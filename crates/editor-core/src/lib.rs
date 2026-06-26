@@ -2,16 +2,19 @@ use bevy::prelude::*;
 use bevy::prelude::Entity as BevyEntity;
 use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::JsFuture;
 
 mod command;
 mod document;
 mod operation_log;
+mod persistence;
 mod processor;
 mod schema;
 
 pub use command::{Command, CommandEnvelope, CommandError, CommandMetadata, CommandResult};
 pub use document::{SceneDocument, Entity, ComponentInstance, StableId};
 pub use operation_log::{LogEntry, OperationLog, OperationLogError};
+pub use persistence::{ProjectMetadata, PROJECT_FILE, SCENES_DIR};
 
 /// Marker component for entities spawned from SceneDocument.
 /// These are despawned and respawned when the document is mutated
@@ -519,4 +522,177 @@ fn sync_log_state(mut log_state: ResMut<OperationLogState>) {
         log_state.can_undo = log.can_undo();
         log_state.can_redo = log.can_redo();
     });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OPFS Persistence — wasm_bindgen externs + high-level functions
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Helper: await a JS Promise and return its resolved JsValue.
+async fn js_await(promise: js_sys::Promise) -> Result<JsValue, JsValue> {
+    let fut = JsFuture::from(promise);
+    fut.await
+        .map_err(|e| JsValue::from_str(&format!("JS promise rejected: {:?}", e)))
+}
+
+#[wasm_bindgen]
+extern "C" {
+    /// JS-side: `window.opfs_save_file(path, contents) -> Promise<{ok, error?}>`
+    #[wasm_bindgen(js_namespace = window, js_name = opfs_save_file)]
+    pub fn opfs_save_file_raw(path: &str, contents: &str) -> js_sys::Promise;
+
+    /// JS-side: `window.opfs_load_file(path) -> Promise<{ok, value?, error?}>`
+    #[wasm_bindgen(js_namespace = window, js_name = opfs_load_file)]
+    pub fn opfs_load_file_raw(path: &str) -> js_sys::Promise;
+
+    /// JS-side: `window.opfs_list_files(path) -> Promise<{ok, value?, error?}>`
+    #[wasm_bindgen(js_namespace = window, js_name = opfs_list_files)]
+    pub fn opfs_list_files_raw(path: &str) -> js_sys::Promise;
+
+    /// JS-side: `window.opfs_exists(path) -> Promise<boolean>`
+    #[wasm_bindgen(js_namespace = window, js_name = opfs_exists)]
+    pub fn opfs_exists_raw(path: &str) -> js_sys::Promise;
+}
+
+async fn js_save_file(path: &str, contents: &str) -> Result<(), String> {
+    let promise = opfs_save_file_raw(path, contents);
+    let result = js_await(promise).await.map_err(|e| format!("{:?}", e))?;
+    let val: serde_json::Value = serde_wasm_bindgen::from_value(result)
+        .map_err(|e| format!("Bad bridge response: {}", e))?;
+    if val.get("ok").and_then(|v| v.as_bool()) == Some(true) {
+        Ok(())
+    } else {
+        Err(val
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Unknown error")
+            .to_string())
+    }
+}
+
+async fn js_load_file(path: &str) -> Result<String, String> {
+    let promise = opfs_load_file_raw(path);
+    let result = js_await(promise).await.map_err(|e| format!("{:?}", e))?;
+    let val: serde_json::Value = serde_wasm_bindgen::from_value(result)
+        .map_err(|e| format!("Bad bridge response: {}", e))?;
+    if val.get("ok").and_then(|v| v.as_bool()) == Some(true) {
+        val.get("value")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .ok_or_else(|| "Missing value in bridge response".to_string())
+    } else {
+        Err(val
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Unknown error")
+            .to_string())
+    }
+}
+
+async fn js_exists(path: &str) -> bool {
+    let promise = opfs_exists_raw(path);
+    match js_await(promise).await {
+        Ok(v) => v.as_bool().unwrap_or(false),
+        Err(_) => false,
+    }
+}
+
+async fn js_list_files(path: &str) -> Result<Vec<String>, String> {
+    let promise = opfs_list_files_raw(path);
+    let result = js_await(promise).await.map_err(|e| format!("{:?}", e))?;
+    let val: serde_json::Value = serde_wasm_bindgen::from_value(result)
+        .map_err(|e| format!("Bad bridge response: {}", e))?;
+    if val.get("ok").and_then(|v| v.as_bool()) == Some(true) {
+        let arr = val
+            .get("value")
+            .and_then(|v| v.as_array())
+            .ok_or_else(|| "Missing value array".to_string())?;
+        Ok(arr
+            .iter()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect())
+    } else {
+        Err(val
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Unknown error")
+            .to_string())
+    }
+}
+
+async fn update_project_metadata(scene_name: &str) -> Result<(), String> {
+    let project = if js_exists(PROJECT_FILE).await {
+        match js_load_file(PROJECT_FILE).await {
+            Ok(json_str) => serde_json::from_str::<ProjectMetadata>(&json_str).unwrap_or_default(),
+            Err(_) => ProjectMetadata::default(),
+        }
+    } else {
+        ProjectMetadata::default()
+    };
+    let mut project = project;
+    if !project.scenes.contains(&scene_name.to_string()) {
+        project.scenes.push(scene_name.to_string());
+    }
+    let json = serde_json::to_string(&project).map_err(|e| e.to_string())?;
+    js_save_file(PROJECT_FILE, &json).await
+}
+
+/// Save the current SceneDocument to OPFS at `scenes/<name>.scene.json`.
+/// Creates `project.json` if it doesn't exist.
+#[wasm_bindgen]
+pub async fn save_scene(name: &str) -> Result<String, JsValue> {
+    let doc_json = SCENE_DOC.with(|s| {
+        let doc_ref = s.borrow();
+        let doc = doc_ref
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("No scene loaded — call load_scene_json first"))?;
+        serde_json::to_string(doc).map_err(|e| JsValue::from_str(&e.to_string()))
+    })?;
+
+    let path = persistence::scene_path(name);
+    js_save_file(&path, &doc_json)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+
+    update_project_metadata(name)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+
+    mark_dirty();
+    Ok(path)
+}
+
+/// Load a SceneDocument from OPFS into the current SCENE_DOC.
+#[wasm_bindgen]
+pub async fn load_scene(name: &str) -> Result<(), JsValue> {
+    let path = persistence::scene_path(name);
+    let json_str = js_load_file(&path).await.map_err(|e| JsValue::from_str(&e))?;
+
+    let doc: SceneDocument =
+        serde_json::from_str(&json_str).map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+
+    SCENE_DOC.with(|s| *s.borrow_mut() = Some(doc));
+    mark_dirty();
+    Ok(())
+}
+
+/// List all scene names from `project.json`.
+#[wasm_bindgen]
+pub async fn list_scenes() -> Result<JsValue, JsValue> {
+    if !js_exists(PROJECT_FILE).await {
+        return serde_wasm_bindgen::to_value(&Vec::<String>::new())
+            .map_err(|e| JsValue::from_str(&e.to_string()));
+    }
+    let json_str = js_load_file(PROJECT_FILE)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+    let project: ProjectMetadata = serde_json::from_str(&json_str)
+        .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+    serde_wasm_bindgen::to_value(&project.scenes).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Check if `project.json` exists in OPFS.
+#[wasm_bindgen]
+pub async fn project_exists() -> bool {
+    js_exists(PROJECT_FILE).await
 }

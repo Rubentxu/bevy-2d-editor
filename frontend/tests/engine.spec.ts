@@ -508,3 +508,150 @@ test.describe("Spike — Operation Log + Undo/Redo", () => {
     expect(state.can_redo).toBe(false);
   });
 });
+
+test.describe("Spike — OPFS Persistence", () => {
+  test("save_scene and load_scene roundtrip with 50 entities", async ({ page }) => {
+    // Build a scene with 50 entities
+    const entities = [];
+    for (let i = 0; i < 50; i++) {
+      entities.push({
+        id: `ent_${i.toString().padStart(3, "0")}`,
+        name: `Entity ${i}`,
+        components: [
+          { type_id: "editor.Name", values: { name: `Entity ${i}` } },
+          {
+            type_id: "editor.Transform2D",
+            values: {
+              translation: { x: i * 10, y: i * 5 },
+              rotation: 0,
+              scale: { x: 1, y: 1 },
+            },
+          },
+        ],
+      });
+    }
+    const bigScene = {
+      version: "0.1",
+      scene_id: "big_test",
+      name: "Big Test Scene",
+      entities,
+    };
+
+    await page.goto("/");
+    await expect(page.getByText("Bevy running")).toBeVisible({ timeout: WASM_LOAD_TIMEOUT });
+    await page.waitForFunction(
+      () =>
+        typeof (window as any).load_scene_json === "function" &&
+        typeof (window as any).save_scene === "function" &&
+        typeof (window as any).load_scene === "function",
+      { timeout: WASM_LOAD_TIMEOUT }
+    );
+
+    // Load the scene
+    await page.evaluate(
+      (scene) => (window as any).load_scene_json(JSON.stringify(scene)),
+      bigScene
+    );
+
+    // Save to OPFS
+    const savedPath = await page.evaluate(() => (window as any).save_scene("e2e_50_test"));
+    expect(savedPath).toBe("scenes/e2e_50_test.scene.json");
+
+    // Verify project.json has the scene
+    const projectJsonString = await page.evaluate(async () => {
+      const obj = await (window as any).opfs_load_file("project.json");
+      return obj.value;
+    });
+    const project = JSON.parse(projectJsonString);
+    expect(project.scenes).toContain("e2e_50_test");
+
+    // Reload page (simulates browser restart)
+    await page.reload();
+    await expect(page.getByText("Bevy running")).toBeVisible({ timeout: WASM_LOAD_TIMEOUT });
+    await page.waitForFunction(
+      () => typeof (window as any).load_scene === "function",
+      { timeout: WASM_LOAD_TIMEOUT }
+    );
+
+    // Load the saved scene
+    await page.evaluate(() => (window as any).load_scene("e2e_50_test"));
+
+    // Verify all 50 entities are present via dispatch_command (snapshot)
+    // (load_scene replaces SCENE_DOC; we get a snapshot via a no-op command)
+    const snapshotResult = await page.evaluate(() => {
+      return (window as any).dispatch_command(
+        JSON.stringify({
+          command: {
+            type: "RenameEntity",
+            entity_id: "ent_000",
+            new_name: "Entity 0",
+          },
+          metadata: { authorship: "test", timestamp: 0 },
+        })
+      );
+    });
+    const snapshot = JSON.parse(snapshotResult).snapshot;
+    expect(snapshot.entities.length).toBe(50);
+    expect(snapshot.entities[0].id).toBe("ent_000");
+    expect(snapshot.entities[49].id).toBe("ent_049");
+  });
+
+  test("list_scenes returns saved scene names", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByText("Bevy running")).toBeVisible({ timeout: WASM_LOAD_TIMEOUT });
+    await page.waitForFunction(
+      () =>
+        typeof (window as any).load_scene_json === "function" &&
+        typeof (window as any).save_scene === "function" &&
+        typeof (window as any).list_scenes === "function",
+      { timeout: WASM_LOAD_TIMEOUT }
+    );
+
+    // Load a minimal scene first
+    const minimalScene = {
+      version: "0.1",
+      scene_id: "x",
+      name: "X",
+      entities: [],
+    };
+    await page.evaluate(
+      (scene) => (window as any).load_scene_json(JSON.stringify(scene)),
+      minimalScene
+    );
+
+    // Save 3 scenes with different names
+    await page.evaluate(() => (window as any).save_scene("alpha"));
+    await page.evaluate(() => (window as any).save_scene("beta"));
+    await page.evaluate(() => (window as any).save_scene("gamma"));
+
+    // List scenes
+    const scenes = await page.evaluate(() => (window as any).list_scenes());
+    expect(scenes).toContain("alpha");
+    expect(scenes).toContain("beta");
+    expect(scenes).toContain("gamma");
+  });
+
+  test("project_exists returns false on empty OPFS", async ({ page, context }) => {
+    // Clear OPFS by clearing browser storage for this origin
+    await context.clearCookies();
+    await page.goto("/");
+    await expect(page.getByText("Bevy running")).toBeVisible({ timeout: WASM_LOAD_TIMEOUT });
+    await page.waitForFunction(
+      () => typeof (window as any).project_exists === "function",
+      { timeout: WASM_LOAD_TIMEOUT }
+    );
+
+    // Try to clear OPFS root
+    await page.evaluate(async () => {
+      try {
+        const root = await navigator.storage.getDirectory();
+        await root.removeEntry("bevy-2d-editor", { recursive: true });
+      } catch {
+        /* ignore */
+      }
+    });
+
+    const exists = await page.evaluate(() => (window as any).project_exists());
+    expect(exists).toBe(false);
+  });
+});
