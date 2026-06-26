@@ -74,6 +74,17 @@ export async function initEngine(
   (window as any).undo = () => wasm.undo();
   (window as any).redo = () => wasm.redo();
   (window as any).get_log_state = () => wasm.get_log_state();
+  // Expose OPFS persistence for testing
+  (window as any).save_scene = (name: string) => wasm.save_scene(name);
+  (window as any).load_scene = (name: string) => wasm.load_scene(name);
+  (window as any).list_scenes = () => wasm.list_scenes();
+  (window as any).project_exists = () => wasm.project_exists();
+  // Expose OPFS bridge functions for wasm_bindgen externs
+  const opfs = await import("./opfs-bridge");
+  (window as any).opfs_save_file = opfs.opfsSaveFile;
+  (window as any).opfs_load_file = opfs.opfsLoadFile;
+  (window as any).opfs_list_files = opfs.opfsListFiles;
+  (window as any).opfs_exists = opfs.opfsExists;
 
   // Step 1: Create buses BEFORE starting engine
   wasm.create_buses();
