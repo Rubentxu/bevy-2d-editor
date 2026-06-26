@@ -6,6 +6,7 @@ use wasm_bindgen_futures::JsFuture;
 
 mod command;
 mod document;
+mod dynamic_scene;
 mod operation_log;
 mod persistence;
 mod processor;
@@ -14,6 +15,10 @@ mod template;
 
 pub use command::{Command, CommandEnvelope, CommandError, CommandMetadata, CommandResult};
 pub use document::{SceneDocument, Entity, ComponentInstance, StableId};
+pub use dynamic_scene::{
+    export_dynamic_scene, DynamicSceneExport, EntityExport, ExportError, ExportWarning,
+    EXPORT_VERSION,
+};
 pub use operation_log::{LogEntry, OperationLog, OperationLogError};
 pub use persistence::{ProjectMetadata, PROJECT_FILE, SCENES_DIR, SCHEMAS_DIR, ENTITIES_DIR};
 pub use template::{EntityTemplate, TemplateEntity, TemplateError};
