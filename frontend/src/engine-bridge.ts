@@ -89,6 +89,13 @@ export async function initEngine(
   (window as any).is_builtin_type = (typeId: string) => wasm.is_builtin_type(typeId);
   (window as any).combined_registry_size = () => wasm.combined_registry_size();
   (window as any).load_project = () => wasm.load_project();
+  // Expose entity template persistence for testing
+  (window as any).save_template = (templateId: string, json: string) =>
+    wasm.save_template(templateId, json);
+  (window as any).load_template = (templateId: string) => wasm.load_template(templateId);
+  (window as any).delete_template = (templateId: string) => wasm.delete_template(templateId);
+  (window as any).list_templates = () => wasm.list_templates();
+  (window as any).is_template_loaded = (templateId: string) => wasm.is_template_loaded(templateId);
   // Expose OPFS bridge functions for wasm_bindgen externs
   const opfs = await import("./opfs-bridge");
   (window as any).opfs_save_file = opfs.opfsSaveFile;

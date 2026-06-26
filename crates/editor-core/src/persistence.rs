@@ -16,8 +16,11 @@ pub const SCENES_DIR: &str = "scenes";
 /// Subdirectory containing Component Schema files (one per schema).
 pub const SCHEMAS_DIR: &str = "schemas";
 
+/// Subdirectory containing Entity Template files (one per template).
+pub const ENTITIES_DIR: &str = "entities";
+
 /// Project metadata stored at OPFS root as `project.json`.
-/// Contains version, name, list of saved scenes, and list of saved schemas.
+/// Contains version, name, list of saved scenes, schemas, and templates.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProjectMetadata {
     pub version: String,
@@ -27,6 +30,10 @@ pub struct ProjectMetadata {
     /// project.json files without this field still parse (empty Vec).
     #[serde(default)]
     pub schemas: Vec<String>,
+    /// List of entity template IDs in the project. `#[serde(default)]` so old
+    /// project.json files without this field still parse (empty Vec).
+    #[serde(default)]
+    pub templates: Vec<String>,
 }
 
 impl Default for ProjectMetadata {
@@ -36,6 +43,7 @@ impl Default for ProjectMetadata {
             name: "Untitled Project".to_string(),
             scenes: Vec::new(),
             schemas: Vec::new(),
+            templates: Vec::new(),
         }
     }
 }
@@ -50,6 +58,11 @@ pub fn scene_path(name: &str) -> String {
 /// accept dots.
 pub fn schema_path(type_id: &str) -> String {
     format!("{}/{}.schema.json", SCHEMAS_DIR, type_id)
+}
+
+/// Resolve the OPFS path for an entity template file: `entities/<template_id>.template.json`.
+pub fn template_path(template_id: &str) -> String {
+    format!("{}/{}.template.json", ENTITIES_DIR, template_id)
 }
 
 #[cfg(test)]
@@ -72,6 +85,7 @@ mod tests {
             name: "Test Project".to_string(),
             scenes: vec!["level_01".to_string(), "level_02".to_string()],
             schemas: vec!["game.PlayerHealth".to_string()],
+            templates: vec!["enemy_goblin".to_string()],
         };
         let json = serde_json::to_string(&pm).unwrap();
         let rt: ProjectMetadata = serde_json::from_str(&json).unwrap();

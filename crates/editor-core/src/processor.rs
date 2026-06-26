@@ -151,8 +151,10 @@ pub fn validate(doc: &SceneDocument, cmd: &Command) -> Result<(), CommandError> 
             }
         }
         Command::InstantiateEntityTemplate { template_id, .. } => {
-            // Stub: templates not yet implemented
-            return Err(CommandError::TemplateNotFound(template_id.clone()));
+            // Validate that template is loaded in cache
+            if crate::template::get_cached_template(template_id).is_none() {
+                return Err(CommandError::TemplateNotFound(template_id.clone()));
+            }
         }
         Command::RenameEntity { entity_id, .. } => {
             find_entity(doc, entity_id)?;
@@ -291,9 +293,22 @@ pub fn apply(doc: &mut SceneDocument, cmd: &Command) -> Result<Command, CommandE
                 new_parent: actual_old,
             })
         }
-        Command::InstantiateEntityTemplate { template_id, .. } => {
-            // Stub: should never reach here because validate fails first
-            Err(CommandError::TemplateNotFound(template_id.clone()))
+        Command::InstantiateEntityTemplate { template_id, target_parent } => {
+            // Look up template from in-memory cache
+            let template = crate::template::get_cached_template(template_id)
+                .ok_or_else(|| CommandError::TemplateNotFound(template_id.clone()))?;
+            // Instantiate: mints fresh StableIds, adds entities to scene
+            let minted_ids = crate::template::instantiate(&template, target_parent.as_ref(), doc)
+                .map_err(|e| CommandError::TemplateNotFound(format!("Template error: {}", e)))?;
+            // Inverse: Batch of DeleteEntity for each minted entity
+            let inverse_commands: Vec<Command> = minted_ids
+                .iter()
+                .map(|id| Command::DeleteEntity { id: id.clone() })
+                .collect();
+            Ok(Command::Batch {
+                label: format!("undo_instantiate_{}", template_id),
+                commands: inverse_commands,
+            })
         }
         Command::RenameEntity {
             entity_id,
