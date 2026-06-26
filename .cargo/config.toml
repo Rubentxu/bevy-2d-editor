@@ -1,0 +1,6 @@
+[build]
+# Uncomment for faster rebuilds (requires: cargo install sccache)
+# rustc-wrapper = "sccache"
+
+[target.wasm32-unknown-unknown]
+# No runner needed — Vite serves the WASM directly
