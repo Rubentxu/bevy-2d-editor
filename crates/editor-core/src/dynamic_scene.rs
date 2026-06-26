@@ -379,6 +379,46 @@ fn anchor_str_to_bevy(s: &str) -> Option<&'static str> {
     })
 }
 
+/// Returns the normalized offset (relative to sprite size) for a given anchor string.
+/// Bevy 0.19's `Anchor(Vec2)` follows the convention that the offset is the pivot point's
+/// position relative to the sprite center, where (0, 0) = sprite center, (-0.5, -0.5) =
+/// bottom-left corner, (0.5, 0.5) = top-right corner.
+///
+/// Returns `(0.0, 0.0)` (= `Anchor::CENTER`) for unknown or empty strings.
+///
+/// Bevy-free on purpose: this is the canonical table. The Bevy-dependent helper
+/// `bevy_anchor::anchor_str_to_bevy_anchor` wraps this to produce a `bevy::sprite::Anchor`.
+pub fn anchor_str_to_normalized_offset(s: &str) -> (f32, f32) {
+    match s {
+        "Center" => (0.0, 0.0),
+        "TopLeft" => (-0.5, 0.5),
+        "TopCenter" => (0.0, 0.5),
+        "TopRight" => (0.5, 0.5),
+        "CenterLeft" => (-0.5, 0.0),
+        "CenterRight" => (0.5, 0.0),
+        "BottomLeft" => (-0.5, -0.5),
+        "BottomCenter" => (0.0, -0.5),
+        "BottomRight" => (0.5, -0.5),
+        _ => (0.0, 0.0),
+    }
+}
+
+/// Returns true if the string is one of the 9 known anchor names.
+pub fn is_known_anchor_str(s: &str) -> bool {
+    matches!(
+        s,
+        "Center"
+            | "TopLeft"
+            | "TopCenter"
+            | "TopRight"
+            | "CenterLeft"
+            | "CenterRight"
+            | "BottomLeft"
+            | "BottomCenter"
+            | "BottomRight"
+    )
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Tests
 // ─────────────────────────────────────────────────────────────────────────────
@@ -803,5 +843,87 @@ mod tests {
         let export = export_dynamic_scene(&doc).unwrap();
         assert_eq!(export.entities[0].components["bevy.Name"]["name"], "");
         assert!(export.warnings[0].message.contains("Name"));
+    }
+
+    // ===== anchor_str_to_bevy_anchor helper (verified via normalized offsets) =====
+    //
+    // The Bevy-dependent function `anchor_str_to_bevy_anchor(s)` returns a
+    // `bevy::sprite::Anchor` whose internal `Vec2` matches the normalized offset
+    // returned by `anchor_str_to_normalized_offset(s)`. We test the normalized
+    // offset function (which is bevy-free) and rely on `cargo check` + Playwright
+    // E2E tests to verify the Bevy dependency. This avoids the libudev-sys native
+    // test issue on Fedora.
+
+    #[test]
+    fn test_anchor_str_to_bevy_anchor_center() {
+        assert_eq!(anchor_str_to_normalized_offset("Center"), (0.0, 0.0));
+    }
+
+    #[test]
+    fn test_anchor_str_to_bevy_anchor_top_left() {
+        assert_eq!(anchor_str_to_normalized_offset("TopLeft"), (-0.5, 0.5));
+    }
+
+    #[test]
+    fn test_anchor_str_to_bevy_anchor_top_center() {
+        assert_eq!(anchor_str_to_normalized_offset("TopCenter"), (0.0, 0.5));
+    }
+
+    #[test]
+    fn test_anchor_str_to_bevy_anchor_top_right() {
+        assert_eq!(anchor_str_to_normalized_offset("TopRight"), (0.5, 0.5));
+    }
+
+    #[test]
+    fn test_anchor_str_to_bevy_anchor_center_left() {
+        assert_eq!(anchor_str_to_normalized_offset("CenterLeft"), (-0.5, 0.0));
+    }
+
+    #[test]
+    fn test_anchor_str_to_bevy_anchor_center_right() {
+        assert_eq!(anchor_str_to_normalized_offset("CenterRight"), (0.5, 0.0));
+    }
+
+    #[test]
+    fn test_anchor_str_to_bevy_anchor_bottom_left() {
+        assert_eq!(anchor_str_to_normalized_offset("BottomLeft"), (-0.5, -0.5));
+    }
+
+    #[test]
+    fn test_anchor_str_to_bevy_anchor_bottom_center() {
+        assert_eq!(anchor_str_to_normalized_offset("BottomCenter"), (0.0, -0.5));
+    }
+
+    #[test]
+    fn test_anchor_str_to_bevy_anchor_bottom_right() {
+        assert_eq!(anchor_str_to_normalized_offset("BottomRight"), (0.5, -0.5));
+    }
+
+    #[test]
+    fn test_anchor_str_to_bevy_anchor_invalid_defaults_to_center() {
+        assert_eq!(anchor_str_to_normalized_offset("NotAnAnchor"), (0.0, 0.0));
+    }
+
+    #[test]
+    fn test_anchor_str_to_bevy_anchor_empty_string_defaults_to_center() {
+        assert_eq!(anchor_str_to_normalized_offset(""), (0.0, 0.0));
+    }
+
+    #[test]
+    fn test_is_known_anchor_str() {
+        // Known anchors
+        assert!(is_known_anchor_str("Center"));
+        assert!(is_known_anchor_str("TopLeft"));
+        assert!(is_known_anchor_str("TopCenter"));
+        assert!(is_known_anchor_str("TopRight"));
+        assert!(is_known_anchor_str("CenterLeft"));
+        assert!(is_known_anchor_str("CenterRight"));
+        assert!(is_known_anchor_str("BottomLeft"));
+        assert!(is_known_anchor_str("BottomCenter"));
+        assert!(is_known_anchor_str("BottomRight"));
+        // Unknown / empty / casing
+        assert!(!is_known_anchor_str("center")); // lowercase
+        assert!(!is_known_anchor_str(""));
+        assert!(!is_known_anchor_str("NotAnAnchor"));
     }
 }

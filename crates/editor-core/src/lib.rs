@@ -4,6 +4,7 @@ use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
+mod bevy_anchor;
 mod command;
 mod document;
 mod dynamic_scene;
@@ -13,11 +14,12 @@ mod processor;
 mod schema;
 mod template;
 
+pub use bevy_anchor::anchor_str_to_bevy_anchor;
 pub use command::{Command, CommandEnvelope, CommandError, CommandMetadata, CommandResult};
 pub use document::{SceneDocument, Entity, ComponentInstance, StableId};
 pub use dynamic_scene::{
-    export_dynamic_scene, DynamicSceneExport, EntityExport, ExportError, ExportWarning,
-    EXPORT_VERSION,
+    anchor_str_to_normalized_offset, export_dynamic_scene, is_known_anchor_str,
+    DynamicSceneExport, EntityExport, ExportError, ExportWarning, EXPORT_VERSION,
 };
 pub use operation_log::{LogEntry, OperationLog, OperationLogError};
 pub use persistence::{ProjectMetadata, PROJECT_FILE, SCENES_DIR, SCHEMAS_DIR, ENTITIES_DIR};
