@@ -79,12 +79,23 @@ export async function initEngine(
   (window as any).load_scene = (name: string) => wasm.load_scene(name);
   (window as any).list_scenes = () => wasm.list_scenes();
   (window as any).project_exists = () => wasm.project_exists();
+  // Expose schema registry persistence for testing
+  (window as any).save_schema = (typeId: string) => wasm.save_schema(typeId);
+  (window as any).load_schema = (typeId: string) => wasm.load_schema(typeId);
+  (window as any).delete_schema = (typeId: string) => wasm.delete_schema(typeId);
+  (window as any).list_schemas = () => wasm.list_schemas();
+  (window as any).register_schema = (json: string) => wasm.register_schema_from_json(json);
+  (window as any).unregister_schema = (typeId: string) => wasm.unregister_schema(typeId);
+  (window as any).is_builtin_type = (typeId: string) => wasm.is_builtin_type(typeId);
+  (window as any).combined_registry_size = () => wasm.combined_registry_size();
+  (window as any).load_project = () => wasm.load_project();
   // Expose OPFS bridge functions for wasm_bindgen externs
   const opfs = await import("./opfs-bridge");
   (window as any).opfs_save_file = opfs.opfsSaveFile;
   (window as any).opfs_load_file = opfs.opfsLoadFile;
   (window as any).opfs_list_files = opfs.opfsListFiles;
   (window as any).opfs_exists = opfs.opfsExists;
+  (window as any).opfs_delete_file = opfs.opfsDeleteFile;
 
   // Step 1: Create buses BEFORE starting engine
   wasm.create_buses();

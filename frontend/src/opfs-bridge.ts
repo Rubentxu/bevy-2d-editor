@@ -132,3 +132,23 @@ export async function opfsExists(path: string): Promise<boolean> {
     return false;
   }
 }
+
+export async function opfsDeleteFile(path: string): Promise<OpfsResult> {
+  try {
+    if (!navigator.storage?.getDirectory) {
+      return { ok: false, error: "OPFS unavailable" };
+    }
+    const segments = path.split("/").filter((s) => s.length > 0);
+    const filename = segments.pop();
+    if (!filename) return { ok: false, error: "Invalid path" };
+    const dir = await getSubdir(segments, false);
+    if (!dir) return { ok: false, error: "File not found" };
+    await dir.removeEntry(filename);
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "NotFoundError") {
+      return { ok: false, error: "File not found" };
+    }
+    return { ok: false, error: String(e) };
+  }
+}

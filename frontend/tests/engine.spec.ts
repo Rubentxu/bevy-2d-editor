@@ -655,3 +655,120 @@ test.describe("Spike — OPFS Persistence", () => {
     expect(exists).toBe(false);
   });
 });
+
+test.describe("Spike — Schema Registry Persistence", () => {
+  test("register custom schema and use it in AddComponent", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByText("Bevy running")).toBeVisible({ timeout: WASM_LOAD_TIMEOUT });
+    await page.waitForFunction(
+      () =>
+        typeof (window as any).load_scene_json === "function" &&
+        typeof (window as any).dispatch_command === "function" &&
+        typeof (window as any).register_schema === "function",
+      { timeout: WASM_LOAD_TIMEOUT }
+    );
+
+    // Load empty scene
+    await page.evaluate(
+      () =>
+        (window as any).load_scene_json(
+          JSON.stringify({
+            version: "0.1",
+            scene_id: "schema_test",
+            name: "Schema Test",
+            entities: [],
+          })
+        )
+    );
+
+    // Register custom schema
+    const customSchema = JSON.stringify({
+      type_id: "game.PlayerHealth",
+      display_name: "Player Health",
+      fields: [
+        { name: "hp", field_type: "F32", default: 100.0, constraints: [] },
+        { name: "max_hp", field_type: "F32", default: 100.0, constraints: [] },
+      ],
+      exports_to_bevy: true,
+    });
+
+    const regResult = await page.evaluate(
+      (json) => (window as any).register_schema(json),
+      customSchema
+    );
+    expect(regResult).toBeUndefined(); // no error
+
+    // Verify schema is in combined registry
+    const schemas = await page.evaluate(() => (window as any).list_schemas());
+    expect(schemas).toContain("game.PlayerHealth");
+    expect(schemas).toContain("editor.Transform2D"); // built-ins still there
+
+    // Use the custom schema in a command
+    const envelope = {
+      command: {
+        type: "CreateEntity",
+        id: "ent_with_custom_schema",
+        name: "Player",
+        components: [
+          {
+            type_id: "game.PlayerHealth",
+            values: { hp: 80.0, max_hp: 100.0 },
+          },
+        ],
+      },
+      metadata: { authorship: "test", timestamp: 0 },
+    };
+
+    const result = await page.evaluate(
+      (env) => (window as any).dispatch_command(JSON.stringify(env)),
+      envelope
+    );
+    const parsed = JSON.parse(result);
+    expect(parsed.snapshot.entities[0].components[0].type_id).toBe("game.PlayerHealth");
+    expect(parsed.snapshot.entities[0].components[0].values.hp).toBe(80.0);
+  });
+
+  test("save schema, reload page, load_project, schema available", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByText("Bevy running")).toBeVisible({ timeout: WASM_LOAD_TIMEOUT });
+    await page.waitForFunction(
+      () =>
+        typeof (window as any).register_schema === "function" &&
+        typeof (window as any).save_schema === "function" &&
+        typeof (window as any).load_project === "function" &&
+        typeof (window as any).combined_registry_size === "function",
+      { timeout: WASM_LOAD_TIMEOUT }
+    );
+
+    // Register and save a custom schema
+    const customSchema = JSON.stringify({
+      type_id: "game.EnemyAI",
+      display_name: "Enemy AI",
+      fields: [{ name: "aggression", field_type: "F32", default: 0.5, constraints: [] }],
+      exports_to_bevy: true,
+    });
+    await page.evaluate((json) => (window as any).register_schema(json), customSchema);
+    await page.evaluate(() => (window as any).save_schema("game.EnemyAI"));
+
+    // Reload page (simulates browser restart, all in-memory state lost)
+    await page.reload();
+    await expect(page.getByText("Bevy running")).toBeVisible({ timeout: WASM_LOAD_TIMEOUT });
+    await page.waitForFunction(
+      () => typeof (window as any).load_project === "function",
+      { timeout: WASM_LOAD_TIMEOUT }
+    );
+
+    // After reload, combined registry should only have built-ins
+    const sizeBefore = await page.evaluate(() => (window as any).combined_registry_size());
+    expect(sizeBefore).toBe(5);
+
+    // Load project: should re-register all schemas from OPFS
+    await page.evaluate(() => (window as any).load_project());
+
+    const sizeAfter = await page.evaluate(() => (window as any).combined_registry_size());
+    expect(sizeAfter).toBe(6); // 5 built-ins + 1 custom
+
+    const schemas = await page.evaluate(() => (window as any).list_schemas());
+    expect(schemas).toContain("game.EnemyAI");
+  });
+});

@@ -102,7 +102,7 @@ pub fn validate(doc: &SceneDocument, cmd: &Command) -> Result<(), CommandError> 
             entity_id, type_id, ..
         } => {
             find_entity(doc, entity_id)?;
-            if global_registry().get(type_id).is_none() {
+            if crate::schema::combined_registry().get(type_id).is_none() {
                 return Err(CommandError::UnknownSchema(type_id.clone()));
             }
         }
