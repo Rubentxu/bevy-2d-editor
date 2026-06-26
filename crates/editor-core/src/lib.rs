@@ -4,6 +4,7 @@ use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
+mod bevy_anchor;
 mod command;
 mod document;
 mod dynamic_scene;
@@ -13,11 +14,12 @@ mod processor;
 mod schema;
 mod template;
 
+pub use bevy_anchor::anchor_str_to_bevy_anchor;
 pub use command::{Command, CommandEnvelope, CommandError, CommandMetadata, CommandResult};
 pub use document::{SceneDocument, Entity, ComponentInstance, StableId};
 pub use dynamic_scene::{
-    export_dynamic_scene, DynamicSceneExport, EntityExport, ExportError, ExportWarning,
-    EXPORT_VERSION,
+    anchor_str_to_normalized_offset, export_dynamic_scene, is_known_anchor_str,
+    DynamicSceneExport, EntityExport, ExportError, ExportWarning, EXPORT_VERSION,
 };
 pub use operation_log::{LogEntry, OperationLog, OperationLogError};
 pub use persistence::{ProjectMetadata, PROJECT_FILE, SCENES_DIR, SCHEMAS_DIR, ENTITIES_DIR};
@@ -394,10 +396,12 @@ fn rebuild_preview_world(
 
 fn spawn_entity(commands: &mut Commands, entity: &Entity) {
     use bevy::prelude::Name as BevyName;
+    use bevy::sprite::Anchor;
 
     let mut name: Option<BevyName> = None;
     let mut transform: Option<Transform> = None;
     let mut sprite: Option<Sprite> = None;
+    let mut anchor_str: Option<String> = None;
 
     for component in &entity.components {
         match component.type_id.as_str() {
@@ -449,6 +453,14 @@ fn spawn_entity(commands: &mut Commands, entity: &Entity) {
                     custom_size: Some(Vec2::splat(100.0)),
                     ..default()
                 });
+
+                // Read anchor string. Missing → silent Center default.
+                // We track the raw string so we can warn on invalid values after the
+                // mapping; the Bevy Anchor Component itself is inserted after Sprite
+                // (so it overrides the `#[require(Anchor)]` auto-insert).
+                if let Some(s) = component.values.get("anchor").and_then(|v| v.as_str()) {
+                    anchor_str = Some(s.to_string());
+                }
             }
             // Skip editorial-only components: editor.Visible, editor.Locked
             _ => {}
@@ -466,7 +478,35 @@ fn spawn_entity(commands: &mut Commands, entity: &Entity) {
         cmd.insert(t);
     }
     if let Some(s) = sprite {
+        // Insert Sprite first — Bevy's `#[require(Anchor)]` auto-inserts
+        // `Anchor::default()` (= Anchor::CENTER) at this point.
         cmd.insert(s);
+
+        // Insert our Anchor AFTER Sprite so it overrides the auto-required default.
+        let raw_anchor = anchor_str.as_deref().unwrap_or("Center");
+        if !is_known_anchor_str(raw_anchor) {
+            // Use web-sys console.warn directly so the message reaches the browser
+            // devtools / Playwright console listeners (Bevy's warn! goes to the
+            // logger plugin, which is not configured to forward to the browser
+            // console in this WASM build).
+            #[cfg(target_arch = "wasm32")]
+            {
+                let msg = format!(
+                    "[editor-core] Sprite2D anchor '{}' on entity {} is not recognized; using Center",
+                    raw_anchor, entity.id
+                );
+                web_sys::console::warn_1(&JsValue::from_str(&msg));
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                eprintln!(
+                    "[editor-core] Sprite2D anchor '{}' on entity {} is not recognized; using Center",
+                    raw_anchor, entity.id
+                );
+            }
+        }
+        let bevy_anchor = anchor_str_to_bevy_anchor(raw_anchor);
+        cmd.insert(Anchor::from(bevy_anchor.0));
     }
 }
 
