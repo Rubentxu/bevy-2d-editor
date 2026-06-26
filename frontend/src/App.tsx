@@ -1,90 +1,161 @@
-import { useEffect, useRef, useState } from "react";
-import {
-  initEngine,
-  sendMoveSprite,
-  isEngineReady,
-  EVT_SPRITE_POSITION,
-  EVT_FPS,
-} from "./engine-bridge";
+import { useEffect, useState } from "react";
+import "./styles.css";
+import { initEngine, isEngineReady } from "./engine-bridge";
+import { useSceneState, SceneDocument } from "./hooks/useSceneState";
+import { useLogState } from "./hooks/useLogState";
+import TopBar from "./components/TopBar";
+import HierarchyPanel from "./components/HierarchyPanel";
+import InspectorPanel from "./components/InspectorPanel";
 
 export default function App() {
   const [ready, setReady] = useState(false);
+  const [initError, setInitError] = useState<string | null>(null);
+  const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [fps, setFps] = useState(0);
-  const [inputX, setInputX] = useState(100);
-  const [inputY, setInputY] = useState(50);
-  const initGuard = useRef(false);
+  const initGuard = (() => {
+    let guard = false;
+    return { current: guard, set: (v: boolean) => (guard = v), get: () => guard };
+  })();
+
+  const { scene, refresh, dispatch } = useSceneState();
+  const logState = useLogState();
 
   useEffect(() => {
-    if (initGuard.current) return;
-    initGuard.current = true;
+    if (initGuard.get()) return;
+    initGuard.set(true);
 
-    initEngine("bevy-canvas", (type, payload) => {
-      if (type === EVT_SPRITE_POSITION) {
-        setPosition({
-          x: payload.getFloat32(0, true),
-          y: payload.getFloat32(4, true),
-        });
-      } else if (type === EVT_FPS) {
-        setFps(payload.getFloat32(0, true));
-      }
+    initEngine("bevy-canvas", () => {
+      // FPS and sprite position events handled silently (legacy)
     })
       .then(() => setReady(isEngineReady()))
-      .catch((e) => {
-        console.error("Engine init failed:", e);
-        setError(String(e));
-      });
+      .catch((e) => setInitError(String(e)));
   }, []);
 
+  const handleUndo = async () => {
+    try {
+      const snap = await (window as any).undo();
+      const parsed = JSON.parse(snap);
+      await refresh();
+      setSelectedEntityId(null);
+    } catch (e) {
+      setError(`Undo failed: ${e}`);
+    }
+  };
+
+  const handleRedo = async () => {
+    try {
+      const snap = await (window as any).redo();
+      await refresh();
+      setSelectedEntityId(null);
+    } catch (e) {
+      setError(`Redo failed: ${e}`);
+    }
+  };
+
+  const handleSave = async () => {
+    const name = window.prompt("Scene name:", "level_01");
+    if (!name) return;
+    try {
+      const path = await (window as any).save_scene(name);
+      setError(null);
+      // Briefly show success — use topbar status
+      console.log(`Saved to ${path}`);
+    } catch (e) {
+      setError(`Save failed: ${e}`);
+    }
+  };
+
+  const handleLoad = async () => {
+    try {
+      await (window as any).load_project();
+      await refresh();
+      setSelectedEntityId(null);
+    } catch (e) {
+      setError(`Load project failed: ${e}`);
+    }
+  };
+
+  const handleRename = async (entityId: string, newName: string) => {
+    const result = await dispatch({
+      command: { type: "RenameEntity", entity_id: entityId, new_name: newName },
+      metadata: { authorship: "user", timestamp: Date.now() },
+    });
+    if (result.error) setError(`Rename failed: ${result.error}`);
+  };
+
+  const handleSetField = async (
+    entityId: string,
+    typeId: string,
+    fieldPath: string,
+    value: any,
+  ) => {
+    const result = await dispatch({
+      command: {
+        type: "SetComponentField",
+        entity_id: entityId,
+        type_id: typeId,
+        field_path: fieldPath,
+        value,
+      },
+      metadata: { authorship: "user", timestamp: Date.now() },
+    });
+    if (result.error) setError(`Set field failed: ${result.error}`);
+  };
+
+  const handleRemoveComponent = async (entityId: string, typeId: string) => {
+    const result = await dispatch({
+      command: { type: "RemoveComponent", entity_id: entityId, type_id: typeId },
+      metadata: { authorship: "user", timestamp: Date.now() },
+    });
+    if (result.error) setError(`Remove component failed: ${result.error}`);
+  };
+
+  const handleAddComponent = async (entityId: string, typeId: string) => {
+    const result = await dispatch({
+      command: {
+        type: "AddComponent",
+        entity_id: entityId,
+        type_id: typeId,
+        values: {},
+      },
+      metadata: { authorship: "user", timestamp: Date.now() },
+    });
+    if (result.error) setError(`Add component failed: ${result.error}`);
+  };
+
   return (
-    <div style={{ display: "flex", height: "100vh" }}>
-      <div style={{ flex: 1, position: "relative" }}>
-        <canvas
-          id="bevy-canvas"
-          style={{ width: "100%", height: "100%", display: "block" }}
+    <div className="app">
+      <TopBar
+        logState={logState}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        onSave={handleSave}
+        onLoad={handleLoad}
+        error={error || initError}
+        onDismissError={() => setError(null)}
+      />
+      <div className="main">
+        <HierarchyPanel
+          scene={scene}
+          selectedId={selectedEntityId}
+          onSelect={setSelectedEntityId}
         />
-      </div>
-      <div
-        style={{
-          width: 280,
-          padding: 16,
-          borderLeft: "1px solid #333",
-          background: "#16213e",
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-        }}
-      >
-        <h2>Spike</h2>
-        <p style={{ color: error ? "#f44" : ready ? "#0f0" : "#888" }}>
-          {error ? `Error: ${error}` : ready ? "Bevy running" : "Loading WASM..."}
-        </p>
-        <hr style={{ borderColor: "#333" }} />
-        <label>
-          X:{" "}
-          <input
-            type="number"
-            value={inputX}
-            onChange={(e) => setInputX(Number(e.target.value))}
-          />
-        </label>
-        <label>
-          Y:{" "}
-          <input
-            type="number"
-            value={inputY}
-            onChange={(e) => setInputY(Number(e.target.value))}
-          />
-        </label>
-        <button onClick={() => sendMoveSprite(inputX, inputY)}>
-          Move Sprite
-        </button>
-        <hr style={{ borderColor: "#333" }} />
-        <p>
-          Position: ({position.x.toFixed(1)}, {position.y.toFixed(1)})
-        </p>
-        <p>FPS: {fps.toFixed(0)}</p>
+        <div className="canvas-container">
+          {!ready && (
+            <div style={{ padding: 16, color: "#888" }}>
+              {initError ? `Error: ${initError}` : "Loading WASM..."}
+            </div>
+          )}
+          <canvas id="bevy-canvas" />
+        </div>
+        <InspectorPanel
+          scene={scene}
+          selectedId={selectedEntityId}
+          onRename={handleRename}
+          onSetField={handleSetField}
+          onRemoveComponent={handleRemoveComponent}
+          onAddComponent={handleAddComponent}
+        />
       </div>
     </div>
   );

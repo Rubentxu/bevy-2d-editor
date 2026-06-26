@@ -703,6 +703,19 @@ pub async fn project_exists() -> bool {
     js_exists(PROJECT_FILE).await
 }
 
+/// Get the current SceneDocument as JSON. Returns null if no scene loaded.
+/// Read-only — does NOT mutate state, operation log, or dirty flag.
+#[wasm_bindgen]
+pub fn get_scene_snapshot() -> JsValue {
+    SCENE_DOC.with(|s| match s.borrow().as_ref() {
+        Some(doc) => match serde_json::to_string(doc) {
+            Ok(json) => JsValue::from_str(&json),
+            Err(_) => JsValue::NULL,
+        },
+        None => JsValue::NULL,
+    })
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Schema Registry Persistence — wasm_bindgen surface
 // ─────────────────────────────────────────────────────────────────────────────

@@ -56,8 +56,8 @@ export async function initEngine(
   const wasmModule = await import("./wasm/editor_core.js");
   await wasmModule.default();
   wasm = wasmModule;
-  wasmMemory = (wasmModule as any).__wasm.memory;
-  console.log("[bridge] WASM module loaded, memory size:", wasmMemory.buffer.byteLength);
+  wasmMemory = (wasmModule as any).__wasm.memory ?? null;
+  console.log("[bridge] WASM module loaded, memory size:", wasmMemory?.buffer.byteLength ?? 0);
 
   frameCallback = onEvent;
 
@@ -96,6 +96,10 @@ export async function initEngine(
   (window as any).delete_template = (templateId: string) => wasm.delete_template(templateId);
   (window as any).list_templates = () => wasm.list_templates();
   (window as any).is_template_loaded = (templateId: string) => wasm.is_template_loaded(templateId);
+  // Expose scene snapshot read for UI panels
+  (window as any).get_scene_snapshot = () => wasm.get_scene_snapshot();
+  // Expose sendMoveSprite (LinearBus raw command, used by legacy tests)
+  (window as any).sendMoveSprite = sendMoveSprite;
   // Expose OPFS bridge functions for wasm_bindgen externs
   const opfs = await import("./opfs-bridge");
   (window as any).opfs_save_file = opfs.opfsSaveFile;
@@ -180,6 +184,19 @@ export async function redo(): Promise<string> {
 export async function getLogState(): Promise<{ size: number; can_undo: boolean; can_redo: boolean; cursor: number }> {
   const json = (window as any).get_log_state();
   return JSON.parse(json);
+}
+
+/**
+ * Get the current SceneDocument as a JS object, or null if no scene loaded.
+ * Read-only — does NOT mutate state.
+ */
+export async function getSceneSnapshot(): Promise<any | null> {
+  const snap = (window as any).get_scene_snapshot();
+  if (snap === null || snap === undefined) return null;
+  if (typeof snap === "string") {
+    return JSON.parse(snap);
+  }
+  return snap;
 }
 
 export function isEngineReady() {

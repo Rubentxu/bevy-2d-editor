@@ -12,15 +12,19 @@ test.describe("Spike — Smoke Tests", () => {
     await expect(canvas).toBeVisible();
   });
 
-  test("sidebar panel renders with controls", async ({ page }) => {
+  test("topbar renders with title and buttons", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator("h2", { hasText: "Spike" })).toBeVisible();
-    await expect(page.locator('input[type="number"]')).toHaveCount(2);
-    await expect(page.getByText("Move Sprite")).toBeVisible();
+    await expect(page.locator('[data-testid="topbar"]')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("h1", { hasText: "Bevy 2D Editor" })).toBeVisible();
+    await expect(page.locator('[data-testid="undo-btn"]')).toBeVisible();
+    await expect(page.locator('[data-testid="redo-btn"]')).toBeVisible();
+    await expect(page.locator('[data-testid="save-btn"]')).toBeVisible();
+    await expect(page.locator('[data-testid="load-btn"]')).toBeVisible();
   });
 
-  test("initial status shows Loading WASM", async ({ page }) => {
+  test("hierarchy and inspector panels render", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByText("Loading WASM...")).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('[data-testid="hierarchy-panel"]')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[data-testid="inspector-panel"]')).toBeVisible({ timeout: 10_000 });
   });
 });
