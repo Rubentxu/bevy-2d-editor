@@ -6,6 +6,7 @@ use wasm_bindgen_futures::JsFuture;
 
 mod command;
 mod document;
+mod dynamic_scene;
 mod operation_log;
 mod persistence;
 mod processor;
@@ -14,6 +15,10 @@ mod template;
 
 pub use command::{Command, CommandEnvelope, CommandError, CommandMetadata, CommandResult};
 pub use document::{SceneDocument, Entity, ComponentInstance, StableId};
+pub use dynamic_scene::{
+    export_dynamic_scene, DynamicSceneExport, EntityExport, ExportError, ExportWarning,
+    EXPORT_VERSION,
+};
 pub use operation_log::{LogEntry, OperationLog, OperationLogError};
 pub use persistence::{ProjectMetadata, PROJECT_FILE, SCENES_DIR, SCHEMAS_DIR, ENTITIES_DIR};
 pub use template::{EntityTemplate, TemplateEntity, TemplateError};
@@ -714,6 +719,49 @@ pub fn get_scene_snapshot() -> JsValue {
         },
         None => JsValue::NULL,
     })
+}
+
+/// Export a SceneDocument JSON string to a Bevy-compatible runtime scene
+/// representation (Hito 0 §9.5). Returns a JSON string with shape:
+///
+/// ```json
+/// {
+///   "json": "<DynamicSceneExport JSON>",
+///   "warnings": [
+///     { "entity_stable_id": "ent_01", "component_type_id": "editor.Sprite2D", "message": "..." }
+///   ]
+/// }
+/// ```
+///
+/// Use `JSON.parse(returnedString)` on the JS side to get the object. We use
+/// `JsValue::from_str` (not `serde_wasm_bindgen::to_value`) because the export
+/// contains nested `serde_json::Value` fields that `to_value` mangles to `{}`.
+///
+/// Returns a JsValue error (thrown as exception on the JS side) if the input
+/// is not valid SceneDocument JSON.
+#[wasm_bindgen]
+pub fn export_dynamic_scene_wasm(doc_json: &str) -> Result<JsValue, JsValue> {
+    let doc: SceneDocument = serde_json::from_str(doc_json)
+        .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+
+    let export = dynamic_scene::export_dynamic_scene(&doc)
+        .map_err(|e| JsValue::from_str(&format!("Export error: {}", e)))?;
+
+    // Marshal the response as `{ json: String, warnings: ExportWarning[] }`.
+    // We re-use the JSON string approach for the inner DynamicSceneExport
+    // because it contains nested serde_json::Value inside BTreeMap values.
+    let export_json = serde_json::to_string(&export)
+        .map_err(|e| JsValue::from_str(&format!("Serialize error: {}", e)))?;
+
+    let response = serde_json::json!({
+        "json": export_json,
+        "warnings": export.warnings,
+    });
+
+    let response_str = serde_json::to_string(&response)
+        .map_err(|e| JsValue::from_str(&format!("Serialize error: {}", e)))?;
+
+    Ok(JsValue::from_str(&response_str))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

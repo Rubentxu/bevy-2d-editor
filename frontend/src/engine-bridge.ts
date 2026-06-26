@@ -98,6 +98,9 @@ export async function initEngine(
   (window as any).is_template_loaded = (templateId: string) => wasm.is_template_loaded(templateId);
   // Expose scene snapshot read for UI panels
   (window as any).get_scene_snapshot = () => wasm.get_scene_snapshot();
+  // Expose DynamicScene export (Hito 0 §9.5) for UI/tests
+  (window as any).export_dynamic_scene_wasm = (json: string) =>
+    wasm.export_dynamic_scene_wasm(json);
   // Expose sendMoveSprite (LinearBus raw command, used by legacy tests)
   (window as any).sendMoveSprite = sendMoveSprite;
   // Expose OPFS bridge functions for wasm_bindgen externs
@@ -197,6 +200,56 @@ export async function getSceneSnapshot(): Promise<any | null> {
     return JSON.parse(snap);
   }
   return snap;
+}
+
+/**
+ * A non-fatal issue surfaced during the DynamicScene export.
+ */
+export interface ExportWarning {
+  entity_stable_id: string | null;
+  component_type_id: string | null;
+  message: string;
+}
+
+/**
+ * The DynamicScene export artifact (Hito 0 §9.5).
+ * Shape: `{ version, source_scene_id, entities: [...], warnings: [...] }`.
+ */
+export interface DynamicSceneExportResult {
+  version: string;
+  source_scene_id: string;
+  entities: Array<{
+    stable_id: string;
+    name: string;
+    parent_stable_id: string | null;
+    components: Record<string, unknown>;
+  }>;
+  warnings: ExportWarning[];
+}
+
+/**
+ * Export a SceneDocument (as JSON string) to a Bevy-compatible runtime scene
+ * representation. Returns the parsed result object.
+ *
+ * Throws if the input is not a valid SceneDocument JSON.
+ */
+export async function exportDynamicScene(
+  sceneJson: string
+): Promise<DynamicSceneExportResult> {
+  const raw = await (window as any).export_dynamic_scene_wasm(sceneJson);
+  if (typeof raw !== "string") {
+    throw new Error("export_dynamic_scene_wasm returned a non-string value");
+  }
+  const response = JSON.parse(raw);
+  // Response shape: `{ json: "<inner export JSON>", warnings: [...] }`.
+  // The inner JSON is a string (so we can preserve nested serde_json::Value
+  // that would otherwise be mangled by serde_wasm_bindgen::to_value).
+  const inner: DynamicSceneExportResult =
+    typeof response.json === "string"
+      ? JSON.parse(response.json)
+      : response.json;
+  inner.warnings = response.warnings ?? [];
+  return inner;
 }
 
 export function isEngineReady() {
