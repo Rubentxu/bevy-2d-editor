@@ -1,0 +1,316 @@
+/* UI Panels styles for Hito 0 */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+body {
+  background: #1a1a2e;
+  color: #eee;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* Top bar */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #333;
+  background: #16213e;
+  height: 48px;
+  flex-shrink: 0;
+}
+
+.topbar h1 {
+  font-size: 16px;
+  margin: 0;
+  margin-right: 16px;
+  color: #fff;
+}
+
+.topbar button {
+  background: #1a1a2e;
+  color: #eee;
+  border: 1px solid #444;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.topbar button:hover:not(:disabled) {
+  background: #0f3460;
+  border-color: #666;
+}
+
+.topbar button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.topbar .status {
+  margin-left: auto;
+  font-size: 12px;
+  color: #888;
+}
+
+.topbar .error {
+  background: #5c1a1a;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: #ffcccc;
+  font-size: 12px;
+  max-width: 400px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Main area: 3-column */
+
+.main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.canvas-container {
+  flex: 1;
+  position: relative;
+  background: #0a0a14;
+  overflow: hidden;
+}
+
+#bevy-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Panels (Hierarchy + Inspector) */
+
+.panel {
+  width: 280px;
+  padding: 12px;
+  border-right: 1px solid #333;
+  background: #16213e;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.panel.inspector {
+  border-right: none;
+  border-left: 1px solid #333;
+}
+
+.panel h2 {
+  font-size: 14px;
+  margin: 0 0 12px 0;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.panel-empty {
+  color: #666;
+  font-style: italic;
+  padding: 16px;
+  text-align: center;
+}
+
+/* Hierarchy */
+
+.entity {
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.entity:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.entity.selected {
+  background: #0f3460;
+}
+
+.entity .name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.entity .id {
+  color: #666;
+  font-size: 11px;
+  font-family: monospace;
+}
+
+/* Inspector */
+
+.inspector input.entity-name {
+  background: #1a1a2e;
+  color: #fff;
+  border: 1px solid #444;
+  padding: 6px 10px;
+  border-radius: 4px;
+  width: 100%;
+  font-size: 14px;
+  font-weight: bold;
+  margin-bottom: 12px;
+}
+
+.inspector input.entity-name:focus {
+  border-color: #0f3460;
+  outline: none;
+}
+
+.component-card {
+  background: #0f3460;
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+.component-card header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.component-card .type-id {
+  font-weight: bold;
+  font-size: 13px;
+  flex: 1;
+  color: #fff;
+  font-family: monospace;
+}
+
+.component-card .remove-btn {
+  background: #5c1a1a;
+  color: #fff;
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+}
+
+.component-card .remove-btn:hover {
+  background: #8c2424;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.field-label {
+  font-size: 12px;
+  color: #aaa;
+  min-width: 80px;
+  font-family: monospace;
+}
+
+.field input,
+.field select {
+  flex: 1;
+  background: #1a1a2e;
+  color: #eee;
+  border: 1px solid #444;
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-size: 13px;
+}
+
+.field input:focus,
+.field select:focus {
+  border-color: #0f3460;
+  outline: none;
+}
+
+.vec2-fields,
+.color-fields {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+
+.vec2-fields input,
+.color-fields input {
+  flex: 1;
+}
+
+/* Add Component button */
+
+.add-component {
+  position: relative;
+  margin-top: 8px;
+}
+
+.add-component button.add-btn {
+  width: 100%;
+  background: #1a1a2e;
+  color: #4a9eff;
+  border: 1px dashed #4a9eff;
+  padding: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.add-component button.add-btn:hover {
+  background: #0f3460;
+}
+
+.add-component .dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #16213e;
+  border: 1px solid #444;
+  border-radius: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 10;
+  margin-top: 4px;
+}
+
+.add-component .dropdown-item {
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: monospace;
+}
+
+.add-component .dropdown-item:hover {
+  background: #0f3460;
+}
