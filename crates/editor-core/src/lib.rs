@@ -485,10 +485,25 @@ fn spawn_entity(commands: &mut Commands, entity: &Entity) {
         // Insert our Anchor AFTER Sprite so it overrides the auto-required default.
         let raw_anchor = anchor_str.as_deref().unwrap_or("Center");
         if !is_known_anchor_str(raw_anchor) {
-            warn!(
-                "Sprite2D anchor '{}' on entity {} is not recognized; using Center",
-                raw_anchor, entity.id
-            );
+            // Use web-sys console.warn directly so the message reaches the browser
+            // devtools / Playwright console listeners (Bevy's warn! goes to the
+            // logger plugin, which is not configured to forward to the browser
+            // console in this WASM build).
+            #[cfg(target_arch = "wasm32")]
+            {
+                let msg = format!(
+                    "[editor-core] Sprite2D anchor '{}' on entity {} is not recognized; using Center",
+                    raw_anchor, entity.id
+                );
+                web_sys::console::warn_1(&JsValue::from_str(&msg));
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                eprintln!(
+                    "[editor-core] Sprite2D anchor '{}' on entity {} is not recognized; using Center",
+                    raw_anchor, entity.id
+                );
+            }
         }
         let bevy_anchor = anchor_str_to_bevy_anchor(raw_anchor);
         cmd.insert(Anchor::from(bevy_anchor.0));
