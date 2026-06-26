@@ -552,6 +552,10 @@ extern "C" {
     /// JS-side: `window.opfs_exists(path) -> Promise<boolean>`
     #[wasm_bindgen(js_namespace = window, js_name = opfs_exists)]
     pub fn opfs_exists_raw(path: &str) -> js_sys::Promise;
+
+    /// JS-side: `window.opfs_delete_file(path) -> Promise<{ok, error?}>`
+    #[wasm_bindgen(js_namespace = window, js_name = opfs_delete_file)]
+    pub fn opfs_delete_file_raw(path: &str) -> js_sys::Promise;
 }
 
 async fn js_save_file(path: &str, contents: &str) -> Result<(), String> {
@@ -695,4 +699,150 @@ pub async fn list_scenes() -> Result<JsValue, JsValue> {
 #[wasm_bindgen]
 pub async fn project_exists() -> bool {
     js_exists(PROJECT_FILE).await
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Schema Registry Persistence — wasm_bindgen surface
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Helper: get a schema's JSON from the combined registry.
+fn get_schema_json(type_id: &str) -> Result<String, JsValue> {
+    let combined = schema::combined_registry();
+    let schema = combined
+        .get(type_id)
+        .ok_or_else(|| JsValue::from_str(&format!("Schema not found: {}", type_id)))?;
+    serde_json::to_string(schema).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Helper: update project.json's schemas list (add or remove a type_id).
+async fn update_project_schemas(type_id: &str, add: bool) -> Result<(), String> {
+    let mut project = if js_exists(PROJECT_FILE).await {
+        match js_load_file(PROJECT_FILE).await {
+            Ok(json_str) => serde_json::from_str::<ProjectMetadata>(&json_str).unwrap_or_default(),
+            Err(_) => ProjectMetadata::default(),
+        }
+    } else {
+        ProjectMetadata::default()
+    };
+
+    if add {
+        if !project.schemas.contains(&type_id.to_string()) {
+            project.schemas.push(type_id.to_string());
+        }
+    } else {
+        project.schemas.retain(|s| s != type_id);
+    }
+
+    let json = serde_json::to_string(&project).map_err(|e| e.to_string())?;
+    js_save_file(PROJECT_FILE, &json).await
+}
+
+/// Save a schema to OPFS at `schemas/<type_id>.schema.json`.
+#[wasm_bindgen]
+pub async fn save_schema(type_id: &str) -> Result<String, JsValue> {
+    let schema_json = get_schema_json(type_id)?;
+    let path = persistence::schema_path(type_id);
+    js_save_file(&path, &schema_json)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+    update_project_schemas(type_id, true)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+    Ok(path)
+}
+
+/// Load a schema from OPFS and register it in the combined registry.
+#[wasm_bindgen]
+pub async fn load_schema(type_id: &str) -> Result<(), JsValue> {
+    let path = persistence::schema_path(type_id);
+    let json_str = js_load_file(&path).await.map_err(|e| JsValue::from_str(&e))?;
+    let schema: schema::ComponentSchema = serde_json::from_str(&json_str)
+        .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+    schema::register_schema(schema).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    Ok(())
+}
+
+/// Delete a schema from OPFS and unregister it (built-ins protected).
+#[wasm_bindgen]
+pub async fn delete_schema(type_id: &str) -> Result<(), JsValue> {
+    if schema::is_builtin_type(type_id) {
+        return Err(JsValue::from_str("Cannot delete built-in schema"));
+    }
+    let path = persistence::schema_path(type_id);
+    let promise = opfs_delete_file_raw(&path);
+    js_await(promise)
+        .await
+        .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+    schema::unregister_schema(type_id).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    update_project_schemas(type_id, false)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+    Ok(())
+}
+
+/// List all schemas (built-in + user).
+#[wasm_bindgen]
+pub fn list_schemas() -> Result<JsValue, JsValue> {
+    let combined = schema::combined_registry();
+    let type_ids: Vec<String> = combined.iter().map(|s| s.type_id.clone()).collect();
+    serde_wasm_bindgen::to_value(&type_ids).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Register a schema from JSON (in-memory only, no OPFS save).
+/// Built-in schemas (editor.*) are rejected.
+#[wasm_bindgen]
+pub fn register_schema_from_json(schema_json: &str) -> Result<(), JsValue> {
+    let schema: schema::ComponentSchema = serde_json::from_str(schema_json)
+        .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+    schema::register_schema(schema).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    Ok(())
+}
+
+/// Unregister a schema (built-ins protected, no OPFS touch).
+#[wasm_bindgen]
+pub fn unregister_schema(type_id: &str) -> Result<(), JsValue> {
+    schema::unregister_schema(type_id).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Check if a type_id is a built-in.
+#[wasm_bindgen]
+pub fn is_builtin_type(type_id: &str) -> bool {
+    schema::is_builtin_type(type_id)
+}
+
+/// Combined registry size (built-ins + user).
+#[wasm_bindgen]
+pub fn combined_registry_size() -> usize {
+    schema::combined_registry().iter().count()
+}
+
+/// Load complete project: project.json + schemas + first scene (atomic).
+#[wasm_bindgen]
+pub async fn load_project() -> Result<(), JsValue> {
+    if !js_exists(PROJECT_FILE).await {
+        return Err(JsValue::from_str("project.json not found"));
+    }
+    let project_json = js_load_file(PROJECT_FILE).await.map_err(|e| JsValue::from_str(&e))?;
+    let project: ProjectMetadata = serde_json::from_str(&project_json)
+        .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+
+    // Register all schemas first (so AddComponent validates against them)
+    for schema_id in &project.schemas {
+        load_schema(schema_id)
+            .await
+            .map_err(|e| {
+                JsValue::from_str(&format!(
+                    "Failed to load schema {}: {:?}",
+                    schema_id,
+                    e.as_string().unwrap_or_default()
+                ))
+            })?;
+    }
+
+    // Load first scene (or none)
+    if let Some(first_scene) = project.scenes.first() {
+        load_scene(first_scene).await?;
+    }
+
+    Ok(())
 }

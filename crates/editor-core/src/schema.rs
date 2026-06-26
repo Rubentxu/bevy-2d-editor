@@ -4,8 +4,10 @@
 //! of component instances used in scene documents.
 
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::OnceLock;
+use thiserror::Error;
 
 /// Field type enumeration for schema field definitions.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -72,9 +74,15 @@ impl ComponentSchemaRegistry {
         self.schemas.get(type_id)
     }
 
-    /// Insert a schema into the registry.
+    /// Insert a schema into the registry. If a schema with the same type_id
+    /// already exists, it is replaced.
     pub fn insert(&mut self, schema: ComponentSchema) {
         self.schemas.insert(schema.type_id.clone(), schema);
+    }
+
+    /// Remove a schema by type_id. Returns the removed schema if found.
+    pub fn remove(&mut self, type_id: &str) -> Option<ComponentSchema> {
+        self.schemas.remove(type_id)
     }
 
     /// Iterate over all schemas.
@@ -192,10 +200,80 @@ impl Default for ComponentSchemaRegistry {
 /// Global singleton registry instance.
 static REGISTRY: OnceLock<ComponentSchemaRegistry> = OnceLock::new();
 
-/// Get the global component schema registry.
+/// Get the global component schema registry (built-ins only).
 /// Initializes with built-in seeds on first call.
 pub fn global_registry() -> &'static ComponentSchemaRegistry {
     REGISTRY.get_or_init(|| ComponentSchemaRegistry::with_builtin_seeds())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mutable user schema registry — runtime additions/deletions
+// ─────────────────────────────────────────────────────────────────────────────
+
+thread_local! {
+    /// Mutable user-defined schemas. Built-ins live in `REGISTRY` (OnceLock)
+    /// and are immutable. User schemas can be added/removed at runtime via
+    /// `register_schema` / `unregister_schema`.
+    static USER_SCHEMAS: RefCell<ComponentSchemaRegistry> = RefCell::new(ComponentSchemaRegistry::new());
+}
+
+/// Returns true if the type_id is a built-in (starts with `editor.`).
+/// Built-ins are immutable: cannot be registered, unregistered, or deleted.
+pub fn is_builtin_type(type_id: &str) -> bool {
+    type_id.starts_with("editor.")
+}
+
+/// Register a user-defined schema in memory (does NOT save to OPFS).
+/// Built-in schemas (editor.*) are rejected.
+pub fn register_schema(schema: ComponentSchema) -> Result<(), SchemaError> {
+    if is_builtin_type(&schema.type_id) {
+        return Err(SchemaError::CannotRegisterBuiltin(schema.type_id));
+    }
+    USER_SCHEMAS.with(|r| r.borrow_mut().insert(schema));
+    Ok(())
+}
+
+/// Unregister a user-defined schema from memory (does NOT delete OPFS file).
+/// Built-in schemas are rejected. Missing schemas are a no-op success.
+pub fn unregister_schema(type_id: &str) -> Result<(), SchemaError> {
+    if is_builtin_type(type_id) {
+        return Err(SchemaError::CannotUnregisterBuiltin(type_id.to_string()));
+    }
+    USER_SCHEMAS.with(|r| {
+        r.borrow_mut().remove(type_id); // ignore if not present
+    });
+    Ok(())
+}
+
+/// Returns a combined registry containing built-ins + user-defined schemas.
+/// User schemas override built-ins if the same type_id is used.
+pub fn combined_registry() -> ComponentSchemaRegistry {
+    let mut combined = ComponentSchemaRegistry::new();
+    for schema in global_registry().iter() {
+        combined.insert(schema.clone());
+    }
+    USER_SCHEMAS.with(|r| {
+        for schema in r.borrow().iter() {
+            combined.insert(schema.clone());
+        }
+    });
+    combined
+}
+
+/// Errors returned by schema registry mutations.
+#[derive(Debug, Error)]
+pub enum SchemaError {
+    #[error("Cannot register built-in schema: {0}")]
+    CannotRegisterBuiltin(String),
+
+    #[error("Cannot unregister built-in schema: {0}")]
+    CannotUnregisterBuiltin(String),
+
+    #[error("Cannot delete built-in schema: {0}")]
+    CannotDeleteBuiltin(String),
+
+    #[error("Schema not found: {0}")]
+    NotFound(String),
 }
 
 #[cfg(test)]
@@ -297,5 +375,127 @@ mod tests {
         let reg2 = global_registry();
         assert_eq!(reg1 as *const _, reg2 as *const _);
         assert_eq!(reg1.iter().count(), 5);
+    }
+
+    // ===== Mutable user schema registry =====
+
+    fn user_schema(type_id: &str) -> ComponentSchema {
+        ComponentSchema {
+            type_id: type_id.to_string(),
+            display_name: type_id.to_string(),
+            fields: vec![FieldDef {
+                name: "value".to_string(),
+                field_type: FieldType::F32,
+                default: serde_json::json!(0.0),
+                constraints: vec![],
+            }],
+            exports_to_bevy: true,
+        }
+    }
+
+    #[test]
+    fn test_is_builtin_type_editor_prefix_true() {
+        assert!(is_builtin_type("editor.Transform2D"));
+        assert!(is_builtin_type("editor.Name"));
+        assert!(is_builtin_type("editor."));
+    }
+
+    #[test]
+    fn test_is_builtin_type_game_prefix_false() {
+        assert!(!is_builtin_type("game.PlayerHealth"));
+        assert!(!is_builtin_type("my.Foo"));
+        assert!(!is_builtin_type(""));
+    }
+
+    #[test]
+    fn test_register_schema_rejects_builtin() {
+        let result = register_schema(user_schema("editor.NewName"));
+        assert!(matches!(result, Err(SchemaError::CannotRegisterBuiltin(_))));
+    }
+
+    #[test]
+    fn test_register_schema_adds_user() {
+        // Cleanup from any prior test
+        let _ = unregister_schema("game.PlayerHealth");
+
+        register_schema(user_schema("game.PlayerHealth")).unwrap();
+        let combined = combined_registry();
+        assert!(combined.get("game.PlayerHealth").is_some());
+
+        // Cleanup
+        let _ = unregister_schema("game.PlayerHealth");
+    }
+
+    #[test]
+    fn test_register_schema_replaces_existing_user() {
+        let _ = unregister_schema("game.EnemyAI");
+        register_schema(user_schema("game.EnemyAI")).unwrap();
+
+        // Replace with schema with different field
+        let mut replacement = user_schema("game.EnemyAI");
+        replacement.fields.push(FieldDef {
+            name: "speed".to_string(),
+            field_type: FieldType::F32,
+            default: serde_json::json!(1.0),
+            constraints: vec![],
+        });
+        register_schema(replacement).unwrap();
+
+        let combined = combined_registry();
+        let schema = combined.get("game.EnemyAI").unwrap();
+        assert_eq!(schema.fields.len(), 2);
+
+        let _ = unregister_schema("game.EnemyAI");
+    }
+
+    #[test]
+    fn test_unregister_schema_removes_user() {
+        let _ = unregister_schema("game.Foo");
+        register_schema(user_schema("game.Foo")).unwrap();
+        assert!(combined_registry().get("game.Foo").is_some());
+        unregister_schema("game.Foo").unwrap();
+        assert!(combined_registry().get("game.Foo").is_none());
+    }
+
+    #[test]
+    fn test_unregister_schema_rejects_builtin() {
+        let result = unregister_schema("editor.Transform2D");
+        assert!(matches!(result, Err(SchemaError::CannotUnregisterBuiltin(_))));
+    }
+
+    #[test]
+    fn test_unregister_schema_nonexistent_is_noop() {
+        let result = unregister_schema("game.NeverRegistered");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_combined_registry_includes_builtins() {
+        let combined = combined_registry();
+        assert_eq!(combined.iter().count(), 5);
+        assert!(combined.get("editor.Name").is_some());
+        assert!(combined.get("editor.Transform2D").is_some());
+    }
+
+    #[test]
+    fn test_combined_registry_includes_user_added() {
+        let _ = unregister_schema("game.Bar");
+        register_schema(user_schema("game.Bar")).unwrap();
+        let combined = combined_registry();
+        assert_eq!(combined.iter().count(), 6);
+        assert!(combined.get("game.Bar").is_some());
+        let _ = unregister_schema("game.Bar");
+    }
+
+    #[test]
+    fn test_remove_method_on_registry() {
+        let mut reg = ComponentSchemaRegistry::new();
+        reg.insert(user_schema("game.X"));
+        assert!(reg.get("game.X").is_some());
+        let removed = reg.remove("game.X");
+        assert!(removed.is_some());
+        assert!(reg.get("game.X").is_none());
+        // Removing non-existent returns None
+        assert!(reg.remove("game.NonExistent").is_none());
     }
 }

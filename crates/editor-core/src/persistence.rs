@@ -13,13 +13,20 @@ pub const PROJECT_FILE: &str = "project.json";
 /// Subdirectory containing SceneDocument files.
 pub const SCENES_DIR: &str = "scenes";
 
+/// Subdirectory containing Component Schema files (one per schema).
+pub const SCHEMAS_DIR: &str = "schemas";
+
 /// Project metadata stored at OPFS root as `project.json`.
-/// Contains version, name, and list of saved scenes.
+/// Contains version, name, list of saved scenes, and list of saved schemas.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProjectMetadata {
     pub version: String,
     pub name: String,
     pub scenes: Vec<String>,
+    /// List of schema type_ids in the project. `#[serde(default)]` so old
+    /// project.json files without this field still parse (empty Vec).
+    #[serde(default)]
+    pub schemas: Vec<String>,
 }
 
 impl Default for ProjectMetadata {
@@ -28,6 +35,7 @@ impl Default for ProjectMetadata {
             version: "0.1".to_string(),
             name: "Untitled Project".to_string(),
             scenes: Vec::new(),
+            schemas: Vec::new(),
         }
     }
 }
@@ -35,6 +43,13 @@ impl Default for ProjectMetadata {
 /// Resolve the OPFS path for a scene file: `scenes/<name>.scene.json`.
 pub fn scene_path(name: &str) -> String {
     format!("{}/{}.scene.json", SCENES_DIR, name)
+}
+
+/// Resolve the OPFS path for a schema file: `schemas/<type_id>.schema.json`.
+/// `type_id` may contain dots (e.g., `editor.Transform2D`); OPFS file names
+/// accept dots.
+pub fn schema_path(type_id: &str) -> String {
+    format!("{}/{}.schema.json", SCHEMAS_DIR, type_id)
 }
 
 #[cfg(test)]
@@ -47,6 +62,7 @@ mod tests {
         assert_eq!(pm.version, "0.1");
         assert_eq!(pm.name, "Untitled Project");
         assert!(pm.scenes.is_empty());
+        assert!(pm.schemas.is_empty());
     }
 
     #[test]
@@ -55,6 +71,7 @@ mod tests {
             version: "0.1".to_string(),
             name: "Test Project".to_string(),
             scenes: vec!["level_01".to_string(), "level_02".to_string()],
+            schemas: vec!["game.PlayerHealth".to_string()],
         };
         let json = serde_json::to_string(&pm).unwrap();
         let rt: ProjectMetadata = serde_json::from_str(&json).unwrap();
@@ -68,6 +85,22 @@ mod tests {
     }
 
     #[test]
+    fn test_schema_path_format() {
+        assert_eq!(schema_path("editor.Transform2D"), "schemas/editor.Transform2D.schema.json");
+        assert_eq!(schema_path("game.PlayerHealth"), "schemas/game.PlayerHealth.schema.json");
+    }
+
+    #[test]
+    fn test_project_metadata_without_schemas_field_deserializes() {
+        // Backward compat: old project.json files without schemas field still parse
+        let json = r#"{"version":"0.1","name":"Old","scenes":["s1"]}"#;
+        let pm: ProjectMetadata = serde_json::from_str(json).unwrap();
+        assert_eq!(pm.name, "Old");
+        assert_eq!(pm.scenes, vec!["s1".to_string()]);
+        assert!(pm.schemas.is_empty()); // default to empty
+    }
+
+    #[test]
     fn test_project_metadata_empty_roundtrip() {
         let pm = ProjectMetadata::default();
         let json = serde_json::to_string(&pm).unwrap();
@@ -78,7 +111,7 @@ mod tests {
     #[test]
     fn test_project_metadata_with_unknown_fields_preserved() {
         // Forward-compat: unknown fields in project.json are preserved on deserialize
-        let json = r#"{"version":"0.1","name":"Test","scenes":[],"future_field":"preserved"}"#;
+        let json = r#"{"version":"0.1","name":"Test","scenes":[],"schemas":[],"future_field":"preserved"}"#;
         // Note: ProjectMetadata uses deny_unknown_fields by default (not set),
         // so unknown fields are silently ignored. We document this as the expected
         // behavior for MVP; if needed, change to #[serde(deny_unknown_fields)] later.
