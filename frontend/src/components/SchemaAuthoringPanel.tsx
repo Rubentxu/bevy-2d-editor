@@ -244,25 +244,17 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
       // Register the schema in memory
       (window as any).register_schema(JSON.stringify(schema));
 
-      // Persist to OPFS
-      const result = (window as any).save_schema(typeId);
-
-      // If save failed, we still have it registered in memory - surface error
-      if (result === false || result?.ok === false) {
+      // Persist to OPFS (async in WASM — must await)
+      try {
+        await (window as any).save_schema(typeId);
+      } catch (e: any) {
         setErrors({
-          general: "Schema was registered but could not be persisted. It will be available for this session.",
+          general: `Schema registered but save failed: ${e?.message ?? "Unknown error"}. Available for this session.`,
         });
-        // Still consider it a success from UX perspective - close panel
         onSaved();
         return;
       }
 
-      onSaved();
-    } catch (e: any) {
-      // Register succeeded but save failed - keep in memory
-      setErrors({
-        general: `Schema registered but save failed: ${e?.message ?? "Unknown error"}. Available for this session.`,
-      });
       onSaved();
     } finally {
       setIsSaving(false);
@@ -278,8 +270,8 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
     if (!confirmed) return;
 
     try {
-      (window as any).unregister_schema(typeId);
-      (window as any).delete_schema(typeId);
+      await (window as any).unregister_schema(typeId);
+      await (window as any).delete_schema(typeId);
       onSaved();
     } catch (e: any) {
       setErrors({ general: `Delete failed: ${e?.message ?? "Unknown error"}` });

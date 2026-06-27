@@ -242,6 +242,10 @@ test.describe("Schema Authoring", () => {
     );
     await page.waitForTimeout(500);
 
+    // Restore project (schemas + scenes) via Load button
+    await page.click('[data-testid="load-btn"]');
+    await page.waitForTimeout(1000);
+
     // Load scene and select entity
     await loadSceneWithEntity(page, "test-e1");
     await selectEntity(page, "test-e1");
