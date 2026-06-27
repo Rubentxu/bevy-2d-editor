@@ -11,12 +11,22 @@ export default defineConfig({
     headless: true,
     snapshotDir: "tests/baselines",
   },
-  webServer: {
-    command: "npx vite",
-    url: "http://localhost:5173",
-    reuseExistingServer: true,
-    timeout: 60_000,
-  },
+  webServer: [
+    {
+      command: "node tests/fixtures/mock-ai-proxy.mjs",
+      url: "http://localhost:11436/health",
+      reuseExistingServer: false,
+      timeout: 10_000,
+      stdout: "ignore",
+      stderr: "pipe",
+    },
+    {
+      command: "npx vite",
+      url: "http://localhost:5173",
+      reuseExistingServer: true,
+      timeout: 60_000,
+    },
+  ],
   projects: [
     {
       name: "chromium",
