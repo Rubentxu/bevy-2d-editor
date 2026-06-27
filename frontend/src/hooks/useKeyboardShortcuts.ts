@@ -7,37 +7,55 @@ interface UseKeyboardShortcutsOptions {
     can_undo: boolean;
     can_redo: boolean;
   };
+  selectedEntityId: string | null;
+  onDeleteEntity: (id: string) => void;
 }
 
 /**
- * React hook for keyboard shortcuts (Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z).
- * Registers a window-level keydown listener that triggers undo/redo
+ * React hook for keyboard shortcuts (Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z / Delete / Backspace).
+ * Registers a window-level keydown listener that triggers undo/redo/delete
  * with input-focus guard and Operation Log state gating.
  */
-export function useKeyboardShortcuts({ onUndo, onRedo, logState }: UseKeyboardShortcutsOptions) {
+export function useKeyboardShortcuts({
+  onUndo,
+  onRedo,
+  logState,
+  selectedEntityId,
+  onDeleteEntity,
+}: UseKeyboardShortcutsOptions) {
   useEffect(() => {
     function handler(e: KeyboardEvent) {
-      const modKey = e.metaKey || e.ctrlKey;
-      if (!modKey) return;
-
-      // Skip if user is typing in an input field
+      // Skip if user is typing in an input field — always check first
       const target = e.target as HTMLElement;
       if (target.closest("input,textarea,[contenteditable=\"true\"]")) return;
 
-      if (e.key.toLowerCase() === "z" && !e.shiftKey) {
-        e.preventDefault();
-        if (logState.can_undo) {
-          onUndo();
+      const modKey = e.metaKey || e.ctrlKey;
+
+      if (modKey) {
+        // Modifier keys: Ctrl+Z, Ctrl+Y, Ctrl+Shift+Z
+        if (e.key.toLowerCase() === "z" && !e.shiftKey) {
+          e.preventDefault();
+          if (logState.can_undo) {
+            onUndo();
+          }
+        } else if (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey)) {
+          e.preventDefault();
+          if (logState.can_redo) {
+            onRedo();
+          }
         }
-      } else if (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey)) {
-        e.preventDefault();
-        if (logState.can_redo) {
-          onRedo();
+      } else {
+        // Bare keys: Delete, Backspace — delete selected entity
+        if (e.key === "Delete" || e.key === "Backspace") {
+          e.preventDefault();
+          if (selectedEntityId) {
+            onDeleteEntity(selectedEntityId);
+          }
         }
       }
     }
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onUndo, onRedo, logState.can_undo, logState.can_redo]);
+  }, [onUndo, onRedo, logState.can_undo, logState.can_redo, selectedEntityId, onDeleteEntity]);
 }

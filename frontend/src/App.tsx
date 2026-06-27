@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import "./styles.css";
 import { initEngine, isEngineReady } from "./engine-bridge";
 import { useSceneState, SceneDocument } from "./hooks/useSceneState";
@@ -124,7 +124,22 @@ export default function App() {
     if (result.error) setError(`Add component failed: ${result.error}`);
   };
 
-  useKeyboardShortcuts({ onUndo: handleUndo, onRedo: handleRedo, logState });
+  const handleDeleteEntity = useCallback(async (id: string) => {
+    if (!id) return;
+    await dispatch({
+      command: { type: "DeleteEntity", id },
+      metadata: { authorship: "keyboard", timestamp: Date.now() },
+    });
+    setSelectedEntityId(null);
+  }, [dispatch]);
+
+  useKeyboardShortcuts({
+    onUndo: handleUndo,
+    onRedo: handleRedo,
+    logState,
+    selectedEntityId,
+    onDeleteEntity: handleDeleteEntity,
+  });
 
   return (
     <div className="app">
