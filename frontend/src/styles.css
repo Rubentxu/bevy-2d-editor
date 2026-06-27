@@ -997,3 +997,197 @@ body {
   border-color: #4a9eff;
   color: #4a9eff;
 }
+
+/* ── Scene Tabs ─────────────────────────────────────────────────────────── */
+
+.scene-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 16px;
+  background: #0d1b2a;
+  border-bottom: 1px solid #333;
+  height: 36px;
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+.scene-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 4px 4px 0 0;
+  background: #1a2744;
+  border: 1px solid #2a3a5a;
+  border-bottom: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: #a0aec0;
+  white-space: nowrap;
+  user-select: none;
+  position: relative;
+}
+
+.scene-tab:hover {
+  background: #1e3050;
+  color: #e2e8f0;
+}
+
+.scene-tab.active {
+  background: #1a1a2e;
+  border-color: #4a9eff;
+  color: #fff;
+  font-weight: 500;
+}
+
+.scene-tab-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scene-tab-dirty-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f6ad55;
+  flex-shrink: 0;
+}
+
+.scene-tab-new-btn {
+  background: transparent;
+  border: 1px dashed #4a5568;
+  color: #a0aec0;
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.scene-tab-new-btn:hover {
+  border-color: #4a9eff;
+  color: #4a9eff;
+}
+
+.scene-tab-rename-input {
+  background: #0d1b2a;
+  border: 1px solid #4a9eff;
+  color: #fff;
+  border-radius: 2px;
+  padding: 1px 4px;
+  font-size: 13px;
+  width: 100px;
+  outline: none;
+}
+
+.scene-tab-context-menu {
+  position: fixed;
+  background: #16213e;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 4px;
+  z-index: 1000;
+  min-width: 100px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+.scene-tab-context-menu button {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  background: transparent;
+  border: none;
+  color: #e2e8f0;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 13px;
+}
+
+.scene-tab-context-menu button:hover {
+  background: #1a2744;
+}
+
+.scene-tab-context-menu button.danger {
+  color: #fc8181;
+}
+
+.scene-tab-context-menu button.danger:hover {
+  background: #742a2a;
+}
+
+/* ── Unsaved Changes Dialog ──────────────────────────────────────────────── */
+
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.dialog {
+  background: #16213e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 24px;
+  min-width: 320px;
+  max-width: 400px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.dialog h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  color: #fff;
+}
+
+.dialog p {
+  margin: 0 0 20px;
+  color: #a0aec0;
+  font-size: 14px;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.dialog button {
+  padding: 6px 16px;
+  border-radius: 4px;
+  border: 1px solid #4a5568;
+  background: #1a2744;
+  color: #e2e8f0;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.dialog button:hover {
+  background: #1e3050;
+}
+
+.dialog button.primary {
+  background: #2b6cb0;
+  border-color: #4299e1;
+  color: #fff;
+}
+
+.dialog button.primary:hover {
+  background: #2c5282;
+}
+
+.dialog button.danger {
+  background: #742a2a;
+  border-color: #c53030;
+  color: #fc8181;
+}
+
+.dialog button.danger:hover {
+  background: #922222;
+}

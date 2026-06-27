@@ -104,6 +104,15 @@ export async function initEngine(
     wasm.export_dynamic_scene_wasm(json);
   // Expose Rust code export (PR2 — code-export)
   (window as any).export_code = (json: string) => wasm.export_code(json);
+
+  // ── Scene Registry (PR2 multi-scene) ──────────────────────────────────────
+  (window as any).scene_create = (name: string) => wasm.scene_create(name);
+  (window as any).scene_switch = (id: string) => wasm.scene_switch(id);
+  (window as any).scene_switch_commit = (id: string) => wasm.scene_switch_commit(id);
+  (window as any).scene_delete = (id: string) => wasm.scene_delete(id);
+  (window as any).scene_rename = (id: string, newName: string) => wasm.scene_rename(id, newName);
+  (window as any).list_scenes_extended = () => wasm.list_scenes_extended();
+  (window as any).get_current_scene_id = () => wasm.get_current_scene_id();
   // Expose sendMoveSprite (LinearBus raw command, used by legacy tests)
   (window as any).sendMoveSprite = sendMoveSprite;
   // Expose OPFS bridge functions for wasm_bindgen externs
