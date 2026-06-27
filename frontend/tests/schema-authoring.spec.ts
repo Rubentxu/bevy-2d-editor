@@ -59,7 +59,8 @@ async function addField(
     await numInput.fill(defaultValue);
     await numInput.blur();
   } else if (fieldType === "String") {
-    const textInput = fieldRow.locator('input[type="text"]').first();
+    // Use .schema-default-value input, NOT the name input (both are type="text")
+    const textInput = fieldRow.locator(".schema-default-value input[type=text]");
     await textInput.fill(defaultValue);
     await textInput.blur();
   } else if (fieldType === "Vec2") {
