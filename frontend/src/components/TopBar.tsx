@@ -6,6 +6,8 @@ interface Props {
   onRedo: () => void;
   onSave: () => void;
   onLoad: () => void;
+  onToggleAI: () => void;
+  aiPanelOpen: boolean;
   error: string | null;
   onDismissError: () => void;
 }
@@ -16,6 +18,8 @@ export default function TopBar({
   onRedo,
   onSave,
   onLoad,
+  onToggleAI,
+  aiPanelOpen,
   error,
   onDismissError,
 }: Props) {
@@ -43,6 +47,14 @@ export default function TopBar({
       </button>
       <button onClick={onLoad} data-testid="load-btn" title="Load project (restores scenes + schemas + templates)">
         Load Project
+      </button>
+      <button
+        onClick={onToggleAI}
+        data-testid="ai-panel-btn"
+        title={aiPanelOpen ? "Close AI panel" : "Open AI panel"}
+        className={aiPanelOpen ? "ai-btn active" : "ai-btn"}
+      >
+        ✨ AI
       </button>
       {error && (
         <span
