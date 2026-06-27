@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import SchemaAuthoringPanel, { ComponentSchema } from "./SchemaAuthoringPanel";
 
 interface Props {
@@ -25,6 +25,8 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
   const [schemas, setSchemas] = useState<string[]>([]);
   const [editingSchema, setEditingSchema] = useState<string | null>(null);
   const [editInitialData, setEditInitialData] = useState<ComponentSchema | undefined>();
+  // Store last saved schema data so edit mode can use it without re-reading from OPFS
+  const lastSavedSchemaRef = useRef<ComponentSchema | null>(null);
 
   useEffect(() => {
     // Fetch all schemas via window-exposed bridge function
@@ -54,10 +56,17 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
         return; // Can't edit builtins
       }
     }
-    // Load schema data for editing
+
+    // First check if we have the schema from a recent save
+    if (lastSavedSchemaRef.current && lastSavedSchemaRef.current.type_id === schemaId) {
+      setEditInitialData(lastSavedSchemaRef.current);
+      setEditingSchema(schemaId);
+      return;
+    }
+
+    // Load schema data from OPFS
     if (typeof (window as any).load_schema === "function") {
       try {
-        // load_schema is async and returns the schema JSON string
         const schemaJson = await (window as any).load_schema(schemaId);
         if (schemaJson) {
           const schema = typeof schemaJson === "string" ? JSON.parse(schemaJson) : schemaJson;
@@ -66,7 +75,6 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
         }
       } catch (e) {
         console.error("load_schema failed:", e);
-        // Open with just the typeId
         setEditInitialData({
           type_id: schemaId,
           display_name: schemaId.split(".").pop() ?? schemaId,
@@ -79,7 +87,11 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
     }
   }
 
-  function handleEditSaved() {
+  function handleEditSaved(schemaData?: ComponentSchema) {
+    // Store the schema data so handleEditClick can use it directly
+    if (schemaData) {
+      lastSavedSchemaRef.current = schemaData;
+    }
     setEditingSchema(null);
     setEditInitialData(undefined);
     // Refresh schemas list

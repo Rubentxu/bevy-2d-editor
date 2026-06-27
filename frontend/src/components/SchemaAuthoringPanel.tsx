@@ -23,7 +23,7 @@ interface Props {
   mode: "create" | "edit";
   initial?: ComponentSchema;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (schemaData?: ComponentSchema) => void;
 }
 
 interface ValidationErrors {
@@ -242,7 +242,10 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
 
     try {
       // Register the schema in memory
-      (window as any).register_schema(JSON.stringify(schema));
+      const regResult = (window as any).register_schema(JSON.stringify(schema));
+      if (regResult instanceof Promise || (regResult && typeof regResult.then === "function")) {
+        await regResult;
+      }
 
       // Persist to OPFS (async in WASM — must await)
       try {
@@ -251,11 +254,11 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
         setErrors({
           general: `Schema registered but save failed: ${e?.message ?? "Unknown error"}. Available for this session.`,
         });
-        onSaved();
+        onSaved(schema);
         return;
       }
 
-      onSaved();
+      onSaved(schema);
     } finally {
       setIsSaving(false);
     }
