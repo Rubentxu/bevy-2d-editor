@@ -57,6 +57,8 @@ export interface CommandMetadata {
   authorship: Authorship;
   timestamp: TimestampMs;
   rationale?: string;
+  /** Optional model identifier returned by the AI proxy */
+  model?: string;
 }
 
 /** Mirrors Rust CommandEnvelope */
