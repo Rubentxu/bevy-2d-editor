@@ -919,6 +919,16 @@ pub fn combined_registry_size() -> usize {
     schema::combined_registry().iter().count()
 }
 
+/// Return the full combined registry (built-ins + user) as a JSON array string.
+/// Used by the AI-assisted editing frontend service to send schema context
+/// to the Ollama/OpenAI proxy endpoint.
+#[wasm_bindgen]
+pub fn get_combined_schemas_json() -> String {
+    let combined = schema::combined_registry();
+    let schemas: Vec<&schema::ComponentSchema> = combined.iter().collect();
+    serde_json::to_string(&schemas).unwrap_or_else(|_| "[]".to_string())
+}
+
 /// Load complete project: project.json + schemas + templates + first scene (atomic).
 #[wasm_bindgen]
 pub async fn load_project() -> Result<(), JsValue> {

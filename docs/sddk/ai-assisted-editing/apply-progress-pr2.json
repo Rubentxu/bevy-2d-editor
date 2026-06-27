@@ -1,0 +1,33 @@
+{
+  "change_name": "ai-assisted-editing",
+  "pr": 2,
+  "branch": "feat/ai-assisted-editing-pr2-wasm-bridge",
+  "status": "completed",
+  "completed_tasks": [
+    "4.1 wasm: get_combined_schemas_json export",
+    "4.2 frontend: expose get_combined_schemas_json on window",
+    "5.1 frontend: ai-assistant.ts with fetchPropose + error types",
+    "5.2 frontend: ai-settings.ts with getProxyUrl/setProxyUrl"
+  ],
+  "files_created": [
+    "frontend/src/services/ai-assistant.ts",
+    "frontend/src/services/ai-settings.ts"
+  ],
+  "files_modified": [
+    "crates/editor-core/src/lib.rs",
+    "frontend/src/engine-bridge.ts"
+  ],
+  "files_stubbed": [
+    "crates/ai-proxy/Cargo.toml"
+  ],
+  "test_results": {
+    "tsc_noEmit": "clean",
+    "wasm_pack_build": "success"
+  },
+  "notes": [
+    "crates/ai-proxy/Cargo.toml was missing (pre-existing broken state from PR 1) — stubbed to unblock wasm-pack",
+    "Proxy URL defaults to http://localhost:11435",
+    "fetchPropose timeout is 30s default",
+    "Error mapping: 400→InvalidRequestError, 503→MissingApiKeyError, 502→UpstreamError, network→NetworkError"
+  ]
+}
