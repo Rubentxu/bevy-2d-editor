@@ -106,14 +106,12 @@ Delete Key (Del/Backspace)                                    ✅     ✅
 
 | Item | Description | Blocking |
 |------|-------------|----------|
-| **Keyboard shortcuts PR** | gh CLI not available — manual PR needed | No |
-| **pixelmatch quantitative diff** | Tests pass but use Buffer equality; should upgrade to use pixelmatch for quantitative output | No (tech debt) |
+| **pixelmatch quantitative diff** | Tests use Playwright toHaveScreenshot; could upgrade to pixelmatch for per-pixel quantitative output | No (tech debt) |
 
 ### Medium Priority (Hito 0 residual)
 
 | Item | Description |
 |------|-------------|
-| **Keyboard shortcut: Delete key** | Delete selected entity via keyboard |
 | **Entity drag-and-drop** | Reorder entities in hierarchy via drag |
 | **Component schema authoring UI** | UI to create new component schemas (not just use existing ones) |
 | **Entity rename inline** | Double-click entity name in hierarchy to rename |
