@@ -1,9 +1,11 @@
+import { useState, useEffect } from "react";
 import { SceneDocument } from "../hooks/useSceneState";
 
 interface Props {
   scene: SceneDocument | null;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  onRename: (entityId: string, newName: string) => void;
 }
 
 /**
@@ -23,7 +25,28 @@ function entityDepth(entity: SceneDocument["entities"][number], allEntities: Sce
   return depth;
 }
 
-export default function HierarchyPanel({ scene, selectedId, onSelect }: Props) {
+export default function HierarchyPanel({ scene, selectedId, onSelect, onRename }: Props) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+
+  // Clear stale editingId if the entity disappears mid-edit
+  useEffect(() => {
+    if (editingId !== null && !scene?.entities.some((e) => e.id === editingId)) {
+      setEditingId(null);
+    }
+  }, [editingId, scene]);
+
+  const commitRename = (entity: SceneDocument["entities"][number]) => {
+    if (editingId !== entity.id) return;
+    const trimmed = editValue.trim();
+    if (trimmed === "" || trimmed === entity.name) {
+      setEditingId(null);
+      return;
+    }
+    onRename(entity.id, trimmed);
+    setEditingId(null);
+  };
+
   if (!scene) {
     return (
       <div className="panel" data-testid="hierarchy-panel">
@@ -58,7 +81,35 @@ export default function HierarchyPanel({ scene, selectedId, onSelect }: Props) {
               }}
               data-testid={`hierarchy-entity-${entity.id}`}
             >
-              <span className="name">{entity.name}</span>
+              {editingId === entity.id ? (
+                <input
+                  data-testid="hierarchy-rename-input"
+                  className="name-input"
+                  autoFocus
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={() => commitRename(entity)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      commitRename(entity);
+                    } else if (e.key === "Escape") {
+                      setEditingId(null);
+                    }
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <span
+                  className="name"
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    setEditingId(entity.id);
+                    setEditValue(entity.name);
+                  }}
+                >
+                  {entity.name}
+                </span>
+              )}
               <span className="id">{entity.id.slice(0, 8)}</span>
             </div>
           );
