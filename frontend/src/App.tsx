@@ -3,6 +3,7 @@ import "./styles.css";
 import { initEngine, isEngineReady } from "./engine-bridge";
 import { useSceneState, SceneDocument } from "./hooks/useSceneState";
 import { useLogState } from "./hooks/useLogState";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import TopBar from "./components/TopBar";
 import HierarchyPanel from "./components/HierarchyPanel";
 import InspectorPanel from "./components/InspectorPanel";
@@ -122,6 +123,8 @@ export default function App() {
     });
     if (result.error) setError(`Add component failed: ${result.error}`);
   };
+
+  useKeyboardShortcuts({ onUndo: handleUndo, onRedo: handleRedo, logState });
 
   return (
     <div className="app">
