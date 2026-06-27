@@ -20,8 +20,6 @@ export function useKeyboardShortcuts({ onUndo, onRedo, logState }: UseKeyboardSh
       const modKey = e.metaKey || e.ctrlKey;
       if (!modKey) return;
 
-      const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
-
       // Skip if user is typing in an input field
       const target = e.target as HTMLElement;
       if (target.closest("input,textarea,[contenteditable=\"true\"]")) return;
