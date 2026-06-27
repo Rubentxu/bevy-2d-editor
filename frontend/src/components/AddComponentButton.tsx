@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import SchemaAuthoringPanel, { ComponentSchema } from "./SchemaAuthoringPanel";
 
 interface Props {
   entityId: string;
@@ -22,6 +23,8 @@ const DEFAULT_VALUES: Record<string, any> = {
 export default function AddComponentButton({ entityId, onAdd }: Props) {
   const [open, setOpen] = useState(false);
   const [schemas, setSchemas] = useState<string[]>([]);
+  const [editingSchema, setEditingSchema] = useState<string | null>(null);
+  const [editInitialData, setEditInitialData] = useState<ComponentSchema | undefined>();
 
   useEffect(() => {
     // Fetch all schemas via window-exposed bridge function
@@ -44,6 +47,51 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
     fetchSchemas();
   }, [entityId]);
 
+  function handleEditClick(e: React.MouseEvent, schemaId: string) {
+    e.stopPropagation();
+    if (typeof (window as any).is_builtin_type === "function") {
+      if ((window as any).is_builtin_type(schemaId)) {
+        return; // Can't edit builtins
+      }
+    }
+    // Load schema data for editing
+    if (typeof (window as any).load_schema === "function") {
+      try {
+        const schemaJson = (window as any).load_schema(schemaId);
+        if (schemaJson) {
+          const schema = typeof schemaJson === "string" ? JSON.parse(schemaJson) : schemaJson;
+          setEditInitialData(schema);
+          setEditingSchema(schemaId);
+        }
+      } catch (e) {
+        console.error("load_schema failed:", e);
+        // Open with just the typeId
+        setEditInitialData({
+          type_id: schemaId,
+          display_name: schemaId.split(".").pop() ?? schemaId,
+          exports_to_bevy: true,
+          fields: [],
+          version: "0.1",
+        });
+        setEditingSchema(schemaId);
+      }
+    }
+  }
+
+  function handleEditSaved() {
+    setEditingSchema(null);
+    setEditInitialData(undefined);
+    // Refresh schemas list
+    if (typeof (window as any).list_schemas === "function") {
+      try {
+        const s = (window as any).list_schemas();
+        setSchemas(s);
+      } catch (e) {
+        console.error("list_schemas failed:", e);
+      }
+    }
+  }
+
   return (
     <div className="add-component" data-testid={`add-component-${entityId}`}>
       <button
@@ -60,20 +108,56 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
               No schemas available
             </div>
           )}
-          {schemas.map((s) => (
-            <div
-              key={s}
-              className="dropdown-item"
-              onClick={() => {
-                onAdd(s);
-                setOpen(false);
-              }}
-              data-testid={`add-schema-${s}`}
-            >
-              {s}
-            </div>
-          ))}
+          {schemas.map((s) => {
+            const isBuiltin =
+              typeof (window as any).is_builtin_type === "function"
+                ? (window as any).is_builtin_type(s)
+                : false;
+            return (
+              <div
+                key={s}
+                className="dropdown-item"
+                onClick={() => {
+                  onAdd(s);
+                  setOpen(false);
+                }}
+                data-testid={`add-schema-${s}`}
+              >
+                <span>{s}</span>
+                {!isBuiltin && (
+                  <button
+                    type="button"
+                    className="edit-icon"
+                    onClick={(e) => handleEditClick(e, s)}
+                    title={`Edit ${s}`}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "#4a9eff",
+                      cursor: "pointer",
+                      padding: "2px 6px",
+                      fontSize: "12px",
+                      marginLeft: "auto",
+                    }}
+                  >
+                    ✎
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
+      )}
+      {editingSchema && (
+        <SchemaAuthoringPanel
+          mode="edit"
+          initial={editInitialData}
+          onClose={() => {
+            setEditingSchema(null);
+            setEditInitialData(undefined);
+          }}
+          onSaved={handleEditSaved}
+        />
       )}
     </div>
   );
