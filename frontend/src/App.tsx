@@ -4,9 +4,11 @@ import { initEngine, isEngineReady } from "./engine-bridge";
 import { useSceneState, SceneDocument } from "./hooks/useSceneState";
 import { useLogState } from "./hooks/useLogState";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
+import { useAIAssistant } from "./hooks/useAIAssistant";
 import TopBar from "./components/TopBar";
 import HierarchyPanel from "./components/HierarchyPanel";
 import InspectorPanel from "./components/InspectorPanel";
+import AIAssistantPanel from "./components/AIAssistantPanel";
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -20,6 +22,45 @@ export default function App() {
 
   const { scene, refresh, dispatch } = useSceneState();
   const logState = useLogState();
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [applyingIds, setApplyingIds] = useState<Set<string>>(new Set());
+
+  const {
+    prompt,
+    setPrompt,
+    loading: aiLoading,
+    proposals,
+    error: aiError,
+    submit,
+    applyProposal,
+    discardProposal,
+  } = useAIAssistant({
+    onApplied: refresh,
+  });
+
+  const handleToggleAI = useCallback(() => {
+    setAiPanelOpen((prev) => !prev);
+  }, []);
+
+  const handleSubmitAI = useCallback(async () => {
+    await submit(dispatch);
+  }, [submit, dispatch]);
+
+  const handleApplyProposal = useCallback(
+    async (proposalId: string) => {
+      setApplyingIds((prev) => new Set([...prev, proposalId]));
+      try {
+        await applyProposal(proposalId, dispatch);
+      } finally {
+        setApplyingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(proposalId);
+          return next;
+        });
+      }
+    },
+    [applyProposal, dispatch],
+  );
 
   useEffect(() => {
     if (initGuard.get()) return;
@@ -149,10 +190,23 @@ export default function App() {
         onRedo={handleRedo}
         onSave={handleSave}
         onLoad={handleLoad}
+        onToggleAI={handleToggleAI}
+        aiPanelOpen={aiPanelOpen}
         error={error || initError}
         onDismissError={() => setError(null)}
       />
       <div className="main">
+        {aiPanelOpen && (
+          <AIAssistantPanel
+            aiState={{ prompt, loading: aiLoading, proposals, error: aiError }}
+            onToggle={handleToggleAI}
+            onPromptChange={setPrompt}
+            onSubmit={handleSubmitAI}
+            onApply={handleApplyProposal}
+            onDiscard={discardProposal}
+            applyingIds={applyingIds}
+          />
+        )}
         <HierarchyPanel
           scene={scene}
           selectedId={selectedEntityId}
