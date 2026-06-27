@@ -856,13 +856,13 @@ pub async fn save_schema(type_id: &str) -> Result<String, JsValue> {
 
 /// Load a schema from OPFS and register it in the combined registry.
 #[wasm_bindgen]
-pub async fn load_schema(type_id: &str) -> Result<(), JsValue> {
+pub async fn load_schema(type_id: &str) -> Result<String, JsValue> {
     let path = persistence::schema_path(type_id);
     let json_str = js_load_file(&path).await.map_err(|e| JsValue::from_str(&e))?;
     let schema: schema::ComponentSchema = serde_json::from_str(&json_str)
         .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
     schema::register_schema(schema).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    Ok(())
+    Ok(json_str)
 }
 
 /// Delete a schema from OPFS and unregister it (built-ins protected).
