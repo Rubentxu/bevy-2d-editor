@@ -17,12 +17,13 @@
 | dynamic-scene-export | v0.6.0 | ✅ | `export_dynamic_scene_wasm` → Bevy `DynamicScene`, component mapping from editor schemas to Bevy native components |
 | preview-anchor-sync | v0.7.0 | ✅ | Preview world honors `editor.Sprite2D.values.anchor` via Bevy 0.19 Anchor Component |
 | keyboard-shortcuts | v0.8.0 | ✅ | `useKeyboardShortcuts` hook, Ctrl+Z/Y + Cmd+Z/Y, input guard, Playwright screenshot diff E2E |
+| delete-key | v0.9.0 | ✅ | Delete/Backspace removes selected entity, input guard, `handleDeleteEntity` in App, 3 Playwright E2E tests |
 
 ### Active Work
 
 | Change | Branch | Status |
 |--------|--------|--------|
-| keyboard-shortcuts fixes | main | Fixes: dead `isMac` var, pixelmatch E2E, playwright config |
+| — | — | No active work |
 
 ---
 
@@ -40,7 +41,8 @@ Entity Templates + Instantiate           ✅     ✅     ✅     ✅     ✅    
 Hierarchy + Inspector Panels                   ✅     ✅     ✅     ✅     ✅
 DynamicScene Export                            ✅     ✅     ✅     ✅
 Preview Anchor Sync                                   ✅     ✅     ✅
-Keyboard Shortcuts (Ctrl+Z/Y)                             ✅     ✅
+Keyboard Shortcuts (Ctrl+Z/Y)                             ✅     ✅     ✅
+Delete Key (Del/Backspace)                                    ✅     ✅
 ```
 
 ---
@@ -159,4 +161,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Entity Template**, **C
 
 ---
 
-*Last updated: v0.8.0 — 2026-06-27*
+*Last updated: v0.9.0 — 2026-06-27*
