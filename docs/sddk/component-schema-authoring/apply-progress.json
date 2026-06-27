@@ -1,0 +1,19 @@
+{
+  "change": "component-schema-authoring",
+  "branch": "feat/component-schema-authoring",
+  "started_at": "2026-06-27T00:00:00Z",
+  "tasks": [
+    { "id": "1.1", "status": "completed", "description": "Create SchemaFieldRow.tsx component" },
+    { "id": "1.2", "status": "completed", "description": "Append CSS rules to styles.css" },
+    { "id": "2.1", "status": "completed", "description": "Create SchemaAuthoringPanel.tsx" },
+    { "id": "2.2", "status": "completed", "description": "Wire validation in SchemaAuthoringPanel" },
+    { "id": "2.3", "status": "completed", "description": "Implement Save handler" },
+    { "id": "2.4", "status": "completed", "description": "Implement Delete handler" },
+    { "id": "2.5", "status": "completed", "description": "Implement Cancel handler" },
+    { "id": "3.1", "status": "completed", "description": "Add New Schema button to InspectorPanel" },
+    { "id": "3.2", "status": "completed", "description": "Add edit affordance to AddComponentButton" },
+    { "id": "4.1", "status": "completed", "description": "Create schema-authoring.spec.ts E2E test" }
+  ],
+  "completed_tasks": ["1.1", "1.2", "2.1", "2.2", "2.3", "2.4", "2.5", "3.1", "3.2", "4.1"],
+  "commits": []
+}

@@ -324,3 +324,388 @@ body {
 .add-component .dropdown-item:hover {
   background: #0f3460;
 }
+
+/* Schema Authoring Panel */
+
+.schema-authoring-panel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.schema-authoring-panel .panel-content {
+  background: #16213e;
+  border: 1px solid #444;
+  border-radius: 8px;
+  width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.schema-authoring-panel h2 {
+  font-size: 16px;
+  margin: 0 0 16px 0;
+  color: #fff;
+}
+
+.schema-authoring-panel .form-group {
+  margin-bottom: 12px;
+}
+
+.schema-authoring-panel .form-group label {
+  display: block;
+  font-size: 12px;
+  color: #aaa;
+  margin-bottom: 4px;
+}
+
+.schema-authoring-panel .form-group input[type="text"],
+.schema-authoring-panel .form-group input[type="number"],
+.schema-authoring-panel .form-group select {
+  width: 100%;
+  background: #1a1a2e;
+  color: #eee;
+  border: 1px solid #444;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.schema-authoring-panel .form-group input[type="text"]:focus,
+.schema-authoring-panel .form-group input[type="number"]:focus,
+.schema-authoring-panel .form-group select:focus {
+  border-color: #4a9eff;
+  outline: none;
+}
+
+.schema-authoring-panel .form-group input[type="checkbox"] {
+  margin-right: 6px;
+}
+
+.schema-authoring-panel .exports-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.schema-authoring-panel .fields-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 16px 0 8px 0;
+}
+
+.schema-authoring-panel .fields-header h3 {
+  font-size: 14px;
+  margin: 0;
+  color: #fff;
+}
+
+.schema-authoring-panel .add-field-btn {
+  background: #1a1a2e;
+  color: #4a9eff;
+  border: 1px dashed #4a9eff;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.schema-authoring-panel .add-field-btn:hover {
+  background: #0f3460;
+}
+
+.schema-field-row {
+  background: #0f3460;
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+.schema-field-row-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.schema-field-index {
+  font-size: 11px;
+  color: #666;
+  min-width: 24px;
+}
+
+.schema-field-move-btns {
+  display: flex;
+  gap: 2px;
+}
+
+.schema-field-move-btns button {
+  background: #1a1a2e;
+  border: 1px solid #444;
+  color: #aaa;
+  width: 24px;
+  height: 24px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+}
+
+.schema-field-move-btns button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.schema-field-move-btns button:hover:not(:disabled) {
+  background: #16213e;
+  color: #eee;
+}
+
+.schema-field-name {
+  flex: 1;
+  background: #1a1a2e;
+  color: #eee;
+  border: 1px solid #444;
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-size: 13px;
+  font-family: monospace;
+}
+
+.schema-field-name:focus {
+  border-color: #4a9eff;
+  outline: none;
+}
+
+.schema-field-type {
+  background: #1a1a2e;
+  color: #eee;
+  border: 1px solid #444;
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.schema-field-remove {
+  background: #5c1a1a;
+  border: none;
+  color: #fff;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+}
+
+.schema-field-remove:hover {
+  background: #8c2424;
+}
+
+.schema-field-row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 32px;
+}
+
+.schema-default-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.schema-default-value label {
+  font-size: 12px;
+  color: #aaa;
+  min-width: 50px;
+}
+
+.schema-default-value input[type="text"],
+.schema-default-value input[type="number"] {
+  flex: 1;
+  background: #1a1a2e;
+  color: #eee;
+  border: 1px solid #444;
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-size: 13px;
+}
+
+.schema-default-value input[type="number"] {
+  width: 80px;
+}
+
+.schema-default-value select {
+  flex: 1;
+  background: #1a1a2e;
+  color: #eee;
+  border: 1px solid #444;
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-size: 13px;
+}
+
+.schema-default-value input[type="checkbox"] {
+  width: auto;
+}
+
+.schema-constraints {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.schema-constraints label {
+  font-size: 12px;
+  color: #aaa;
+}
+
+.schema-constraints-disabled {
+  font-size: 11px;
+  color: #666;
+  font-style: italic;
+}
+
+.schema-constraint-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 8px;
+}
+
+.schema-constraint-row label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #aaa;
+  min-width: 60px;
+}
+
+.schema-constraint-row input[type="number"] {
+  width: 70px;
+  background: #1a1a2e;
+  color: #eee;
+  border: 1px solid #444;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.schema-error {
+  background: #5c1a1a;
+  color: #ffcccc;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.schema-error-inline {
+  color: #ff8888;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.schema-authoring-panel .panel-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #333;
+}
+
+.schema-authoring-panel .panel-actions button {
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.schema-authoring-panel .panel-actions .save-btn {
+  background: #4a9eff;
+  color: #fff;
+  border: none;
+}
+
+.schema-authoring-panel .panel-actions .save-btn:hover:not(:disabled) {
+  background: #3a8eef;
+}
+
+.schema-authoring-panel .panel-actions .save-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.schema-authoring-panel .panel-actions .delete-btn {
+  background: #5c1a1a;
+  color: #fff;
+  border: none;
+  margin-right: auto;
+}
+
+.schema-authoring-panel .panel-actions .delete-btn:hover {
+  background: #8c2424;
+}
+
+.schema-authoring-panel .panel-actions .cancel-btn {
+  background: #1a1a2e;
+  color: #aaa;
+  border: 1px solid #444;
+}
+
+.schema-authoring-panel .panel-actions .cancel-btn:hover {
+  background: #16213e;
+  color: #eee;
+}
+
+.inspector-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.new-schema-btn {
+  flex: 1;
+  background: #1a1a2e;
+  color: #4a9eff;
+  border: 1px dashed #4a9eff;
+  padding: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.new-schema-btn:hover {
+  background: #0f3460;
+}
+
+.dropdown-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dropdown-item .edit-icon {
+  opacity: 0;
+  cursor: pointer;
+  color: #4a9eff;
+  font-size: 12px;
+  margin-left: auto;
+  padding: 2px 6px;
+}
+
+.dropdown-item:hover .edit-icon {
+  opacity: 1;
+}

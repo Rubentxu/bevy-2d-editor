@@ -19,6 +19,7 @@
 | keyboard-shortcuts | v0.8.0 | ✅ | `useKeyboardShortcuts` hook, Ctrl+Z/Y + Cmd+Z/Y, input guard, Playwright screenshot diff E2E |
 | delete-key | v0.9.0 | ✅ | Delete/Backspace removes selected entity, input guard, `handleDeleteEntity` in App, 3 Playwright E2E tests |
 | entity-rename-inline | v0.10.0 | ✅ | Double-click name in hierarchy → inline input, Enter/blur commits via RenameEntity, Escape cancels, empty/unchanged no-op |
+| entity-drag-drop | v0.11.0 | ✅ | HTML5 DnD reparenting in HierarchyPanel, `ReparentEntity` via `window.dispatch_command`, root-drop zone, self-drop guard, cycle safety via backend |
 
 ### Active Work
 
@@ -31,20 +32,21 @@
 ## Hito 0 — Capabilities Matrix
 
 ```
-Capability                    v0.1   v0.2   v0.3   v0.4   v0.5   v0.6   v0.7   v0.8   v0.9   v0.10
-────────────────────────────────────────────────────────────────────────────────────────────────────────
-SceneDocument JSON             ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
-Typed Command System           ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
-Reversible Commands                ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
-OPFS Scene Persistence              ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
-Schema Registry (mutable)               ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
-Entity Templates + Instantiate           ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
-Hierarchy + Inspector Panels                   ✅     ✅     ✅     ✅     ✅     ✅     ✅
-DynamicScene Export                            ✅     ✅     ✅     ✅     ✅     ✅     ✅
+Capability                    v0.1   v0.2   v0.3   v0.4   v0.5   v0.6   v0.7   v0.8   v0.9   v0.10  v0.11
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+SceneDocument JSON             ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
+Typed Command System           ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
+Reversible Commands                ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
+OPFS Scene Persistence              ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
+Schema Registry (mutable)               ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
+Entity Templates + Instantiate           ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
+Hierarchy + Inspector Panels                   ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
+DynamicScene Export                            ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
 Preview Anchor Sync                                   ✅     ✅     ✅     ✅     ✅     ✅     ✅
-Keyboard Shortcuts (Ctrl+Z/Y)                             ✅     ✅     ✅     ✅     ✅     ✅
-Delete Key (Del/Backspace)                                    ✅     ✅     ✅     ✅     ✅
-Entity Rename Inline                                               ✅     ✅     ✅     ✅
+Keyboard Shortcuts (Ctrl+Z/Y)                             ✅     ✅     ✅     ✅     ✅     ✅     ✅
+Delete Key (Del/Backspace)                                    ✅     ✅     ✅     ✅     ✅     ✅     ✅
+Entity Rename Inline                                               ✅     ✅     ✅     ✅     ✅     ✅     ✅
+Entity Drag-and-Drop Reparenting                                       ✅     ✅     ✅     ✅     ✅     ✅
 ```
 
 ---
@@ -114,7 +116,6 @@ Entity Rename Inline                                               ✅     ✅  
 
 | Item | Description |
 |------|-------------|
-| **Entity drag-and-drop** | Reorder entities in hierarchy via drag |
 | **Component schema authoring UI** | UI to create new component schemas (not just use existing ones) |
 
 ### Hito 1 (Future)
@@ -160,4 +161,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Entity Template**, **C
 
 ---
 
-*Last updated: v0.10.0 — 2026-06-27*
+*Last updated: v0.11.0 — 2026-06-27*

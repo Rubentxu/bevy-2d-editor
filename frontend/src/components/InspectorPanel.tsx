@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { SceneDocument } from "../hooks/useSceneState";
 import ComponentCard from "./ComponentCard";
 import AddComponentButton from "./AddComponentButton";
+import SchemaAuthoringPanel from "./SchemaAuthoringPanel";
 
 interface Props {
   scene: SceneDocument | null;
@@ -22,6 +23,8 @@ export default function InspectorPanel({
 }: Props) {
   const entity = scene?.entities.find((e) => e.id === selectedId) ?? null;
   const [nameDraft, setNameDraft] = useState(entity?.name ?? "");
+  const [showSchemaPanel, setShowSchemaPanel] = useState(false);
+  const [schemaRefreshKey, setSchemaRefreshKey] = useState(0);
 
   useEffect(() => {
     setNameDraft(entity?.name ?? "");
@@ -76,7 +79,26 @@ export default function InspectorPanel({
           onRemove={() => onRemoveComponent(entity.id, c.type_id)}
         />
       ))}
-      <AddComponentButton entityId={entity.id} onAdd={(typeId) => onAddComponent(entity.id, typeId)} />
+      <AddComponentButton key={schemaRefreshKey} entityId={entity.id} onAdd={(typeId) => onAddComponent(entity.id, typeId)} />
+      <div className="inspector-actions">
+        <button
+          type="button"
+          className="new-schema-btn"
+          onClick={() => setShowSchemaPanel(true)}
+        >
+          + New Schema
+        </button>
+      </div>
+      {showSchemaPanel && (
+        <SchemaAuthoringPanel
+          mode="create"
+          onClose={() => setShowSchemaPanel(false)}
+          onSaved={() => {
+            setShowSchemaPanel(false);
+            setSchemaRefreshKey((k) => k + 1);
+          }}
+        />
+      )}
     </div>
   );
 }
