@@ -34,6 +34,10 @@ pub struct ProjectMetadata {
     /// project.json files without this field still parse (empty Vec).
     #[serde(default)]
     pub templates: Vec<String>,
+    /// The currently active/selected scene. `#[serde(default)]` so old
+    /// project.json files without this field still parse (None → first scene).
+    #[serde(default)]
+    pub active_scene: Option<String>,
 }
 
 impl Default for ProjectMetadata {
@@ -44,6 +48,7 @@ impl Default for ProjectMetadata {
             scenes: Vec::new(),
             schemas: Vec::new(),
             templates: Vec::new(),
+            active_scene: None,
         }
     }
 }
@@ -86,6 +91,7 @@ mod tests {
             scenes: vec!["level_01".to_string(), "level_02".to_string()],
             schemas: vec!["game.PlayerHealth".to_string()],
             templates: vec!["enemy_goblin".to_string()],
+            active_scene: None,
         };
         let json = serde_json::to_string(&pm).unwrap();
         let rt: ProjectMetadata = serde_json::from_str(&json).unwrap();

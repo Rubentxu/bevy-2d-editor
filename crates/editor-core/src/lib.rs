@@ -12,6 +12,7 @@ mod dynamic_scene;
 mod operation_log;
 mod persistence;
 mod processor;
+mod scenes;
 mod schema;
 mod template;
 
@@ -25,6 +26,7 @@ pub use dynamic_scene::{
 };
 pub use operation_log::{LogEntry, OperationLog, OperationLogError};
 pub use persistence::{ProjectMetadata, PROJECT_FILE, SCENES_DIR, SCHEMAS_DIR, ENTITIES_DIR};
+pub use scenes::{SceneInfo, SceneRegistry, SwitchResult};
 pub use template::{EntityTemplate, TemplateEntity, TemplateError};
 
 /// Marker component for entities spawned from SceneDocument.
@@ -64,10 +66,40 @@ pub struct OperationLogState {
 /// because both run on the same thread (single-threaded WASM).
 thread_local! {
     static DIRTY_FLAG: RefCell<bool> = const { RefCell::new(false) };
+    static SCENE_REGISTRY: RefCell<Option<SceneRegistry>> = const { RefCell::new(None) };
+}
+
+/// Get an immutable borrowed reference to the SceneRegistry, initializing if needed.
+fn with_registry<F, R>(f: F) -> R
+where
+    F: FnOnce(&SceneRegistry) -> R,
+{
+    SCENE_REGISTRY.with(|cell| {
+        let mut_ref = &mut *cell.borrow_mut();
+        if mut_ref.is_none() {
+            *mut_ref = Some(SceneRegistry::default());
+        }
+        f(mut_ref.as_ref().unwrap())
+    })
+}
+
+/// Get a mutable borrowed reference to the SceneRegistry, initializing if needed.
+fn with_registry_mut<F, R>(f: F) -> R
+where
+    F: FnOnce(&mut SceneRegistry) -> R,
+{
+    SCENE_REGISTRY.with(|cell| {
+        let mut_ref = &mut *cell.borrow_mut();
+        if mut_ref.is_none() {
+            *mut_ref = Some(SceneRegistry::default());
+        }
+        f(mut_ref.as_mut().unwrap())
+    })
 }
 
 fn mark_dirty() {
     DIRTY_FLAG.with(|d| *d.borrow_mut() = true);
+    with_registry_mut(|r| r.mark_current_dirty());
 }
 
 const CMD_MOVE_SPRITE: u16 = 1;
@@ -374,6 +406,10 @@ fn setup(mut commands: Commands) {
 
 /// Respawns scene entities when the SceneDocumentState dirty flag is set.
 /// Triggered by `dispatch_command` setting DIRTY_FLAG via mark_dirty().
+///
+/// Design decision 3: Syncs SceneDocumentState.document from SCENE_DOC on every
+/// dirty tick. This fixes both multi-scene switching AND pre-existing preview
+/// staleness where entity edits never reached the canvas.
 fn rebuild_preview_world(
     mut commands: Commands,
     mut state: ResMut<SceneDocumentState>,
@@ -384,6 +420,14 @@ fn rebuild_preview_world(
     if !state.dirty && !external_dirty {
         return;
     }
+
+    // Sync document from SCENE_DOC thread_local (value-swap source)
+    // This ensures the preview reflects the currently active scene after a switch
+    let current_doc = SCENE_DOC.with(|s| s.borrow().clone());
+    if let Some(doc) = current_doc {
+        state.document = doc;
+    }
+
     // Despawn existing scene entities (Camera2d survives)
     for entity in scene_entities.iter() {
         commands.entity(entity).despawn();
@@ -690,45 +734,6 @@ async fn update_project_metadata(scene_name: &str) -> Result<(), String> {
     js_save_file(PROJECT_FILE, &json).await
 }
 
-/// Save the current SceneDocument to OPFS at `scenes/<name>.scene.json`.
-/// Creates `project.json` if it doesn't exist.
-#[wasm_bindgen]
-pub async fn save_scene(name: &str) -> Result<String, JsValue> {
-    let doc_json = SCENE_DOC.with(|s| {
-        let doc_ref = s.borrow();
-        let doc = doc_ref
-            .as_ref()
-            .ok_or_else(|| JsValue::from_str("No scene loaded — call load_scene_json first"))?;
-        serde_json::to_string(doc).map_err(|e| JsValue::from_str(&e.to_string()))
-    })?;
-
-    let path = persistence::scene_path(name);
-    js_save_file(&path, &doc_json)
-        .await
-        .map_err(|e| JsValue::from_str(&e))?;
-
-    update_project_metadata(name)
-        .await
-        .map_err(|e| JsValue::from_str(&e))?;
-
-    mark_dirty();
-    Ok(path)
-}
-
-/// Load a SceneDocument from OPFS into the current SCENE_DOC.
-#[wasm_bindgen]
-pub async fn load_scene(name: &str) -> Result<(), JsValue> {
-    let path = persistence::scene_path(name);
-    let json_str = js_load_file(&path).await.map_err(|e| JsValue::from_str(&e))?;
-
-    let doc: SceneDocument =
-        serde_json::from_str(&json_str).map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
-
-    SCENE_DOC.with(|s| *s.borrow_mut() = Some(doc));
-    mark_dirty();
-    Ok(())
-}
-
 /// List all scene names from `project.json`.
 #[wasm_bindgen]
 pub async fn list_scenes() -> Result<JsValue, JsValue> {
@@ -953,50 +958,6 @@ pub fn get_combined_schemas_json() -> String {
     serde_json::to_string(&schemas).unwrap_or_else(|_| "[]".to_string())
 }
 
-/// Load complete project: project.json + schemas + templates + first scene (atomic).
-#[wasm_bindgen]
-pub async fn load_project() -> Result<(), JsValue> {
-    if !js_exists(PROJECT_FILE).await {
-        return Err(JsValue::from_str("project.json not found"));
-    }
-    let project_json = js_load_file(PROJECT_FILE).await.map_err(|e| JsValue::from_str(&e))?;
-    let project: ProjectMetadata = serde_json::from_str(&project_json)
-        .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
-
-    // Register all schemas first (so AddComponent validates against them)
-    for schema_id in &project.schemas {
-        load_schema(schema_id)
-            .await
-            .map_err(|e| {
-                JsValue::from_str(&format!(
-                    "Failed to load schema {}: {:?}",
-                    schema_id,
-                    e.as_string().unwrap_or_default()
-                ))
-            })?;
-    }
-
-    // Load all templates into cache
-    for template_id in &project.templates {
-        load_template(template_id)
-            .await
-            .map_err(|e| {
-                JsValue::from_str(&format!(
-                    "Failed to load template {}: {:?}",
-                    template_id,
-                    e.as_string().unwrap_or_default()
-                ))
-            })?;
-    }
-
-    // Load first scene (or none)
-    if let Some(first_scene) = project.scenes.first() {
-        load_scene(first_scene).await?;
-    }
-
-    Ok(())
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Entity Templates — wasm_bindgen surface
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1089,4 +1050,264 @@ pub async fn delete_template(template_id: &str) -> Result<(), JsValue> {
 #[wasm_bindgen]
 pub fn is_template_loaded(template_id: &str) -> bool {
     template::get_cached_template(template_id).is_some()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scene Registry — multi-scene WASM surface
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Create a new scene with the given name.
+/// Returns the actual name used (may differ if name was duplicate).
+#[wasm_bindgen]
+pub fn scene_create(name: &str) -> Result<String, JsValue> {
+    with_registry_mut(|r| r.create(name)).map_err(|e| e.to_js_value())
+}
+
+/// Probe a scene switch. Returns `SwitchResult` indicating whether
+/// the switch happened directly or requires a dirty-prompt round-trip.
+///
+/// - If `switched: true`: the scene was switched immediately (source was clean).
+/// - If `dirty_prompt_required: true`: frontend must show dialog, then call
+///   `scene_switch_commit(target_id)` after user resolves Save/Discard.
+#[wasm_bindgen]
+pub fn scene_switch(id: &str) -> Result<JsValue, JsValue> {
+    let result = with_registry(|r| r.switch(id)).map_err(|e| e.to_js_value())?;
+
+    if result.switched {
+        // Perform the value-swap: store current to registry, load target into thread_locals
+        perform_scene_swap(&result.source_name, id);
+    }
+
+    serde_wasm_bindgen::to_value(&result)
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Commit a scene switch after the user resolves the dirty prompt.
+/// Call this ONLY after Save or Discard has cleared the source's dirty flag.
+#[wasm_bindgen]
+pub fn scene_switch_commit(id: &str) -> Result<(), JsValue> {
+    // Get the current id before we overwrite it (clone for use after lock release)
+    let old_id = with_registry(|r| r.current_id())
+        .ok_or_else(|| JsValue::from_str("No current scene"))?;
+
+    with_registry_mut(|r| r.commit_switch(id)).map_err(|e| e.to_js_value())?;
+
+    // Perform value-swap (old_id is owned, so safe to use after lock release)
+    perform_scene_swap(&old_id, id);
+    Ok(())
+}
+
+/// Perform the actual value-swap between scenes.
+/// Stores current SCENE_DOC/OPERATION_LOG to registry[old_id],
+/// then loads registry[new_id] into the thread_locals.
+fn perform_scene_swap(old_id: &str, new_id: &str) {
+    // Store current scene back to registry
+    let doc_opt = SCENE_DOC.with(|s| s.borrow().clone());
+    let log = OPERATION_LOG.with(|l| l.borrow().clone());
+
+    let (doc, log) = match doc_opt {
+        Some(doc) => (doc, log),
+        None => (
+            crate::document::SceneDocument {
+                version: "0.1".to_string(),
+                scene_id: format!("scratch-{}", std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_nanos())
+                    .unwrap_or(0)),
+                name: old_id.to_string(),
+                entities: Vec::new(),
+            },
+            crate::operation_log::OperationLog::new_const(),
+        )
+    };
+
+    with_registry_mut(|r| r.store_to(old_id, doc, log));
+
+    // Load new scene from registry into thread_locals
+    if let Some((new_doc, new_log)) = with_registry(|r| r.swap_in(new_id)) {
+        SCENE_DOC.with(|s| *s.borrow_mut() = Some(new_doc));
+        OPERATION_LOG.with(|l| *l.borrow_mut() = new_log);
+    }
+
+    mark_dirty();
+}
+
+/// Delete a scene. Fails if it's the last remaining scene.
+#[wasm_bindgen]
+pub fn scene_delete(id: &str) -> Result<(), JsValue> {
+    with_registry_mut(|r| r.delete(id)).map_err(|e| e.to_js_value())
+}
+
+/// Rename a scene. Returns the actual new name (may differ if duplicate).
+#[wasm_bindgen]
+pub fn scene_rename(id: &str, new_name: &str) -> Result<String, JsValue> {
+    with_registry_mut(|r| r.rename(id, new_name)).map_err(|e| e.to_js_value())
+}
+
+/// List all scenes with extended metadata (id, name, isCurrent, isDirty).
+#[wasm_bindgen]
+pub fn list_scenes_extended() -> JsValue {
+    let scenes = with_registry(|r| r.list());
+    serde_wasm_bindgen::to_value(&scenes).unwrap_or_else(|_| JsValue::NULL)
+}
+
+/// Get the current scene ID.
+#[wasm_bindgen]
+pub fn get_current_scene_id() -> Option<String> {
+    with_registry(|r| r.current_id())
+}
+
+/// Discard unsaved changes in the current scene by reloading it from OPFS.
+#[wasm_bindgen]
+pub async fn discard_scene_changes(id: &str) -> Result<(), JsValue> {
+    let path = persistence::scene_path(id);
+    let json_str = js_load_file(&path)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+    let doc: SceneDocument = serde_json::from_str(&json_str)
+        .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+
+    // Store reloaded doc back to registry and to thread_locals if current
+    let current_id = with_registry(|r| r.current_id());
+    let log = OperationLog::new_const(); // Fresh log on discard
+
+    with_registry_mut(|r| r.store_to(id, doc.clone(), log.clone()));
+
+    if current_id.as_deref() == Some(id) {
+        SCENE_DOC.with(|s| *s.borrow_mut() = Some(doc));
+        OPERATION_LOG.with(|l| *l.borrow_mut() = log);
+    }
+
+    with_registry_mut(|r| r.clear_current_dirty());
+    mark_dirty();
+    Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// load_project integration — populates SceneRegistry from OPFS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Load complete project: project.json + schemas + templates + all scenes (atomic).
+#[wasm_bindgen]
+pub async fn load_project() -> Result<(), JsValue> {
+    if !js_exists(PROJECT_FILE).await {
+        return Err(JsValue::from_str("project.json not found"));
+    }
+    let project_json = js_load_file(PROJECT_FILE).await.map_err(|e| JsValue::from_str(&e))?;
+    let project: ProjectMetadata = serde_json::from_str(&project_json)
+        .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+
+    // Register all schemas first (so AddComponent validates against them)
+    for schema_id in &project.schemas {
+        load_schema(schema_id)
+            .await
+            .map_err(|e| {
+                JsValue::from_str(&format!(
+                    "Failed to load schema {}: {:?}",
+                    schema_id,
+                    e.as_string().unwrap_or_default()
+                ))
+            })?;
+    }
+
+    // Load all templates into cache
+    for template_id in &project.templates {
+        load_template(template_id)
+            .await
+            .map_err(|e| {
+                JsValue::from_str(&format!(
+                    "Failed to load template {}: {:?}",
+                    template_id,
+                    e.as_string().unwrap_or_default()
+                ))
+            })?;
+    }
+
+    // Load all scenes into the registry
+    let active = project.active_scene.clone();
+    for scene_name in &project.scenes {
+        let path = persistence::scene_path(scene_name);
+        if js_exists(&path).await {
+            match js_load_file(&path).await {
+                Ok(json_str) => {
+                    let doc: SceneDocument = serde_json::from_str(&json_str)
+                        .unwrap_or_else(|_| crate::document::SceneDocument {
+                            version: "0.1".to_string(),
+                            scene_id: format!("loaded-{}", std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .map(|d| d.as_nanos())
+                                .unwrap_or(0)),
+                            name: scene_name.clone(),
+                            entities: Vec::new(),
+                        });
+                    let log = OperationLog::new_const();
+                    with_registry_mut(|r| r.load_scene(scene_name.clone(), doc, log));
+                }
+                Err(_) => {
+                    // Skip scenes that fail to load; they'll be absent from registry
+                }
+            }
+        }
+    }
+
+    // Set active scene (defaults to first if not specified)
+    let active_id = active.or_else(|| project.scenes.first().cloned());
+    with_registry_mut(|r| r.set_current(active_id.clone()));
+
+    // Load the active scene into SCENE_DOC thread_local for preview
+    if let Some(ref active_name) = active_id {
+        let path = persistence::scene_path(active_name);
+        if js_exists(&path).await {
+            if let Ok(json_str) = js_load_file(&path).await {
+                if let Ok(doc) = serde_json::from_str::<SceneDocument>(&json_str) {
+                    SCENE_DOC.with(|s| *s.borrow_mut() = Some(doc));
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Save the current SceneDocument to OPFS at `scenes/<name>.scene.json`.
+/// Also clears the `is_dirty` flag on the current scene entry.
+#[wasm_bindgen]
+pub async fn save_scene(name: &str) -> Result<String, JsValue> {
+    let doc_json = SCENE_DOC.with(|s| {
+        let doc_ref = s.borrow();
+        let doc = doc_ref
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("No scene loaded — call load_scene_json first"))?;
+        serde_json::to_string(doc).map_err(|e| JsValue::from_str(&e.to_string()))
+    })?;
+
+    let path = persistence::scene_path(name);
+    js_save_file(&path, &doc_json)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+
+    update_project_metadata(name)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+
+    // Clear the dirty flag on the current scene (design decision 4)
+    with_registry_mut(|r| r.clear_current_dirty());
+    mark_dirty();
+    Ok(path)
+}
+
+/// Load a SceneDocument from OPFS into the current SCENE_DOC thread_local.
+/// Note: For multi-scene, prefer `scene_switch` which handles the full
+/// value-swap through the registry.
+#[wasm_bindgen]
+pub async fn load_scene(name: &str) -> Result<(), JsValue> {
+    let path = persistence::scene_path(name);
+    let json_str = js_load_file(&path).await.map_err(|e| JsValue::from_str(&e))?;
+
+    let doc: SceneDocument =
+        serde_json::from_str(&json_str).map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+
+    SCENE_DOC.with(|s| *s.borrow_mut() = Some(doc));
+    mark_dirty();
+    Ok(())
 }

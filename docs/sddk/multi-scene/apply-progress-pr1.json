@@ -1,0 +1,74 @@
+{
+  "change": "multi-scene",
+  "pr": 1,
+  "status": "completed",
+  "branch": "feat/multi-scene-pr1-backend",
+  "completed_tasks": [
+    "1.1: Created scene_registry.rs with SceneRegistry, SceneEntry, SceneInfo, SwitchResult, SceneRegistryError",
+    "1.2: Added SCENE_REGISTRY thread_local with value-swap on switch",
+    "1.3: Added active_scene to ProjectMetadata; load_project populates registry from all scenes",
+    "1.4: mark_dirty() dual-writes to registry; rebuild_preview_world syncs from SCENE_DOC",
+    "1.5: Added WASM exports: scene_create, scene_switch, scene_switch_commit, scene_delete, scene_rename, list_scenes_extended, get_current_scene_id, discard_scene_changes",
+    "1.6: Unit tests in scenes.rs: CRUD, 16-limit, last-scene guard, duplicate suffix, value-swap, mark_dirty scope"
+  ],
+  "phase1_rust_backend": {
+    "files_created": [
+      "crates/editor-core/src/scenes.rs"
+    ],
+    "files_modified": [
+      "crates/editor-core/src/lib.rs",
+      "crates/editor-core/src/persistence.rs",
+      "crates/editor-core/Cargo.toml"
+    ],
+    "wasm_exports_added": [
+      "scene_create",
+      "scene_switch",
+      "scene_switch_commit",
+      "scene_delete",
+      "scene_rename",
+      "list_scenes_extended",
+      "get_current_scene_id",
+      "discard_scene_changes"
+    ],
+    "key_implementations": [
+      "SceneRegistry with Mutex<HashMap<String, SceneEntry>> + current_scene_id",
+      "Value-swap thread_local pattern: SCENE_DOC/OPERATION_LOG swapped on scene_switch",
+      "mark_dirty() writes to both DIRTY_FLAG and registry[current].is_dirty",
+      "rebuild_preview_world syncs SceneDocumentState.document from SCENE_DOC each dirty tick",
+      "16 scene limit with auto-suffix deduplication",
+      "Cannot delete last scene guard",
+      "dirty_prompt_required pattern for frontend-driven switch flow"
+    ]
+  },
+  "tests": {
+    "unit_tests_written": 14,
+    "test_coverage": [
+      "test_create_first_scene",
+      "test_create_duplicate_name_gets_suffix",
+      "test_max_scenes_limit",
+      "test_delete_last_scene_fails",
+      "test_delete_non_current_switches_remaining",
+      "test_switch_to_dirty_source_requires_prompt",
+      "test_switch_clean_to_clean_succeeds",
+      "test_commit_switch_after_dirty_resolution",
+      "test_rename",
+      "test_rename_duplicate_suffix",
+      "test_list_returns_metadata",
+      "test_mark_and_clear_dirty",
+      "test_load_scene_populates_registry",
+      "test_swap_out_and_store"
+    ],
+    "cannot_run_natively": "libudev dependency unavailable on host; tests compile for wasm32 target"
+  },
+  "build": {
+    "wasm_pack_build": "success",
+    "warnings": "pre-existing warnings only (unused code in other modules)"
+  },
+  "commits": [
+    "feat(registry): add SceneRegistry with create/switch/delete/rename",
+    "feat(wasm): add scene_create/switch/delete/rename bindings",
+    "feat(registry): dual-write mark_dirty and preview sync",
+    "test(registry): unit tests for registry operations"
+  ],
+  "next_pr": "PR2 — Frontend: SceneTabs, UnsavedChangesDialog, useScenes hook, engine-bridge.ts"
+}
