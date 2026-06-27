@@ -88,6 +88,7 @@ export async function initEngine(
   (window as any).unregister_schema = (typeId: string) => wasm.unregister_schema(typeId);
   (window as any).is_builtin_type = (typeId: string) => wasm.is_builtin_type(typeId);
   (window as any).combined_registry_size = () => wasm.combined_registry_size();
+  (window as any).get_combined_schemas_json = () => wasm.get_combined_schemas_json();
   (window as any).load_project = () => wasm.load_project();
   // Expose entity template persistence for testing
   (window as any).save_template = (templateId: string, json: string) =>
