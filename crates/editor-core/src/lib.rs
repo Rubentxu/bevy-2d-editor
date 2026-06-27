@@ -5,6 +5,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
 mod bevy_anchor;
+mod code_export;
 mod command;
 mod document;
 mod dynamic_scene;
@@ -15,6 +16,7 @@ mod schema;
 mod template;
 
 pub use bevy_anchor::anchor_str_to_bevy_anchor;
+pub use code_export::{export_rust_source, CodeGenResult};
 pub use command::{Command, CommandEnvelope, CommandError, CommandMetadata, CommandResult};
 pub use document::{SceneDocument, Entity, ComponentInstance, StableId};
 pub use dynamic_scene::{
@@ -759,6 +761,28 @@ pub fn get_scene_snapshot() -> JsValue {
         },
         None => JsValue::NULL,
     })
+}
+
+/// Export a SceneDocument JSON string to runnable Bevy 0.19 Rust source code.
+/// Returns a JSON object with shape:
+/// `{ source: String, warnings: ExportWarning[] }`
+///
+/// Use `JSON.parse(returnedString)` on the JS side to get the object.
+#[wasm_bindgen]
+pub fn export_code(doc_json: &str) -> Result<JsValue, JsValue> {
+    let doc: SceneDocument = serde_json::from_str(doc_json)
+        .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+
+    let schemas = schema::combined_registry();
+    let result = code_export::export_rust_source(&doc, &schemas);
+
+    let response = serde_json::json!({
+        "source": result.source,
+        "warnings": result.warnings,
+    });
+
+    serde_wasm_bindgen::to_value(&response)
+        .map_err(|e| JsValue::from_str(&format!("Serialize error: {}", e)))
 }
 
 /// Export a SceneDocument JSON string to a Bevy-compatible runtime scene
