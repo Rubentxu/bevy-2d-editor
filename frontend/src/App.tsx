@@ -10,6 +10,10 @@ import HierarchyPanel from "./components/HierarchyPanel";
 import InspectorPanel from "./components/InspectorPanel";
 import AIAssistantPanel from "./components/AIAssistantPanel";
 import ExportRustModal from "./components/ExportRustModal";
+import SceneTabs from "./components/SceneTabs";
+import UnsavedChangesDialog from "./components/UnsavedChangesDialog";
+import { useScenes } from "./hooks/useScenes";
+import { sceneCreate, sceneSwitch, sceneSwitchCommit, sceneDelete, sceneRename } from "./services/scenes";
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -26,6 +30,9 @@ export default function App() {
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [exportRustOpen, setExportRustOpen] = useState(false);
   const [applyingIds, setApplyingIds] = useState<Set<string>>(new Set());
+  const { scenes, currentId, refresh: refreshScenes } = useScenes();
+  const [pendingSwitchId, setPendingSwitchId] = useState<string | null>(null);
+  const [pendingSwitchSource, setPendingSwitchSource] = useState<string | null>(null);
 
   const {
     prompt,
@@ -176,6 +183,62 @@ export default function App() {
     setSelectedEntityId(null);
   }, [dispatch]);
 
+  // ── Multi-scene handlers ─────────────────────────────────────────────────
+
+  const handleTabClick = useCallback(async (id: string) => {
+    if (id === currentId) return;
+    const result = await sceneSwitch(id);
+    if (result.dirty_prompt_required) {
+      setPendingSwitchId(id);
+      setPendingSwitchSource(result.source_name);
+    }
+    // If no dirty prompt, the switch already happened server-side
+    await refresh();
+  }, [currentId, refresh]);
+
+  const handleNewScene = useCallback(async (name: string) => {
+    await sceneCreate(name);
+    await refreshScenes();
+  }, [refreshScenes]);
+
+  const handleDeleteScene = useCallback(async (id: string) => {
+    await sceneDelete(id);
+    await refreshScenes();
+  }, [refreshScenes]);
+
+  const handleRenameScene = useCallback(async (id: string, newName: string) => {
+    await sceneRename(id, newName);
+    await refreshScenes();
+  }, [refreshScenes]);
+
+  const handleSaveAndSwitch = useCallback(async () => {
+    if (!pendingSwitchId) return;
+    // Save current scene (user initiated from dialog)
+    const currentScene = scenes.find((s) => s.id === currentId);
+    if (currentScene) {
+      await (window as any).save_scene(currentScene.name);
+    }
+    await sceneSwitchCommit(pendingSwitchId);
+    setPendingSwitchId(null);
+    setPendingSwitchSource(null);
+    await refresh();
+    await refreshScenes();
+  }, [pendingSwitchId, currentId, scenes, refresh, refreshScenes]);
+
+  const handleDiscardAndSwitch = useCallback(async () => {
+    if (!pendingSwitchId) return;
+    await sceneSwitchCommit(pendingSwitchId);
+    setPendingSwitchId(null);
+    setPendingSwitchSource(null);
+    await refresh();
+    await refreshScenes();
+  }, [pendingSwitchId, refresh, refreshScenes]);
+
+  const handleCancelSwitch = useCallback(() => {
+    setPendingSwitchId(null);
+    setPendingSwitchSource(null);
+  }, []);
+
   useKeyboardShortcuts({
     onUndo: handleUndo,
     onRedo: handleRedo,
@@ -197,6 +260,14 @@ export default function App() {
         aiPanelOpen={aiPanelOpen}
         error={error || initError}
         onDismissError={() => setError(null)}
+      />
+      <SceneTabs
+        scenes={scenes}
+        currentId={currentId}
+        onTabClick={handleTabClick}
+        onNewScene={handleNewScene}
+        onDeleteScene={handleDeleteScene}
+        onRenameScene={handleRenameScene}
       />
       <div className="main">
         {aiPanelOpen && (
@@ -234,6 +305,14 @@ export default function App() {
         />
       </div>
       {exportRustOpen && <ExportRustModal onClose={() => setExportRustOpen(false)} />}
+      {pendingSwitchId !== null && pendingSwitchSource !== null && (
+        <UnsavedChangesDialog
+          sourceName={pendingSwitchSource}
+          onSave={handleSaveAndSwitch}
+          onDiscard={handleDiscardAndSwitch}
+          onCancel={handleCancelSwitch}
+        />
+      )}
     </div>
   );
 }
