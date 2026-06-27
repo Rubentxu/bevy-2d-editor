@@ -157,6 +157,7 @@ export default function App() {
           scene={scene}
           selectedId={selectedEntityId}
           onSelect={setSelectedEntityId}
+          onRename={handleRename}
         />
         <div className="canvas-container">
           {!ready && (
