@@ -68,3 +68,15 @@ test-headed: wasm
 # Run a specific test file
 test-one file: wasm
     cd {{frontend}} && npx playwright test {{file}}
+
+# Run the AI proxy (requires OPENAI_API_KEY env var)
+ai-proxy:
+    cargo run -p ai-proxy
+
+# Run AI proxy with custom port
+ai-proxy-port port=$PORT:
+    cargo run -p ai-proxy -- --port {{port}}
+
+# Run AI proxy unit tests
+ai-proxy-test:
+    cargo test -p ai-proxy

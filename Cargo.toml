@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/editor-core"]
+members = ["crates/editor-core", "crates/ai-proxy"]
 resolver = "2"
 
 [profile.dev]
