@@ -21,6 +21,18 @@
 | entity-rename-inline | v0.10.0 | ✅ | Double-click name in hierarchy → inline input, Enter/blur commits via RenameEntity, Escape cancels, empty/unchanged no-op |
 | entity-drag-drop | v0.11.0 | ✅ | HTML5 DnD reparenting in HierarchyPanel, `ReparentEntity` via `window.dispatch_command`, root-drop zone, self-drop guard, cycle safety via backend |
 
+---
+
+## Hito 1: AI-Assisted Editing
+
+**Goal**: LLM-powered scene editing via a Rust HTTP proxy that routes to OpenAI, with a React UI panel for proposing, reviewing, and dispatching scene-edit commands.
+
+### Completed Milestones
+
+| Milestone | Version | Status | Key Deliverables |
+|-----------|---------|--------|------------------|
+| ai-assisted-editing | v0.12.0 | ✅ | Rust axum proxy (Ollama + OpenAI), `crates/ai-proxy`, WASM bridge `get_combined_schemas_json`, `AIAssistantPanel` + `ProposalCard` React components, `useAIAssistant` hook, mock LLM proxy fixture, 6 Playwright E2E tests |
+
 ### Active Work
 
 | Change | Branch | Status |
@@ -33,7 +45,7 @@
 
 ```
 Capability                    v0.1   v0.2   v0.3   v0.4   v0.5   v0.6   v0.7   v0.8   v0.9   v0.10  v0.11
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────
 SceneDocument JSON             ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
 Typed Command System           ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
 Reversible Commands                ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
@@ -49,6 +61,18 @@ Entity Rename Inline                                               ✅     ✅  
 Entity Drag-and-Drop Reparenting                                       ✅     ✅     ✅     ✅     ✅     ✅
 ```
 
+## Hito 1 — Capabilities Matrix
+
+```
+Capability                    v0.12
+───────────────────────────────────────
+AI-Assisted Editing                ✅
+LLM Proxy (Ollama/OpenAI)           ✅
+AI Proposal UI Panel                ✅
+Apply / Discard Commands            ✅
+E2E Tests (mock proxy)             ✅
+```
+
 ---
 
 ## Architecture
@@ -58,14 +82,14 @@ Entity Drag-and-Drop Reparenting                                       ✅     �
 │  React Frontend (TypeScript)                                 │
 │  ┌─────────────┐ ┌─────────────┐ ┌──────────────────────┐   │
 │  │TopBar      │ │HierarchyPanel│ │InspectorPanel        │   │
-│  │TopBar      │ │Entity tree   │ │ComponentEditor        │   │
+│  │TopBar      │ │Entity tree   │ │ComponentEditor       │   │
 │  └─────────────┘ └─────────────┘ └──────────────────────┘   │
 │  ┌─────────────┐ ┌──────────────────────────────────────┐  │
 │  │engine-bridge│ │hooks: useSceneState, useLogState,     │  │
-│  │(WASM bridge)│ │useKeyboardShortcuts                    │  │
+│  │(WASM bridge)│ │useKeyboardShortcuts, useAIAssistant   │  │
 │  └─────────────┘ └──────────────────────────────────────┘  │
 └──────────────────────────┬──────────────────────────────────┘
-                          │ wasm-bindgen
+                           │ wasm-bindgen
 ┌─────────────────────────▼──────────────────────────────────┐
 │  Editor Core (Rust / WASM)                                   │
 │  ┌──────────────┐ ┌───────────────┐ ┌────────────────────┐  │
@@ -91,8 +115,8 @@ Entity Drag-and-Drop Reparenting                                       ✅     �
 │                              │ mark_dirty() │                │
 │                              └──────────────┘                │
 └──────────────────────────────────────────────────────────────┘
-                          │
-                          │ LinearBus (64KiB shared memory)
+                           │
+                           │ LinearBus (64KiB shared memory)
 ┌─────────────────────────▼──────────────────────────────────┐
 │  Bevy Preview World (Rust / Native)                          │
 │  ┌──────────────┐ ┌───────────────┐ ┌────────────────────┐  │
@@ -100,6 +124,12 @@ Entity Drag-and-Drop Reparenting                                       ✅     �
 │  │ marker       │ │ Anchor (0.19) │ │ world system        │  │
 │  └──────────────┘ └───────────────┘ └────────────────────┘  │
 └──────────────────────────────────────────────────────────────┘
+                           │
+                    ┌───────▼───────┐
+                    │  AI Proxy     │
+                    │  (axum/Rust)  │
+                    │  OpenAI/Ollama│
+                    └───────────────┘
 ```
 
 ---
@@ -122,7 +152,7 @@ Entity Drag-and-Drop Reparenting                                       ✅     �
 
 | Item | Description |
 |------|-------------|
-| **AI-assisted editing** | LLM integration for scene description → entity generation |
+| ~~AI-assisted editing~~ | ✅ Completed in v0.12.0 |
 | **Code export** | Generate Bevy Rust code from scene document |
 | **Multi-scene projects** | Multiple scenes per project with scene switching |
 | **Collaborative editing** | CRDT-based multi-user editing |
@@ -161,4 +191,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Entity Template**, **C
 
 ---
 
-*Last updated: v0.11.0 — 2026-06-27*
+*Last updated: v0.12.0 — 2026-06-27*

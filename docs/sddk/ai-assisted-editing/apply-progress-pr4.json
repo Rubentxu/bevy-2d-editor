@@ -1,0 +1,36 @@
+{
+  "change_name": "ai-assisted-editing",
+  "pr": 4,
+  "branch": "feat/ai-assisted-editing-pr4-integration",
+  "status": "completed",
+  "completed_tasks": [
+    "8.1 frontend: mock LLM proxy fixture (mock-ai-proxy.mjs, port 11436)",
+    "8.2 frontend: Playwright E2E tests for full AI flow (6 tests)",
+    "8.3 frontend: playwright.config.ts updated with mock proxy webServer",
+    "8.4 docs: ROADMAP.md updated with Hito 1 v0.12.0 milestone + capabilities matrix",
+    "8.5 docs: ai-assisted-editing/README.md quickstart guide"
+  ],
+  "files_created": [
+    "frontend/tests/fixtures/mock-ai-proxy.mjs",
+    "frontend/tests/ai-assisted-editing.spec.ts",
+    "docs/sddk/ai-assisted-editing/README.md"
+  ],
+  "files_modified": [
+    "frontend/playwright.config.ts",
+    "docs/ROADMAP.md"
+  ],
+  "test_results": {
+    "tsc_noEmit": "clean",
+    "cargo_test_ai_proxy": "37 passed (26 lib + 11 integration)"
+  },
+  "commits": [],
+  "notes": [
+    "Mock proxy runs on port 11436, configurable via PORT env var",
+    "Mock proxy implements POST /v1/propose with canned responses keyed by prompt pattern",
+    "Test 5 (proxy unreachable) uses page.addInitScript to override proxy URL",
+    "playwright.config.ts starts mock proxy before Vite, both required for AI E2E tests",
+    "ROADMAP.md updated with Hito 1 v0.12.0 ai-assisted-editing milestone",
+    "Hito 1 capabilities matrix added showing AI-assisted editing column",
+    "README covers: setup, proxy URL config, usage, troubleshooting, test commands"
+  ]
+}
