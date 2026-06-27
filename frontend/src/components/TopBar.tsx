@@ -6,6 +6,7 @@ interface Props {
   onRedo: () => void;
   onSave: () => void;
   onLoad: () => void;
+  onExportRust: () => void;
   onToggleAI: () => void;
   aiPanelOpen: boolean;
   error: string | null;
@@ -18,6 +19,7 @@ export default function TopBar({
   onRedo,
   onSave,
   onLoad,
+  onExportRust,
   onToggleAI,
   aiPanelOpen,
   error,
@@ -47,6 +49,9 @@ export default function TopBar({
       </button>
       <button onClick={onLoad} data-testid="load-btn" title="Load project (restores scenes + schemas + templates)">
         Load Project
+      </button>
+      <button onClick={onExportRust} data-testid="export-rs-btn" title="Export scene as Rust code">
+        📥 Export .rs
       </button>
       <button
         onClick={onToggleAI}

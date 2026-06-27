@@ -9,6 +9,7 @@ import TopBar from "./components/TopBar";
 import HierarchyPanel from "./components/HierarchyPanel";
 import InspectorPanel from "./components/InspectorPanel";
 import AIAssistantPanel from "./components/AIAssistantPanel";
+import ExportRustModal from "./components/ExportRustModal";
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -23,6 +24,7 @@ export default function App() {
   const { scene, refresh, dispatch } = useSceneState();
   const logState = useLogState();
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [exportRustOpen, setExportRustOpen] = useState(false);
   const [applyingIds, setApplyingIds] = useState<Set<string>>(new Set());
 
   const {
@@ -190,6 +192,7 @@ export default function App() {
         onRedo={handleRedo}
         onSave={handleSave}
         onLoad={handleLoad}
+        onExportRust={() => setExportRustOpen(true)}
         onToggleAI={handleToggleAI}
         aiPanelOpen={aiPanelOpen}
         error={error || initError}
@@ -230,6 +233,7 @@ export default function App() {
           onAddComponent={handleAddComponent}
         />
       </div>
+      {exportRustOpen && <ExportRustModal onClose={() => setExportRustOpen(false)} />}
     </div>
   );
 }

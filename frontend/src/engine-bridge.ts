@@ -102,6 +102,8 @@ export async function initEngine(
   // Expose DynamicScene export (Hito 0 §9.5) for UI/tests
   (window as any).export_dynamic_scene_wasm = (json: string) =>
     wasm.export_dynamic_scene_wasm(json);
+  // Expose Rust code export (PR2 — code-export)
+  (window as any).export_code = (json: string) => wasm.export_code(json);
   // Expose sendMoveSprite (LinearBus raw command, used by legacy tests)
   (window as any).sendMoveSprite = sendMoveSprite;
   // Expose OPFS bridge functions for wasm_bindgen externs
