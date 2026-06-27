@@ -198,7 +198,11 @@ test.describe("Schema Authoring", () => {
 
     // Open edit again and verify changes persisted
     await page.click(".add-btn");
-    await editButton.click();
+    // Wait for dropdown to open and schema to appear
+    await expect(page.locator(`[data-testid="add-schema-game.EditableSchema"]`)).toBeVisible();
+    // Re-locate edit button since dropdown was closed and reopened
+    const editButtonAgain = page.locator(`[data-testid="add-schema-game.EditableSchema"] .edit-icon`);
+    await editButtonAgain.click();
     await expect(page.locator(".schema-authoring-panel")).toBeVisible();
     await page.waitForTimeout(300);
 
