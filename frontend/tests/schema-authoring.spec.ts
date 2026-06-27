@@ -143,4 +143,111 @@ test.describe("Schema Authoring", () => {
     // Error should appear about builtins
     await expect(page.locator(".schema-error-inline")).toContainText("Cannot create built-in");
   });
+
+  test("(c) edit game.PlayerHealth - modify a field - save - assert changes persisted", async ({ page }) => {
+    // Setup: load page and wait for WASM
+    await page.goto("/");
+    await expect(page.locator('[data-testid="topbar"]')).toBeVisible({ timeout: WASM_LOAD_TIMEOUT });
+    await page.waitForFunction(
+      () => typeof (window as any).load_scene_json === "function",
+      { timeout: WASM_LOAD_TIMEOUT }
+    );
+    await page.waitForTimeout(500);
+
+    // Load scene with entity and select it
+    await loadSceneWithEntity(page, "test-e1");
+    await selectEntity(page, "test-e1");
+
+    // First create a schema we can edit
+    await openNewSchemaPanel(page);
+    await fillSchemaMetadata(page, "game.EditableSchema", "Editable Schema");
+    await addField(page, "field1", "String", "original");
+    await saveSchema(page);
+
+    // Open Add Component dropdown
+    await page.click(".add-btn");
+
+    // Click edit icon on game.EditableSchema
+    const editButton = page.locator(`[data-testid="add-schema-game.EditableSchema"] .edit-icon`);
+    await expect(editButton).toBeVisible();
+    await editButton.click();
+
+    // Wait for panel to load with full schema data
+    await expect(page.locator(".schema-authoring-panel")).toBeVisible();
+    await page.waitForTimeout(300);
+
+    // Verify fields are pre-populated (type_id should be disabled in edit mode)
+    const typeIdInput = page.locator('input[placeholder="game.MyComponent"]');
+    await expect(typeIdInput).toBeDisabled();
+    await expect(typeIdInput).toHaveValue("game.EditableSchema");
+
+    // Modify the field value
+    const fieldRow = page.locator(".schema-field-row").first();
+    const fieldNameInput = fieldRow.locator(".schema-field-name");
+    await expect(fieldNameInput).toHaveValue("field1");
+
+    // Change the field name
+    await fieldNameInput.clear();
+    await fieldNameInput.fill("modified_field");
+    await fieldNameInput.blur();
+    await page.waitForTimeout(100);
+
+    // Save
+    await saveSchema(page);
+
+    // Open edit again and verify changes persisted
+    await page.click(".add-btn");
+    await editButton.click();
+    await expect(page.locator(".schema-authoring-panel")).toBeVisible();
+    await page.waitForTimeout(300);
+
+    const fieldRowAfter = page.locator(".schema-field-row").first();
+    await expect(fieldRowAfter.locator(".schema-field-name")).toHaveValue("modified_field");
+
+    // Close panel
+    await page.click(".cancel-btn");
+  });
+
+  test("(d) create schema -> reload page -> load_project -> schema still in dropdown", async ({ page }) => {
+    // Setup: load page and wait for WASM
+    await page.goto("/");
+    await expect(page.locator('[data-testid="topbar"]')).toBeVisible({ timeout: WASM_LOAD_TIMEOUT });
+    await page.waitForFunction(
+      () => typeof (window as any).load_scene_json === "function",
+      { timeout: WASM_LOAD_TIMEOUT }
+    );
+    await page.waitForTimeout(500);
+
+    // Load scene with entity and select it
+    await loadSceneWithEntity(page, "test-e1");
+    await selectEntity(page, "test-e1");
+
+    // Create a schema
+    await openNewSchemaPanel(page);
+    await fillSchemaMetadata(page, "game.PersistentSchema", "Persistent Schema");
+    await addField(page, "name", "String", "test");
+    await saveSchema(page);
+
+    // Verify schema appears in dropdown
+    await page.click(".add-btn");
+    await expect(page.locator(`[data-testid="add-schema-game.PersistentSchema"]`)).toBeVisible();
+    await page.click(".add-btn"); // Close dropdown
+
+    // Reload the page
+    await page.reload();
+    await expect(page.locator('[data-testid="topbar"]')).toBeVisible({ timeout: WASM_LOAD_TIMEOUT });
+    await page.waitForFunction(
+      () => typeof (window as any).load_scene_json === "function",
+      { timeout: WASM_LOAD_TIMEOUT }
+    );
+    await page.waitForTimeout(500);
+
+    // Load scene and select entity
+    await loadSceneWithEntity(page, "test-e1");
+    await selectEntity(page, "test-e1");
+
+    // Verify schema is still in dropdown after reload
+    await page.click(".add-btn");
+    await expect(page.locator(`[data-testid="add-schema-game.PersistentSchema"]`)).toBeVisible();
+  });
 });

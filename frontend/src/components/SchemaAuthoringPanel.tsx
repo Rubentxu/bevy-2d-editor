@@ -66,11 +66,68 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
   const [isBuiltin, setIsBuiltin] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Load schema data when in edit mode with just type_id (no full field data)
   useEffect(() => {
-    if (initial?.type_id && typeof (window as any).is_builtin_type === "function") {
-      setIsBuiltin((window as any).is_builtin_type(initial.type_id));
+    if (mode !== "edit" || !initial?.type_id) return;
+
+    // Check if we already have full field data
+    if (initial.fields && initial.fields.length > 0) {
+      setIsBuiltin(typeof (window as any).is_builtin_type === "function"
+        ? (window as any).is_builtin_type(initial.type_id)
+        : false);
+      return;
     }
-  }, [initial?.type_id]);
+
+    // We have type_id but no field data - load the full schema
+    if (typeof (window as any).load_schema !== "function") {
+      setErrors({ general: "load_schema not available" });
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const schemaJson = await (window as any).load_schema(initial.type_id);
+        if (cancelled) return;
+
+        const schema = typeof schemaJson === "string" ? JSON.parse(schemaJson) : schemaJson;
+
+        // Pre-populate draft state from loaded schema
+        setTypeId(schema.type_id);
+        setDisplayName(schema.display_name);
+        setExportsToBevy(schema.exports_to_bevy);
+
+        // Convert fields from Rust format to DraftField format
+        const convertConstraint = (c: ConstraintJson) => {
+          if (c === "NonEmpty") {
+            return { type: "NonEmpty" as const };
+          } else if ("Min" in c) {
+            return { type: "Min" as const, value: c.Min };
+          } else {
+            return { type: "Max" as const, value: c.Max };
+          }
+        };
+
+        setFields(schema.fields.map((f: FieldDef) => ({
+          id: generateId(),
+          name: f.name,
+          field_type: f.field_type,
+          default: f.default,
+          constraints: f.constraints.map(convertConstraint),
+        })));
+
+        setIsBuiltin(typeof (window as any).is_builtin_type === "function"
+          ? (window as any).is_builtin_type(schema.type_id)
+          : false);
+      } catch (e: any) {
+        if (cancelled) return;
+        console.error("load_schema failed:", e);
+        setErrors({ general: `Failed to load schema: ${e?.message ?? "Unknown error"}` });
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [mode, initial?.type_id]);
 
   const validate = useCallback((): ValidationErrors => {
     const errs: ValidationErrors = {};

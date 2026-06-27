@@ -47,7 +47,7 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
     fetchSchemas();
   }, [entityId]);
 
-  function handleEditClick(e: React.MouseEvent, schemaId: string) {
+  async function handleEditClick(e: React.MouseEvent, schemaId: string) {
     e.stopPropagation();
     if (typeof (window as any).is_builtin_type === "function") {
       if ((window as any).is_builtin_type(schemaId)) {
@@ -57,7 +57,8 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
     // Load schema data for editing
     if (typeof (window as any).load_schema === "function") {
       try {
-        const schemaJson = (window as any).load_schema(schemaId);
+        // load_schema is async and returns the schema JSON string
+        const schemaJson = await (window as any).load_schema(schemaId);
         if (schemaJson) {
           const schema = typeof schemaJson === "string" ? JSON.parse(schemaJson) : schemaJson;
           setEditInitialData(schema);
