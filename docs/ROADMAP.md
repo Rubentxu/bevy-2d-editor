@@ -18,6 +18,7 @@
 | preview-anchor-sync | v0.7.0 | ✅ | Preview world honors `editor.Sprite2D.values.anchor` via Bevy 0.19 Anchor Component |
 | keyboard-shortcuts | v0.8.0 | ✅ | `useKeyboardShortcuts` hook, Ctrl+Z/Y + Cmd+Z/Y, input guard, Playwright screenshot diff E2E |
 | delete-key | v0.9.0 | ✅ | Delete/Backspace removes selected entity, input guard, `handleDeleteEntity` in App, 3 Playwright E2E tests |
+| entity-rename-inline | v0.10.0 | ✅ | Double-click name in hierarchy → inline input, Enter/blur commits via RenameEntity, Escape cancels, empty/unchanged no-op |
 
 ### Active Work
 
@@ -30,19 +31,20 @@
 ## Hito 0 — Capabilities Matrix
 
 ```
-Capability                    v0.1   v0.2   v0.3   v0.4   v0.5   v0.6   v0.7   v0.8   v0.9
-──────────────────────────────────────────────────────────────────────────────────────────────
-SceneDocument JSON             ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
-Typed Command System           ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
-Reversible Commands                ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
-OPFS Scene Persistence              ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
-Schema Registry (mutable)               ✅     ✅     ✅     ✅     ✅     ✅     ✅
-Entity Templates + Instantiate           ✅     ✅     ✅     ✅     ✅     ✅     ✅
-Hierarchy + Inspector Panels                   ✅     ✅     ✅     ✅     ✅     ✅
-DynamicScene Export                            ✅     ✅     ✅     ✅     ✅     ✅
-Preview Anchor Sync                                   ✅     ✅     ✅     ✅     ✅     ✅
-Keyboard Shortcuts (Ctrl+Z/Y)                             ✅     ✅     ✅     ✅     ✅
-Delete Key (Del/Backspace)                                    ✅     ✅     ✅     ✅
+Capability                    v0.1   v0.2   v0.3   v0.4   v0.5   v0.6   v0.7   v0.8   v0.9   v0.10
+────────────────────────────────────────────────────────────────────────────────────────────────────────
+SceneDocument JSON             ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
+Typed Command System           ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
+Reversible Commands                ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
+OPFS Scene Persistence              ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
+Schema Registry (mutable)               ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
+Entity Templates + Instantiate           ✅     ✅     ✅     ✅     ✅     ✅     ✅     ✅
+Hierarchy + Inspector Panels                   ✅     ✅     ✅     ✅     ✅     ✅     ✅
+DynamicScene Export                            ✅     ✅     ✅     ✅     ✅     ✅     ✅
+Preview Anchor Sync                                   ✅     ✅     ✅     ✅     ✅     ✅     ✅
+Keyboard Shortcuts (Ctrl+Z/Y)                             ✅     ✅     ✅     ✅     ✅     ✅
+Delete Key (Del/Backspace)                                    ✅     ✅     ✅     ✅     ✅
+Entity Rename Inline                                               ✅     ✅     ✅     ✅
 ```
 
 ---
@@ -114,7 +116,6 @@ Delete Key (Del/Backspace)                                    ✅     ✅     �
 |------|-------------|
 | **Entity drag-and-drop** | Reorder entities in hierarchy via drag |
 | **Component schema authoring UI** | UI to create new component schemas (not just use existing ones) |
-| **Entity rename inline** | Double-click entity name in hierarchy to rename |
 
 ### Hito 1 (Future)
 
@@ -159,4 +160,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Entity Template**, **C
 
 ---
 
-*Last updated: v0.9.0 — 2026-06-27*
+*Last updated: v0.10.0 — 2026-06-27*
