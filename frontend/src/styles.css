@@ -168,6 +168,16 @@ body {
   font-family: monospace;
 }
 
+.entity.drag-over {
+  outline: 2px solid #3b82f6;
+  background-color: rgba(59, 130, 246, 0.1);
+}
+
+.hierarchy-root-zone.drag-over {
+  background: rgba(59, 130, 246, 0.08);
+  outline: 2px dashed #3b82f6;
+}
+
 /* Inspector */
 
 .inspector input.entity-name {

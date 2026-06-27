@@ -28,6 +28,8 @@ function entityDepth(entity: SceneDocument["entities"][number], allEntities: Sce
 export default function HierarchyPanel({ scene, selectedId, onSelect, onRename }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   // Clear stale editingId if the entity disappears mid-edit
   useEffect(() => {
@@ -45,6 +47,19 @@ export default function HierarchyPanel({ scene, selectedId, onSelect, onRename }
     }
     onRename(entity.id, trimmed);
     setEditingId(null);
+  };
+
+  const reparent = (entityId: string, newParent: string | null) => {
+    const currentParent = scene!.entities.find((e) => e.id === entityId)?.parent ?? null;
+    (window as any).dispatch_command(JSON.stringify({
+      command: {
+        type: "ReparentEntity",
+        entity_id: entityId,
+        old_parent: currentParent,
+        new_parent: newParent,
+      },
+      metadata: { authorship: "user", timestamp: Date.now() },
+    }));
   };
 
   if (!scene) {
@@ -66,18 +81,72 @@ export default function HierarchyPanel({ scene, selectedId, onSelect, onRename }
   return (
     <div className="panel" data-testid="hierarchy-panel">
       <h2>Hierarchy</h2>
-      <div onClick={() => onSelect(null)}>
+      <div
+        className="hierarchy-root-zone"
+        onClick={() => onSelect(null)}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          if (draggedId) {
+            reparent(draggedId, null);
+          }
+          setDraggedId(null);
+          setDragOverId(null);
+        }}
+      >
         {scene.entities.map((entity) => {
           const depth = entityDepth(entity, scene.entities);
           const isSelected = selectedId === entity.id;
           return (
             <div
               key={entity.id}
-              className={isSelected ? "entity selected" : "entity"}
-              style={{ paddingLeft: `${depth * 16 + 8}px`, cursor: "pointer" }}
+              className={[
+                "entity",
+                isSelected ? "selected" : "",
+                draggedId === entity.id ? "dragging" : "",
+                dragOverId === entity.id ? "drag-over" : "",
+              ].join(" ").trim()}
+              style={{
+                paddingLeft: `${depth * 16 + 8}px`,
+                cursor: "pointer",
+                opacity: draggedId === entity.id ? 0.5 : 1,
+              }}
+              draggable
               onClick={(e) => {
                 e.stopPropagation();
                 onSelect(entity.id);
+              }}
+              onDragStart={(e) => {
+                setDraggedId(entity.id);
+                e.dataTransfer.effectAllowed = "move";
+              }}
+              onDragEnd={() => {
+                setDraggedId(null);
+                setDragOverId(null);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (draggedId !== entity.id) {
+                  setDragOverId(entity.id);
+                }
+              }}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                  if (dragOverId === entity.id) setDragOverId(null);
+                }
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (draggedId && draggedId !== entity.id && scene.entities.some((e) => e.id === draggedId)) {
+                  reparent(draggedId, entity.id);
+                }
+                setDraggedId(null);
+                setDragOverId(null);
               }}
               data-testid={`hierarchy-entity-${entity.id}`}
             >
