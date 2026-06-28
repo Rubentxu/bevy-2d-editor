@@ -17,6 +17,7 @@ mod processor;
 pub mod scene_asset;
 pub mod scene_asset_catalog;
 pub mod scene_instance;
+pub mod scene_instance_overrides;
 mod scenes;
 mod schema;
 mod template;
