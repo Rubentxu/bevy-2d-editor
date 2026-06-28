@@ -1,8 +1,7 @@
 //! Integration tests for `bsn_codegen` — covers spec scenarios S1–S8.
 
 use editor_core::{
-    bsn_ir_from_scene_asset, emit_bsn_source, emit_bsn_source_from_document,
-    ComponentInstance,
+    ComponentInstance, bsn_ir_from_scene_asset, emit_bsn_source, emit_bsn_source_from_document,
     scene_asset::{
         LocalId, RelationshipKind, SceneAssetDocument, SceneAssetEntity, SceneAssetRelationship,
         SceneAssetRole,
@@ -32,7 +31,11 @@ fn make_scene_asset(
     }
 }
 
-fn scene_entity(local_id_val: &str, name: &str, components: Vec<ComponentInstance>) -> SceneAssetEntity {
+fn scene_entity(
+    local_id_val: &str,
+    name: &str,
+    components: Vec<ComponentInstance>,
+) -> SceneAssetEntity {
     SceneAssetEntity {
         local_id: mk_local_id(local_id_val),
         local_path: format!("root/{}", name),
@@ -112,7 +115,10 @@ fn bsn_codegen_roundtrip_minimal_scene() {
     let result = emit_bsn_source_from_document(&doc, "level_01");
     let src = &result.source;
 
-    assert!(src.contains("use bevy::prelude::*;"), "missing prelude import");
+    assert!(
+        src.contains("use bevy::prelude::*;"),
+        "missing prelude import"
+    );
     assert!(
         src.contains("pub fn spawn_level_01(mut commands: Commands)"),
         "missing spawn function"
@@ -125,12 +131,17 @@ fn bsn_codegen_roundtrip_minimal_scene() {
     assert!(src.contains("#player_01"), "missing entity identifier");
     assert!(src.contains("Name(\"Player\")"), "missing Name component");
     assert!(
-        src.contains("Transform { translation: Vec2::new(0, 0), rotation: 0, scale: Vec2::new(1, 1) }"),
+        src.contains(
+            "Transform { translation: Vec2::new(0, 0), rotation: 0, scale: Vec2::new(1, 1) }"
+        ),
         "missing Transform"
     );
     assert!(src.contains("Sprite {"), "missing Sprite block");
     assert!(src.contains("]).unwrap();"), "missing unwrap");
-    assert!(result.source.ends_with('\n'), "source must end with newline");
+    assert!(
+        result.source.ends_with('\n'),
+        "source must end with newline"
+    );
 }
 
 /// S2: parent + child with RelationshipKind::Child → Children [ ... ] block
@@ -160,8 +171,14 @@ fn bsn_codegen_with_children() {
     assert!(src.contains("Children ["), "missing Children block");
     assert!(src.contains("#child_01"), "missing child identifier");
     assert!(src.contains("Name(\"Sword\")"), "missing child Name");
-    assert!(!src.contains("commands.entity("), "Commands::spawn leaked into bsn! output");
-    assert!(!src.contains("add_child("), "add_child leaked into bsn! output");
+    assert!(
+        !src.contains("commands.entity("),
+        "Commands::spawn leaked into bsn! output"
+    );
+    assert!(
+        !src.contains("add_child("),
+        "add_child leaked into bsn! output"
+    );
 }
 
 /// S3 + S4: Sprite asset as string literal + Anchor as Anchor(Vec2) sibling
@@ -189,14 +206,20 @@ fn bsn_codegen_sprite_with_anchor() {
     );
     assert!(!src.contains("Handle::new"), "no Handle::new wrapper");
     assert!(!src.contains("Handle<Image>"), "no Handle type");
-    assert!(!src.contains(".to_string()"), "no .to_string() on asset path");
+    assert!(
+        !src.contains(".to_string()"),
+        "no .to_string() on asset path"
+    );
 
     // Anchor as sibling Anchor(Vec2) component
     assert!(
         src.contains("Anchor(Vec2::new(-0.5, 0.5))"),
         "TopLeft anchor not emitted correctly"
     );
-    assert!(!src.contains("Anchor::TOP_LEFT"), "no Anchor named constant");
+    assert!(
+        !src.contains("Anchor::TOP_LEFT"),
+        "no Anchor named constant"
+    );
 }
 
 /// S5: editor.Visible / editor.Locked silently skipped, Transform emitted
@@ -222,10 +245,16 @@ fn bsn_codegen_skips_editor_components() {
     assert!(!src.contains("Visible"), "Visible should not appear");
     assert!(!src.contains("Locked"), "Locked should not appear");
     assert!(
-        src.contains("Transform { translation: Vec2::new(0, 0), rotation: 0, scale: Vec2::new(1, 1) }"),
+        src.contains(
+            "Transform { translation: Vec2::new(0, 0), rotation: 0, scale: Vec2::new(1, 1) }"
+        ),
         "Transform should appear"
     );
-    assert_eq!(result.warnings.len(), 0, "no warnings for silently-skipped types");
+    assert_eq!(
+        result.warnings.len(),
+        0,
+        "no warnings for silently-skipped types"
+    );
 }
 
 /// S7: empty scene → bsn_list![] with // Empty scene comment, no bsn! opener
@@ -251,7 +280,10 @@ fn bsn_codegen_empty_scene() {
     );
 
     assert_eq!(result.source, expected);
-    assert!(!result.source.contains("bsn!{"), "no bsn! block for empty scene");
+    assert!(
+        !result.source.contains("bsn!{"),
+        "no bsn! block for empty scene"
+    );
     assert!(result.warnings.is_empty(), "no warnings for empty scene");
 }
 
@@ -279,11 +311,18 @@ fn bsn_codegen_warns_on_unknown_component() {
         !src.contains("CustomThing"),
         "unknown CustomThing should not appear"
     );
-    assert!(!src.contains("mystery.Bar"), "unknown mystery.Bar should not appear");
+    assert!(
+        !src.contains("mystery.Bar"),
+        "unknown mystery.Bar should not appear"
+    );
     // Known component still present
     assert!(src.contains("Name(\"X\")"), "Name should still appear");
     // Warnings for unknown types
-    assert_eq!(result.warnings.len(), 2, "expected 2 warnings for unknown types");
+    assert_eq!(
+        result.warnings.len(),
+        2,
+        "expected 2 warnings for unknown types"
+    );
     let unknown_types: Vec<_> = result
         .warnings
         .iter()

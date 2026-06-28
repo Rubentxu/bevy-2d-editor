@@ -26,7 +26,10 @@ pub fn emit_bsn_source(ir: &BsnIr, scene_name: &str) -> CodeGenResult {
         out.push('\n');
     }
 
-    CodeGenResult { source: out, warnings }
+    CodeGenResult {
+        source: out,
+        warnings,
+    }
 }
 
 /// Build `BsnIr` from a `SceneAssetDocument` and emit `bsn!` source.
@@ -67,7 +70,12 @@ fn emit_header(out: &mut String) {
 }
 
 /// Emits the `spawn_<scene_name>` function wrapping `bsn_list!`.
-fn emit_spawn_function(out: &mut String, ir: &BsnIr, scene_name: &str, warnings: &mut Vec<ExportWarning>) {
+fn emit_spawn_function(
+    out: &mut String,
+    ir: &BsnIr,
+    scene_name: &str,
+    warnings: &mut Vec<ExportWarning>,
+) {
     let snake = to_snake_case(scene_name);
     writeln!(out, "pub fn spawn_{}(mut commands: Commands) {{", snake).unwrap();
     writeln!(out, "    commands.spawn_scene_list(bsn_list![").unwrap();
@@ -89,7 +97,12 @@ fn emit_bsn_list_body(out: &mut String, ir: &BsnIr, warnings: &mut Vec<ExportWar
 }
 
 /// Recursively emits a single `bsn!{ ... }` block for a `BsnIrNode`.
-fn emit_bsn_node(out: &mut String, node: &BsnIrNode, indent: usize, warnings: &mut Vec<ExportWarning>) {
+fn emit_bsn_node(
+    out: &mut String,
+    node: &BsnIrNode,
+    indent: usize,
+    warnings: &mut Vec<ExportWarning>,
+) {
     let indent_str = "    ".repeat(indent);
 
     writeln!(out, "{}bsn!{{", indent_str).unwrap();
@@ -131,10 +144,7 @@ fn emit_component(
             // Silently skip: editor.Visible, editor.Locked
         }
         "editor.Name" => {
-            let name = values
-                .get("name")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let name = values.get("name").and_then(|v| v.as_str()).unwrap_or("");
             writeln!(out, "{}Name(\"{}\"),", indent_str, escape_string(name)).unwrap();
         }
         "editor.Transform2D" => {
@@ -165,10 +175,7 @@ fn emit_component(
             writeln!(out, "{}Transform {{ translation: Vec2::new({}, {}), rotation: {}, scale: Vec2::new({}, {}) }},", indent_str, tx, ty, rot, sx, sy).unwrap();
         }
         "editor.Sprite2D" => {
-            let asset = values
-                .get("asset")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let asset = values.get("asset").and_then(|v| v.as_str()).unwrap_or("");
             let r = values
                 .get("color")
                 .and_then(|v| v.get("r"))
@@ -194,7 +201,17 @@ fn emit_component(
                 .and_then(|v| v.as_str())
                 .unwrap_or("Center");
 
-            writeln!(out, "{}Sprite {{ image: \"{}\", color: Color::srgba({}, {}, {}, {}) }},", indent_str, escape_string(asset), r, g, b, a).unwrap();
+            writeln!(
+                out,
+                "{}Sprite {{ image: \"{}\", color: Color::srgba({}, {}, {}, {}) }},",
+                indent_str,
+                escape_string(asset),
+                r,
+                g,
+                b,
+                a
+            )
+            .unwrap();
 
             // Emit Anchor as a sibling component if non-default
             let (ax, ay) = anchor_str_to_normalized_offset(anchor_str);
@@ -264,7 +281,12 @@ fn is_user_type(type_id: &str) -> bool {
 fn pascal_case_struct_name(type_id: &str) -> String {
     let stripped = type_id.strip_prefix("game.").unwrap_or(type_id);
     let pascal = to_pascal_case(stripped);
-    if pascal.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+    if pascal
+        .chars()
+        .next()
+        .map(|c| c.is_ascii_digit())
+        .unwrap_or(false)
+    {
         format!("_{}", pascal)
     } else {
         pascal
