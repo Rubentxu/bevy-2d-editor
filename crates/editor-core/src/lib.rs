@@ -7,7 +7,6 @@ use wasm_bindgen_futures::JsFuture;
 mod bevy_anchor;
 pub mod bsn_ir;
 pub mod bsn_codegen;
-pub use bsn_codegen::{emit_bsn_source, emit_bsn_source_from_document};
 mod code_export;
 mod command;
 mod document;
