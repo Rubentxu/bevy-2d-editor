@@ -150,12 +150,6 @@ pub fn validate(doc: &SceneDocument, cmd: &Command) -> Result<(), CommandError> 
                 }
             }
         }
-        Command::InstantiateEntityTemplate { template_id, .. } => {
-            // Validate that template is loaded in cache
-            if crate::template::get_cached_template(template_id).is_none() {
-                return Err(CommandError::TemplateNotFound(template_id.clone()));
-            }
-        }
         Command::RenameEntity { entity_id, .. } => {
             find_entity(doc, entity_id)?;
         }
@@ -291,23 +285,6 @@ pub fn apply(doc: &mut SceneDocument, cmd: &Command) -> Result<Command, CommandE
                 entity_id: entity_id.clone(),
                 old_parent: actual_old.clone(),
                 new_parent: actual_old,
-            })
-        }
-        Command::InstantiateEntityTemplate { template_id, target_parent } => {
-            // Look up template from in-memory cache
-            let template = crate::template::get_cached_template(template_id)
-                .ok_or_else(|| CommandError::TemplateNotFound(template_id.clone()))?;
-            // Instantiate: mints fresh StableIds, adds entities to scene
-            let minted_ids = crate::template::instantiate(&template, target_parent.as_ref(), doc)
-                .map_err(|e| CommandError::TemplateNotFound(format!("Template error: {}", e)))?;
-            // Inverse: Batch of DeleteEntity for each minted entity
-            let inverse_commands: Vec<Command> = minted_ids
-                .iter()
-                .map(|id| Command::DeleteEntity { id: id.clone() })
-                .collect();
-            Ok(Command::Batch {
-                label: format!("undo_instantiate_{}", template_id),
-                commands: inverse_commands,
             })
         }
         Command::RenameEntity {
@@ -674,19 +651,6 @@ mod tests {
         apply(&mut doc, &cmd).unwrap();
         assert_eq!(doc.entities[0].name, "PlayerSpawn");
         assert_eq!(doc.entities[0].id.as_str(), "ent_01J");
-    }
-
-    // ===== InstantiateEntityTemplate (stub) =====
-
-    #[test]
-    fn test_instantiate_template_stub_rejects() {
-        let mut doc = empty_doc();
-        let cmd = Command::InstantiateEntityTemplate {
-            template_id: "tmpl_missing".to_string(),
-            target_parent: None,
-        };
-        let result = apply(&mut doc, &cmd);
-        assert!(matches!(result, Err(CommandError::TemplateNotFound(_))));
     }
 
     // ===== Batch =====

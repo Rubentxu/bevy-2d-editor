@@ -90,13 +90,6 @@ export async function initEngine(
   (window as any).combined_registry_size = () => wasm.combined_registry_size();
   (window as any).get_combined_schemas_json = () => wasm.get_combined_schemas_json();
   (window as any).load_project = () => wasm.load_project();
-  // Expose entity template persistence for testing
-  (window as any).save_template = (templateId: string, json: string) =>
-    wasm.save_template(templateId, json);
-  (window as any).load_template = (templateId: string) => wasm.load_template(templateId);
-  (window as any).delete_template = (templateId: string) => wasm.delete_template(templateId);
-  (window as any).list_templates = () => wasm.list_templates();
-  (window as any).is_template_loaded = (templateId: string) => wasm.is_template_loaded(templateId);
   // Expose scene snapshot read for UI panels
   (window as any).get_scene_snapshot = () => wasm.get_scene_snapshot();
   // Expose DynamicScene export (Hito 0 §9.5) for UI/tests

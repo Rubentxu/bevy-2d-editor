@@ -1,0 +1,81 @@
+{
+  "change": "remove-template-rs",
+  "phase": "apply",
+  "status": "success",
+  "branch": "refactor/remove-entity-template",
+  "commit": "f64abcb",
+  "completed_tasks": [
+    "T1.1: Create branch refactor/remove-entity-template",
+    "T1.2: Pre-flight cargo check + test build passed",
+    "T1.3: Delete template.rs (507 LOC)",
+    "T1.4: Edit lib.rs — remove mod template, ENTITIES_DIR re-export, template re-exports, wasm_bindgen template functions, load_project template loop",
+    "T1.5: Edit command.rs — remove InstantiateEntityTemplate variant, TemplateNotFound error",
+    "T1.6: Edit processor.rs — remove validate/apply arms for InstantiateEntityTemplate, remove test_instantiate_template_stub_rejects",
+    "T1.7: Edit persistence.rs — remove ENTITIES_DIR, templates field, template_path(), test fixture templates field",
+    "T1.8: Edit engine-bridge.ts — remove 5 template window shims",
+    "T1.9: Edit ai-assistant.ts — remove InstantiateEntityTemplate from Command union",
+    "T1.10: Edit ProposalCard.tsx — remove InstantiateEntityTemplate case",
+    "T1.11: Edit engine.spec.ts — remove template persistence test describe block (200 LOC)",
+    "T1.12: Optional cosmetic — TopBar.tsx tooltip updated",
+    "T1.13: Verification — cargo check passed, test build passed, grep clean (source files only)",
+    "T1.14: Atomic commit as single unit"
+  ],
+  "files_changed": [
+    "crates/editor-core/src/command.rs (modified, -10 LOC)",
+    "crates/editor-core/src/lib.rs (modified, -113 LOC)",
+    "crates/editor-core/src/persistence.rs (modified, -16 LOC)",
+    "crates/editor-core/src/processor.rs (modified, -36 LOC)",
+    "crates/editor-core/src/template.rs (deleted, 507 LOC)",
+    "docs/sddk/remove-template-rs/design.md (new)",
+    "docs/sddk/remove-template-rs/explore-report.md (new)",
+    "docs/sddk/remove-template-rs/proposal.md (new)",
+    "docs/sddk/remove-template-rs/spec.md (new)",
+    "docs/sddk/remove-template-rs/tasks.md (new)",
+    "frontend/src/components/ProposalCard.tsx (modified, -2 LOC)",
+    "frontend/src/components/TopBar.tsx (modified, cosmetic -1 LOC)",
+    "frontend/src/engine-bridge.ts (modified, -7 LOC)",
+    "frontend/src/services/ai-assistant.ts (modified, -1 LOC)",
+    "frontend/tests/engine.spec.ts (modified, -200 LOC)"
+  ],
+  "loc_delta": -158,
+  "cargo_check_wasm": "pass",
+  "cargo_test_wasm_build": "pass",
+  "cargo_check_ai_proxy": "fail (pre-existing mio/wasm32 incompatibility, unrelated to this change)",
+  "grep_clean": "pass (source files clean; generated WASM bindings will update on next WASM rebuild)",
+  "mode": "Standard",
+  "inner_loop_stats": {
+    "total_attempts": 1,
+    "max_attempts_per_task": 5,
+    "no_progress_streaks_detected": 0,
+    "cost_estimate_usd": 0
+  },
+  "verification_run": {
+    "total_tests": "N/A (test build successful, actual test run deferred to verify phase)",
+    "passing_tests": "N/A",
+    "failing_tests": "N/A",
+    "pre_existing_failures_reported": 0
+  },
+  "deviations_from_design": "TopBar.tsx cosmetic tooltip change included (was marked optional but was straightforward)",
+  "issues_found": "ai-proxy cargo check fails for wasm32 due to mio dependency not supporting wasm32 — this is pre-existing and unrelated to this change",
+  "remaining_tasks": [],
+  "workload_pr_boundary": {
+    "mode": "single PR slice",
+    "current_work_unit": "delete legacy EntityTemplate model",
+    "boundary": "Single atomic commit on refactor/remove-entity-template branch",
+    "estimated_review_budget_impact": "Low — net deletion of ~158 LOC, no new code"
+  },
+  "router_context_used": [
+    "knowledge_coverage",
+    "context_quality",
+    "problem_taxonomy",
+    "domain_language",
+    "invariants",
+    "per_task_max_attempts",
+    "task_acceptance",
+    "strict_tdd_mode",
+    "delivery_strategy",
+    "artifact_store_mode"
+  ],
+  "invariants_preserved": true,
+  "timestamp": "2026-06-28T00:00:00Z"
+}

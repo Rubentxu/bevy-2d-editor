@@ -58,13 +58,6 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         new_parent: Option<StableId>,
     },
-    /// Instantiate an Entity Template. Stub in this cycle; full tree
-    /// instantiation is deferred to a future change.
-    InstantiateEntityTemplate {
-        template_id: String,
-        #[serde(default)]
-        target_parent: Option<StableId>,
-    },
     /// Change an entity's human-readable name. The `id` MUST NOT change.
     RenameEntity {
         entity_id: StableId,
@@ -140,9 +133,6 @@ pub enum CommandError {
 
     #[error("Reparent would create cycle through {0}")]
     WouldCreateCycle(StableId),
-
-    #[error("Template not found: {0}")]
-    TemplateNotFound(String),
 
     #[error("Batch failed at command {index}: {source}")]
     BatchFailed {
