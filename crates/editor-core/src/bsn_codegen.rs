@@ -3,10 +3,9 @@
 //! See ADR-0005 §Implementation Direction item 4.
 //! Coexists with `code_export::export_rust_source`; neither calls the other.
 
-use std::collections::BTreeMap;
 use std::fmt::Write as FmtWrite;
 
-use crate::bsn_ir::{BsnIr, BsnIrNode, BsnIrRelationship, bsn_ir_from_scene_asset};
+use crate::bsn_ir::{BsnIr, BsnIrNode, bsn_ir_from_scene_asset};
 use crate::code_export::CodeGenResult;
 use crate::dynamic_scene::{ExportWarning, anchor_str_to_normalized_offset};
 use crate::scene_asset::SceneAssetDocument;
@@ -230,7 +229,15 @@ fn emit_struct_fields(values: &serde_json::Value, warnings: &mut Vec<ExportWarni
         for (k, v) in obj {
             let lit = format_bsn_literal(v);
             if lit.is_empty() {
-                // Object/Array — already warned in format_bsn_literal, skip field
+                // Object/Array — cannot emit as bare bsn! literal; warn and skip
+                warnings.push(ExportWarning {
+                    entity_stable_id: None,
+                    component_type_id: None,
+                    message: format!(
+                        "Object/Array field '{}' cannot be represented in bsn! source; skipped",
+                        k
+                    ),
+                });
                 continue;
             }
             parts.push(format!("{}: {}", k, lit));
