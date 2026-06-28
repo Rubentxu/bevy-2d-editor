@@ -1,11 +1,13 @@
 //! Integration tests for `bsn_codegen` — covers spec scenarios S1–S8.
 
 use editor_core::{
-    ComponentInstance, bsn_ir_from_scene_asset, emit_bsn_source, emit_bsn_source_from_document,
+    bsn_codegen::{emit_bsn_source, emit_bsn_source_from_document},
+    bsn_ir_from_scene_asset,
     scene_asset::{
         LocalId, RelationshipKind, SceneAssetDocument, SceneAssetEntity, SceneAssetRelationship,
         SceneAssetRole,
     },
+    ComponentInstance,
 };
 use serde_json::json;
 
@@ -319,9 +321,10 @@ fn bsn_codegen_warns_on_unknown_component() {
         "expected 1 warning for unknown type"
     );
     assert!(
-        result.warnings.iter().any(|w| w
-            .message
-            .contains("mystery.Bar")),
+        result
+            .warnings
+            .iter()
+            .any(|w| w.message.contains("mystery.Bar")),
         "warning must reference mystery.Bar"
     );
 }
