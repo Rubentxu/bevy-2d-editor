@@ -176,6 +176,7 @@ Pixelmatch Screenshot Diff                                   ✅
 | ADR-0002 | Single Bevy instance renders canvas | ✅ |
 | ADR-0003 | `serde_json::Value` for forward-compat ComponentInstance values | ✅ |
 | ADR-0004 | Bevy native Anchor Component for sprite anchoring (not custom) | ✅ |
+| ADR-0005 | Scene Asset as BSN-aligned reusable scene model | ✅ |
 
 ---
 
