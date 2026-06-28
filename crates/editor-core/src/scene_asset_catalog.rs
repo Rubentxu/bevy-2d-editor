@@ -12,8 +12,10 @@ use crate::scene_asset::SceneAssetRole;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SceneAssetCatalog {
     entries: BTreeMap<String, SceneAssetCatalogEntry>,
+    #[serde(skip)]
     path_index: BTreeMap<String, String>,
-    role_index: BTreeMap<&'static str, BTreeSet<String>>,
+    #[serde(skip)]
+    role_index: BTreeMap<String, BTreeSet<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -59,13 +61,11 @@ impl SceneAssetCatalog {
     }
 
     pub fn from_entries(entries: Vec<SceneAssetCatalogEntry>) -> Result<Self, CatalogError> {
-        entries
-            .into_iter()
-            .fold(Ok(Self::default()), |acc, entry| {
-                let mut catalog = acc?;
-                catalog.register(entry)?;
-                Ok(catalog)
-            })
+        entries.into_iter().fold(Ok(Self::default()), |acc, entry| {
+            let mut catalog = acc?;
+            catalog.register(entry)?;
+            Ok(catalog)
+        })
     }
 
     pub fn register(&mut self, entry: SceneAssetCatalogEntry) -> Result<(), CatalogError> {
@@ -87,7 +87,7 @@ impl SceneAssetCatalog {
         entry.tags = dedupe_tags(entry.tags);
 
         let asset_id = entry.asset_id.clone();
-        let role_key = role_key(&entry.role);
+        let role_key = role_key(&entry.role).to_string();
 
         self.entries.insert(asset_id.clone(), entry);
         self.path_index.insert(normalized, asset_id.clone());
@@ -110,22 +110,18 @@ impl SceneAssetCatalog {
         let normalized = normalize_logical_path(&entry.logical_path);
         self.path_index.remove(&normalized);
 
-        let role_key = role_key(&entry.role);
-        if let Some(set) = self.role_index.get_mut(role_key) {
+        let role_key = role_key(&entry.role).to_string();
+        if let Some(set) = self.role_index.get_mut(&role_key) {
             set.remove(asset_id);
             if set.is_empty() {
-                self.role_index.remove(role_key);
+                self.role_index.remove(&role_key);
             }
         }
 
         Ok(entry)
     }
 
-    pub fn update_version(
-        &mut self,
-        asset_id: &str,
-        new_version: u32,
-    ) -> Result<(), CatalogError> {
+    pub fn update_version(&mut self, asset_id: &str, new_version: u32) -> Result<(), CatalogError> {
         let entry = self
             .entries
             .get(asset_id)
@@ -163,14 +159,10 @@ impl SceneAssetCatalog {
     }
 
     pub fn list_by_role(&self, role: SceneAssetRole) -> Vec<&SceneAssetCatalogEntry> {
-        let key = role_key(&role);
+        let key = role_key(&role).to_string();
         self.role_index
-            .get(key)
-            .map(|set| {
-                set.iter()
-                    .filter_map(|id| self.entries.get(id))
-                    .collect()
-            })
+            .get(&key)
+            .map(|set| set.iter().filter_map(|id| self.entries.get(id)).collect())
             .unwrap_or_default()
     }
 
@@ -300,8 +292,7 @@ fn current_unix_millis() -> u64 {
 #[cfg(target_arch = "wasm32")]
 fn random_hex_8() -> String {
     use js_sys::{Date, Math};
-    let seed =
-        (Date::now() * 1_000_000.0) as u64 ^ (Math::random() * 1e15) as u64;
+    let seed = (Date::now() * 1_000_000.0) as u64 ^ (Math::random() * 1e15) as u64;
     format!("{:016x}", seed & 0xFFFFFFFF)
 }
 
