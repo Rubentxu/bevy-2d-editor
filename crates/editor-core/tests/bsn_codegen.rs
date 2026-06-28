@@ -287,7 +287,7 @@ fn bsn_codegen_empty_scene() {
     assert!(result.warnings.is_empty(), "no warnings for empty scene");
 }
 
-/// S6 + S8: unknown component → warning + skipped; game.* emitted; Name survives
+/// S6: unknown (non-editor.*, non-game.*) component → warning + skipped; Name survives
 #[test]
 fn bsn_codegen_warns_on_unknown_component() {
     let doc = make_scene_asset(
@@ -296,7 +296,6 @@ fn bsn_codegen_warns_on_unknown_component() {
             "X",
             vec![
                 name_comp("X"),
-                game_comp("game.CustomThing", json!({ "foo": 1 })),
                 game_comp("mystery.Bar", json!({ "baz": "x" })),
             ],
         )],
@@ -306,11 +305,7 @@ fn bsn_codegen_warns_on_unknown_component() {
     let result = emit_bsn_source_from_document(&doc, "level_01");
     let src = &result.source;
 
-    // Unknown types not in output
-    assert!(
-        !src.contains("CustomThing"),
-        "unknown CustomThing should not appear"
-    );
+    // Unknown type not in output
     assert!(
         !src.contains("mystery.Bar"),
         "unknown mystery.Bar should not appear"
@@ -320,24 +315,44 @@ fn bsn_codegen_warns_on_unknown_component() {
     // Warnings for unknown types
     assert_eq!(
         result.warnings.len(),
-        2,
-        "expected 2 warnings for unknown types"
-    );
-    let unknown_types: Vec<_> = result
-        .warnings
-        .iter()
-        .filter(|w| w.component_type_id.is_some())
-        .collect();
-    assert!(
-        unknown_types
-            .iter()
-            .any(|w| w.component_type_id.as_ref() == Some(&"game.CustomThing".to_string())),
-        "warning for game.CustomThing missing"
+        1,
+        "expected 1 warning for unknown type"
     );
     assert!(
-        unknown_types
-            .iter()
-            .any(|w| w.component_type_id.as_ref() == Some(&"mystery.Bar".to_string())),
-        "warning for mystery.Bar missing"
+        result.warnings.iter().any(|w| w
+            .message
+            .contains("mystery.Bar")),
+        "warning must reference mystery.Bar"
+    );
+}
+
+/// S6 (defensive): game.* components are emitted as struct literals with no warning
+#[test]
+fn bsn_codegen_game_component_emitted_as_struct() {
+    let doc = make_scene_asset(
+        vec![scene_entity(
+            "player_01",
+            "Player",
+            vec![
+                name_comp("Player"),
+                game_comp("game.Health", json!({ "hp": 100 })),
+            ],
+        )],
+        vec![],
+    );
+
+    let result = emit_bsn_source_from_document(&doc, "level_01");
+    assert!(
+        result.warnings.is_empty(),
+        "game.* must not warn, got: {:?}",
+        result.warnings
+    );
+    assert!(
+        result.source.contains("Health"),
+        "game.Health must be emitted as struct"
+    );
+    assert!(
+        result.source.contains("hp: 100"),
+        "game.Health field must be emitted"
     );
 }
