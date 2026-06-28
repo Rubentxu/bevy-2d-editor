@@ -32,6 +32,9 @@
 | Milestone | Version | Status | Key Deliverables |
 |-----------|---------|--------|------------------|
 | ai-assisted-editing | v0.12.0 | ✅ | Rust axum proxy (Ollama + OpenAI), `crates/ai-proxy`, WASM bridge `get_combined_schemas_json`, `AIAssistantPanel` + `ProposalCard` React components, `useAIAssistant` hook, mock LLM proxy fixture, 6 Playwright E2E tests |
+| code-export | v0.14.0 | ✅ | `crates/editor-core/src/code_export.rs` (590 LOC): pure-string codegen, `rust_type_for_field`, `emit_header/user_structs/plugin_shell/spawn_scene`, snapshot tests |
+| multi-scene | v0.15.0 | ✅ | `SceneRegistry`, scene switching with dirty-state tracking, `SceneTabs` UI, `UnsavedChangesDialog`, E2E tests, WASM bindings |
+| pixelmatch quantitative diff | — | ✅ | `frontend/tests/pixelmatchHelper.ts`, upgraded screenshot tests to per-pixel quantitative output with explicit % metrics |
 
 ### Active Work
 
@@ -64,13 +67,17 @@ Entity Drag-and-Drop Reparenting                                       ✅     �
 ## Hito 1 — Capabilities Matrix
 
 ```
-Capability                    v0.12
-───────────────────────────────────────
-AI-Assisted Editing                ✅
-LLM Proxy (Ollama/OpenAI)           ✅
-AI Proposal UI Panel                ✅
-Apply / Discard Commands            ✅
-E2E Tests (mock proxy)             ✅
+Capability                    v0.12  v0.13  v0.14  v0.15
+───────────────────────────────────────────────────────────
+AI-Assisted Editing                ✅    ✅    ✅    ✅
+LLM Proxy (Ollama/OpenAI)           ✅    ✅    ✅    ✅
+AI Proposal UI Panel                ✅    ✅    ✅    ✅
+Apply / Discard Commands            ✅    ✅    ✅    ✅
+E2E Tests (mock proxy)             ✅    ✅    ✅    ✅
+Code Export (Rust codegen)                      ✅    ✅
+Multi-scene Projects                             ✅    ✅
+Scene Tabs + Dirty State                                   ✅
+Pixelmatch Screenshot Diff                                   ✅
 ```
 
 ---
@@ -140,21 +147,22 @@ E2E Tests (mock proxy)             ✅
 
 | Item | Description | Blocking |
 |------|-------------|----------|
-| **pixelmatch quantitative diff** | Tests use Playwright toHaveScreenshot; could upgrade to pixelmatch for per-pixel quantitative output | No (tech debt) |
+| — | — | — |
 
-### Medium Priority (Hito 0 residual)
+### Medium Priority
 
 | Item | Description |
 |------|-------------|
 | **Component schema authoring UI** | UI to create new component schemas (not just use existing ones) |
 
-### Hito 1 (Future)
+### Hito 1 Pending
 
 | Item | Description |
 |------|-------------|
 | ~~AI-assisted editing~~ | ✅ Completed in v0.12.0 |
-| **Code export** | Generate Bevy Rust code from scene document |
-| **Multi-scene projects** | Multiple scenes per project with scene switching |
+| ~~Code export~~ | ✅ Completed in v0.14.0 |
+| ~~Multi-scene projects~~ | ✅ Completed in v0.15.0 |
+| ~~pixelmatch quantitative diff~~ | ✅ Completed |
 | **Collaborative editing** | CRDT-based multi-user editing |
 | **Plugin system** | Extensible component schema registry with runtime loading |
 
@@ -191,4 +199,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Entity Template**, **C
 
 ---
 
-*Last updated: v0.12.0 — 2026-06-27*
+*Last updated: v0.15.0 — 2026-06-28*
