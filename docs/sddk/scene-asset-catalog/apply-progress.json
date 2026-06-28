@@ -1,0 +1,54 @@
+{
+  "change": "scene-asset-catalog",
+  "branch": "feat/scene-asset-catalog",
+  "base_commit": "d011ce5",
+  "status": "success",
+  "mode": "Standard",
+  "commits": [
+    {
+      "hash": "5280d13",
+      "message": "feat(editor-core): add scene asset catalog metadata index",
+      "task": "T1"
+    },
+    {
+      "hash": "c86e997",
+      "message": "feat(editor-core): wire scene asset catalog module into lib.rs",
+      "task": "T2"
+    },
+    {
+      "hash": "91a39df",
+      "message": "test(editor-core): add scene asset catalog tests",
+      "task": "T3"
+    },
+    {
+      "hash": "47e3b0f",
+      "message": "style(editor-core): apply rustfmt to scene_asset_catalog",
+      "task": "fmt"
+    }
+  ],
+  "files_changed": [
+    "crates/editor-core/src/lib.rs",
+    "crates/editor-core/src/scene_asset_catalog.rs",
+    "crates/editor-core/tests/scene_asset_catalog.rs"
+  ],
+  "loc_total": 764,
+  "cargo_check_wasm": "pass",
+  "cargo_test_wasm_build": "pass",
+  "rustfmt_our_files_clean": "pass",
+  "pre_existing_fmt_drift": "no",
+  "forecast_actual_vs_estimated": "315+445 actual vs 350-450 estimated (slight overage, within 500 upper bound)",
+  "design_deviations": [
+    "role_index key type changed from BTreeMap<&'static str, _> to BTreeMap<String, _> due to serde Deserialize lifetime conflict with 'static; the String key is constructed from role_key() at runtime and role_index is marked #[serde(skip)] so serde round-trip is unaffected"
+  ],
+  "completed_tasks": [
+    "T1: scene_asset_catalog.rs module created with all 11 methods, CatalogError (including InvalidVersion per spec S10), CatalogWarning, mint_asset_id, normalize_logical_path, validate_logical_path, cfg-gated random_hex_8",
+    "T2: lib.rs wired with pub mod and re-exports per spec acceptance criteria item 2",
+    "T3: 11 integration tests covering all spec scenarios (S1-S10 + mint uniqueness)",
+    "T4: verification passed — cargo check, cargo test --no-run, rustfmt clean on cycle files"
+  ],
+  "verification_notes": [
+    "No pre-existing failures detected in baseline",
+    "All warnings in cargo check are pre-existing (not introduced by this change)",
+    "rustfmt drift was detected and corrected; fmt commit produced"
+  ]
+}

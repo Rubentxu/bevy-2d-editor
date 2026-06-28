@@ -15,6 +15,7 @@ mod operation_log;
 mod persistence;
 mod processor;
 pub mod scene_asset;
+pub mod scene_asset_catalog;
 pub mod scene_instance;
 mod scenes;
 mod schema;
@@ -36,6 +37,9 @@ pub use persistence::{ENTITIES_DIR, PROJECT_FILE, ProjectMetadata, SCENES_DIR, S
 pub use scene_asset::{
     AssetReference, ExposedProperty, LocalId, RelationshipKind, RoleWarning, SceneAssetDocument,
     SceneAssetEntity, SceneAssetMetadata, SceneAssetRelationship, SceneAssetRole, validate_role,
+};
+pub use scene_asset_catalog::{
+    CatalogError, CatalogWarning, SceneAssetCatalog, SceneAssetCatalogEntry, mint_asset_id,
 };
 pub use scene_instance::{
     OverridePatch, OverrideStatus, SceneInstance, patch_status_after_field_rename,
