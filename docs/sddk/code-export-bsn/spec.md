@@ -103,18 +103,19 @@ Components whose `type_id` starts with `editor.` AND are not `Name`, `Transform2
 
 A component whose `type_id` is neither `editor.*` nor `game.*` MUST be omitted from output AND MUST emit exactly one `ExportWarning` referencing the skipped type_id.
 
-#### Scenario: S6 — Unknown user components emit a warning, not a panic
+#### Scenario: S6 — Unknown (non-`editor.*`, non-`game.*`) components emit a warning, not a panic
 
-**Given** an entity with `game.CustomThing { foo: 1 }`, `mystery.Bar { baz: "x" }`, and `editor.Name { name: "X" }`
+**Given** an entity with `mystery.Bar { baz: "x" }` and `editor.Name { name: "X" }`
 
 **When** emitted
 
-**Then** `result.source` does NOT contain `CustomThing` and does NOT contain `mystery.Bar`
-- AND `result.warnings.len() == 2` (one per skipped component)
-- AND there exists a warning with `component_type_id == Some("game.CustomThing")`
-- AND there exists a warning with `component_type_id == Some("mystery.Bar")`
+**Then** `result.source` does NOT contain `mystery.Bar`
+- AND `result.warnings.len() == 1`
+- AND the warning's `component_type_id` is `Some("mystery.Bar")`
 - AND `result.source` still contains `Name("X")` (the known component survives)
 - AND the resulting source parses as a syntactically complete Rust file (balanced braces, no dangling `bsn!` opener)
+
+> **Note**: `game.*` components are emitted as PascalCase struct literals and do **not** produce warnings. Only truly unknown type_ids (not `editor.*`, not `game.*`) are warned and skipped.
 
 ### Requirement: empty-scene-emits-bsn-list-empty
 
@@ -191,7 +192,7 @@ The following are NOT part of this change:
 ## §4. Acceptance Criteria
 
 1. New module `crates/editor-core/src/bsn_codegen.rs` exposes `emit_bsn_source(ir: &BsnIr, scene_name: &str) -> CodeGenResult` and `emit_bsn_source_from_document(doc: &SceneAssetDocument, scene_name: &str) -> CodeGenResult`.
-2. `lib.rs` adds exactly two lines: `pub mod bsn_codegen;` and a `pub use` re-export.
+2. `lib.rs` adds exactly one line: `pub mod bsn_codegen;`.
 3. `code_export.rs` byte-identical before and after the change (verified via `git diff --stat`).
 4. All 10 scenarios (S1–S10) have passing tests in `crates/editor-core/tests/bsn_codegen.rs`.
 5. `result.source` is syntactically complete Rust (balanced braces, ends with `\n`) for every scenario.
