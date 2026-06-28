@@ -1,0 +1,25 @@
+{
+  "change": "scene-asset-document",
+  "branch": "feat/scene-asset-document",
+  "started_at": "2026-06-28T15:00:00Z",
+  "tasks": [
+    { "id": "T1", "status": "done", "commit": "e21598150a740a2e34a33ac7f70afd655f1d86bf", "description": "Add scene asset document types" },
+    { "id": "T2", "status": "done", "commit": "f20024c419ab959841e81f14d3de6b85da84b2f1", "description": "Add scene instance and override patch types" },
+    { "id": "T3", "status": "done", "commit": "a2bb37e3de0be90e70cda1a49ae57fb3d7766d1b", "description": "Add bsn ir types and one-way projection" },
+    { "id": "T4", "status": "done", "commit": "abaf3352d90a056a33a31711c45db9e4519affb3", "description": "Wire scene asset modules into lib.rs" },
+    { "id": "T5", "status": "done", "commit": "07bc86b66b04d92a29344fb2a70a5e10da3116b9", "description": "Add scene asset round-trip tests" },
+    { "id": "T6", "status": "done", "commit": "2f686d81663e9b62b44d585f2df1be46c4179214", "description": "Add override target and rename-stale tests" },
+    { "id": "T7", "status": "done", "commit": "a469a7c7cff07c5e40c6b6abd69e9c9ad7d38b77", "description": "Add role validation and hierarchy tests" },
+    { "id": "T8", "status": "verification", "description": "Full validation gate" }
+  ],
+  "completed_tasks": ["T1", "T2", "T3", "T4", "T5", "T6", "T7"],
+  "last_commit": "a469a7c7cff07c5e40c6b6abd69e9c9ad7d38b77",
+  "verification_notes": {
+    "wasm_check": "pass",
+    "wasm_build": "pass",
+    "wasm_test_no_run": "pass - 4 test binaries built (1 lib + 3 integration)",
+    "cargo_fmt": "pass",
+    "native_check": "fail - pre-existing system config issue (libudev not available, js_sys unavailable on host)",
+    "note": "Native build fails due to pre-existing system configuration (libudev + wasm_bindgen/js_sys host incompatibility). Project uses WASM target (per justfile). All WASM targets pass cleanly."
+  }
+}
