@@ -8,7 +8,7 @@ use std::fmt;
 
 /// Opaque stable identifier for entities.
 /// Uses #[serde(transparent)] so it serializes as a plain string.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct StableId(String);
 
