@@ -6,6 +6,7 @@ use wasm_bindgen_futures::JsFuture;
 
 mod bevy_anchor;
 pub mod bsn_ir;
+pub mod bsn_codegen;
 mod code_export;
 mod command;
 mod document;

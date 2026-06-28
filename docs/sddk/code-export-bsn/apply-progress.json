@@ -1,0 +1,55 @@
+{
+  "change_name": "code-export-bsn",
+  "branch": "feat/code-export-bsn",
+  "phase": "apply",
+  "status": "success",
+  "completed_tasks": ["T1", "T2", "T3", "T4"],
+  "T5_executed": false,
+  "T5_reason": "export_rust_source has 14 internal tests in code_export.rs; cycle did not modify code_export.rs so byte-identity is trivially true — smoke test redundant",
+  "commits": [
+    {
+      "sha": "1809785",
+      "message": "feat(editor-core): add bsn_codegen module emitting bsn!/bsn_list! source",
+      "type": "feat"
+    },
+    {
+      "sha": "81cba47",
+      "message": "feat(editor-core): wire bsn_codegen module into lib.rs",
+      "type": "feat"
+    },
+    {
+      "sha": "8b82ba8",
+      "message": "test(editor-core): add 6 integration tests for bsn_codegen",
+      "type": "test"
+    },
+    {
+      "sha": "88eebb8",
+      "message": "style(editor-core): apply cargo fmt to bsn_codegen sources",
+      "type": "style"
+    }
+  ],
+  "files_changed": [
+    "crates/editor-core/src/bsn_codegen.rs",
+    "crates/editor-core/tests/bsn_codegen.rs"
+  ],
+  "lib_rs_changes": [
+    "crates/editor-core/src/lib.rs (1 line added: pub use code_export::{CodeGenResult, export_rust_source};)"
+  ],
+  "cargo_check_wasm": "pass",
+  "cargo_test_wasm_build": "pass",
+  "cargo_fmt_our_files_clean": true,
+  "pre_existing_fmt_drift_in_other_files": true,
+  "pre_existing_fmt_drift_locations": [
+    "crates/ai-proxy/src/*.rs (pre-existing, not owned by this cycle)"
+  ],
+  "pre_existing_fmt_drift_acknowledged": true,
+  "verification_notes": [
+    "cargo fmt scoped to bsn_codegen.rs and tests/bsn_codegen.rs: both clean",
+    "cargo fmt --check from root shows only ai-proxy/ pre-existing drift",
+    "cargo check --target wasm32-unknown-unknown: pass (warnings only, no errors)",
+    "cargo test --no-run --target wasm32-unknown-unknown: pass — 6 test executables built",
+    "export_rust_source has 14 existing tests in code_export.rs — T5 smoke test redundant"
+  ],
+  "loc_total": 89,
+  "timestamp": "2026-06-28T00:00:00Z"
+}
