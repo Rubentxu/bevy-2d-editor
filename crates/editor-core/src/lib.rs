@@ -20,7 +20,7 @@ pub mod scene_instance;
 pub mod scene_instance_overrides;
 mod scenes;
 mod schema;
-mod template;
+
 
 pub use bevy_anchor::anchor_str_to_bevy_anchor;
 pub use bsn_ir::{
@@ -34,7 +34,7 @@ pub use dynamic_scene::{
     anchor_str_to_normalized_offset, export_dynamic_scene, is_known_anchor_str,
 };
 pub use operation_log::{LogEntry, OperationLog, OperationLogError};
-pub use persistence::{ENTITIES_DIR, PROJECT_FILE, ProjectMetadata, SCENES_DIR, SCHEMAS_DIR};
+pub use persistence::{PROJECT_FILE, ProjectMetadata, SCENES_DIR, SCHEMAS_DIR};
 pub use scene_asset::{
     AssetReference, ExposedProperty, LocalId, RelationshipKind, RoleWarning, SceneAssetDocument,
     SceneAssetEntity, SceneAssetMetadata, SceneAssetRelationship, SceneAssetRole, validate_role,
@@ -46,8 +46,6 @@ pub use scene_instance::{
     OverridePatch, OverrideStatus, SceneInstance, patch_status_after_field_rename,
 };
 pub use scenes::{SceneInfo, SceneRegistry, SwitchResult};
-pub use template::{EntityTemplate, TemplateEntity, TemplateError};
-
 /// Marker component for entities spawned from SceneDocument.
 /// These are despawned and respawned when the document is mutated
 /// (preview world rebuild strategy — matches Hito 0 decision 23).
@@ -1006,100 +1004,6 @@ pub fn get_combined_schemas_json() -> String {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Entity Templates — wasm_bindgen surface
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Helper: update project.json's templates list (add or remove a template_id).
-async fn update_project_templates(template_id: &str, add: bool) -> Result<(), String> {
-    let mut project = if js_exists(PROJECT_FILE).await {
-        match js_load_file(PROJECT_FILE).await {
-            Ok(json_str) => serde_json::from_str::<ProjectMetadata>(&json_str).unwrap_or_default(),
-            Err(_) => ProjectMetadata::default(),
-        }
-    } else {
-        ProjectMetadata::default()
-    };
-
-    if add {
-        if !project.templates.contains(&template_id.to_string()) {
-            project.templates.push(template_id.to_string());
-        }
-    } else {
-        project.templates.retain(|t| t != template_id);
-    }
-
-    let json = serde_json::to_string(&project).map_err(|e| e.to_string())?;
-    js_save_file(PROJECT_FILE, &json).await
-}
-
-/// Save an EntityTemplate to OPFS at `entities/<template_id>.template.json`.
-#[wasm_bindgen]
-pub async fn save_template(template_id: &str, template_json: &str) -> Result<(), JsValue> {
-    let template: EntityTemplate = serde_json::from_str(template_json)
-        .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
-    template::validate(&template).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    let path = persistence::template_path(template_id);
-    let json = serde_json::to_string(&template).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    js_save_file(&path, &json)
-        .await
-        .map_err(|e| JsValue::from_str(&e))?;
-    update_project_templates(template_id, true)
-        .await
-        .map_err(|e| JsValue::from_str(&e))?;
-    template::cache_template(template);
-    Ok(())
-}
-
-/// Load an EntityTemplate from OPFS and cache in memory.
-#[wasm_bindgen]
-pub async fn load_template(template_id: &str) -> Result<(), JsValue> {
-    let path = persistence::template_path(template_id);
-    let json_str = js_load_file(&path)
-        .await
-        .map_err(|e| JsValue::from_str(&e))?;
-    let template: EntityTemplate = serde_json::from_str(&json_str)
-        .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
-    template::validate(&template).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    template::cache_template(template);
-    Ok(())
-}
-
-/// List all template IDs in OPFS.
-#[wasm_bindgen]
-pub async fn list_templates() -> Result<JsValue, JsValue> {
-    let files = js_list_files(persistence::ENTITIES_DIR)
-        .await
-        .map_err(|e| JsValue::from_str(&e))?;
-    let ids: Vec<String> = files
-        .into_iter()
-        .filter(|f| f.ends_with(".template.json"))
-        .map(|f| f.trim_end_matches(".template.json").to_string())
-        .collect();
-    serde_wasm_bindgen::to_value(&ids).map_err(|e| JsValue::from_str(&e.to_string()))
-}
-
-/// Delete an EntityTemplate from OPFS and clear from cache.
-#[wasm_bindgen]
-pub async fn delete_template(template_id: &str) -> Result<(), JsValue> {
-    let path = persistence::template_path(template_id);
-    let promise = opfs_delete_file_raw(&path);
-    js_await(promise)
-        .await
-        .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
-    template::remove_cached_template(template_id);
-    update_project_templates(template_id, false)
-        .await
-        .map_err(|e| JsValue::from_str(&e))?;
-    Ok(())
-}
-
-/// Check if a template is loaded in the in-memory cache.
-#[wasm_bindgen]
-pub fn is_template_loaded(template_id: &str) -> bool {
-    template::get_cached_template(template_id).is_some()
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Scene Registry — multi-scene WASM surface
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1236,7 +1140,7 @@ pub async fn discard_scene_changes(id: &str) -> Result<(), JsValue> {
 // load_project integration — populates SceneRegistry from OPFS
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Load complete project: project.json + schemas + templates + all scenes (atomic).
+/// Load complete project: project.json + schemas + all scenes (atomic).
 #[wasm_bindgen]
 pub async fn load_project() -> Result<(), JsValue> {
     if !js_exists(PROJECT_FILE).await {
@@ -1254,17 +1158,6 @@ pub async fn load_project() -> Result<(), JsValue> {
             JsValue::from_str(&format!(
                 "Failed to load schema {}: {:?}",
                 schema_id,
-                e.as_string().unwrap_or_default()
-            ))
-        })?;
-    }
-
-    // Load all templates into cache
-    for template_id in &project.templates {
-        load_template(template_id).await.map_err(|e| {
-            JsValue::from_str(&format!(
-                "Failed to load template {}: {:?}",
-                template_id,
                 e.as_string().unwrap_or_default()
             ))
         })?;

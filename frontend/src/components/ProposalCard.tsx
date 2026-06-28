@@ -38,8 +38,6 @@ function formatCommand(envelope: CommandEnvelope): string {
       return `ReparentEntity ${((cmd as any).entity_id ?? "").slice(0, 8)}`;
     case "RenameEntity":
       return `RenameEntity → "${(cmd as any).new_name ?? ""}"`;
-    case "InstantiateEntityTemplate":
-      return `InstantiateEntityTemplate ${(cmd as any).template_id}`;
     case "Batch":
       return `Batch: ${((cmd as any).label ?? "nested")} (${((cmd as any).commands ?? []).length} commands)`;
     default:

@@ -38,7 +38,6 @@ export type Command =
   | { type: "RemoveComponent"; entity_id: StableId; type_id: string }
   | { type: "SetComponentField"; entity_id: StableId; type_id: string; field_path: FieldPath; value: JsonValue }
   | { type: "ReparentEntity"; entity_id: StableId; old_parent?: StableId | null; new_parent?: StableId | null }
-  | { type: "InstantiateEntityTemplate"; template_id: string; target_parent?: StableId | null }
   | { type: "RenameEntity"; entity_id: StableId; old_name?: string | null; new_name: string }
   | {
       type: "Batch";

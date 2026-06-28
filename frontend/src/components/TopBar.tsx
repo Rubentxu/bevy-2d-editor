@@ -47,7 +47,7 @@ export default function TopBar({
       <button onClick={onSave} data-testid="save-btn" title="Save scene">
         Save
       </button>
-      <button onClick={onLoad} data-testid="load-btn" title="Load project (restores scenes + schemas + templates)">
+      <button onClick={onLoad} data-testid="load-btn" title="Load project (restores scenes + schemas)">
         Load Project
       </button>
       <button onClick={onExportRust} data-testid="export-rs-btn" title="Export scene as Rust code">
