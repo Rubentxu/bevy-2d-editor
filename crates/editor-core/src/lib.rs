@@ -1,10 +1,11 @@
-use bevy::prelude::*;
 use bevy::prelude::Entity as BevyEntity;
+use bevy::prelude::*;
 use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
 mod bevy_anchor;
+pub mod bsn_ir;
 mod code_export;
 mod command;
 mod document;
@@ -12,20 +13,32 @@ mod dynamic_scene;
 mod operation_log;
 mod persistence;
 mod processor;
+pub mod scene_asset;
+pub mod scene_instance;
 mod scenes;
 mod schema;
 mod template;
 
 pub use bevy_anchor::anchor_str_to_bevy_anchor;
-pub use code_export::{export_rust_source, CodeGenResult};
+pub use bsn_ir::{
+    BsnIr, BsnIrNode, BsnIrRelationship, BsnPatch, BsnPatchOp, bsn_ir_from_scene_asset,
+};
+pub use code_export::{CodeGenResult, export_rust_source};
 pub use command::{Command, CommandEnvelope, CommandError, CommandMetadata, CommandResult};
-pub use document::{SceneDocument, Entity, ComponentInstance, StableId};
+pub use document::{ComponentInstance, Entity, SceneDocument, StableId};
 pub use dynamic_scene::{
+    DynamicSceneExport, EXPORT_VERSION, EntityExport, ExportError, ExportWarning,
     anchor_str_to_normalized_offset, export_dynamic_scene, is_known_anchor_str,
-    DynamicSceneExport, EntityExport, ExportError, ExportWarning, EXPORT_VERSION,
 };
 pub use operation_log::{LogEntry, OperationLog, OperationLogError};
-pub use persistence::{ProjectMetadata, PROJECT_FILE, SCENES_DIR, SCHEMAS_DIR, ENTITIES_DIR};
+pub use persistence::{ENTITIES_DIR, PROJECT_FILE, ProjectMetadata, SCENES_DIR, SCHEMAS_DIR};
+pub use scene_asset::{
+    AssetReference, ExposedProperty, LocalId, RelationshipKind, RoleWarning, SceneAssetDocument,
+    SceneAssetEntity, SceneAssetMetadata, SceneAssetRelationship, SceneAssetRole, validate_role,
+};
+pub use scene_instance::{
+    OverridePatch, OverrideStatus, SceneInstance, patch_status_after_field_rename,
+};
 pub use scenes::{SceneInfo, SceneRegistry, SwitchResult};
 pub use template::{EntityTemplate, TemplateEntity, TemplateError};
 
@@ -184,7 +197,8 @@ impl LinearBus {
         let mut pos = 8;
         while pos + 4 <= end && pos + 4 <= self.buffer.len() {
             let cmd_type = u16::from_le_bytes(self.buffer[pos..pos + 2].try_into().unwrap());
-            let payload_len = u16::from_le_bytes(self.buffer[pos + 2..pos + 4].try_into().unwrap()) as usize;
+            let payload_len =
+                u16::from_le_bytes(self.buffer[pos + 2..pos + 4].try_into().unwrap()) as usize;
             if pos + 4 + payload_len > self.buffer.len() {
                 break;
             }
@@ -205,12 +219,10 @@ impl LinearBus {
         if write_offset + slot_size > self.buffer.len() {
             return false;
         }
-        self.buffer[write_offset..write_offset + 2]
-            .copy_from_slice(&event_type.to_le_bytes());
+        self.buffer[write_offset..write_offset + 2].copy_from_slice(&event_type.to_le_bytes());
         self.buffer[write_offset + 2..write_offset + 4]
             .copy_from_slice(&(payload.len() as u16).to_le_bytes());
-        self.buffer[write_offset + 4..write_offset + 4 + payload.len()]
-            .copy_from_slice(payload);
+        self.buffer[write_offset + 4..write_offset + 4 + payload.len()].copy_from_slice(payload);
         Self::set_write_offset(&mut self.buffer, write_offset + slot_size);
         true
     }
@@ -337,7 +349,13 @@ pub fn get_log_state() -> String {
 #[wasm_bindgen]
 pub fn start_engine(canvas_id: &str) {
     let canvas_selector = format!("#{}", canvas_id);
-    web_sys::console::log_1(&format!("[editor-core] Starting Bevy with canvas: {}", canvas_selector).into());
+    web_sys::console::log_1(
+        &format!(
+            "[editor-core] Starting Bevy with canvas: {}",
+            canvas_selector
+        )
+        .into(),
+    );
 
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -390,7 +408,9 @@ fn setup(mut commands: Commands) {
             match serde_json::from_str(DEFAULT_SCENE_JSON) {
                 Ok(doc) => doc,
                 Err(e) => {
-                    web_sys::console::error_1(&format!("[editor-core] Failed to parse default scene: {}", e).into());
+                    web_sys::console::error_1(
+                        &format!("[editor-core] Failed to parse default scene: {}", e).into(),
+                    );
                     return;
                 }
             }
@@ -463,7 +483,13 @@ fn spawn_entity(commands: &mut Commands, entity: &Entity) {
                     .values
                     .get("translation")
                     .and_then(|v| v.get("x").zip(v.get("y")))
-                    .map(|(x, y)| Vec3::new(x.as_f64().unwrap_or(0.0) as f32, y.as_f64().unwrap_or(0.0) as f32, 0.0))
+                    .map(|(x, y)| {
+                        Vec3::new(
+                            x.as_f64().unwrap_or(0.0) as f32,
+                            y.as_f64().unwrap_or(0.0) as f32,
+                            0.0,
+                        )
+                    })
                     .unwrap_or(Vec3::ZERO);
 
                 let rotation = component
@@ -476,10 +502,20 @@ fn spawn_entity(commands: &mut Commands, entity: &Entity) {
                     .values
                     .get("scale")
                     .and_then(|v| v.get("x").zip(v.get("y")))
-                    .map(|(x, y)| Vec3::new(x.as_f64().unwrap_or(1.0) as f32, y.as_f64().unwrap_or(1.0) as f32, 1.0))
+                    .map(|(x, y)| {
+                        Vec3::new(
+                            x.as_f64().unwrap_or(1.0) as f32,
+                            y.as_f64().unwrap_or(1.0) as f32,
+                            1.0,
+                        )
+                    })
                     .unwrap_or(Vec3::new(1.0, 1.0, 1.0));
 
-                transform = Some(Transform::from_translation(translation).with_rotation(Quat::from_rotation_z(rotation)).with_scale(scale));
+                transform = Some(
+                    Transform::from_translation(translation)
+                        .with_rotation(Quat::from_rotation_z(rotation))
+                        .with_scale(scale),
+                );
             }
             "editor.Sprite2D" => {
                 let color = component
@@ -558,7 +594,10 @@ fn spawn_entity(commands: &mut Commands, entity: &Entity) {
 
 fn process_commands(mut sprites: Query<&mut Transform, With<Sprite>>) {
     let cmds = COMMAND_BUS.with(|b| {
-        b.borrow_mut().as_mut().map(|bus| bus.drain()).unwrap_or_default()
+        b.borrow_mut()
+            .as_mut()
+            .map(|bus| bus.drain())
+            .unwrap_or_default()
     });
 
     if let Ok(mut transform) = sprites.single_mut() {
@@ -887,7 +926,9 @@ pub async fn save_schema(type_id: &str) -> Result<String, JsValue> {
 #[wasm_bindgen]
 pub async fn load_schema(type_id: &str) -> Result<String, JsValue> {
     let path = persistence::schema_path(type_id);
-    let json_str = js_load_file(&path).await.map_err(|e| JsValue::from_str(&e))?;
+    let json_str = js_load_file(&path)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
     let schema: schema::ComponentSchema = serde_json::from_str(&json_str)
         .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
     schema::register_schema(schema).map_err(|e| JsValue::from_str(&e.to_string()))?;
@@ -966,9 +1007,7 @@ pub fn get_combined_schemas_json() -> String {
 async fn update_project_templates(template_id: &str, add: bool) -> Result<(), String> {
     let mut project = if js_exists(PROJECT_FILE).await {
         match js_load_file(PROJECT_FILE).await {
-            Ok(json_str) => {
-                serde_json::from_str::<ProjectMetadata>(&json_str).unwrap_or_default()
-            }
+            Ok(json_str) => serde_json::from_str::<ProjectMetadata>(&json_str).unwrap_or_default(),
             Err(_) => ProjectMetadata::default(),
         }
     } else {
@@ -1009,7 +1048,9 @@ pub async fn save_template(template_id: &str, template_json: &str) -> Result<(),
 #[wasm_bindgen]
 pub async fn load_template(template_id: &str) -> Result<(), JsValue> {
     let path = persistence::template_path(template_id);
-    let json_str = js_load_file(&path).await.map_err(|e| JsValue::from_str(&e))?;
+    let json_str = js_load_file(&path)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
     let template: EntityTemplate = serde_json::from_str(&json_str)
         .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
     template::validate(&template).map_err(|e| JsValue::from_str(&e.to_string()))?;
@@ -1078,8 +1119,7 @@ pub fn scene_switch(id: &str) -> Result<JsValue, JsValue> {
         perform_scene_swap(&result.source_name, id);
     }
 
-    serde_wasm_bindgen::to_value(&result)
-        .map_err(|e| JsValue::from_str(&e.to_string()))
+    serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Commit a scene switch after the user resolves the dirty prompt.
@@ -1087,8 +1127,8 @@ pub fn scene_switch(id: &str) -> Result<JsValue, JsValue> {
 #[wasm_bindgen]
 pub fn scene_switch_commit(id: &str) -> Result<(), JsValue> {
     // Get the current id before we overwrite it (clone for use after lock release)
-    let old_id = with_registry(|r| r.current_id())
-        .ok_or_else(|| JsValue::from_str("No current scene"))?;
+    let old_id =
+        with_registry(|r| r.current_id()).ok_or_else(|| JsValue::from_str("No current scene"))?;
 
     with_registry_mut(|r| r.commit_switch(id)).map_err(|e| e.to_js_value())?;
 
@@ -1110,15 +1150,18 @@ fn perform_scene_swap(old_id: &str, new_id: &str) {
         None => (
             crate::document::SceneDocument {
                 version: "0.1".to_string(),
-                scene_id: format!("scratch-{}", std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_nanos())
-                    .unwrap_or(0)),
+                scene_id: format!(
+                    "scratch-{}",
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_nanos())
+                        .unwrap_or(0)
+                ),
                 name: old_id.to_string(),
                 entities: Vec::new(),
             },
             crate::operation_log::OperationLog::new_const(),
-        )
+        ),
     };
 
     with_registry_mut(|r| r.store_to(old_id, doc, log));
@@ -1193,34 +1236,32 @@ pub async fn load_project() -> Result<(), JsValue> {
     if !js_exists(PROJECT_FILE).await {
         return Err(JsValue::from_str("project.json not found"));
     }
-    let project_json = js_load_file(PROJECT_FILE).await.map_err(|e| JsValue::from_str(&e))?;
+    let project_json = js_load_file(PROJECT_FILE)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
     let project: ProjectMetadata = serde_json::from_str(&project_json)
         .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
 
     // Register all schemas first (so AddComponent validates against them)
     for schema_id in &project.schemas {
-        load_schema(schema_id)
-            .await
-            .map_err(|e| {
-                JsValue::from_str(&format!(
-                    "Failed to load schema {}: {:?}",
-                    schema_id,
-                    e.as_string().unwrap_or_default()
-                ))
-            })?;
+        load_schema(schema_id).await.map_err(|e| {
+            JsValue::from_str(&format!(
+                "Failed to load schema {}: {:?}",
+                schema_id,
+                e.as_string().unwrap_or_default()
+            ))
+        })?;
     }
 
     // Load all templates into cache
     for template_id in &project.templates {
-        load_template(template_id)
-            .await
-            .map_err(|e| {
-                JsValue::from_str(&format!(
-                    "Failed to load template {}: {:?}",
-                    template_id,
-                    e.as_string().unwrap_or_default()
-                ))
-            })?;
+        load_template(template_id).await.map_err(|e| {
+            JsValue::from_str(&format!(
+                "Failed to load template {}: {:?}",
+                template_id,
+                e.as_string().unwrap_or_default()
+            ))
+        })?;
     }
 
     // Load all scenes into the registry
@@ -1230,16 +1271,20 @@ pub async fn load_project() -> Result<(), JsValue> {
         if js_exists(&path).await {
             match js_load_file(&path).await {
                 Ok(json_str) => {
-                    let doc: SceneDocument = serde_json::from_str(&json_str)
-                        .unwrap_or_else(|_| crate::document::SceneDocument {
+                    let doc: SceneDocument = serde_json::from_str(&json_str).unwrap_or_else(|_| {
+                        crate::document::SceneDocument {
                             version: "0.1".to_string(),
-                            scene_id: format!("loaded-{}", std::time::SystemTime::now()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .map(|d| d.as_nanos())
-                                .unwrap_or(0)),
+                            scene_id: format!(
+                                "loaded-{}",
+                                std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .map(|d| d.as_nanos())
+                                    .unwrap_or(0)
+                            ),
                             name: scene_name.clone(),
                             entities: Vec::new(),
-                        });
+                        }
+                    });
                     let log = OperationLog::new_const();
                     with_registry_mut(|r| r.load_scene(scene_name.clone(), doc, log));
                 }
@@ -1302,10 +1347,12 @@ pub async fn save_scene(name: &str) -> Result<String, JsValue> {
 #[wasm_bindgen]
 pub async fn load_scene(name: &str) -> Result<(), JsValue> {
     let path = persistence::scene_path(name);
-    let json_str = js_load_file(&path).await.map_err(|e| JsValue::from_str(&e))?;
+    let json_str = js_load_file(&path)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
 
-    let doc: SceneDocument =
-        serde_json::from_str(&json_str).map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+    let doc: SceneDocument = serde_json::from_str(&json_str)
+        .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
 
     SCENE_DOC.with(|s| *s.borrow_mut() = Some(doc));
     mark_dirty();
