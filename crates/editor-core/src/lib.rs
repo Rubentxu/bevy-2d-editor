@@ -21,6 +21,21 @@ pub mod scene_instance_overrides;
 mod scenes;
 mod schema;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ADR References (documentation only — no code changes here)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// ## ADRs integrated in this crate
+//
+// - [ADR-0005](../../adr/0005-scene-asset-bsn-aligned-reusable-scene-model.md):
+//   Scene Asset identity (`asset_id` + `logical_path`), roles, versioning.
+// - [ADR-0006](../../adr/0006-authoring-first-roadmap-after-bsn-migration.md):
+//   editor-owned source of truth; `.bsn` write-back deferred.
+// - [ADR-0007](../../adr/0007-separate-asset-command-surface.md):
+//   separate `AssetCommand` surface for authoring mutations.
+// - [ADR-0008](../../adr/0008-path-based-scene-asset-opfs-layout.md):
+//   `assets/<logical_path>.asset.json` path layout; catalog in `ProjectMetadata`.
+
 
 pub use bevy_anchor::anchor_str_to_bevy_anchor;
 pub use bsn_ir::{
@@ -34,7 +49,7 @@ pub use dynamic_scene::{
     anchor_str_to_normalized_offset, export_dynamic_scene, is_known_anchor_str,
 };
 pub use operation_log::{LogEntry, OperationLog, OperationLogError};
-pub use persistence::{PROJECT_FILE, ProjectMetadata, SCENES_DIR, SCHEMAS_DIR};
+pub use persistence::{asset_path, PROJECT_FILE, ProjectMetadata, SCENES_DIR, SCHEMAS_DIR, ASSETS_DIR};
 pub use scene_asset::{
     AssetReference, ExposedProperty, LocalId, RelationshipKind, RoleWarning, SceneAssetDocument,
     SceneAssetEntity, SceneAssetMetadata, SceneAssetRelationship, SceneAssetRole, validate_role,
@@ -84,6 +99,11 @@ pub struct OperationLogState {
 thread_local! {
     static DIRTY_FLAG: RefCell<bool> = const { RefCell::new(false) };
     static SCENE_REGISTRY: RefCell<Option<SceneRegistry>> = const { RefCell::new(None) };
+    // Scene Asset catalog, document, and warnings holders (ADR-0008 §Decision).
+    // Mirror of SCENE_REGISTRY/SCENE_DOC pattern for scene assets.
+    static SCENE_ASSET_CATALOG: RefCell<Option<SceneAssetCatalog>> = const { RefCell::new(None) };
+    static SCENE_ASSET_DOC: RefCell<Option<SceneAssetDocument>> = const { RefCell::new(None) };
+    static SCENE_ASSET_CATALOG_WARNINGS: RefCell<Vec<CatalogWarning>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Get an immutable borrowed reference to the SceneRegistry, initializing if needed.
@@ -112,6 +132,60 @@ where
         }
         f(mut_ref.as_mut().unwrap())
     })
+}
+
+/// Get an immutable borrowed reference to the SceneAssetCatalog, initializing if needed.
+fn with_asset_catalog<F, R>(f: F) -> R
+where
+    F: FnOnce(&SceneAssetCatalog) -> R,
+{
+    SCENE_ASSET_CATALOG.with(|cell| {
+        let mut_ref = &mut *cell.borrow_mut();
+        if mut_ref.is_none() {
+            *mut_ref = Some(SceneAssetCatalog::new());
+        }
+        f(mut_ref.as_ref().unwrap())
+    })
+}
+
+/// Get a mutable borrowed reference to the SceneAssetCatalog, initializing if needed.
+fn with_asset_catalog_mut<F, R>(f: F) -> R
+where
+    F: FnOnce(&mut SceneAssetCatalog) -> R,
+{
+    SCENE_ASSET_CATALOG.with(|cell| {
+        let mut_ref = &mut *cell.borrow_mut();
+        if mut_ref.is_none() {
+            *mut_ref = Some(SceneAssetCatalog::new());
+        }
+        f(mut_ref.as_mut().unwrap())
+    })
+}
+
+/// Get an immutable borrowed reference to the active SceneAssetDocument.
+fn with_asset_doc<F, R>(f: F) -> R
+where
+    F: FnOnce(&Option<SceneAssetDocument>) -> R,
+{
+    SCENE_ASSET_DOC.with(|cell| f(&*cell.borrow()))
+}
+
+/// Get a mutable borrowed reference to the active SceneAssetDocument.
+fn with_asset_doc_mut<F, R>(f: F) -> R
+where
+    F: FnOnce(&mut Option<SceneAssetDocument>) -> R,
+{
+    SCENE_ASSET_DOC.with(|cell| f(&mut *cell.borrow_mut()))
+}
+
+/// Collect all catalog warnings accumulated during load_project.
+fn get_asset_catalog_warnings() -> Vec<CatalogWarning> {
+    SCENE_ASSET_CATALOG_WARNINGS.with(|cell| cell.borrow().clone())
+}
+
+/// Clear all accumulated catalog warnings.
+fn clear_asset_catalog_warnings() {
+    SCENE_ASSET_CATALOG_WARNINGS.with(|cell| cell.borrow_mut().clear());
 }
 
 fn mark_dirty() {
@@ -1209,6 +1283,48 @@ pub async fn load_project() -> Result<(), JsValue> {
             }
         }
     }
+
+    // Rebuild Scene Asset catalog from project.scene_assets (ADR-0008 §Decision).
+    // For each catalog entry, check if the body file exists. If missing, emit a
+    // typed CatalogWarning (S16) and KEEP the entry — never silent delete.
+    clear_asset_catalog_warnings();
+    let mut catalog = SceneAssetCatalog::new();
+    for entry in &project.scene_assets {
+        let lp = &entry.logical_path;
+        let body_exists = js_exists(&persistence::asset_path(lp)).await;
+        if !body_exists {
+            // Orphan: body file is missing. Emit typed warning and keep entry.
+            let warning = CatalogWarning {
+                code: "orphaned_index".to_string(),
+                message: format!(
+                    "asset '{}' (id={}) is listed in project.json but the body file is missing",
+                    lp, entry.asset_id
+                ),
+                asset_id: Some(entry.asset_id.clone()),
+                logical_path: Some(lp.clone()),
+            };
+            SCENE_ASSET_CATALOG_WARNINGS.with(|cell| {
+                cell.borrow_mut().push(warning);
+            });
+        }
+        // Register the entry (keep it regardless of orphan status)
+        if let Err(e) = catalog.register(entry.clone()) {
+            // If registration fails (e.g., duplicate), still keep the entry in warnings
+            let warning = CatalogWarning {
+                code: "catalog_error".to_string(),
+                message: format!("failed to register asset '{}': {}", lp, e),
+                asset_id: Some(entry.asset_id.clone()),
+                logical_path: Some(lp.clone()),
+            };
+            SCENE_ASSET_CATALOG_WARNINGS.with(|cell| {
+                cell.borrow_mut().push(warning);
+            });
+        }
+    }
+    // Store the rebuilt catalog in the thread-local holder
+    SCENE_ASSET_CATALOG.with(|cell| {
+        *cell.borrow_mut() = Some(catalog);
+    });
 
     Ok(())
 }

@@ -4,8 +4,20 @@
 //! directory structure. This module provides the Rust-side data structures
 //! and path resolution; the actual OPFS calls go through a JS bridge
 //! (see `frontend/src/opfs-bridge.ts`).
+//!
+//! ## ADRs integrated here
+//! - [ADR-0005](../../adr/0005-scene-asset-bsn-aligned-reusable-scene-model.md):
+//!   Scene Asset identity (`asset_id` + `logical_path`), roles, versioning.
+//! - [ADR-0006](../../adr/0006-authoring-first-roadmap-after-bsn-migration.md):
+//!   editor-owned source of truth; `.bsn` write-back deferred.
+//! - [ADR-0007](../../adr/0007-separate-asset-command-surface.md):
+//!   separate `AssetCommand` surface for authoring mutations.
+//! - [ADR-0008](../../adr/0008-path-based-scene-asset-opfs-layout.md):
+//!   `assets/<logical_path>.asset.json` path layout; catalog in `ProjectMetadata`.
 
 use serde::{Deserialize, Serialize};
+
+use crate::scene_asset_catalog::SceneAssetCatalogEntry;
 
 /// Filename for the project metadata file at OPFS root.
 pub const PROJECT_FILE: &str = "project.json";
@@ -15,6 +27,9 @@ pub const SCENES_DIR: &str = "scenes";
 
 /// Subdirectory containing Component Schema files (one per schema).
 pub const SCHEMAS_DIR: &str = "schemas";
+
+/// Subdirectory containing SceneAssetDocument bodies (ADR-0008 §Decision).
+pub const ASSETS_DIR: &str = "assets";
 
 /// Project metadata stored at OPFS root as `project.json`.
 /// Contains version, name, list of saved scenes, schemas.
@@ -31,6 +46,11 @@ pub struct ProjectMetadata {
     /// project.json files without this field still parse (None → first scene).
     #[serde(default)]
     pub active_scene: Option<String>,
+    /// Catalog of Scene Assets in this project. `#[serde(default)]` so old
+    /// project.json files without this field still parse (empty Vec).
+    /// See ADR-0008 §Decision rule 2.
+    #[serde(default)]
+    pub scene_assets: Vec<SceneAssetCatalogEntry>,
 }
 
 impl Default for ProjectMetadata {
@@ -41,6 +61,7 @@ impl Default for ProjectMetadata {
             scenes: Vec::new(),
             schemas: Vec::new(),
             active_scene: None,
+            scene_assets: Vec::new(),
         }
     }
 }
@@ -55,6 +76,13 @@ pub fn scene_path(name: &str) -> String {
 /// accept dots.
 pub fn schema_path(type_id: &str) -> String {
     format!("{}/{}.schema.json", SCHEMAS_DIR, type_id)
+}
+
+/// Resolve the OPFS path for a Scene Asset body: `assets/<logical_path>.asset.json`.
+/// `logical_path` MUST be already-normalized (segments joined by '/').
+/// See ADR-0008 §Decision rule 1.
+pub fn asset_path(logical_path: &str) -> String {
+    format!("{}/{}.asset.json", ASSETS_DIR, logical_path)
 }
 
 #[cfg(test)]
@@ -78,6 +106,7 @@ mod tests {
             scenes: vec!["level_01".to_string(), "level_02".to_string()],
             schemas: vec!["game.PlayerHealth".to_string()],
             active_scene: None,
+            scene_assets: vec![],
         };
         let json = serde_json::to_string(&pm).unwrap();
         let rt: ProjectMetadata = serde_json::from_str(&json).unwrap();
@@ -124,5 +153,71 @@ mod tests {
         let rt: ProjectMetadata = serde_json::from_str(json).unwrap();
         assert_eq!(rt.version, "0.1");
         assert_eq!(rt.name, "Test");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // S18 RED — asset_path produces the expected OPFS path
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_asset_path_produces_expected_format() {
+        // RED phase: this test captures the expected contract from ADR-0008 §Decision.
+        // GIVEN logical_path = "characters/player"
+        // WHEN asset_path(logical_path) is called
+        // THEN the result equals "assets/characters/player.asset.json"
+        assert_eq!(
+            asset_path("characters/player"),
+            "assets/characters/player.asset.json"
+        );
+    }
+
+    #[test]
+    fn test_asset_path_simple_name() {
+        assert_eq!(asset_path("player"), "assets/player.asset.json");
+    }
+
+    #[test]
+    fn test_asset_path_nested() {
+        assert_eq!(
+            asset_path("characters/player"),
+            "assets/characters/player.asset.json"
+        );
+        assert_eq!(
+            asset_path("ui/menus/title_screen"),
+            "assets/ui/menus/title_screen.asset.json"
+        );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // S17 RED — ProjectMetadata with old shape still loads (back-compat)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_project_metadata_without_scene_assets_field_deserializes() {
+        // RED phase: old project.json files without scene_assets field must parse.
+        // GIVEN a project.json written before this change (no scene_assets field)
+        // WHEN load_project parses it
+        // THEN parsing succeeds AND scene_assets defaults to empty Vec
+        // AND no warning is emitted for the missing field.
+        let json = r#"{"version":"0.1","name":"Old Project","scenes":["main"]}"#;
+        let pm: ProjectMetadata = serde_json::from_str(json).unwrap();
+        assert_eq!(pm.name, "Old Project");
+        assert_eq!(pm.scenes, vec!["main"]);
+        assert!(pm.scene_assets.is_empty()); // default to empty Vec
+    }
+
+    #[test]
+    fn test_project_metadata_with_empty_scene_assets_roundtrip() {
+        let pm = ProjectMetadata {
+            version: "0.1".to_string(),
+            name: "Test Project".to_string(),
+            scenes: vec!["level_01".to_string()],
+            schemas: vec![],
+            active_scene: None,
+            scene_assets: vec![],
+        };
+        let json = serde_json::to_string(&pm).unwrap();
+        let rt: ProjectMetadata = serde_json::from_str(&json).unwrap();
+        assert!(rt.scene_assets.is_empty());
     }
 }
