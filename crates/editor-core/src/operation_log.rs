@@ -185,6 +185,7 @@ mod tests {
     use crate::command::{CommandMetadata, CommandEnvelope};
     use crate::document::{ComponentInstance, Entity, StableId};
     use serde_json::json;
+    use std::collections::BTreeMap;
 
     fn empty_doc() -> SceneDocument {
         SceneDocument {

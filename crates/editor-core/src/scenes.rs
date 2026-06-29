@@ -379,6 +379,7 @@ impl Default for SceneRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
 
     fn make_doc(name: &str) -> SceneDocument {
         SceneDocument {
