@@ -379,6 +379,7 @@ extern "C" {
     fn on_frame_end();
 }
 
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn create_buses() {
     console_error_panic_hook::set_once();
@@ -387,6 +388,7 @@ pub fn create_buses() {
     web_sys::console::log_1(&"[editor-core] Buses created".into());
 }
 
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn load_scene_json(json: &str) -> Result<(), JsValue> {
     let doc: SceneDocument = serde_json::from_str(json)
@@ -666,6 +668,7 @@ pub fn get_log_state() -> String {
     })
 }
 
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn start_engine(canvas_id: &str) {
     let canvas_selector = format!("#{}", canvas_id);
@@ -728,8 +731,14 @@ fn setup(mut commands: Commands) {
             match serde_json::from_str(DEFAULT_SCENE_JSON) {
                 Ok(doc) => doc,
                 Err(e) => {
+                    #[cfg(target_arch = "wasm32")]
                     web_sys::console::error_1(
                         &format!("[editor-core] Failed to parse default scene: {}", e).into(),
+                    );
+                    #[cfg(not(target_arch = "wasm32"))]
+                    eprintln!(
+                        "[editor-core] Failed to parse default scene: {}",
+                        e
                     );
                     return;
                 }
@@ -1108,6 +1117,7 @@ fn sync_log_state(mut log_state: ResMut<OperationLogState>) {
 // OPFS Persistence — wasm_bindgen externs + high-level functions
 // ─────────────────────────────────────────────────────────────────────────────
 
+#[cfg(target_arch = "wasm32")]
 /// Helper: await a JS Promise and return its resolved JsValue.
 async fn js_await(promise: js_sys::Promise) -> Result<JsValue, JsValue> {
     let fut = JsFuture::from(promise);
@@ -1115,6 +1125,7 @@ async fn js_await(promise: js_sys::Promise) -> Result<JsValue, JsValue> {
         .map_err(|e| JsValue::from_str(&format!("JS promise rejected: {:?}", e)))
 }
 
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 extern "C" {
     /// JS-side: `window.opfs_save_file(path, contents) -> Promise<{ok, error?}>`
@@ -1138,6 +1149,7 @@ extern "C" {
     pub fn opfs_delete_file_raw(path: &str) -> js_sys::Promise;
 }
 
+#[cfg(target_arch = "wasm32")]
 async fn js_save_file(path: &str, contents: &str) -> Result<(), String> {
     let promise = opfs_save_file_raw(path, contents);
     let result = js_await(promise).await.map_err(|e| format!("{:?}", e))?;
@@ -1154,6 +1166,7 @@ async fn js_save_file(path: &str, contents: &str) -> Result<(), String> {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 async fn js_load_file(path: &str) -> Result<String, String> {
     let promise = opfs_load_file_raw(path);
     let result = js_await(promise).await.map_err(|e| format!("{:?}", e))?;
@@ -1173,6 +1186,7 @@ async fn js_load_file(path: &str) -> Result<String, String> {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 async fn js_exists(path: &str) -> bool {
     let promise = opfs_exists_raw(path);
     match js_await(promise).await {
@@ -1181,6 +1195,7 @@ async fn js_exists(path: &str) -> bool {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 async fn js_list_files(path: &str) -> Result<Vec<String>, String> {
     let promise = opfs_list_files_raw(path);
     let result = js_await(promise).await.map_err(|e| format!("{:?}", e))?;
@@ -1204,6 +1219,7 @@ async fn js_list_files(path: &str) -> Result<Vec<String>, String> {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 async fn update_project_metadata(scene_name: &str) -> Result<(), String> {
     let project = if js_exists(PROJECT_FILE).await {
         match js_load_file(PROJECT_FILE).await {
@@ -1222,6 +1238,7 @@ async fn update_project_metadata(scene_name: &str) -> Result<(), String> {
 }
 
 /// List all scene names from `project.json`.
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn list_scenes() -> Result<JsValue, JsValue> {
     if !js_exists(PROJECT_FILE).await {
@@ -1237,6 +1254,7 @@ pub async fn list_scenes() -> Result<JsValue, JsValue> {
 }
 
 /// Check if `project.json` exists in OPFS.
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn project_exists() -> bool {
     js_exists(PROJECT_FILE).await
@@ -1334,6 +1352,7 @@ fn get_schema_json(type_id: &str) -> Result<String, JsValue> {
 }
 
 /// Helper: update project.json's schemas list (add or remove a type_id).
+#[cfg(target_arch = "wasm32")]
 async fn update_project_schemas(type_id: &str, add: bool) -> Result<(), String> {
     let mut project = if js_exists(PROJECT_FILE).await {
         match js_load_file(PROJECT_FILE).await {
@@ -1357,6 +1376,7 @@ async fn update_project_schemas(type_id: &str, add: bool) -> Result<(), String> 
 }
 
 /// Save a schema to OPFS at `schemas/<type_id>.schema.json`.
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn save_schema(type_id: &str) -> Result<String, JsValue> {
     let schema_json = get_schema_json(type_id)?;
@@ -1371,6 +1391,7 @@ pub async fn save_schema(type_id: &str) -> Result<String, JsValue> {
 }
 
 /// Load a schema from OPFS and register it in the combined registry.
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn load_schema(type_id: &str) -> Result<String, JsValue> {
     let path = persistence::schema_path(type_id);
@@ -1384,6 +1405,7 @@ pub async fn load_schema(type_id: &str) -> Result<String, JsValue> {
 }
 
 /// Delete a schema from OPFS and unregister it (built-ins protected).
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn delete_schema(type_id: &str) -> Result<(), JsValue> {
     if schema::is_builtin_type(type_id) {
@@ -1556,6 +1578,7 @@ pub fn get_current_scene_id() -> Option<String> {
 }
 
 /// Discard unsaved changes in the current scene by reloading it from OPFS.
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn discard_scene_changes(id: &str) -> Result<(), JsValue> {
     let path = persistence::scene_path(id);
@@ -1593,6 +1616,7 @@ pub async fn discard_scene_changes(id: &str) -> Result<(), JsValue> {
 ///
 /// For each catalog entry, loads the body file and stores it keyed by
 /// `logical_path` in the cache.
+#[cfg(target_arch = "wasm32")]
 async fn warm_asset_body_cache() {
     use crate::scene_asset::SceneAssetDocument;
 
@@ -1633,6 +1657,7 @@ async fn warm_asset_body_cache() {
 }
 
 /// Load complete project: project.json + schemas + all scenes (atomic).
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn load_project() -> Result<(), JsValue> {
     if !js_exists(PROJECT_FILE).await {
@@ -1758,6 +1783,7 @@ pub async fn load_project() -> Result<(), JsValue> {
 
 /// Save the current SceneDocument to OPFS at `scenes/<name>.scene.json`.
 /// Also clears the `is_dirty` flag on the current scene entry.
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn save_scene(name: &str) -> Result<String, JsValue> {
     let doc_json = SCENE_DOC.with(|s| {
@@ -1831,6 +1857,7 @@ fn resync_instances_on_load(
     reports
 }
 
+#[cfg(target_arch = "wasm32")]
 pub async fn load_scene(name: &str) -> Result<(), JsValue> {
     let path = persistence::scene_path(name);
     let json_str = js_load_file(&path)
@@ -1936,6 +1963,7 @@ pub fn get_asset_log_state() -> String {
 
 /// Create a new Scene Asset with the given name and role.
 /// Returns the new catalog entry as JSON.
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn create_scene_asset(name: &str, role: &str) -> Result<String, JsValue> {
     use crate::scene_asset::SceneAssetRole;
@@ -2012,6 +2040,7 @@ pub async fn create_scene_asset(name: &str, role: &str) -> Result<String, JsValu
 }
 
 /// Rename a Scene Asset (moves the file and updates catalog).
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn rename_scene_asset(asset_id: &str, new_path: &str) -> Result<String, JsValue> {
     let new_path_normalized = scene_asset_catalog::normalize_logical_path(new_path);
@@ -2077,6 +2106,7 @@ pub async fn rename_scene_asset(asset_id: &str, new_path: &str) -> Result<String
 }
 
 /// Duplicate a Scene Asset.
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn duplicate_scene_asset(asset_id: &str) -> Result<String, JsValue> {
     // Get source entry
@@ -2128,6 +2158,7 @@ pub async fn duplicate_scene_asset(asset_id: &str) -> Result<String, JsValue> {
 }
 
 /// Delete a Scene Asset.
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn delete_scene_asset(asset_id: &str) -> Result<(), JsValue> {
     // Get entry
@@ -2182,6 +2213,7 @@ pub fn list_scene_assets(role_filter: Option<String>) -> Result<String, JsValue>
 }
 
 /// Open a Scene Asset by asset_id into SCENE_ASSET_DOC thread-local.
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn open_scene_asset(asset_id: &str) -> Result<String, JsValue> {
     // Get entry
@@ -2247,6 +2279,7 @@ pub fn get_scene_asset_catalog_json() -> Result<String, JsValue> {
 }
 
 /// Save the active Scene Asset: body-first, then catalog update.
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn save_scene_asset() -> Result<String, JsValue> {
     let (asset_id, path, doc_json) = with_asset_doc_mut(|doc_opt| {
@@ -2331,6 +2364,7 @@ fn derive_duplicate_path(original: &str) -> String {
 }
 
 /// Update project.json with a modified scene_assets list.
+#[cfg(target_arch = "wasm32")]
 async fn update_project_metadata_for_asset(
     entry: &scene_asset_catalog::SceneAssetCatalogEntry,
     _operation: &str,
@@ -2353,6 +2387,7 @@ async fn update_project_metadata_for_asset(
 }
 
 /// Load project metadata from OPFS.
+#[cfg(target_arch = "wasm32")]
 async fn load_project_metadata() -> Result<ProjectMetadata, JsValue> {
     if js_exists(persistence::PROJECT_FILE).await {
         let json_str = js_load_file(persistence::PROJECT_FILE)
@@ -2366,6 +2401,7 @@ async fn load_project_metadata() -> Result<ProjectMetadata, JsValue> {
 }
 
 /// Delete a file from OPFS.
+#[cfg(target_arch = "wasm32")]
 async fn js_delete_file(path: &str) -> Result<(), String> {
     let promise = opfs_delete_file_raw(path);
     js_await(promise).await.map_err(|e| format!("{:?}", e))?;
