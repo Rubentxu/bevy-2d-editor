@@ -12,8 +12,14 @@ import AIAssistantPanel from "./components/AIAssistantPanel";
 import ExportRustModal from "./components/ExportRustModal";
 import SceneTabs from "./components/SceneTabs";
 import UnsavedChangesDialog from "./components/UnsavedChangesDialog";
+import ProjectAssetBrowser from "./components/ProjectAssetBrowser";
+import AssetAuthoringView from "./components/AssetAuthoringView";
+import AssetUnsavedChangesDialog from "./components/AssetUnsavedChangesDialog";
 import { useScenes } from "./hooks/useScenes";
+import { useSceneAssets } from "./hooks/useSceneAssets";
 import { sceneCreate, sceneSwitch, sceneSwitchCommit, sceneDelete, sceneRename } from "./services/scenes";
+
+type EditorMode = "scene" | "asset-authoring";
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -34,6 +40,29 @@ export default function App() {
   const [pendingSwitchId, setPendingSwitchId] = useState<string | null>(null);
   const [pendingSwitchSource, setPendingSwitchSource] = useState<string | null>(null);
 
+  // ── Asset Authoring Mode ─────────────────────────────────────────────────
+  const [editorMode, setEditorMode] = useState<EditorMode>("scene");
+  const [activeAssetLogicalPath, setActiveAssetLogicalPath] = useState<string | null>(null);
+  const [pendingBackToScene, setPendingBackToScene] = useState(false);
+
+  const {
+    entries: assetEntries,
+    assetDoc,
+    logState: assetLogState,
+    dirty: assetDirty,
+    open: openAsset,
+    close: closeAsset,
+    dispatch: dispatchAssetCommand,
+    undo: undoAsset,
+    redo: redoAsset,
+    save: saveAsset,
+    create: createAsset,
+    rename: renameAsset,
+    duplicate: duplicateAsset,
+    deleteAsset: deleteAssetFn,
+  } = useSceneAssets();
+
+  // ── AI Assistant ─────────────────────────────────────────────────────────
   const {
     prompt,
     setPrompt,
@@ -239,10 +268,136 @@ export default function App() {
     setPendingSwitchSource(null);
   }, []);
 
+  // ── Asset Authoring handlers ─────────────────────────────────────────────
+
+  const handleOpenAsset = useCallback(
+    async (assetId: string) => {
+      const entry = assetEntries.find((e) => e.asset_id === assetId);
+      if (!entry) return;
+      await openAsset(assetId);
+      setActiveAssetLogicalPath(entry.logical_path);
+      setEditorMode("asset-authoring");
+    },
+    [assetEntries, openAsset]
+  );
+
+  const handleAssetCreate = useCallback(
+    async (name: string, role: string) => {
+      await createAsset(name, role);
+    },
+    [createAsset]
+  );
+
+  const handleAssetRename = useCallback(
+    async (assetId: string, newPath: string) => {
+      await renameAsset(assetId, newPath);
+    },
+    [renameAsset]
+  );
+
+  const handleAssetDuplicate = useCallback(
+    async (assetId: string) => {
+      await duplicateAsset(assetId);
+    },
+    [duplicateAsset]
+  );
+
+  const handleAssetDelete = useCallback(
+    async (assetId: string) => {
+      await deleteAssetFn(assetId);
+    },
+    [deleteAssetFn]
+  );
+
+  // "Back to Scene" — check dirty BEFORE flipping mode (per D4)
+  const handleBackToScene = useCallback(() => {
+    if (assetDirty) {
+      setPendingBackToScene(true);
+    } else {
+      // Not dirty — safe to leave immediately
+      closeAsset();
+      setActiveAssetLogicalPath(null);
+      setEditorMode("scene");
+    }
+  }, [assetDirty, closeAsset]);
+
+  const handleAssetSaveAndLeave = useCallback(async () => {
+    await saveAsset();
+    setPendingBackToScene(false);
+    closeAsset();
+    setActiveAssetLogicalPath(null);
+    setEditorMode("scene");
+  }, [saveAsset, closeAsset]);
+
+  const handleAssetDiscardAndLeave = useCallback(() => {
+    // Close without saving — no file write
+    closeAsset();
+    setPendingBackToScene(false);
+    setActiveAssetLogicalPath(null);
+    setEditorMode("scene");
+  }, [closeAsset]);
+
+  const handleAssetCancelBack = useCallback(() => {
+    setPendingBackToScene(false);
+  }, []);
+
+  // Asset command dispatch with C-2 adapter: fieldPath string → [fieldPath]
+  const handleAssetCommit = useCallback(
+    async (localId: string, typeId: string, fieldPath: string, value: any) => {
+      // Wrap fieldPath as [fieldPath] for SetComponentValue.field_path: Vec<String>
+      const command = {
+        type: "SetComponentValue",
+        local_id: localId,
+        type_id: typeId,
+        field_path: [fieldPath], // C-2: 1-element array wrap
+        value,
+      };
+      await dispatchAssetCommand(command);
+    },
+    [dispatchAssetCommand]
+  );
+
+  const handleAssetAddComponent = useCallback(
+    async (localId: string, typeId: string) => {
+      const command = {
+        type: "AddComponent",
+        local_id: localId,
+        type_id: typeId,
+        values: {},
+      };
+      await dispatchAssetCommand(command);
+    },
+    [dispatchAssetCommand]
+  );
+
+  const handleAssetRemoveComponent = useCallback(
+    async (localId: string, typeId: string) => {
+      const command = {
+        type: "RemoveComponent",
+        local_id: localId,
+        type_id: typeId,
+      };
+      await dispatchAssetCommand(command);
+    },
+    [dispatchAssetCommand]
+  );
+
+  const handleAssetUndo = useCallback(async () => {
+    await undoAsset();
+  }, [undoAsset]);
+
+  const handleAssetRedo = useCallback(async () => {
+    await redoAsset();
+  }, [redoAsset]);
+
+  const handleAssetSave = useCallback(async () => {
+    await saveAsset();
+  }, [saveAsset]);
+
   useKeyboardShortcuts({
-    onUndo: handleUndo,
-    onRedo: handleRedo,
-    logState,
+    onUndo: editorMode === "scene" ? handleUndo : handleAssetUndo,
+    onRedo: editorMode === "scene" ? handleRedo : handleAssetRedo,
+    logState: editorMode === "scene" ? logState : assetLogState,
     selectedEntityId,
     onDeleteEntity: handleDeleteEntity,
   });
@@ -250,10 +405,13 @@ export default function App() {
   return (
     <div className="app">
       <TopBar
-        logState={logState}
-        onUndo={handleUndo}
-        onRedo={handleRedo}
-        onSave={handleSave}
+        editorMode={editorMode}
+        onOpenAssets={() => {}}
+        onBackToScene={editorMode === "asset-authoring" ? handleBackToScene : undefined}
+        logState={editorMode === "scene" ? logState : assetLogState}
+        onUndo={editorMode === "scene" ? handleUndo : handleAssetUndo}
+        onRedo={editorMode === "scene" ? handleRedo : handleAssetRedo}
+        onSave={editorMode === "scene" ? handleSave : handleAssetSave}
         onLoad={handleLoad}
         onExportRust={() => setExportRustOpen(true)}
         onToggleAI={handleToggleAI}
@@ -261,48 +419,84 @@ export default function App() {
         error={error || initError}
         onDismissError={() => setError(null)}
       />
-      <SceneTabs
-        scenes={scenes}
-        currentId={currentId}
-        onTabClick={handleTabClick}
-        onNewScene={handleNewScene}
-        onDeleteScene={handleDeleteScene}
-        onRenameScene={handleRenameScene}
-      />
+      {editorMode === "scene" && (
+        <SceneTabs
+          scenes={scenes}
+          currentId={currentId}
+          onTabClick={handleTabClick}
+          onNewScene={handleNewScene}
+          onDeleteScene={handleDeleteScene}
+          onRenameScene={handleRenameScene}
+        />
+      )}
       <div className="main">
-        {aiPanelOpen && (
-          <AIAssistantPanel
-            aiState={{ prompt, loading: aiLoading, proposals, error: aiError }}
-            onToggle={handleToggleAI}
-            onPromptChange={setPrompt}
-            onSubmit={handleSubmitAI}
-            onApply={handleApplyProposal}
-            onDiscard={discardProposal}
-            applyingIds={applyingIds}
-          />
-        )}
-        <HierarchyPanel
-          scene={scene}
-          selectedId={selectedEntityId}
-          onSelect={setSelectedEntityId}
-          onRename={handleRename}
-        />
-        <div className="canvas-container">
-          {!ready && (
-            <div style={{ padding: 16, color: "#888" }}>
-              {initError ? `Error: ${initError}` : "Loading WASM..."}
+        {editorMode === "scene" ? (
+          <>
+            {aiPanelOpen && (
+              <AIAssistantPanel
+                aiState={{ prompt, loading: aiLoading, proposals, error: aiError }}
+                onToggle={handleToggleAI}
+                onPromptChange={setPrompt}
+                onSubmit={handleSubmitAI}
+                onApply={handleApplyProposal}
+                onDiscard={discardProposal}
+                applyingIds={applyingIds}
+              />
+            )}
+            <HierarchyPanel
+              scene={scene}
+              selectedId={selectedEntityId}
+              onSelect={setSelectedEntityId}
+              onRename={handleRename}
+            />
+            <div className="canvas-container">
+              {!ready && (
+                <div style={{ padding: 16, color: "#888" }}>
+                  {initError ? `Error: ${initError}` : "Loading WASM..."}
+                </div>
+              )}
+              {/* Canvas stays mounted — AssetAuthoringView does NOT touch it (C-4) */}
+              <canvas id="bevy-canvas" />
             </div>
-          )}
-          <canvas id="bevy-canvas" />
-        </div>
-        <InspectorPanel
-          scene={scene}
-          selectedId={selectedEntityId}
-          onRename={handleRename}
-          onSetField={handleSetField}
-          onRemoveComponent={handleRemoveComponent}
-          onAddComponent={handleAddComponent}
-        />
+            <InspectorPanel
+              scene={scene}
+              selectedId={selectedEntityId}
+              onRename={handleRename}
+              onSetField={handleSetField}
+              onRemoveComponent={handleRemoveComponent}
+              onAddComponent={handleAddComponent}
+            />
+          </>
+        ) : (
+          /* Asset Authoring Mode — replaces .main content (C-4) */
+          <>
+            <ProjectAssetBrowser
+              entries={assetEntries}
+              onCreate={handleAssetCreate}
+              onRename={handleAssetRename}
+              onDuplicate={handleAssetDuplicate}
+              onDelete={handleAssetDelete}
+              onOpen={handleOpenAsset}
+            />
+            {assetDoc && (
+              <AssetAuthoringView
+                document={assetDoc}
+                activeEntityId={null}
+                onSelectEntity={() => {}}
+                onCommit={handleAssetCommit}
+                onAddComponent={handleAssetAddComponent}
+                onRemoveComponent={handleAssetRemoveComponent}
+                onUndo={handleAssetUndo}
+                onRedo={handleAssetRedo}
+                onSave={handleAssetSave}
+                onBackToScene={handleBackToScene}
+                canUndo={assetLogState.can_undo}
+                canRedo={assetLogState.can_redo}
+                dirty={assetDirty}
+              />
+            )}
+          </>
+        )}
       </div>
       {exportRustOpen && <ExportRustModal onClose={() => setExportRustOpen(false)} />}
       {pendingSwitchId !== null && pendingSwitchSource !== null && (
@@ -311,6 +505,15 @@ export default function App() {
           onSave={handleSaveAndSwitch}
           onDiscard={handleDiscardAndSwitch}
           onCancel={handleCancelSwitch}
+        />
+      )}
+      {pendingBackToScene && activeAssetLogicalPath && (
+        <AssetUnsavedChangesDialog
+          logicalPath={activeAssetLogicalPath}
+          unsavedCount={assetLogState.size}
+          onSave={handleAssetSaveAndLeave}
+          onDiscard={handleAssetDiscardAndLeave}
+          onCancel={handleAssetCancelBack}
         />
       )}
     </div>
