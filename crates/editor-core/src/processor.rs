@@ -35,6 +35,10 @@ fn find_entity<'a>(doc: &'a SceneDocument, id: &StableId) -> Result<&'a Entity, 
 /// Path navigation: split on '.', navigate to parent, set leaf.
 /// For `"translation.x"` on `{"translation": {"x": 0, "y": 0}}`,
 /// the result is `{"translation": {"x": <new>, "y": 0}}`.
+///
+/// NOTE: This is the same pattern as `asset_command::set_field_path_vec`
+/// but accepts a dotted `&str` instead of `Vec<String>`. Per ADR-0007, the
+/// two command surfaces stay independent — no logic unification.
 fn set_field_path(
     value: &mut serde_json::Value,
     path: &str,
