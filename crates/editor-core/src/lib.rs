@@ -4,6 +4,7 @@ use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
+pub mod asset_command;
 mod bevy_anchor;
 pub mod bsn_ir;
 pub mod bsn_codegen;
@@ -49,7 +50,8 @@ pub use dynamic_scene::{
     anchor_str_to_normalized_offset, export_dynamic_scene, is_known_anchor_str,
 };
 pub use operation_log::{LogEntry, OperationLog, OperationLogError};
-pub use persistence::{asset_path, PROJECT_FILE, ProjectMetadata, SCENES_DIR, SCHEMAS_DIR, ASSETS_DIR};
+pub use persistence::{asset_path, validate_logical_path, AssetPathError, PROJECT_FILE, ProjectMetadata, SCENES_DIR, SCHEMAS_DIR, ASSETS_DIR};
+pub use asset_command::{AssetCommand, AssetCommandError, AssetOperationLog};
 pub use scene_asset::{
     AssetReference, ExposedProperty, LocalId, RelationshipKind, RoleWarning, SceneAssetDocument,
     SceneAssetEntity, SceneAssetMetadata, SceneAssetRelationship, SceneAssetRole, validate_role,
@@ -104,6 +106,9 @@ thread_local! {
     static SCENE_ASSET_CATALOG: RefCell<Option<SceneAssetCatalog>> = const { RefCell::new(None) };
     static SCENE_ASSET_DOC: RefCell<Option<SceneAssetDocument>> = const { RefCell::new(None) };
     static SCENE_ASSET_CATALOG_WARNINGS: RefCell<Vec<CatalogWarning>> = const { RefCell::new(Vec::new()) };
+    // Asset operation log: per-asset undo/redo history (ADR-0007).
+    // Mirror of OPERATION_LOG pattern for scene assets.
+    static ASSET_OPERATION_LOG: RefCell<AssetOperationLog> = const { RefCell::new(AssetOperationLog::new_const()) };
 }
 
 /// Get an immutable borrowed reference to the SceneRegistry, initializing if needed.
@@ -186,6 +191,22 @@ fn get_asset_catalog_warnings() -> Vec<CatalogWarning> {
 /// Clear all accumulated catalog warnings.
 fn clear_asset_catalog_warnings() {
     SCENE_ASSET_CATALOG_WARNINGS.with(|cell| cell.borrow_mut().clear());
+}
+
+/// Get an immutable borrowed reference to the AssetOperationLog.
+fn with_asset_log<F, R>(f: F) -> R
+where
+    F: FnOnce(&AssetOperationLog) -> R,
+{
+    ASSET_OPERATION_LOG.with(|cell| f(&*cell.borrow()))
+}
+
+/// Get a mutable borrowed reference to the AssetOperationLog.
+fn with_asset_log_mut<F, R>(f: F) -> R
+where
+    F: FnOnce(&mut AssetOperationLog) -> R,
+{
+    ASSET_OPERATION_LOG.with(|cell| f(&mut *cell.borrow_mut()))
 }
 
 fn mark_dirty() {
@@ -1371,5 +1392,514 @@ pub async fn load_scene(name: &str) -> Result<(), JsValue> {
 
     SCENE_DOC.with(|s| *s.borrow_mut() = Some(doc));
     mark_dirty();
+    Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scene Asset Authoring — WASM surface (ADR-0007, design §6)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Apply an AssetCommand to the active SceneAssetDocument, mutating it and
+/// producing an inverse command for undo. Returns the inverse as JSON.
+///
+/// Does NOT call mark_dirty() — asset changes don't affect the Bevy preview.
+#[wasm_bindgen]
+pub fn dispatch_asset_command(cmd_json: &str) -> Result<String, JsValue> {
+    let cmd: AssetCommand = serde_json::from_str(cmd_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid command JSON: {}", e)))?;
+
+    let result_json = with_asset_doc_mut(|doc_opt| {
+        let doc = doc_opt
+            .as_mut()
+            .ok_or_else(|| JsValue::from_str("No asset open — call open_scene_asset first"))?;
+
+        let inverse = asset_command::apply(doc, &cmd)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+        // Record in asset operation log
+        with_asset_log_mut(|log| {
+            log.record(&cmd, inverse.clone());
+        });
+
+        serde_json::to_string(&inverse)
+            .map_err(|e| JsValue::from_str(&format!("Failed to serialize inverse: {}", e)))
+    })?;
+
+    Ok(result_json)
+}
+
+/// Undo the last asset command. Returns the inverse command JSON.
+#[wasm_bindgen]
+pub fn undo_asset() -> Result<String, JsValue> {
+    let inverse_json = with_asset_doc_mut(|doc_opt| {
+        with_asset_log_mut(|log| {
+            let doc = doc_opt
+                .as_mut()
+                .ok_or_else(|| JsValue::from_str("No asset open"))?;
+            log.undo(doc)
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            serde_json::to_string(&())
+                .map_err(|e| JsValue::from_str(&format!("Failed to serialize: {}", e)))
+        })
+    })?;
+    Ok(inverse_json)
+}
+
+/// Redo the next asset command.
+#[wasm_bindgen]
+pub fn redo_asset() -> Result<String, JsValue> {
+    let result_json = with_asset_doc_mut(|doc_opt| {
+        with_asset_log_mut(|log| {
+            let doc = doc_opt
+                .as_mut()
+                .ok_or_else(|| JsValue::from_str("No asset open"))?;
+            log.redo(doc)
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            serde_json::to_string(&())
+                .map_err(|e| JsValue::from_str(&format!("Failed to serialize: {}", e)))
+        })
+    })?;
+    Ok(result_json)
+}
+
+/// Returns asset operation log metadata as JSON.
+#[wasm_bindgen]
+pub fn get_asset_log_state() -> String {
+    with_asset_log(|log| {
+        serde_json::json!({
+            "size": log.get_log_size(),
+            "can_undo": log.can_undo(),
+            "can_redo": log.can_redo(),
+            "cursor": log.get_cursor(),
+            "dirty": log.is_dirty(),
+        })
+        .to_string()
+    })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scene Asset Catalog WASM functions (design §6)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Create a new Scene Asset with the given name and role.
+/// Returns the new catalog entry as JSON.
+#[wasm_bindgen]
+pub async fn create_scene_asset(name: &str, role: &str) -> Result<String, JsValue> {
+    use crate::scene_asset::SceneAssetRole;
+
+    let role = match role {
+        "actor" => SceneAssetRole::Actor,
+        "fragment" => SceneAssetRole::Fragment,
+        "screen" => SceneAssetRole::Screen,
+        "level" => SceneAssetRole::Level,
+        "ui" => SceneAssetRole::Ui,
+        "effect" => SceneAssetRole::Effect,
+        _ => return Err(JsValue::from_str(&format!("Unknown role: {}", role))),
+    };
+
+    let normalized_path = scene_asset_catalog::normalize_logical_path(name);
+    let asset_id = scene_asset_catalog::mint_asset_id();
+
+    // Check for duplicate path
+    let duplicate = with_asset_catalog(|cat| {
+        cat.resolve_path(&normalized_path).is_some()
+    });
+    if duplicate {
+        return Err(JsValue::from_str(&format!(
+            "Duplicate logical path: {}",
+            normalized_path
+        )));
+    }
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+
+    let entry = scene_asset_catalog::SceneAssetCatalogEntry {
+        asset_id: asset_id.clone(),
+        logical_path: normalized_path.clone(),
+        role,
+        current_version: 1,
+        tags: vec![],
+        created_at: now,
+        updated_at: now,
+    };
+
+    // Create empty document
+    let doc = SceneAssetDocument {
+        asset_id: asset_id.clone(),
+        logical_path: normalized_path.clone(),
+        role,
+        version: 1,
+        entities: vec![],
+        relationships: vec![],
+        exposed_properties: vec![],
+        metadata: Default::default(),
+    };
+
+    let doc_json = serde_json::to_string(&doc)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    // Write body file first
+    js_save_file(&persistence::asset_path(&normalized_path), &doc_json)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+
+    // Register in catalog
+    with_asset_catalog_mut(|cat| {
+        cat.register(entry.clone())
+    }).map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    // Update project.json
+    update_project_metadata_for_asset(&entry, "create").await?;
+
+    serde_json::to_string(&entry)
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Rename a Scene Asset (moves the file and updates catalog).
+#[wasm_bindgen]
+pub async fn rename_scene_asset(asset_id: &str, new_path: &str) -> Result<String, JsValue> {
+    let new_path_normalized = scene_asset_catalog::normalize_logical_path(new_path);
+
+    // Get old entry
+    let old_entry = with_asset_catalog(|cat| {
+        cat.get(asset_id).cloned()
+    }).ok_or_else(|| JsValue::from_str(&format!("Asset not found: {}", asset_id)))?;
+
+    let old_path = &old_entry.logical_path;
+
+    // Check for duplicate new path
+    if old_path != &new_path_normalized {
+        let duplicate = with_asset_catalog(|cat| {
+            cat.resolve_path(&new_path_normalized).is_some()
+        });
+        if duplicate {
+            return Err(JsValue::from_str(&format!(
+                "Duplicate logical path: {}",
+                new_path_normalized
+            )));
+        }
+    }
+
+    // Read old body
+    let body = js_load_file(&persistence::asset_path(old_path))
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+
+    // Write new body file
+    js_save_file(&persistence::asset_path(&new_path_normalized), &body)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+
+    // Delete old body file
+    let _ = js_delete_file(&persistence::asset_path(old_path)).await;
+
+    // Update catalog: unregister old, register new
+    let new_entry = with_asset_catalog_mut(|cat| {
+        let _ = cat.unregister(asset_id).map_err(|e| JsValue::from_str(&e.to_string()));
+        let mut new_entry = old_entry.clone();
+        new_entry.logical_path = new_path_normalized.clone();
+        new_entry.current_version += 1;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        new_entry.updated_at = now;
+        cat.register(new_entry.clone()).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        Ok::<_, JsValue>(new_entry)
+    })?;
+
+    // Update project.json
+    update_project_metadata_for_asset(&new_entry, "rename").await?;
+
+    serde_json::to_string(&new_entry)
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Duplicate a Scene Asset.
+#[wasm_bindgen]
+pub async fn duplicate_scene_asset(asset_id: &str) -> Result<String, JsValue> {
+    // Get source entry
+    let source_entry = with_asset_catalog(|cat| {
+        cat.get(asset_id).cloned()
+    }).ok_or_else(|| JsValue::from_str(&format!("Asset not found: {}", asset_id)))?;
+
+    let source_path = &source_entry.logical_path;
+
+    // Read source body
+    let body = js_load_file(&persistence::asset_path(source_path))
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+
+    // Mint new id
+    let new_id = scene_asset_catalog::mint_asset_id();
+    let new_path = derive_duplicate_path(&source_entry.logical_path);
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+
+    let new_entry = scene_asset_catalog::SceneAssetCatalogEntry {
+        asset_id: new_id.clone(),
+        logical_path: new_path.clone(),
+        role: source_entry.role,
+        current_version: 1,
+        tags: vec![],
+        created_at: now,
+        updated_at: now,
+    };
+
+    // Write new body file
+    js_save_file(&persistence::asset_path(&new_path), &body)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+
+    // Register in catalog
+    with_asset_catalog_mut(|cat| {
+        cat.register(new_entry.clone())
+    }).map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    // Update project.json
+    update_project_metadata_for_asset(&new_entry, "duplicate").await?;
+
+    serde_json::to_string(&new_entry)
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Delete a Scene Asset.
+#[wasm_bindgen]
+pub async fn delete_scene_asset(asset_id: &str) -> Result<(), JsValue> {
+    // Get entry
+    let entry = with_asset_catalog(|cat| {
+        cat.get(asset_id).cloned()
+    }).ok_or_else(|| JsValue::from_str(&format!("Asset not found: {}", asset_id)))?;
+
+    let path = entry.logical_path.clone();
+
+    // Delete body file
+    let _ = js_delete_file(&persistence::asset_path(&path)).await;
+
+    // Unregister from catalog
+    with_asset_catalog_mut(|cat| {
+        cat.unregister(asset_id)
+    }).map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    // Update project.json
+    update_project_metadata_for_asset(&entry, "delete").await?;
+
+    Ok(())
+}
+
+/// List all Scene Assets, optionally filtered by role.
+#[wasm_bindgen]
+pub fn list_scene_assets(role_filter: Option<String>) -> Result<String, JsValue> {
+    let entries: Vec<scene_asset_catalog::SceneAssetCatalogEntry> = with_asset_catalog(|cat| {
+        match role_filter {
+            Some(role) => {
+                use crate::scene_asset::SceneAssetRole;
+                let r = match role.as_str() {
+                    "actor" => SceneAssetRole::Actor,
+                    "fragment" => SceneAssetRole::Fragment,
+                    "screen" => SceneAssetRole::Screen,
+                    "level" => SceneAssetRole::Level,
+                    "ui" => SceneAssetRole::Ui,
+                    "effect" => SceneAssetRole::Effect,
+                    _ => return cat.list_all().into_iter().cloned().collect(),
+                };
+                cat.list_by_role(r).into_iter().cloned().collect()
+            }
+            None => cat.list_all().into_iter().cloned().collect(),
+        }
+    });
+    serde_json::to_string(&entries)
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Open a Scene Asset by asset_id into SCENE_ASSET_DOC thread-local.
+#[wasm_bindgen]
+pub async fn open_scene_asset(asset_id: &str) -> Result<String, JsValue> {
+    // Get entry
+    let entry = with_asset_catalog(|cat| {
+        cat.get(asset_id).cloned()
+    }).ok_or_else(|| JsValue::from_str(&format!("Asset not found: {}", asset_id)))?;
+
+    let path = &entry.logical_path;
+
+    // Load body
+    let body_json = js_load_file(&persistence::asset_path(path))
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+
+    let doc: SceneAssetDocument = serde_json::from_str(&body_json)
+        .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+
+    // Store in thread-local
+    with_asset_doc_mut(|doc_opt| {
+        *doc_opt = Some(doc.clone());
+    });
+
+    // Reset operation log
+    with_asset_log_mut(|log| {
+        log.clear();
+    });
+
+    serde_json::to_string(&doc)
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Close the currently open Scene Asset (no-op if none open).
+#[wasm_bindgen]
+pub fn close_scene_asset() {
+    with_asset_doc_mut(|doc_opt| {
+        *doc_opt = None;
+    });
+    with_asset_log_mut(|log| {
+        log.clear();
+    });
+}
+
+/// Get the active SceneAssetDocument as JSON.
+#[wasm_bindgen]
+pub fn get_asset_document_json() -> Result<String, JsValue> {
+    with_asset_doc(|doc_opt| {
+        match doc_opt {
+            Some(doc) => serde_json::to_string(doc)
+                .map_err(|e| JsValue::from_str(&e.to_string())),
+            None => Err(JsValue::from_str("No asset open")),
+        }
+    })
+}
+
+/// Get the Scene Asset Catalog as JSON.
+#[wasm_bindgen]
+pub fn get_scene_asset_catalog_json() -> Result<String, JsValue> {
+    let entries = with_asset_catalog(|cat| {
+        cat.list_all().into_iter().cloned().collect::<Vec<_>>()
+    });
+    serde_json::to_string(&entries)
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Save the active Scene Asset: body-first, then catalog update.
+#[wasm_bindgen]
+pub async fn save_scene_asset() -> Result<String, JsValue> {
+    let (asset_id, path, doc_json) = with_asset_doc_mut(|doc_opt| {
+        let doc = doc_opt
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("No asset open"))?;
+        let asset_id = doc.asset_id.clone();
+        let path = doc.logical_path.clone();
+        let doc_json = serde_json::to_string(doc)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        Ok::<_, JsValue>((asset_id, path, doc_json))
+    })?;
+
+    // Step 1: Write body file first
+    js_save_file(&persistence::asset_path(&path), &doc_json)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+
+    // Step 2: Bump version in catalog
+    let new_version = with_asset_catalog_mut(|cat| {
+        let current = cat.get(&asset_id)
+            .ok_or_else(|| JsValue::from_str(&format!("Asset not found: {}", asset_id)))?
+            .current_version;
+        let new_ver = current + 1;
+        cat.update_version(&asset_id, new_ver)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        Ok::<_, JsValue>(new_ver)
+    })?;
+
+    // Step 3: Write project.json
+    let entries = with_asset_catalog(|cat| {
+        cat.list_all().into_iter().cloned().collect::<Vec<_>>()
+    });
+    let mut project = load_project_metadata().await?;
+    project.scene_assets = entries;
+    let project_json = serde_json::to_string(&project)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    js_save_file(persistence::PROJECT_FILE, &project_json)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+
+    // Step 4: Clear dirty flag
+    with_asset_log_mut(|log| {
+        log.clear();
+    });
+
+    Ok(format!("Saved {} v{}", path, new_version))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper functions
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Derive a unique path for duplication (appends `_2`, `_3`, etc. if collision).
+fn derive_duplicate_path(original: &str) -> String {
+    let base = format!("{}_2", original);
+    // Check if collision
+    let exists = with_asset_catalog(|cat| {
+        cat.resolve_path(&base).is_some()
+    });
+    if exists {
+        // Try _3, _4, etc.
+        let mut counter = 3;
+        loop {
+            let candidate = format!("{}_{}", original, counter);
+            if !with_asset_catalog(|cat| cat.resolve_path(&candidate).is_some()) {
+                return candidate;
+            }
+            counter += 1;
+            if counter > 100 {
+                return base; // Fallback
+            }
+        }
+    } else {
+        base
+    }
+}
+
+/// Update project.json with a modified scene_assets list.
+async fn update_project_metadata_for_asset(
+    entry: &scene_asset_catalog::SceneAssetCatalogEntry,
+    _operation: &str,
+) -> Result<(), JsValue> {
+    let mut project = load_project_metadata().await?;
+
+    // Find and replace or add entry
+    if let Some(existing) = project.scene_assets.iter_mut().find(|e| e.asset_id == entry.asset_id) {
+        *existing = entry.clone();
+    } else {
+        project.scene_assets.push(entry.clone());
+    }
+
+    let json = serde_json::to_string(&project)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    js_save_file(persistence::PROJECT_FILE, &json)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+    Ok(())
+}
+
+/// Load project metadata from OPFS.
+async fn load_project_metadata() -> Result<ProjectMetadata, JsValue> {
+    if js_exists(persistence::PROJECT_FILE).await {
+        let json_str = js_load_file(persistence::PROJECT_FILE)
+            .await
+            .map_err(|e| JsValue::from_str(&e))?;
+        serde_json::from_str(&json_str)
+            .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))
+    } else {
+        Ok(ProjectMetadata::default())
+    }
+}
+
+/// Delete a file from OPFS.
+async fn js_delete_file(path: &str) -> Result<(), String> {
+    let promise = opfs_delete_file_raw(path);
+    js_await(promise).await.map_err(|e| format!("{:?}", e))?;
     Ok(())
 }

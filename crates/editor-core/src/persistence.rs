@@ -85,6 +85,40 @@ pub fn asset_path(logical_path: &str) -> String {
     format!("{}/{}.asset.json", ASSETS_DIR, logical_path)
 }
 
+/// Error type for asset path validation.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum AssetPathError {
+    #[error("asset path is empty")]
+    Empty,
+    #[error("path traversal not allowed: {0}")]
+    PathTraversal(String),
+}
+
+/// Validate an asset logical path.
+///
+/// Returns `Ok(())` if the path is valid, or an `AssetPathError` if not.
+/// A valid path:
+/// - Is not empty (after trimming whitespace)
+/// - Does not contain `..` or `.` path segments (no path traversal)
+///
+/// This is a security and correctness check per ADR-0008 §Decision rule 1.
+/// Use this before calling `asset_path()` to give early feedback on invalid input.
+pub fn validate_logical_path(s: &str) -> Result<(), AssetPathError> {
+    if s.trim().is_empty() {
+        return Err(AssetPathError::Empty);
+    }
+    let segments: Vec<&str> = s.split('/').collect();
+    for seg in segments {
+        if seg == ".." {
+            return Err(AssetPathError::PathTraversal("'..' segment not allowed".to_string()));
+        }
+        if seg == "." {
+            return Err(AssetPathError::PathTraversal("'.' segment not allowed".to_string()));
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -219,5 +253,55 @@ mod tests {
         let json = serde_json::to_string(&pm).unwrap();
         let rt: ProjectMetadata = serde_json::from_str(&json).unwrap();
         assert!(rt.scene_assets.is_empty());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // validate_logical_path tests (PR1 debt, Engram #3351)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_validate_logical_path_empty_string() {
+        let result = validate_logical_path("");
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), AssetPathError::Empty));
+    }
+
+    #[test]
+    fn test_validate_logical_path_whitespace_only() {
+        let result = validate_logical_path("   ");
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), AssetPathError::Empty));
+    }
+
+    #[test]
+    fn test_validate_logical_path_valid_simple() {
+        validate_logical_path("player").expect("simple name should be valid");
+        validate_logical_path("assets/player").expect("nested path should be valid");
+        validate_logical_path("a/b/c").expect("multi-segment should be valid");
+    }
+
+    #[test]
+    fn test_validate_logical_path_double_dot() {
+        let result = validate_logical_path("foo/../bar");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, AssetPathError::PathTraversal(ref s) if s.contains("..")));
+    }
+
+    #[test]
+    fn test_validate_logical_path_single_dot() {
+        let result = validate_logical_path("foo/./bar");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, AssetPathError::PathTraversal(ref s) if s.contains(".")));
+    }
+
+    #[test]
+    fn test_asset_path_error_display() {
+        let empty = AssetPathError::Empty;
+        assert_eq!(empty.to_string(), "asset path is empty");
+
+        let traversal = AssetPathError::PathTraversal("'..' segment not allowed".to_string());
+        assert!(traversal.to_string().contains("path traversal"));
     }
 }
