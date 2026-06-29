@@ -6,7 +6,10 @@
 //! for future agent auditing.
 
 use crate::document::{ComponentInstance, StableId};
+use crate::scene_asset::{AssetReference, LocalId};
+use crate::scene_instance::SceneInstance;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use thiserror::Error;
 
 /// Typed command enum covering the 8 semantic operations from Hito 0 §6.4
@@ -70,6 +73,32 @@ pub enum Command {
     Batch {
         label: String,
         commands: Vec<Command>,
+    },
+    /// Place a Scene Asset as a new Scene Instance in the document.
+    /// ADR-0007 §Command surface: instances share the scene OperationLog.
+    PlaceInstance {
+        instance_id: StableId,
+        asset_ref: AssetReference,
+        asset_version: u32,
+        id_map: BTreeMap<LocalId, StableId>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        overrides: Vec<crate::scene_instance::OverridePatch>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        orphaned_overrides: Vec<crate::scene_instance::OverridePatch>,
+    },
+    /// Remove a Scene Instance from the document.
+    /// Inverse is PlaceInstance restoring the full captured pre-state.
+    RemoveInstance {
+        instance_id: StableId,
+    },
+    /// Replace the asset_ref of an existing Scene Instance.
+    /// Runs resync to reclassify overrides; captures pre-state for inverse.
+    ReplaceInstanceAsset {
+        instance_id: StableId,
+        new_asset_ref: AssetReference,
+        new_asset_version: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        captured_old: Option<SceneInstance>,
     },
 }
 
@@ -143,6 +172,18 @@ pub enum CommandError {
 
     #[error("JSON serialization error: {0}")]
     JsonError(String),
+
+    /// Asset has more than one root entity; single-root gate failed.
+    #[error("Multiple roots: asset has {0} root entities, expected 1")]
+    MultipleRoots(usize),
+
+    /// Asset has no entities; cannot place an empty instance.
+    #[error("Empty asset: cannot place instance with zero entities")]
+    EmptyAsset,
+
+    /// Instance not found in SceneDocument.instances.
+    #[error("Instance not found: {0}")]
+    InstanceNotFound(StableId),
 }
 
 impl From<serde_json::Error> for CommandError {

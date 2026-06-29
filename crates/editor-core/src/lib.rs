@@ -1585,6 +1585,53 @@ pub async fn discard_scene_changes(id: &str) -> Result<(), JsValue> {
 // load_project integration — populates SceneRegistry from OPFS
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Warm the ASSET_BODY_CACHE by loading all scene asset bodies from OPFS.
+///
+/// Called after `load_project` clears the cache. This ensures that subsequent
+/// `place_scene_instance` calls find assets in cache without needing to load
+/// them individually.
+///
+/// For each catalog entry, loads the body file and stores it keyed by
+/// `logical_path` in the cache.
+async fn warm_asset_body_cache() {
+    use crate::scene_asset::SceneAssetDocument;
+
+    // Access the catalog that was just loaded
+    let entries: Vec<crate::scene_asset_catalog::SceneAssetCatalogEntry> =
+        SCENE_ASSET_CATALOG.with(|cell| {
+            match &*cell.borrow() {
+                Some(cat) => cat.list_all().into_iter().cloned().collect(),
+                None => Vec::new(),
+            }
+        });
+
+    for entry in entries {
+        let path = &entry.logical_path;
+        let body_exists = js_exists(&persistence::asset_path(path)).await;
+        if !body_exists {
+            continue; // Skip missing bodies (catalog warnings already emitted)
+        }
+
+        match js_load_file(&persistence::asset_path(path)).await {
+            Ok(body_json) => {
+                match serde_json::from_str::<SceneAssetDocument>(&body_json) {
+                    Ok(doc) => {
+                        with_asset_body_cache_mut(|cache| {
+                            cache.insert(path.clone(), doc);
+                        });
+                    }
+                    Err(_) => {
+                        // Skip invalid JSON - catalog warnings already handle this
+                    }
+                }
+            }
+            Err(_) => {
+                // Skip load failures
+            }
+        }
+    }
+}
+
 /// Load complete project: project.json + schemas + all scenes (atomic).
 #[wasm_bindgen]
 pub async fn load_project() -> Result<(), JsValue> {
@@ -1702,6 +1749,9 @@ pub async fn load_project() -> Result<(), JsValue> {
     SCENE_ASSET_CATALOG.with(|cell| {
         *cell.borrow_mut() = Some(catalog);
     });
+
+    // Step D4: Warm ASSET_BODY_CACHE with all scene asset bodies
+    warm_asset_body_cache().await;
 
     Ok(())
 }
