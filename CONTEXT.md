@@ -32,6 +32,26 @@ _Avoid_: prefab, blueprint, Entity Template, DynamicScene Export, Defold-style s
 A placed use of a Scene Asset inside a SceneDocument, represented as an asset reference plus explicit local patches/overrides, with references and Stable IDs owned by the editor.
 _Avoid_: prefab instance, cloned template, deep copy, Bevy Entity
 
+**Project Asset Browser**:
+The editor UI surface for browsing Project-level assets such as scenes, schemas, Scene Assets, and future level-design assets. It is not a filesystem browser and must show editor-owned logical assets, not raw OPFS implementation details.
+_Avoid_: file explorer, asset folder, OS browser
+
+**Scene Asset Authoring Mode**:
+The isolated editing mode for a Scene Asset document. Changes affect the Scene Asset definition and later propagate to Scene Instances through explicit resync workflows.
+_Avoid_: prefab mode (unless comparing with Unity), template editor, scene clone editor
+
+**Override / Resync Workbench**:
+The UI and workflow for inspecting, applying, reverting, rebinding, and resetting Scene Instance overrides after the referenced Scene Asset changes.
+_Avoid_: merge conflict dialog, auto-fix panel, prefab override window
+
+**Validation Center**:
+The project-wide issue panel for broken references, missing schemas, invalid paths, export warnings, override conflicts, dirty scenes, and invalid AI proposals.
+_Avoid_: console (when you mean structured project health), error list (when warnings/suggestions also apply)
+
+**Runtime Preview Inspector**:
+The read-only UI for understanding how editor-owned data appears in the Bevy preview world, including ephemeral runtime mappings, preview metrics, and provenance.
+_Avoid_: Bevy inspector (when you mean editor-owned preview diagnostics), runtime source of truth
+
 **Entity Template**:
 Legacy/transitional term for reusable entity compositions. Prefer Scene Asset for future-facing design aligned with Bevy's BSN roadmap.
 _Avoid_: prefab, blueprint, archetype, runtime entity

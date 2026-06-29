@@ -48,6 +48,48 @@
 
 ---
 
+## Hito 2: Authoring Workflows & 2D Level Production
+
+**Goal**: Turn the post-BSN architecture into practical editor workflows: Project asset management, Scene Asset authoring, Scene Instance placement, override/resync UX, validation, 2D level design tools, and runtime preview inspection.
+
+**Normative references**:
+
+- [ADR-0006: Authoring-First Roadmap after the BSN Migration](./adr/0006-authoring-first-roadmap-after-bsn-migration.md)
+- [Post-BSN Authoring Roadmap Specification](./specs/post-bsn-authoring-roadmap.md)
+
+### Planned Sequence
+
+| Order | Change | Status | Why |
+|-------|--------|--------|-----|
+| 1 | `project-asset-browser-and-scene-asset-authoring` | Planned | Exposes existing `SceneAssetDocument` + `SceneAssetCatalog` as usable Project workflows |
+| 2 | `scene-instance-placement` | Planned | Lets users place Scene Assets in SceneDocuments without deep cloning |
+| 3 | `override-resync-workbench` | Planned | Makes `OverridePatch` status and resync reports visible/actionable |
+| 4 | `validation-center` | Planned | Centralizes broken refs, schema issues, export warnings, override conflicts, dirty scenes, and invalid AI proposals |
+| 5 | `level-design-layers-research` | Planned research | Defines tile/object/IntGrid/auto-layer semantics before committing to a tilemap model |
+| 6 | `runtime-preview-inspector` | Planned | Shows runtime preview provenance, metrics, and editor-to-preview mapping |
+
+### Research Gates
+
+| Capability | Required research before `sddk-propose` |
+|------------|------------------------------------------|
+| Project Asset Browser + Scene Asset Authoring | Unity Prefab Mode, Godot PackedScene/inherited scenes, Defold Collections/factories, Bevy BSN asset roadmap, OPFS Project layout |
+| Scene Instance Placement | Unity prefab instance display, Defold collectionfactory ID maps, Godot missing base-scene behavior |
+| Override / Resync Workbench | Unity Prefab Overrides, Blender Library Overrides, Godot inherited-scene constraints |
+| Validation Center | Unity console/validation patterns, Defold resource profiler, Bevy diagnostics |
+| 2D Level Design Tools | Tiled terrain brush/automapping, LDtk IntGrid/Auto Layers/Entities, Bevy tilemap ecosystem, Aseprite metadata |
+| Runtime Preview Inspector | Defold profiler, Godot remote SceneTree, Bevy diagnostics/remote tooling, Chronos future debugging |
+
+### Deferred Until After Hito 2
+
+| Candidate | Revisit when |
+|-----------|--------------|
+| Collaborative editing | Project asset identity, validation, and save/load semantics are stable |
+| Plugin system | Schema packs and validation extension points have at least one built-in example |
+| Physical `.bsn` import/export | Bevy ships stable loader/write-back APIs |
+| Visual scripting/state machines | Scene Asset workflows and runtime preview inspection are mature |
+
+---
+
 ## Hito 0 — Capabilities Matrix
 
 ```
@@ -159,7 +201,9 @@ BSN Migration Complete (template.rs deleted)                                    
 
 | Item | Description | Blocking |
 |------|-------------|----------|
-| — | — | — |
+| `project-asset-browser-and-scene-asset-authoring` | First Hito 2 implementation cycle. Adds Project Asset Browser and isolated Scene Asset authoring mode. | Requires Hito 2 explore to refine OPFS layout and authoring UX |
+| `scene-instance-placement` | Place Scene Assets into SceneDocuments as Scene Instances, preserving `id_map` and asset provenance. | Depends on Project Asset Browser + Scene Asset Authoring |
+| `override-resync-workbench` | UI for active/orphaned/stale/conflict overrides, resync report, apply/revert/reset. | Depends on Scene Instance Placement |
 
 ### Medium Priority
 
@@ -180,8 +224,8 @@ BSN Migration Complete (template.rs deleted)                                    
 | ~~Scene Asset Catalog~~ | ✅ Completed v0.18.0 | — | — |
 | ~~Scene Instance Overrides + Resync~~ | ✅ Completed v0.19.0 | — | — |
 | ~~BSN Migration (template.rs deleted)~~ | ✅ Completed v0.20.0 | — | — |
-| **Collaborative editing** | CRDT-based multi-user editing. Decisions: Yjs vs Automerge vs Loro, transport (WebRTC P2P vs relay), awareness state, OPFS+CRDT merge strategy, conflict UX | 3000–5000 | A-full |
-| **Plugin system** | WASM plugin ABI for schema registration, command dispatch, inspector hooks. Decisions: plugin format, distribution (npm vs URL), permissions model, hot-reload | 2000–3000 | A-full |
+| **Collaborative editing** | Deferred until after Hito 2. CRDT-based multi-user editing still requires decisions: Yjs vs Automerge vs Loro, transport, awareness state, OPFS+CRDT merge strategy, conflict UX | 3000–5000 | A-full |
+| **Plugin system** | Deferred until after Hito 2. WASM plugin ABI should follow schema packs + validation extension points, not precede them | 2000–3000 | A-full |
 
 ### ADR-0005 Implementation Status
 
@@ -206,6 +250,7 @@ BSN Migration Complete (template.rs deleted)                                    
 | ADR-0003 | `serde_json::Value` for forward-compat ComponentInstance values | ✅ |
 | ADR-0004 | Bevy native Anchor Component for sprite anchoring (not custom) | ✅ |
 | ADR-0005 | Scene Asset as BSN-aligned reusable scene model | ✅ |
+| ADR-0006 | Authoring-first roadmap after the BSN migration | ✅ |
 
 ---
 
@@ -225,7 +270,7 @@ BSN Migration Complete (template.rs deleted)                                    
 
 See [`CONTEXT.md`](../CONTEXT.md) for authoritative domain language.
 
-Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Scene Instance**, **Scene Asset Catalog**, **Component Schema Registry**, **Component Instance**, **Operation Log**, **BsnIr**, **OverridePatch**.
+Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Scene Instance**, **Scene Asset Catalog**, **Project Asset Browser**, **Scene Asset Authoring Mode**, **Override / Resync Workbench**, **Validation Center**, **Runtime Preview Inspector**, **Component Schema Registry**, **Component Instance**, **Operation Log**, **BsnIr**, **OverridePatch**.
 
 ---
 
