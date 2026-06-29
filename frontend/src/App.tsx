@@ -429,6 +429,15 @@ export default function App() {
           onRenameScene={handleRenameScene}
         />
       )}
+      {/* Canvas always mounted — AssetAuthoringView overlays .main content (C-4) */}
+      <div className="canvas-container">
+        {!ready && (
+          <div style={{ padding: 16, color: "#888" }}>
+            {initError ? `Error: ${initError}` : "Loading WASM..."}
+          </div>
+        )}
+        <canvas id="bevy-canvas" />
+      </div>
       <div className="main">
         {editorMode === "scene" ? (
           <>
@@ -449,15 +458,6 @@ export default function App() {
               onSelect={setSelectedEntityId}
               onRename={handleRename}
             />
-            <div className="canvas-container">
-              {!ready && (
-                <div style={{ padding: 16, color: "#888" }}>
-                  {initError ? `Error: ${initError}` : "Loading WASM..."}
-                </div>
-              )}
-              {/* Canvas stays mounted — AssetAuthoringView does NOT touch it (C-4) */}
-              <canvas id="bevy-canvas" />
-            </div>
             <InspectorPanel
               scene={scene}
               selectedId={selectedEntityId}
@@ -468,7 +468,7 @@ export default function App() {
             />
           </>
         ) : (
-          /* Asset Authoring Mode — replaces .main content (C-4) */
+          /* Asset Authoring Mode — overlays canvas via .main (C-4) */
           <>
             <ProjectAssetBrowser
               entries={assetEntries}

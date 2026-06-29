@@ -56,8 +56,7 @@ export async function initEngine(
   const wasmModule = await import("./wasm/editor_core.js");
   await wasmModule.default();
   wasm = wasmModule;
-  wasmMemory = (wasmModule as any).__wasm.memory ?? null;
-  console.log("[bridge] WASM module loaded, memory size:", wasmMemory?.buffer.byteLength ?? 0);
+  console.log("[bridge] WASM module loaded");
 
   frameCallback = onEvent;
 
