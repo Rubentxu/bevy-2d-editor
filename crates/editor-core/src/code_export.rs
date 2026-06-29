@@ -292,6 +292,7 @@ mod tests {
     use crate::document::{Entity, StableId};
     use crate::schema::{ComponentSchema, ComponentSchemaRegistry, FieldDef};
     use serde_json::json;
+    use std::collections::BTreeMap;
 
     fn make_doc(entities: Vec<Entity>) -> SceneDocument {
         SceneDocument {
@@ -299,6 +300,7 @@ mod tests {
             scene_id: "scene_001".to_string(),
             name: "Test".to_string(),
             entities,
+            instances: BTreeMap::new(),
         }
     }
 

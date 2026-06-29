@@ -1,6 +1,7 @@
 use bevy::prelude::Entity as BevyEntity;
 use bevy::prelude::*;
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
@@ -19,6 +20,7 @@ pub mod scene_asset;
 pub mod scene_asset_catalog;
 pub mod scene_instance;
 pub mod scene_instance_overrides;
+pub mod instance_projection;
 mod scenes;
 mod schema;
 
@@ -62,6 +64,7 @@ pub use scene_asset_catalog::{
 pub use scene_instance::{
     OverridePatch, OverrideStatus, SceneInstance, patch_status_after_field_rename,
 };
+pub use instance_projection::{root_local_ids, PreviewEntity};
 pub use scenes::{SceneInfo, SceneRegistry, SwitchResult};
 /// Marker component for entities spawned from SceneDocument.
 /// These are despawned and respawned when the document is mutated
@@ -109,6 +112,9 @@ thread_local! {
     // Asset operation log: per-asset undo/redo history (ADR-0007).
     // Mirror of OPERATION_LOG pattern for scene assets.
     static ASSET_OPERATION_LOG: RefCell<AssetOperationLog> = const { RefCell::new(AssetOperationLog::new_const()) };
+    // Asset body cache: BTreeMap<asset_ref, SceneAssetDocument> for O(1) lookups
+    // during instance placement projection. No invalidation hooks yet (Task 1.5).
+    static ASSET_BODY_CACHE: RefCell<Option<BTreeMap<String, SceneAssetDocument>>> = const { RefCell::new(None) };
 }
 
 /// Get an immutable borrowed reference to the SceneRegistry, initializing if needed.
@@ -207,6 +213,36 @@ where
     F: FnOnce(&mut AssetOperationLog) -> R,
 {
     ASSET_OPERATION_LOG.with(|cell| f(&mut *cell.borrow_mut()))
+}
+
+/// Get an immutable borrowed reference to the ASSET_BODY_CACHE.
+fn with_asset_body_cache<F, R>(f: F) -> R
+where
+    F: FnOnce(&BTreeMap<String, SceneAssetDocument>) -> R,
+{
+    ASSET_BODY_CACHE.with(|cell| {
+        let cache = cell.borrow();
+        if cache.is_none() {
+            // Initialize empty cache on first access
+            f(&BTreeMap::new())
+        } else {
+            f(cache.as_ref().unwrap())
+        }
+    })
+}
+
+/// Get a mutable borrowed reference to the ASSET_BODY_CACHE.
+fn with_asset_body_cache_mut<F, R>(f: F) -> R
+where
+    F: FnOnce(&mut BTreeMap<String, SceneAssetDocument>) -> R,
+{
+    ASSET_BODY_CACHE.with(|cell| {
+        let mut cache = cell.borrow_mut();
+        if cache.is_none() {
+            *cache = Some(BTreeMap::new());
+        }
+        f(cache.as_mut().unwrap())
+    })
 }
 
 fn mark_dirty() {
@@ -1164,6 +1200,7 @@ fn perform_scene_swap(old_id: &str, new_id: &str) {
                 ),
                 name: old_id.to_string(),
                 entities: Vec::new(),
+                instances: BTreeMap::new(),
             },
             crate::operation_log::OperationLog::new_const(),
         ),
@@ -1277,6 +1314,7 @@ pub async fn load_project() -> Result<(), JsValue> {
                             ),
                             name: scene_name.clone(),
                             entities: Vec::new(),
+                            instances: BTreeMap::new(),
                         }
                     });
                     let log = OperationLog::new_const();

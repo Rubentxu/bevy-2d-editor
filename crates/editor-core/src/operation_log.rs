@@ -185,6 +185,7 @@ mod tests {
     use crate::command::{CommandMetadata, CommandEnvelope};
     use crate::document::{ComponentInstance, Entity, StableId};
     use serde_json::json;
+    use std::collections::BTreeMap;
 
     fn empty_doc() -> SceneDocument {
         SceneDocument {
@@ -192,6 +193,7 @@ mod tests {
             scene_id: "test".to_string(),
             name: "Test".to_string(),
             entities: vec![],
+            instances: BTreeMap::new(),
         }
     }
 

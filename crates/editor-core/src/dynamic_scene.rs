@@ -435,6 +435,7 @@ mod tests {
             scene_id: "scene_001".to_string(),
             name: "Test".to_string(),
             entities,
+            instances: BTreeMap::new(),
         }
     }
 

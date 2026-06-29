@@ -353,6 +353,7 @@ impl SceneRegistry {
 
     /// Create a default empty scene with the given name.
     fn default_scene(name: &str) -> SceneDocument {
+        use std::collections::BTreeMap;
         SceneDocument {
             version: "0.1".to_string(),
             scene_id: format!(
@@ -364,6 +365,7 @@ impl SceneRegistry {
             ),
             name: name.to_string(),
             entities: Vec::new(),
+            instances: BTreeMap::new(),
         }
     }
 }
@@ -377,6 +379,7 @@ impl Default for SceneRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
 
     fn make_doc(name: &str) -> SceneDocument {
         SceneDocument {
@@ -384,6 +387,7 @@ mod tests {
             scene_id: "test-id".to_string(),
             name: name.to_string(),
             entities: Vec::new(),
+            instances: BTreeMap::new(),
         }
     }
 

@@ -4,7 +4,10 @@
 //! as structured JSON documents.
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::fmt;
+
+use crate::scene_instance::SceneInstance;
 
 /// Opaque stable identifier for entities.
 /// Uses #[serde(transparent)] so it serializes as a plain string.
@@ -88,6 +91,23 @@ pub struct SceneDocument {
     pub scene_id: String,
     pub name: String,
     pub entities: Vec<Entity>,
+    /// Placed Scene Instances indexed by StableId.
+    /// Serialized as a BTreeMap for deterministic key ordering.
+    /// Defaults to empty BTreeMap when absent from older documents (S7).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub instances: BTreeMap<StableId, SceneInstance>,
+}
+
+impl Default for SceneDocument {
+    fn default() -> Self {
+        Self {
+            version: "0.1".to_string(),
+            scene_id: String::new(),
+            name: String::new(),
+            entities: Vec::new(),
+            instances: BTreeMap::new(),
+        }
+    }
 }
 
 /// A single entity within a scene with its associated components.
@@ -125,6 +145,7 @@ mod tests {
                 parent: None,
                 components: vec![],
             }],
+            instances: BTreeMap::new(),
         };
 
         let json = serde_json::to_string(&doc).unwrap();
@@ -142,6 +163,7 @@ mod tests {
             scene_id: "empty".to_string(),
             name: "Empty Scene".to_string(),
             entities: vec![],
+            instances: BTreeMap::new(),
         };
 
         let json = serde_json::to_string(&doc).unwrap();
@@ -199,6 +221,7 @@ mod tests {
                     components: vec![],
                 },
             ],
+            instances: BTreeMap::new(),
         };
 
         let json = serde_json::to_string(&doc).unwrap();
@@ -291,6 +314,7 @@ mod tests {
             scene_id: "scene_001".to_string(),
             name: "Test".to_string(),
             entities: vec![],
+            instances: BTreeMap::new(),
         };
 
         let json = serde_json::to_string(&doc).unwrap();
