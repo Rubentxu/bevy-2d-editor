@@ -42,12 +42,14 @@
 | project-asset-browser-and-scene-asset-authoring (PR1 slice) | v0.21.0 | ✅ (partial) | Scene Asset persistence + catalog holder foundation. Path-based OPFS layout (`assets/<logical_path>.asset.json`), `ProjectMetadata.scene_assets` with `#[serde(default)]`, `SCENE_ASSET_CATALOG` / `SCENE_ASSET_DOC` / `SCENE_ASSET_CATALOG_WARNINGS` thread-locals, typed `CatalogWarning` for orphaned entries (S16), 9/9 PR1 spec scenarios compliant (S4–S8, S16–S19). PR #16 (docs/plan) and PR #17 (code) merged; tag `v0.21.0`. ADR-0007/ADR-0008/ADR README and SDDK artifacts (`docs/sddk/project-asset-browser-and-scene-asset-authoring/`) added. |
 | project-asset-browser-and-scene-asset-authoring (PR2 slice) | v0.22.0 | ✅ (partial) | AssetCommand surface + WASM bridge. Separate `AssetCommand` enum (AddEntity, RemoveEntity, RenameEntity, SetComponentValue) per ADR-0007, `AssetOperationLog` (undo/redo) scoped to scene assets, `AssetProcessor` with `set_field_path_vec` helper, thread-local `ASSET_OPERATION_LOG`, WASM CRUD bridge (dispatch_asset_command, create/rename/duplicate/delete/list_scene_assets, open/close/get_asset_document/get_scene_asset_catalog, save_scene_asset body-first/catalog-second). 16/16 PR2 tasks complete; 23/23 spec scenarios covered (S10, S13, S14, S15 PR2 + PR1 regression). PR #18 merged; tag `v0.22.0`.
 | project-asset-browser-and-scene-asset-authoring (PR3 slice) | v0.23.0 | ✅ | Project Asset Browser + Scene Asset Authoring Mode frontend. React components (ProjectAssetBrowser, AssetAuthoringView, AssetUnsavedChangesDialog), hooks (useSceneAssets), services (scene-assets.ts), App.tsx editorMode state, TopBar mode-aware toolbar, Playwright E2E tests (14 scenarios + EC1-EC6). C-1 (engine-bridge TypeError) and C-4 (canvas unmount) fixed in correction commit f85333b. Follow-up issue #19 tracks C-NEW (SystemTime::now panic on wasm32). PR #20 merged; tag `v0.23.0`. **Capability 1 (Project Asset Browser + Scene Asset Authoring) CLOSED**. |
+| scene-instance-placement (PR1 slice) | v0.24.0 | ✅ (partial) | Storage seam + cache + gate. `SceneDocument.instances: BTreeMap<StableId, SceneInstance>` with `#[serde(default)]`, `ASSET_BODY_CACHE` skeleton (resolve, warm, invalidate, clear), `instance_projection.rs` with `root_local_ids` gate (single-root enforcement). Rust unit tests compile cleanly; runtime env-blocked (libudev missing). PR #21 merged; tag `v0.24.0`. PR2 (commands+WASM) and PR3 (frontend+E2E) remain pending for full Hito 2 Order 2 closure. ADR-0009/ADR-0010 to be written post-merge. |
 
 ### Active Work
 
 | Change | Branch | Status |
 |--------|--------|--------|
-| None | main | ✅ All planned capabilities for Hito 0 and Hito 1 complete; ready for Hito 2 next capability. |
+| `scene-instance-placement` PR2 (commands + WASM) | next | Pending — base=`main@PR1`, depends on PR1 storage seam |
+| `scene-instance-placement` PR3 (frontend + E2E) | next | Pending — base=`main@PR2`, depends on PR2 command surface |
 
 ---
 
@@ -65,6 +67,7 @@
 | Order | Change | Status | Why |
 |-------|--------|--------|-----|
 | 1 | `project-asset-browser-and-scene-asset-authoring` (PR1 ✅ v0.21.0; PR2 ✅ v0.22.0; PR3 ✅ v0.23.0) | ✅ DONE | Exposes existing `SceneAssetDocument` + `SceneAssetCatalog` as usable Project workflows |
+| 2 | `scene-instance-placement` (PR1 ✅ v0.24.0; PR2 pending; PR3 pending) | In Progress | Lets users place Scene Assets in SceneDocuments without deep cloning |
 | 2 | `scene-instance-placement` | Planned | Lets users place Scene Assets in SceneDocuments without deep cloning |
 | 3 | `override-resync-workbench` | Planned | Makes `OverridePatch` status and resync reports visible/actionable |
 | 4 | `validation-center` | Planned | Centralizes broken refs, schema issues, export warnings, override conflicts, dirty scenes, and invalid AI proposals |
@@ -116,25 +119,26 @@ Entity Drag-and-Drop Reparenting                                       ✅     �
 ## Hito 1 — Capabilities Matrix
 
 ```
-Capability                    v0.12  v0.13  v0.14  v0.15  v0.16  v0.17  v0.18  v0.19  v0.20  v0.21  v0.22  v0.23
-───────────────────────────────────────────────────────────────────────────────────────────────────────────
-AI-Assisted Editing                ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
-LLM Proxy (Ollama/OpenAI)           ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
-AI Proposal UI Panel                ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
-Apply / Discard Commands            ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
-E2E Tests (mock proxy)             ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
-Code Export (Rust codegen)                      ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
-Multi-scene Projects                             ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
-Scene Tabs + Dirty State                                   ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
-Pixelmatch Screenshot Diff                                   ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
-BSN Scene Asset Model                                               ✅    ✅    ✅    ✅    ✅    ✅    ✅
-BSN IR + bsn! Codegen                                                    ✅    ✅    ✅    ✅    ✅    ✅    ✅
-Scene Asset Catalog                                                          ✅    ✅    ✅    ✅    ✅    ✅
+Capability                    v0.12  v0.13  v0.14  v0.15  v0.16  v0.17  v0.18  v0.19  v0.20  v0.21  v0.22  v0.23  v0.24
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+AI-Assisted Editing                ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
+LLM Proxy (Ollama/OpenAI)           ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
+AI Proposal UI Panel                ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
+Apply / Discard Commands            ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
+E2E Tests (mock proxy)             ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
+Code Export (Rust codegen)                      ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
+Multi-scene Projects                             ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
+Scene Tabs + Dirty State                                   ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
+Pixelmatch Screenshot Diff                                   ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
+BSN Scene Asset Model                                               ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
+BSN IR + bsn! Codegen                                                    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
+Scene Asset Catalog                                                          ✅    ✅    ✅    ✅    ✅    ✅    ✅
 Scene Instance Overrides + Resync                                                ✅    ✅    ✅    ✅    ✅
 BSN Migration Complete (template.rs deleted)                                         ✅    ✅    ✅    ✅
-Scene Asset Persistence + Catalog Holder (PR1 slice)                                       ✅    ✅    ✅
-AssetCommand Surface + WASM Bridge (PR2 slice)                                                ✅    ✅
-Project Asset Browser + Authoring Mode Frontend (PR3 slice)                                         ✅
+Scene Asset Persistence + Catalog Holder (PR1 slice)                                       ✅    ✅    ✅    ✅
+AssetCommand Surface + WASM Bridge (PR2 slice)                                                ✅    ✅    ✅
+Project Asset Browser + Authoring Mode Frontend (PR3 slice)                                         ✅    ✅
+Instance Storage Seam + Cache + Gate (PR1 slice)                                             ✅
 ```
 
 ---
@@ -232,7 +236,8 @@ Project Asset Browser + Authoring Mode Frontend (PR3 slice)                     
 | ~~BSN Migration (template.rs deleted)~~ | ✅ Completed v0.20.0 | — | — |
 | ~~`project-asset-browser-and-scene-asset-authoring` PR1 (persistence + catalog holder)~~ | ✅ Completed in v0.21.0 | ~733 (code+tests) | A-full |
 | ~~`project-asset-browser-and-scene-asset-authoring` PR2 (AssetCommand surface + WASM bridge)~~ | ✅ Completed in v0.22.0 | ~1871 (code+tests) | A-full |
-| **`project-asset-browser-and-scene-asset-authoring` PR3 (PAB + AAM frontend)** | ✅ Completed in v0.23.0 | ~790 (code+tests) | A-lite |
+| ~~`project-asset-browser-and-scene-asset-authoring` PR3 (PAB + AAM frontend)~~ | ✅ Completed in v0.23.0 | ~790 (code+tests) | A-lite |
+| **`scene-instance-placement` PR1 (storage seam + cache + gate)** | ✅ Completed in v0.24.0 | ~240 (backend only) | A-lite (partial) |
 | **Collaborative editing** | Deferred until after Hito 2. CRDT-based multi-user editing still requires decisions: Yjs vs Automerge vs Loro, transport, awareness state, OPFS+CRDT merge strategy, conflict UX | 3000–5000 | A-full |
 | **Plugin system** | Deferred until after Hito 2. WASM plugin ABI should follow schema packs + validation extension points, not precede them | 2000–3000 | A-full |
 
@@ -285,4 +290,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Scene
 
 ---
 
-*Last updated: v0.23.0 — 2026-06-29 (PR3 slice of `project-asset-browser-and-scene-asset-authoring` landed; Capability 1 (Project Asset Browser + Scene Asset Authoring) CLOSED)*
+*Last updated: v0.24.0 — 2026-06-29 (PR1 storage seam + cache + gate for scene-instance-placement landed; PR2 commands+WASM and PR3 frontend+E2E remain pending for Hito 2 Order 2)*
