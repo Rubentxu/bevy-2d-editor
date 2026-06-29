@@ -60,6 +60,10 @@ export default function App() {
     rename: renameAsset,
     duplicate: duplicateAsset,
     deleteAsset: deleteAssetFn,
+    placeInstance,
+    instances,
+    removeInstance,
+    replaceInstanceAsset,
   } = useSceneAssets();
 
   // ── AI Assistant ─────────────────────────────────────────────────────────
@@ -465,6 +469,10 @@ export default function App() {
               onSetField={handleSetField}
               onRemoveComponent={handleRemoveComponent}
               onAddComponent={handleAddComponent}
+              instances={instances}
+              onRemoveInstance={removeInstance}
+              onReplaceInstanceAsset={replaceInstanceAsset}
+              assetEntries={assetEntries}
             />
           </>
         ) : (
@@ -477,6 +485,7 @@ export default function App() {
               onDuplicate={handleAssetDuplicate}
               onDelete={handleAssetDelete}
               onOpen={handleOpenAsset}
+              onPlaceInstance={placeInstance}
             />
             {assetDoc && (
               <AssetAuthoringView

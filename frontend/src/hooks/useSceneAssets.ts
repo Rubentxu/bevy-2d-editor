@@ -3,6 +3,7 @@ import {
   SceneAssetCatalogEntry,
   AssetLogState,
   SceneAssetDocument,
+  SceneInstance,
   listSceneAssets,
   getSceneAssetCatalogJson,
   openSceneAsset,
@@ -17,6 +18,10 @@ import {
   renameSceneAsset,
   duplicateSceneAsset,
   deleteSceneAsset,
+  placeSceneInstance,
+  removeSceneInstance,
+  replaceSceneInstanceAsset,
+  getSceneInstances,
 } from "../services/scene-assets";
 
 const DEFAULT_ENTRIES: SceneAssetCatalogEntry[] = [];
@@ -28,6 +33,7 @@ const DEFAULT_LOG_STATE: AssetLogState = {
   cursor: 0,
   dirty: false,
 };
+const DEFAULT_INSTANCES: Record<string, SceneInstance> = {};
 
 /**
  * React hook for Scene Asset state and operations.
@@ -47,6 +53,9 @@ export function useSceneAssets() {
   );
   const [activeAssetId, setActiveAssetId] = useState<string | null>(null);
   const [logState, setLogState] = useState<AssetLogState>(DEFAULT_LOG_STATE);
+  const [instances, setInstances] = useState<Record<string, SceneInstance>>(
+    DEFAULT_INSTANCES
+  );
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   /**
@@ -74,11 +83,23 @@ export function useSceneAssets() {
   }, []);
 
   /**
-   * Full refresh - catalog + log state.
+   * Refresh the scene instances from the backend.
+   */
+  const refreshInstances = useCallback(async () => {
+    try {
+      const inst = await getSceneInstances();
+      setInstances(inst);
+    } catch (e) {
+      console.error("useSceneAssets: refreshInstances failed:", e);
+    }
+  }, []);
+
+  /**
+   * Full refresh - catalog + log state + instances.
    */
   const refresh = useCallback(async () => {
-    await Promise.all([refreshCatalog(), refreshLogState()]);
-  }, [refreshCatalog, refreshLogState]);
+    await Promise.all([refreshCatalog(), refreshLogState(), refreshInstances()]);
+  }, [refreshCatalog, refreshLogState, refreshInstances]);
 
   /**
    * Open a Scene Asset for editing.
@@ -211,6 +232,49 @@ export function useSceneAssets() {
     [activeAssetId, close, refreshCatalog]
   );
 
+  // ── Scene Instance operations (PR3) ──────────────────────────────────────────
+
+  /**
+   * Place a Scene Asset as a new Scene Instance in the active scene.
+   * @param assetId - The asset's stable ID from the catalog
+   * @param translation - Optional translation {x, y}
+   */
+  const placeInstance = useCallback(
+    async (assetId: string, translation?: { x: number; y: number }) => {
+      await placeSceneInstance(assetId, translation);
+      // Refresh instances after placing
+      await refreshInstances();
+    },
+    [refreshInstances]
+  );
+
+  /**
+   * Remove a Scene Instance from the active scene.
+   * @param instanceId - The instance's stable ID
+   */
+  const removeInstance = useCallback(
+    async (instanceId: string) => {
+      await removeSceneInstance(instanceId);
+      // Refresh instances after removing
+      await refreshInstances();
+    },
+    [refreshInstances]
+  );
+
+  /**
+   * Replace the asset of an existing Scene Instance.
+   * @param instanceId - The instance's stable ID
+   * @param newAssetId - The new asset's stable ID
+   */
+  const replaceInstanceAsset = useCallback(
+    async (instanceId: string, newAssetId: string) => {
+      await replaceSceneInstanceAsset(instanceId, newAssetId);
+      // Refresh instances after replacing
+      await refreshInstances();
+    },
+    [refreshInstances]
+  );
+
   /**
    * Force a refresh trigger (increments counter to force re-render).
    */
@@ -218,18 +282,20 @@ export function useSceneAssets() {
     setRefreshTrigger((n) => n + 1);
   }, []);
 
-  // Poll for catalog + log state every 500ms
+  // Poll for catalog + log state + instances every 500ms
   useEffect(() => {
     refreshCatalog();
     refreshLogState();
+    refreshInstances();
 
     const interval = setInterval(() => {
       refreshCatalog();
       refreshLogState();
+      refreshInstances();
     }, 500);
 
     return () => clearInterval(interval);
-  }, [refresh, refreshCatalog, refreshLogState]);
+  }, [refresh, refreshCatalog, refreshLogState, refreshInstances]);
 
   return {
     // Catalog state
@@ -257,6 +323,13 @@ export function useSceneAssets() {
     rename,
     duplicate,
     deleteAsset: deleteAsset,
+
+    // Scene Instances (PR3)
+    instances,
+    refreshInstances,
+    placeInstance,
+    removeInstance,
+    replaceInstanceAsset,
 
     // Force refresh
     forceRefresh,

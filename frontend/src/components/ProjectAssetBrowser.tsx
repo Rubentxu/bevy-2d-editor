@@ -8,6 +8,10 @@ interface Props {
   onDuplicate: (assetId: string) => Promise<void>;
   onDelete: (assetId: string) => Promise<void>;
   onOpen: (assetId: string) => void;
+  onPlaceInstance: (
+    assetId: string,
+    translation?: { x: number; y: number }
+  ) => Promise<void>;
 }
 
 const ROLES = ["actor", "level", "ui", "fragment", "screen", "effect"] as const;
@@ -20,10 +24,12 @@ export default function ProjectAssetBrowser({
   onDuplicate,
   onDelete,
   onOpen,
+  onPlaceInstance,
 }: Props) {
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [placingAssetId, setPlacingAssetId] = useState<string | null>(null);
 
   const filteredEntries =
     roleFilter === "all"
@@ -109,6 +115,39 @@ export default function ProjectAssetBrowser({
       }
     },
     [entries, onDelete]
+  );
+
+  const handlePlaceInstance = useCallback(
+    async (assetId: string) => {
+      // Show translation dialog (S1, E5)
+      const translationStr = window.prompt(
+        "Translation (optional, e.g. {x:100, y:200} or leave empty):"
+      );
+      let translation: { x: number; y: number } | undefined;
+      if (translationStr && translationStr.trim()) {
+        try {
+          translation = JSON.parse(translationStr);
+        } catch {
+          // If parsing fails, try simple x,y format
+          const match = translationStr.match(/x\s*:\s*([-\d.]+)\s*,\s*y\s*:\s*([-\d.]+)/i);
+          if (match) {
+            translation = {
+              x: parseFloat(match[1]),
+              y: parseFloat(match[2]),
+            };
+          }
+        }
+      }
+      setPlacingAssetId(assetId);
+      try {
+        await onPlaceInstance(assetId, translation);
+      } catch (e) {
+        console.error("Place instance failed:", e);
+      } finally {
+        setPlacingAssetId(null);
+      }
+    },
+    [onPlaceInstance]
   );
 
   return (
@@ -202,6 +241,14 @@ export default function ProjectAssetBrowser({
                       title="Open for editing"
                     >
                       Open
+                    </button>
+                    <button
+                      onClick={() => handlePlaceInstance(entry.asset_id)}
+                      data-testid="asset-place-btn"
+                      disabled={placingAssetId === entry.asset_id}
+                      title="Place instance in scene"
+                    >
+                      {placingAssetId === entry.asset_id ? "Placing..." : "Place Instance"}
                     </button>
                     <button
                       onClick={() => handleRenameStart(entry)}

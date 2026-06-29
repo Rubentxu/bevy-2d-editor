@@ -97,6 +97,15 @@ export async function initEngine(
   // Expose Rust code export (PR2 — code-export)
   (window as any).export_code = (json: string) => wasm.export_code(json);
 
+  // ── Scene Instance Placement (PR3) ────────────────────────────────────────
+  (window as any).place_scene_instance = (assetId: string, translationJson?: string) =>
+    wasm.place_scene_instance(assetId, translationJson ?? null);
+  (window as any).remove_scene_instance = (instanceId: string) =>
+    wasm.remove_scene_instance(instanceId);
+  (window as any).replace_scene_instance_asset = (instanceId: string, newAssetId: string) =>
+    wasm.replace_scene_instance_asset(instanceId, newAssetId);
+  (window as any).get_scene_instances = () => wasm.get_scene_instances();
+
   // ── Scene Registry (PR2 multi-scene) ──────────────────────────────────────
   (window as any).scene_create = (name: string) => wasm.scene_create(name);
   (window as any).scene_switch = (id: string) => wasm.scene_switch(id);

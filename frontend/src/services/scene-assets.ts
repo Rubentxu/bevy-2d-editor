@@ -227,3 +227,108 @@ export async function saveSceneAsset(): Promise<string> {
   await waitForEngine();
   return (window as any).save_scene_asset();
 }
+
+// ── Scene Instance Types (PR3) ────────────────────────────────────────────────
+
+/**
+ * Override health per ADR-0005 §Overrides, §Versioning.
+ */
+export type OverrideStatus = "active" | "orphaned" | "stale" | "conflict";
+
+/**
+ * A single non-destructive patch on a placed Scene Instance.
+ */
+export interface OverridePatch {
+  target_local_id: string;
+  field_path: string[];
+  value: unknown;
+  status: OverrideStatus;
+}
+
+/**
+ * A placed use of a Scene Asset: reference + patches, NOT a deep clone.
+ * Per ADR-0005 §Overrides, §Versioning.
+ */
+export interface SceneInstance {
+  instance_id: string;
+  asset_ref: string;
+  asset_version_seen: number;
+  id_map: Record<string, string>;
+  overrides: OverridePatch[];
+  orphaned_overrides: OverridePatch[];
+}
+
+/**
+ * Result of a scene instance command (place/remove/replace).
+ */
+export interface SceneInstanceCommandResult {
+  inverse: object;
+  snapshot: object;
+}
+
+// ── Scene Instance Operations (PR3) ──────────────────────────────────────────
+
+/**
+ * Place a Scene Asset as a new Scene Instance in the active scene.
+ *
+ * @param assetId - The asset's stable ID from the catalog
+ * @param translationJson - Optional translation as {x: number, y: number}
+ * @returns SceneInstanceCommandResult JSON
+ */
+export async function placeSceneInstance(
+  assetId: string,
+  translationJson?: { x: number; y: number }
+): Promise<SceneInstanceCommandResult> {
+  await waitForEngine();
+  const result = (window as any).place_scene_instance(
+    assetId,
+    translationJson ? JSON.stringify(translationJson) : null
+  );
+  return typeof result === "string" ? JSON.parse(result) : result;
+}
+
+/**
+ * Remove a Scene Instance from the active scene.
+ *
+ * @param instanceId - The instance's stable ID
+ * @returns SceneInstanceCommandResult JSON
+ */
+export async function removeSceneInstance(
+  instanceId: string
+): Promise<SceneInstanceCommandResult> {
+  await waitForEngine();
+  const result = (window as any).remove_scene_instance(instanceId);
+  return typeof result === "string" ? JSON.parse(result) : result;
+}
+
+/**
+ * Replace the asset of an existing Scene Instance.
+ *
+ * @param instanceId - The instance's stable ID
+ * @param newAssetId - The new asset's stable ID
+ * @returns SceneInstanceCommandResult JSON
+ */
+export async function replaceSceneInstanceAsset(
+  instanceId: string,
+  newAssetId: string
+): Promise<SceneInstanceCommandResult> {
+  await waitForEngine();
+  const result = (window as any).replace_scene_instance_asset(
+    instanceId,
+    newAssetId
+  );
+  return typeof result === "string" ? JSON.parse(result) : result;
+}
+
+/**
+ * Get all Scene Instances from the active scene.
+ *
+ * @returns Map of instance_id → SceneInstance
+ */
+export async function getSceneInstances(): Promise<
+  Record<string, SceneInstance>
+> {
+  await waitForEngine();
+  const result = (window as any).get_scene_instances();
+  return typeof result === "string" ? JSON.parse(result) : result;
+}

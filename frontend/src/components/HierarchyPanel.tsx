@@ -179,6 +179,15 @@ export default function HierarchyPanel({ scene, selectedId, onSelect, onRename }
                   {entity.name}
                 </span>
               )}
+              {entity.id.startsWith("inst_") && (
+                <span
+                  className="scene-instance-badge"
+                  data-testid={`instance-badge-${entity.id}`}
+                  title="Scene Instance child"
+                >
+                  [I]
+                </span>
+              )}
               <span className="id">{entity.id.slice(0, 8)}</span>
             </div>
           );
