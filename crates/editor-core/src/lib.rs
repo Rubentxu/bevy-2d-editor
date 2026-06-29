@@ -1200,6 +1200,7 @@ fn perform_scene_swap(old_id: &str, new_id: &str) {
                 ),
                 name: old_id.to_string(),
                 entities: Vec::new(),
+                instances: BTreeMap::new(),
             },
             crate::operation_log::OperationLog::new_const(),
         ),
@@ -1313,6 +1314,7 @@ pub async fn load_project() -> Result<(), JsValue> {
                             ),
                             name: scene_name.clone(),
                             entities: Vec::new(),
+                            instances: BTreeMap::new(),
                         }
                     });
                     let log = OperationLog::new_const();
