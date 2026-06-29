@@ -192,6 +192,7 @@ mod tests {
             scene_id: "test".to_string(),
             name: "Test".to_string(),
             entities: vec![],
+            instances: BTreeMap::new(),
         }
     }
 

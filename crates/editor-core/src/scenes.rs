@@ -386,6 +386,7 @@ mod tests {
             scene_id: "test-id".to_string(),
             name: name.to_string(),
             entities: Vec::new(),
+            instances: BTreeMap::new(),
         }
     }
 

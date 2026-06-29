@@ -5,7 +5,7 @@
 //! S14: Authored entities do NOT have an `instance_id` field.
 
 use editor_core::{
-    document::SceneDocument,
+    SceneDocument,
     scene_asset::{AssetReference, LocalId, SceneAssetDocument, SceneAssetEntity, SceneAssetRole},
     scene_instance::SceneInstance,
     StableId,
