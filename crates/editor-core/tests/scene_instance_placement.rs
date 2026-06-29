@@ -12,8 +12,7 @@ use editor_core::{
     command::{Command, CommandError},
     document::SceneDocument,
     scene_asset::{AssetReference, LocalId, SceneAssetDocument, SceneAssetEntity, SceneAssetRole},
-    scene_instance::SceneInstance,
-    scene_instance_overrides::OverridePatch,
+    scene_instance::{OverridePatch, SceneInstance},
     processor,
     StableId,
 };

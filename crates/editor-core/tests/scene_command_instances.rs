@@ -230,7 +230,7 @@ fn s15_place_instance_apply_and_inverse() {
 
     // Inverse should be RemoveInstance
     match inverse {
-        Command::RemoveInstance { instance_id } => {
+        Command::RemoveInstance { ref instance_id } => {
             assert_eq!(instance_id.as_str(), "inst_test");
         }
         _ => panic!("Inverse should be RemoveInstance"),
@@ -272,8 +272,8 @@ fn s16_remove_instance_apply_and_inverse() {
     // Inverse should be PlaceInstance restoring the captured state
     match inverse {
         Command::PlaceInstance {
-            instance_id,
-            asset_ref,
+            ref instance_id,
+            ref asset_ref,
             asset_version,
             ..
         } => {
@@ -332,10 +332,10 @@ fn s17_replace_instance_asset_apply_and_inverse() {
     // Inverse should be another ReplaceInstanceAsset restoring old state
     match inverse {
         Command::ReplaceInstanceAsset {
-            instance_id,
-            new_asset_ref,
+            ref instance_id,
+            ref new_asset_ref,
             new_asset_version,
-            captured_old,
+            ref captured_old,
         } => {
             assert_eq!(instance_id.as_str(), "inst_test");
             assert_eq!(new_asset_ref.as_str(), "old_player"); // Swapped back
