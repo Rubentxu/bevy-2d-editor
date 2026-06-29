@@ -9,6 +9,8 @@
 
 use crate::command::{Command, CommandError};
 use crate::document::{ComponentInstance, Entity, SceneDocument, StableId};
+use crate::scene_instance::SceneInstance;
+use crate::scene_instance_overrides::resync;
 use crate::schema::global_registry;
 
 /// Find an entity by id and return a mutable reference.
@@ -173,6 +175,24 @@ pub fn validate(doc: &SceneDocument, cmd: &Command) -> Result<(), CommandError> 
                 })?;
             }
         }
+        Command::PlaceInstance { instance_id, .. } => {
+            // Instance ID must not already exist
+            if doc.instances.contains_key(instance_id) {
+                return Err(CommandError::DuplicateId(instance_id.clone()));
+            }
+        }
+        Command::RemoveInstance { instance_id } => {
+            // Instance must exist
+            if !doc.instances.contains_key(instance_id) {
+                return Err(CommandError::InstanceNotFound(instance_id.clone()));
+            }
+        }
+        Command::ReplaceInstanceAsset { instance_id, .. } => {
+            // Instance must exist
+            if !doc.instances.contains_key(instance_id) {
+                return Err(CommandError::InstanceNotFound(instance_id.clone()));
+            }
+        }
     }
     Ok(())
 }
@@ -327,6 +347,89 @@ pub fn apply(doc: &mut SceneDocument, cmd: &Command) -> Result<Command, CommandE
             Ok(Command::Batch {
                 label: "inverse".to_string(),
                 commands: inverses,
+            })
+        }
+        Command::PlaceInstance {
+            instance_id,
+            asset_ref,
+            asset_version,
+            id_map,
+            overrides,
+            orphaned_overrides,
+        } => {
+            // S15: PlaceInstance applies and inverts
+            let instance = SceneInstance {
+                instance_id: instance_id.clone(),
+                asset_ref: asset_ref.clone(),
+                asset_version_seen: *asset_version,
+                id_map: id_map.clone(),
+                overrides: overrides.clone(),
+                orphaned_overrides: orphaned_overrides.clone(),
+            };
+            doc.instances.insert(instance_id.clone(), instance);
+            // Inverse is RemoveInstance
+            Ok(Command::RemoveInstance {
+                instance_id: instance_id.clone(),
+            })
+        }
+        Command::RemoveInstance { instance_id } => {
+            // S16: RemoveInstance applies and inverts
+            // Capture pre-state for inverse
+            let removed = doc
+                .instances
+                .remove(instance_id)
+                .ok_or_else(|| CommandError::InstanceNotFound(instance_id.clone()))?;
+            // Inverse is PlaceInstance restoring the full captured state
+            Ok(Command::PlaceInstance {
+                instance_id: removed.instance_id.clone(),
+                asset_ref: removed.asset_ref.clone(),
+                asset_version: removed.asset_version_seen,
+                id_map: removed.id_map.clone(),
+                overrides: removed.overrides.clone(),
+                orphaned_overrides: removed.orphaned_overrides.clone(),
+            })
+        }
+        Command::ReplaceInstanceAsset {
+            instance_id,
+            new_asset_ref,
+            new_asset_version,
+            captured_old: _,
+        } => {
+            // S17: ReplaceInstanceAsset applies and inverts
+            // Capture current state for inverse BEFORE mutating
+            let old_instance = doc
+                .instances
+                .get(instance_id)
+                .cloned()
+                .ok_or_else(|| CommandError::InstanceNotFound(instance_id.clone()))?;
+            // Update the instance
+            let instance = doc
+                .instances
+                .get_mut(instance_id)
+                .ok_or_else(|| CommandError::InstanceNotFound(instance_id.clone()))?;
+            instance.asset_ref = new_asset_ref.clone();
+            instance.asset_version_seen = *new_asset_version;
+
+            // S17: Run resync to reclassify overrides according to new asset schema
+            // Look up the new asset in catalog and cache, then call resync
+            let asset_id = crate::with_asset_catalog(|cat| cat.resolve_path(new_asset_ref.as_str()).map(|s| s.to_string()));
+            if let Some(asset_id) = asset_id {
+                if let Some(entry) = crate::with_asset_catalog(|cat| cat.get(&asset_id).cloned()) {
+                    if let Some(asset) =
+                        crate::with_asset_body_cache(|cache| cache.get(&entry.logical_path).cloned())
+                    {
+                        let _report = resync(&asset, instance, *new_asset_version);
+                    }
+                }
+            }
+
+            // Inverse is ReplaceInstanceAsset restoring captured old state
+            // Clone individually to avoid partial move
+            Ok(Command::ReplaceInstanceAsset {
+                instance_id: instance_id.clone(),
+                new_asset_ref: old_instance.asset_ref.clone(),
+                new_asset_version: old_instance.asset_version_seen,
+                captured_old: Some(old_instance),
             })
         }
     }
