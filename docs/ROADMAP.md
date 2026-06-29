@@ -71,17 +71,22 @@ Entity Drag-and-Drop Reparenting                                       ✅     �
 ## Hito 1 — Capabilities Matrix
 
 ```
-Capability                    v0.12  v0.13  v0.14  v0.15
-───────────────────────────────────────────────────────────
-AI-Assisted Editing                ✅    ✅    ✅    ✅
-LLM Proxy (Ollama/OpenAI)           ✅    ✅    ✅    ✅
-AI Proposal UI Panel                ✅    ✅    ✅    ✅
-Apply / Discard Commands            ✅    ✅    ✅    ✅
-E2E Tests (mock proxy)             ✅    ✅    ✅    ✅
-Code Export (Rust codegen)                      ✅    ✅
-Multi-scene Projects                             ✅    ✅
-Scene Tabs + Dirty State                                   ✅
-Pixelmatch Screenshot Diff                                   ✅
+Capability                    v0.12  v0.13  v0.14  v0.15  v0.16  v0.17  v0.18  v0.19  v0.20
+──────────────────────────────────────────────────────────────────────────────────────────
+AI-Assisted Editing                ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
+LLM Proxy (Ollama/OpenAI)           ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
+AI Proposal UI Panel                ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
+Apply / Discard Commands            ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
+E2E Tests (mock proxy)             ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅    ✅
+Code Export (Rust codegen)                      ✅    ✅    ✅    ✅    ✅    ✅    ✅
+Multi-scene Projects                             ✅    ✅    ✅    ✅    ✅    ✅    ✅
+Scene Tabs + Dirty State                                   ✅    ✅    ✅    ✅    ✅
+Pixelmatch Screenshot Diff                                   ✅    ✅    ✅    ✅    ✅
+BSN Scene Asset Model                                               ✅    ✅    ✅    ✅
+BSN IR + bsn! Codegen                                                    ✅    ✅    ✅
+Scene Asset Catalog                                                          ✅    ✅    ✅
+Scene Instance Overrides + Resync                                                ✅    ✅
+BSN Migration Complete (template.rs deleted)                                         ✅
 ```
 
 ---
@@ -92,33 +97,45 @@ Pixelmatch Screenshot Diff                                   ✅
 ┌─────────────────────────────────────────────────────────────┐
 │  React Frontend (TypeScript)                                 │
 │  ┌─────────────┐ ┌─────────────┐ ┌──────────────────────┐   │
-│  │TopBar      │ │HierarchyPanel│ │InspectorPanel        │   │
-│  │TopBar      │ │Entity tree   │ │ComponentEditor       │   │
+│  │ TopBar     │ │HierarchyPanel│ │ InspectorPanel       │   │
+│  │            │ │ Entity tree  │ │ ComponentEditor       │   │
 │  └─────────────┘ └─────────────┘ └──────────────────────┘   │
 │  ┌─────────────┐ ┌──────────────────────────────────────┐  │
-│  │engine-bridge│ │hooks: useSceneState, useLogState,     │  │
-│  │(WASM bridge)│ │useKeyboardShortcuts, useAIAssistant   │  │
+│  │ engine-     │ │ hooks: useSceneState, useLogState,   │  │
+│  │ bridge      │ │ useKeyboardShortcuts, useAIAssistant, │  │
+│  │ (WASM)      │ │ useScenes                            │  │
 │  └─────────────┘ └──────────────────────────────────────┘  │
 └──────────────────────────┬──────────────────────────────────┘
-                           │ wasm-bindgen
+                            │ wasm-bindgen
 ┌─────────────────────────▼──────────────────────────────────┐
 │  Editor Core (Rust / WASM)                                   │
 │  ┌──────────────┐ ┌───────────────┐ ┌────────────────────┐  │
 │  │ document.rs  │ │ command.rs    │ │ processor.rs        │  │
-│  │ SceneDocument│ │ 9 Command     │ │ apply() / inverse() │  │
-│  │ Entity      │ │ variants      │ │ cycle detection     │  │
-│  │ StableId    │ │ Batch         │ │ field path parser   │  │
+│  │ SceneDocument│ │ Command       │ │ apply() / inverse() │  │
+│  │ Entity       │ │ variants      │ │ cycle detection     │  │
+│  │ StableId     │ │ Batch         │ │ field path parser   │  │
 │  └──────────────┘ └───────────────┘ └────────────────────┘  │
 │  ┌──────────────┐ ┌───────────────┐ ┌────────────────────┐  │
-│  │ operation_   │ │ template.rs   │ │ schema.rs           │  │
-│  │ log.rs      │ │ EntityTemplate│ │ ComponentSchema     │  │
-│  │ undo/redo   │ │ instantiate() │ │ combined_registry() │  │
-│  │ LogEntry    │ │ mint_stable_id│ │ validate()          │  │
+│  │ scene_asset  │ │scene_instance │ │ scene_asset_catalog │  │
+│  │ .rs          │ │ .rs           │ │ .rs                 │  │
+│  │ SceneAsset   │ │ SceneInstance │ │ 3-index BTreeMap    │  │
+│  │              │ │ OverridePatch  │ │ mint_asset_id       │  │
 │  └──────────────┘ └───────────────┘ └────────────────────┘  │
 │  ┌──────────────┐ ┌───────────────┐ ┌────────────────────┐  │
-│  │ persistence  │ │ dynamic_scene │ │ bevy_anchor.rs     │  │
-│  │ OPFS JS     │ │ .rs           │ │ anchor_str_to_bevy_ │  │
-│  │ bridge      │ │ DynamicScene   │ │ anchor() helper    │  │
+│  │scene_instance│ │ bsn_ir.rs    │ │ bsn_codegen.rs     │  │
+│  │_overrides.rs │ │ BsnIr        │ │ bsn! codegen        │  │
+│  │ effective_   │ │ semantic IR   │ │ emit_bsn!           │  │
+│  │ values/resync│ │              │ │                     │  │
+│  └──────────────┘ └───────────────┘ └────────────────────┘  │
+│  ┌──────────────┐ ┌───────────────┐ ┌────────────────────┐  │
+│  │ schema.rs   │ │ persistence   │ │ dynamic_scene.rs    │  │
+│  │ Component   │ │ OPFS bridge   │ │ DynamicScene export │  │
+│  │ Schema      │ │ save/load     │ │ adapter            │  │
+│  └──────────────┘ └───────────────┘ └────────────────────┘  │
+│  ┌──────────────┐ ┌───────────────┐ ┌────────────────────┐  │
+│  │ operation_   │ │ scenes.rs    │ │ bevy_anchor.rs     │  │
+│  │ log.rs       │ │ SceneRegistry│ │ Anchor component    │  │
+│  │ undo/redo    │ │ multi-scene  │ │ mapping            │  │
 │  └──────────────┘ └───────────────┘ └────────────────────┘  │
 │                              ┌──────────────┐                │
 │                              │ lib.rs       │                │
@@ -126,21 +143,12 @@ Pixelmatch Screenshot Diff                                   ✅
 │                              │ mark_dirty() │                │
 │                              └──────────────┘                │
 └──────────────────────────────────────────────────────────────┘
-                           │
-                           │ LinearBus (64KiB shared memory)
-┌─────────────────────────▼──────────────────────────────────┐
-│  Bevy Preview World (Rust / Native)                          │
-│  ┌──────────────┐ ┌───────────────┐ ┌────────────────────┐  │
-│  │ SceneEntity  │ │ Sprite2D      │ │ rebuild_preview_    │  │
-│  │ marker       │ │ Anchor (0.19) │ │ world system        │  │
-│  └──────────────┘ └───────────────┘ └────────────────────┘  │
-└──────────────────────────────────────────────────────────────┘
-                           │
-                    ┌───────▼───────┐
-                    │  AI Proxy     │
-                    │  (axum/Rust)  │
-                    │  OpenAI/Ollama│
-                    └───────────────┘
+                            │
+                     ┌───────▼───────┐
+                     │  AI Proxy     │
+                     │  (axum/Rust)  │
+                     │  OpenAI/Ollama│
+                     └───────────────┘
 ```
 
 ---
@@ -157,18 +165,35 @@ Pixelmatch Screenshot Diff                                   ✅
 
 | Item | Description |
 |------|-------------|
-| — | — |
+| Test timing race: list_schemas dropdown not updating immediately after save (deferred from component-schema-authoring cycle) | Low urgency, cosmetic |
 
 ### Hito 1 Pending
 
-| Item | Description |
-|------|-------------|
-| ~~AI-assisted editing~~ | ✅ Completed in v0.12.0 |
-| ~~Code export~~ | ✅ Completed in v0.14.0 |
-| ~~Multi-scene projects~~ | ✅ Completed in v0.15.0 |
-| ~~pixelmatch quantitative diff~~ | ✅ Completed |
-| **Collaborative editing** | CRDT-based multi-user editing |
-| **Plugin system** | Extensible component schema registry with runtime loading |
+| Item | Description | Est. LOC | Path |
+|------|-------------|-----------|------|
+| ~~AI-assisted editing~~ | ✅ Completed in v0.12.0 | — | — |
+| ~~Code export~~ | ✅ Completed in v0.14.0 | — | — |
+| ~~Multi-scene projects~~ | ✅ Completed in v0.15.0 | — | — |
+| ~~pixelmatch quantitative diff~~ | ✅ Completed | — | — |
+| ~~BSN Scene Asset model~~ | ✅ Completed v0.16.0 | — | — |
+| ~~bsn! codegen~~ | ✅ Completed v0.17.0 | — | — |
+| ~~Scene Asset Catalog~~ | ✅ Completed v0.18.0 | — | — |
+| ~~Scene Instance Overrides + Resync~~ | ✅ Completed v0.19.0 | — | — |
+| ~~BSN Migration (template.rs deleted)~~ | ✅ Completed v0.20.0 | — | — |
+| **Collaborative editing** | CRDT-based multi-user editing. Decisions: Yjs vs Automerge vs Loro, transport (WebRTC P2P vs relay), awareness state, OPFS+CRDT merge strategy, conflict UX | 3000–5000 | A-full |
+| **Plugin system** | WASM plugin ABI for schema registration, command dispatch, inspector hooks. Decisions: plugin format, distribution (npm vs URL), permissions model, hot-reload | 2000–3000 | A-full |
+
+### ADR-0005 Implementation Status
+
+| # | Item | Status |
+|---|------|--------|
+| 1 | Scene Asset + Instance + Catalog as first-class Project concepts | ✅ Done |
+| 2 | BSN-compatible IR (BsnIr) + semantic compatibility | ✅ Done |
+| 3 | Delete legacy EntityTemplate model | ✅ Done |
+| 4 | `bsn!`/`bsn_list!` code generation as primary Bevy target | ✅ Done |
+| 5 | DynamicScene Export as adapter (not source of truth) | ✅ Done |
+| 6 | Non-destructive override validation, resync, rebind, cleanup | ✅ Done |
+| 7 | `.bsn` file import/export | ⏳ Pending — Bevy loader/write-back APIs not yet stable |
 
 ---
 
@@ -200,8 +225,8 @@ Pixelmatch Screenshot Diff                                   ✅
 
 See [`CONTEXT.md`](../CONTEXT.md) for authoritative domain language.
 
-Key terms: **SceneDocument**, **StableId**, **Entity**, **Entity Template**, **Component Schema Registry**, **Component Instance**, **Operation Log**, **LinearBus**.
+Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Scene Instance**, **Scene Asset Catalog**, **Component Schema Registry**, **Component Instance**, **Operation Log**, **BsnIr**, **OverridePatch**.
 
 ---
 
-*Last updated: v0.18.0 — 2026-06-28*
+*Last updated: v0.20.0 — 2026-06-29*
