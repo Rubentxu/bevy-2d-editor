@@ -67,6 +67,70 @@ pub fn root_local_ids(asset: &SceneAssetDocument) -> Vec<LocalId> {
         .collect()
 }
 
+/// Project all Scene Instances in a document into preview entities.
+///
+/// For each instance in `doc.instances`, this function:
+/// 1. Resolves the asset reference via the provided closure
+/// 2. Runs `effective_values` to compute the resolved component values
+/// 3. Maps each resolved entity to its StableId via the persisted `id_map`
+///
+/// The returned `PreviewEntity` values carry the `stable_id` from the id_map,
+/// NOT from `effective_values`' throwaway mint — this is the design D3 decision.
+///
+/// # Arguments
+///
+/// * `doc` - The SceneDocument containing instances to project
+/// * `resolve` - Closure that resolves an AssetReference to a SceneAssetDocument
+///
+/// # Returns
+///
+/// Vec of PreviewEntity, one per instance entity. Empty Vec if no instances.
+pub fn project_instances(
+    doc: &crate::document::SceneDocument,
+    resolve: &dyn Fn(&crate::scene_asset::AssetReference) -> Option<SceneAssetDocument>,
+) -> Vec<PreviewEntity> {
+    use crate::scene_instance_overrides::effective_values;
+
+    let mut results = Vec::new();
+
+    for instance in doc.instances.values() {
+        // Resolve the asset
+        let asset = match resolve(&instance.asset_ref) {
+            Some(a) => a,
+            None => continue, // Missing asset — skip (UI should mark as broken)
+        };
+
+        // Run effective_values with a throwaway mint (we use id_map StableIds instead)
+        let mut throwaway_counter = 0u32;
+        let mut throwaway_mint = || {
+            throwaway_counter += 1;
+            crate::document::StableId::new(format!("throwaway_{}", throwaway_counter))
+        };
+
+        let resolved = match effective_values(&asset, instance, &mut throwaway_mint) {
+            Ok(r) => r,
+            Err(_) => continue, // Empty or invalid asset — skip
+        };
+
+        // Map each resolved entity to its StableId via the persisted id_map
+        for (local_id, resolved_entity) in resolved.entities {
+            // Get the StableId from the persisted id_map
+            let stable_id = match instance.id_map.get(&local_id) {
+                Some(sid) => sid.clone(),
+                None => continue, // No mapping for this local_id — skip
+            };
+
+            results.push(PreviewEntity {
+                stable_id,
+                local_id: local_id.clone(),
+                component_values: resolved_entity.components,
+            });
+        }
+    }
+
+    results
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

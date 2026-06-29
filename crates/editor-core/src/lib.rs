@@ -10,12 +10,12 @@ mod bevy_anchor;
 pub mod bsn_ir;
 pub mod bsn_codegen;
 mod code_export;
-mod command;
-mod document;
+pub mod command;
+pub mod document;
 mod dynamic_scene;
 mod operation_log;
 mod persistence;
-mod processor;
+pub mod processor;
 pub mod scene_asset;
 pub mod scene_asset_catalog;
 pub mod scene_instance;
@@ -64,13 +64,23 @@ pub use scene_asset_catalog::{
 pub use scene_instance::{
     OverridePatch, OverrideStatus, SceneInstance, patch_status_after_field_rename,
 };
-pub use instance_projection::{root_local_ids, PreviewEntity};
+pub use scene_instance_overrides::ResyncReport;
+pub use instance_projection::{root_local_ids, PreviewEntity, project_instances};
 pub use scenes::{SceneInfo, SceneRegistry, SwitchResult};
 /// Marker component for entities spawned from SceneDocument.
 /// These are despawned and respawned when the document is mutated
 /// (preview world rebuild strategy — matches Hito 0 decision 23).
 #[derive(Component)]
 pub struct SceneEntity;
+
+/// Marker component for entities that are projected from a Scene Instance.
+/// Carries the instance_id and local_id of the source entity.
+/// Used for selection routing and despawn-all cleanup.
+#[derive(Component)]
+pub struct SceneInstanceChild {
+    pub instance_id: crate::document::StableId,
+    pub local_id: crate::scene_asset::LocalId,
+}
 
 /// Resource holding the current SceneDocument and a dirty flag
 /// that signals `rebuild_preview_world` to respawn entities.
@@ -369,6 +379,7 @@ extern "C" {
     fn on_frame_end();
 }
 
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn create_buses() {
     console_error_panic_hook::set_once();
@@ -377,6 +388,7 @@ pub fn create_buses() {
     web_sys::console::log_1(&"[editor-core] Buses created".into());
 }
 
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn load_scene_json(json: &str) -> Result<(), JsValue> {
     let doc: SceneDocument = serde_json::from_str(json)
@@ -421,6 +433,181 @@ pub fn dispatch_command(json: &str) -> Result<String, JsValue> {
 
     mark_dirty();
     Ok(result_json)
+}
+
+/// Place a Scene Asset as a new Scene Instance in the active SceneDocument.
+///
+/// Design D5: `place_scene_instance(asset_id, translation_json?)`
+/// - Resolves asset via catalog + cache
+/// - Checks single-root gate via `root_local_ids`
+/// - Mints fresh `instance_id` and `id_map` with `inst_` prefix
+/// - Creates OverridePatch for translation if provided
+/// - Dispatches `Command::PlaceInstance` through the shared OperationLog
+///
+/// Returns the `CommandResult` JSON on success.
+#[wasm_bindgen]
+pub fn place_scene_instance(
+    asset_id: &str,
+    translation_json: Option<String>,
+) -> Result<String, JsValue> {
+    use crate::instance_projection::root_local_ids;
+    use crate::scene_instance::OverridePatch;
+    use crate::scene_instance::OverrideStatus;
+
+    // Step 1: Look up catalog entry
+    let entry = with_asset_catalog(|cat| cat.get(asset_id).cloned())
+        .ok_or_else(|| JsValue::from_str(&format!("Asset not found in catalog: {}", asset_id)))?;
+
+    // Step 2: Look up asset body in cache (keyed by logical_path)
+    let asset = with_asset_body_cache(|cache| {
+        cache.get(&entry.logical_path).cloned()
+    }).ok_or_else(|| JsValue::from_str(&format!("Asset not in cache: {}. Call load_project first.", entry.logical_path)))?;
+
+    // Step 3: Check single-root gate
+    let roots = root_local_ids(&asset);
+    if roots.is_empty() {
+        return Err(JsValue::from_str("Empty asset: cannot place instance with zero entities"));
+    }
+    if roots.len() > 1 {
+        return Err(JsValue::from_str(&format!(
+            "Multiple roots: asset has {} root entities, expected 1",
+            roots.len()
+        )));
+    }
+
+    // Step 4: Mint fresh instance_id
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0);
+    let instance_id = crate::document::StableId::new(format!("inst_{:x}", now));
+
+    // Step 5: Mint id_map entries with `inst_{iid}_{lid}` pattern
+    let id_map: std::collections::BTreeMap<crate::scene_asset::LocalId, crate::document::StableId> = asset
+        .entities
+        .iter()
+        .map(|e| {
+            let stable_id = crate::document::StableId::new(format!(
+                "{}_{}",
+                instance_id.as_str(),
+                e.local_id.as_str()
+            ));
+            (e.local_id.clone(), stable_id)
+        })
+        .collect();
+
+    // Step 6: Create OverridePatch for translation if provided
+    let mut overrides = Vec::new();
+    if let Some(trans_json) = translation_json {
+        let translation: serde_json::Value = serde_json::from_str(&trans_json)
+            .map_err(|e| JsValue::from_str(&format!("Invalid translation JSON: {}", e)))?;
+
+        let root_local_id = roots[0].clone();
+        overrides.push(OverridePatch {
+            target_local_id: root_local_id,
+            field_path: vec![
+                "editor.Transform2D".to_string(),
+                "translation".to_string(),
+            ],
+            value: translation,
+            status: OverrideStatus::Active,
+        });
+    }
+
+    // Step 7: Build PlaceInstance command
+    let command = Command::PlaceInstance {
+        instance_id,
+        asset_ref: crate::scene_asset::AssetReference::new(entry.logical_path.clone()),
+        asset_version: entry.current_version,
+        id_map,
+        overrides,
+        orphaned_overrides: Vec::new(),
+    };
+
+    // Step 8: Wrap in envelope and dispatch
+    let envelope = CommandEnvelope {
+        command,
+        metadata: CommandMetadata::now("user"),
+    };
+
+    let envelope_json = serde_json::to_string(&envelope)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize envelope: {}", e)))?;
+
+    // Use dispatch_command to apply
+    let result_json = dispatch_command(&envelope_json)?;
+
+    Ok(result_json)
+}
+
+/// Remove a Scene Instance from the active SceneDocument.
+///
+/// Returns the `CommandResult` JSON on success.
+#[wasm_bindgen]
+pub fn remove_scene_instance(instance_id: &str) -> Result<String, JsValue> {
+    let stable_id = crate::document::StableId::new(instance_id);
+
+    let command = Command::RemoveInstance {
+        instance_id: stable_id,
+    };
+
+    let envelope = CommandEnvelope {
+        command,
+        metadata: CommandMetadata::now("user"),
+    };
+
+    let envelope_json = serde_json::to_string(&envelope)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize envelope: {}", e)))?;
+
+    dispatch_command(&envelope_json)
+}
+
+/// Replace the asset of an existing Scene Instance.
+///
+/// Dispatches `Command::ReplaceInstanceAsset` which runs resync to reclassify
+/// overrides. Returns the `CommandResult` JSON on success.
+#[wasm_bindgen]
+pub fn replace_scene_instance_asset(
+    instance_id: &str,
+    new_asset_id: &str,
+) -> Result<String, JsValue> {
+    // Look up new asset in catalog
+    let new_entry = with_asset_catalog(|cat| cat.get(new_asset_id).cloned())
+        .ok_or_else(|| JsValue::from_str(&format!("Asset not found in catalog: {}", new_asset_id)))?;
+
+    let stable_id = crate::document::StableId::new(instance_id);
+
+    let command = Command::ReplaceInstanceAsset {
+        instance_id: stable_id,
+        new_asset_ref: crate::scene_asset::AssetReference::new(new_entry.logical_path.clone()),
+        new_asset_version: new_entry.current_version,
+        captured_old: None, // Processor fills this in
+    };
+
+    let envelope = CommandEnvelope {
+        command,
+        metadata: CommandMetadata::now("user"),
+    };
+
+    let envelope_json = serde_json::to_string(&envelope)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize envelope: {}", e)))?;
+
+    dispatch_command(&envelope_json)
+}
+
+/// Get all Scene Instances from the active SceneDocument as JSON.
+///
+/// Returns the `instances` BTreeMap serialized as JSON.
+#[wasm_bindgen]
+pub fn get_scene_instances() -> Result<String, JsValue> {
+    SCENE_DOC.with(|s| {
+        let doc_ref = s.borrow();
+        let doc = doc_ref
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("No scene loaded — call load_scene_json first"))?;
+
+        serde_json::to_string(&doc.instances)
+            .map_err(|e| JsValue::from_str(&format!("Failed to serialize instances: {}", e)))
+    })
 }
 
 /// Undo the last operation. Returns the new document snapshot as JSON.
@@ -481,6 +668,7 @@ pub fn get_log_state() -> String {
     })
 }
 
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn start_engine(canvas_id: &str) {
     let canvas_selector = format!("#{}", canvas_id);
@@ -543,8 +731,14 @@ fn setup(mut commands: Commands) {
             match serde_json::from_str(DEFAULT_SCENE_JSON) {
                 Ok(doc) => doc,
                 Err(e) => {
+                    #[cfg(target_arch = "wasm32")]
                     web_sys::console::error_1(
                         &format!("[editor-core] Failed to parse default scene: {}", e).into(),
+                    );
+                    #[cfg(not(target_arch = "wasm32"))]
+                    eprintln!(
+                        "[editor-core] Failed to parse default scene: {}",
+                        e
                     );
                     return;
                 }
@@ -565,6 +759,9 @@ fn setup(mut commands: Commands) {
 /// Design decision 3: Syncs SceneDocumentState.document from SCENE_DOC on every
 /// dirty tick. This fixes both multi-scene switching AND pre-existing preview
 /// staleness where entity edits never reached the canvas.
+///
+/// Design decision 7: Also projects Scene Instances via `project_instances`
+/// and spawns them with `SceneEntity` + `SceneInstanceChild` tags.
 fn rebuild_preview_world(
     mut commands: Commands,
     mut state: ResMut<SceneDocumentState>,
@@ -587,10 +784,22 @@ fn rebuild_preview_world(
     for entity in scene_entities.iter() {
         commands.entity(entity).despawn();
     }
-    // Spawn new entities from the document
+
+    // Spawn authored entities from the document
     for entity in state.document.entities.iter() {
         spawn_entity(&mut commands, entity);
     }
+
+    // Project and spawn Scene Instances
+    let resolver = |asset_ref: &crate::scene_asset::AssetReference| -> Option<crate::scene_asset::SceneAssetDocument> {
+        with_asset_body_cache(|cache| cache.get(asset_ref.as_str()).cloned())
+    };
+    let projected = project_instances(&state.document, &resolver);
+
+    for preview in projected {
+        spawn_preview_entity(&mut commands, &preview);
+    }
+
     state.dirty = false;
     DIRTY_FLAG.with(|d| *d.borrow_mut() = false);
 }
@@ -727,6 +936,119 @@ fn spawn_entity(commands: &mut Commands, entity: &Entity) {
     }
 }
 
+/// Spawn a projected entity from a Scene Instance.
+///
+/// This is similar to `spawn_entity` but uses the `PreviewEntity` structure
+/// which carries the stable_id from the instance's id_map and the local_id
+/// from the source asset. The entity is tagged with `SceneInstanceChild`
+/// so it can be identified and despawned separately from authored entities.
+fn spawn_preview_entity(commands: &mut Commands, preview: &PreviewEntity) {
+    use bevy::prelude::Name as BevyName;
+    use bevy::sprite::Anchor;
+
+    let mut name: Option<BevyName> = None;
+    let mut transform: Option<Transform> = None;
+    let mut sprite: Option<Sprite> = None;
+    let mut anchor_str: Option<String> = None;
+
+    for component in &preview.component_values {
+        match component.type_id.as_str() {
+            "editor.Name" => {
+                if let Some(name_val) = component.values.get("name") {
+                    if let Some(name_str) = name_val.as_str() {
+                        name = Some(BevyName::new(name_str.to_string()));
+                    }
+                }
+            }
+            "editor.Transform2D" => {
+                let translation = component
+                    .values
+                    .get("translation")
+                    .and_then(|v| v.get("x").zip(v.get("y")))
+                    .map(|(x, y)| {
+                        Vec3::new(
+                            x.as_f64().unwrap_or(0.0) as f32,
+                            y.as_f64().unwrap_or(0.0) as f32,
+                            0.0,
+                        )
+                    })
+                    .unwrap_or(Vec3::ZERO);
+
+                let rotation = component
+                    .values
+                    .get("rotation")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0) as f32;
+
+                let scale = component
+                    .values
+                    .get("scale")
+                    .and_then(|v| v.get("x").zip(v.get("y")))
+                    .map(|(x, y)| {
+                        Vec3::new(
+                            x.as_f64().unwrap_or(1.0) as f32,
+                            y.as_f64().unwrap_or(1.0) as f32,
+                            1.0,
+                        )
+                    })
+                    .unwrap_or(Vec3::new(1.0, 1.0, 1.0));
+
+                transform = Some(
+                    Transform::from_translation(translation)
+                        .with_rotation(Quat::from_rotation_z(rotation))
+                        .with_scale(scale),
+                );
+            }
+            "editor.Sprite2D" => {
+                let color = component
+                    .values
+                    .get("color")
+                    .and_then(|v| {
+                        let r = v.get("r").and_then(|x| x.as_f64()).unwrap_or(1.0) as f32;
+                        let g = v.get("g").and_then(|x| x.as_f64()).unwrap_or(1.0) as f32;
+                        let b = v.get("b").and_then(|x| x.as_f64()).unwrap_or(1.0) as f32;
+                        let a = v.get("a").and_then(|x| x.as_f64()).unwrap_or(1.0) as f32;
+                        Some(Color::srgba(r, g, b, a))
+                    })
+                    .unwrap_or(Color::WHITE);
+
+                sprite = Some(Sprite {
+                    color,
+                    custom_size: Some(Vec2::splat(100.0)),
+                    ..default()
+                });
+
+                if let Some(s) = component.values.get("anchor").and_then(|v| v.as_str()) {
+                    anchor_str = Some(s.to_string());
+                }
+            }
+            // Skip editorial-only components
+            _ => {}
+        }
+    }
+
+    // Build and spawn the entity with SceneInstanceChild tag
+    let mut cmd = commands.spawn_empty();
+    cmd.insert(SceneEntity);
+    cmd.insert(SceneInstanceChild {
+        instance_id: preview.stable_id.clone(),
+        local_id: preview.local_id.clone(),
+    });
+
+    if let Some(n) = name {
+        cmd.insert(n);
+    }
+    if let Some(t) = transform {
+        cmd.insert(t);
+    }
+    if let Some(s) = sprite {
+        cmd.insert(s);
+        let raw_anchor = anchor_str.as_deref().unwrap_or("Center");
+        let bevy_anchor = anchor_str_to_bevy_anchor(raw_anchor);
+        cmd.insert(Anchor::from(bevy_anchor.0));
+    }
+}
+
 fn process_commands(mut sprites: Query<&mut Transform, With<Sprite>>) {
     let cmds = COMMAND_BUS.with(|b| {
         b.borrow_mut()
@@ -795,6 +1117,7 @@ fn sync_log_state(mut log_state: ResMut<OperationLogState>) {
 // OPFS Persistence — wasm_bindgen externs + high-level functions
 // ─────────────────────────────────────────────────────────────────────────────
 
+#[cfg(target_arch = "wasm32")]
 /// Helper: await a JS Promise and return its resolved JsValue.
 async fn js_await(promise: js_sys::Promise) -> Result<JsValue, JsValue> {
     let fut = JsFuture::from(promise);
@@ -802,6 +1125,7 @@ async fn js_await(promise: js_sys::Promise) -> Result<JsValue, JsValue> {
         .map_err(|e| JsValue::from_str(&format!("JS promise rejected: {:?}", e)))
 }
 
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 extern "C" {
     /// JS-side: `window.opfs_save_file(path, contents) -> Promise<{ok, error?}>`
@@ -825,6 +1149,7 @@ extern "C" {
     pub fn opfs_delete_file_raw(path: &str) -> js_sys::Promise;
 }
 
+#[cfg(target_arch = "wasm32")]
 async fn js_save_file(path: &str, contents: &str) -> Result<(), String> {
     let promise = opfs_save_file_raw(path, contents);
     let result = js_await(promise).await.map_err(|e| format!("{:?}", e))?;
@@ -841,6 +1166,7 @@ async fn js_save_file(path: &str, contents: &str) -> Result<(), String> {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 async fn js_load_file(path: &str) -> Result<String, String> {
     let promise = opfs_load_file_raw(path);
     let result = js_await(promise).await.map_err(|e| format!("{:?}", e))?;
@@ -860,6 +1186,7 @@ async fn js_load_file(path: &str) -> Result<String, String> {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 async fn js_exists(path: &str) -> bool {
     let promise = opfs_exists_raw(path);
     match js_await(promise).await {
@@ -868,6 +1195,7 @@ async fn js_exists(path: &str) -> bool {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 async fn js_list_files(path: &str) -> Result<Vec<String>, String> {
     let promise = opfs_list_files_raw(path);
     let result = js_await(promise).await.map_err(|e| format!("{:?}", e))?;
@@ -891,6 +1219,7 @@ async fn js_list_files(path: &str) -> Result<Vec<String>, String> {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 async fn update_project_metadata(scene_name: &str) -> Result<(), String> {
     let project = if js_exists(PROJECT_FILE).await {
         match js_load_file(PROJECT_FILE).await {
@@ -909,6 +1238,7 @@ async fn update_project_metadata(scene_name: &str) -> Result<(), String> {
 }
 
 /// List all scene names from `project.json`.
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn list_scenes() -> Result<JsValue, JsValue> {
     if !js_exists(PROJECT_FILE).await {
@@ -924,6 +1254,7 @@ pub async fn list_scenes() -> Result<JsValue, JsValue> {
 }
 
 /// Check if `project.json` exists in OPFS.
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn project_exists() -> bool {
     js_exists(PROJECT_FILE).await
@@ -1021,6 +1352,7 @@ fn get_schema_json(type_id: &str) -> Result<String, JsValue> {
 }
 
 /// Helper: update project.json's schemas list (add or remove a type_id).
+#[cfg(target_arch = "wasm32")]
 async fn update_project_schemas(type_id: &str, add: bool) -> Result<(), String> {
     let mut project = if js_exists(PROJECT_FILE).await {
         match js_load_file(PROJECT_FILE).await {
@@ -1044,6 +1376,7 @@ async fn update_project_schemas(type_id: &str, add: bool) -> Result<(), String> 
 }
 
 /// Save a schema to OPFS at `schemas/<type_id>.schema.json`.
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn save_schema(type_id: &str) -> Result<String, JsValue> {
     let schema_json = get_schema_json(type_id)?;
@@ -1058,6 +1391,7 @@ pub async fn save_schema(type_id: &str) -> Result<String, JsValue> {
 }
 
 /// Load a schema from OPFS and register it in the combined registry.
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn load_schema(type_id: &str) -> Result<String, JsValue> {
     let path = persistence::schema_path(type_id);
@@ -1071,6 +1405,7 @@ pub async fn load_schema(type_id: &str) -> Result<String, JsValue> {
 }
 
 /// Delete a schema from OPFS and unregister it (built-ins protected).
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn delete_schema(type_id: &str) -> Result<(), JsValue> {
     if schema::is_builtin_type(type_id) {
@@ -1243,6 +1578,7 @@ pub fn get_current_scene_id() -> Option<String> {
 }
 
 /// Discard unsaved changes in the current scene by reloading it from OPFS.
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn discard_scene_changes(id: &str) -> Result<(), JsValue> {
     let path = persistence::scene_path(id);
@@ -1272,7 +1608,56 @@ pub async fn discard_scene_changes(id: &str) -> Result<(), JsValue> {
 // load_project integration — populates SceneRegistry from OPFS
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Warm the ASSET_BODY_CACHE by loading all scene asset bodies from OPFS.
+///
+/// Called after `load_project` clears the cache. This ensures that subsequent
+/// `place_scene_instance` calls find assets in cache without needing to load
+/// them individually.
+///
+/// For each catalog entry, loads the body file and stores it keyed by
+/// `logical_path` in the cache.
+#[cfg(target_arch = "wasm32")]
+async fn warm_asset_body_cache() {
+    use crate::scene_asset::SceneAssetDocument;
+
+    // Access the catalog that was just loaded
+    let entries: Vec<crate::scene_asset_catalog::SceneAssetCatalogEntry> =
+        SCENE_ASSET_CATALOG.with(|cell| {
+            match &*cell.borrow() {
+                Some(cat) => cat.list_all().into_iter().cloned().collect(),
+                None => Vec::new(),
+            }
+        });
+
+    for entry in entries {
+        let path = &entry.logical_path;
+        let body_exists = js_exists(&persistence::asset_path(path)).await;
+        if !body_exists {
+            continue; // Skip missing bodies (catalog warnings already emitted)
+        }
+
+        match js_load_file(&persistence::asset_path(path)).await {
+            Ok(body_json) => {
+                match serde_json::from_str::<SceneAssetDocument>(&body_json) {
+                    Ok(doc) => {
+                        with_asset_body_cache_mut(|cache| {
+                            cache.insert(path.clone(), doc);
+                        });
+                    }
+                    Err(_) => {
+                        // Skip invalid JSON - catalog warnings already handle this
+                    }
+                }
+            }
+            Err(_) => {
+                // Skip load failures
+            }
+        }
+    }
+}
+
 /// Load complete project: project.json + schemas + all scenes (atomic).
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn load_project() -> Result<(), JsValue> {
     if !js_exists(PROJECT_FILE).await {
@@ -1283,6 +1668,11 @@ pub async fn load_project() -> Result<(), JsValue> {
         .map_err(|e| JsValue::from_str(&e))?;
     let project: ProjectMetadata = serde_json::from_str(&project_json)
         .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+
+    // Step A: Clear ASSET_BODY_CACHE (D4)
+    with_asset_body_cache_mut(|cache| {
+        cache.clear();
+    });
 
     // Register all schemas first (so AddComponent validates against them)
     for schema_id in &project.schemas {
@@ -1385,11 +1775,15 @@ pub async fn load_project() -> Result<(), JsValue> {
         *cell.borrow_mut() = Some(catalog);
     });
 
+    // Step D4: Warm ASSET_BODY_CACHE with all scene asset bodies
+    warm_asset_body_cache().await;
+
     Ok(())
 }
 
 /// Save the current SceneDocument to OPFS at `scenes/<name>.scene.json`.
 /// Also clears the `is_dirty` flag on the current scene entry.
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn save_scene(name: &str) -> Result<String, JsValue> {
     let doc_json = SCENE_DOC.with(|s| {
@@ -1415,18 +1809,66 @@ pub async fn save_scene(name: &str) -> Result<String, JsValue> {
     Ok(path)
 }
 
-/// Load a SceneDocument from OPFS into the current SCENE_DOC thread_local.
-/// Note: For multi-scene, prefer `scene_switch` which handles the full
-/// value-swap through the registry.
-#[wasm_bindgen]
+/// Resync Scene Instances on scene load.
+///
+/// Checks each instance's `asset_version_seen` against the current asset version.
+/// If the asset has been bumped, calls `resync` to reclassify overrides.
+///
+/// Design S8/S9: Never silently delete overrides — orphaned patches are moved
+/// to `orphaned_overrides` and a `ResyncReport` is returned for UI surfacing.
+///
+/// Returns a Vec of (instance_id, ResyncReport) for each instance that was
+/// resynced. Empty Vec if no instances or no version mismatches.
+fn resync_instances_on_load(
+    doc: &mut SceneDocument,
+) -> Vec<(crate::document::StableId, ResyncReport)> {
+    use crate::scene_instance_overrides::resync;
+
+    let mut reports = Vec::new();
+
+    for (instance_id, instance) in doc.instances.iter_mut() {
+        // Look up asset in catalog to get current version
+        // First resolve the logical path to an asset_id, then look up the entry
+        let asset_id = match with_asset_catalog(|cat| cat.resolve_path(instance.asset_ref.as_str()).map(|s| s.to_string())) {
+            Some(id) => id,
+            None => continue, // Unresolved path — skip
+        };
+        let entry = match with_asset_catalog(|cat| cat.get(&asset_id).cloned()) {
+            Some(e) => e,
+            None => continue, // Missing catalog entry — skip
+        };
+
+        // Check if version has changed
+        if instance.asset_version_seen >= entry.current_version {
+            continue; // No version bump
+        }
+
+        // Look up asset body in cache
+        let asset = match with_asset_body_cache(|cache| cache.get(&entry.logical_path).cloned()) {
+            Some(a) => a,
+            None => continue, // Not in cache — skip (cache should be warm)
+        };
+
+        // Run resync
+        let report = resync(&asset, instance, entry.current_version);
+        reports.push((instance_id.clone(), report));
+    }
+
+    reports
+}
+
+#[cfg(target_arch = "wasm32")]
 pub async fn load_scene(name: &str) -> Result<(), JsValue> {
     let path = persistence::scene_path(name);
     let json_str = js_load_file(&path)
         .await
         .map_err(|e| JsValue::from_str(&e))?;
 
-    let doc: SceneDocument = serde_json::from_str(&json_str)
+    let mut doc: SceneDocument = serde_json::from_str(&json_str)
         .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+
+    // Run resync to catch any asset version bumps since last save
+    let _reports = resync_instances_on_load(&mut doc);
 
     SCENE_DOC.with(|s| *s.borrow_mut() = Some(doc));
     mark_dirty();
@@ -1521,6 +1963,7 @@ pub fn get_asset_log_state() -> String {
 
 /// Create a new Scene Asset with the given name and role.
 /// Returns the new catalog entry as JSON.
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn create_scene_asset(name: &str, role: &str) -> Result<String, JsValue> {
     use crate::scene_asset::SceneAssetRole;
@@ -1597,6 +2040,7 @@ pub async fn create_scene_asset(name: &str, role: &str) -> Result<String, JsValu
 }
 
 /// Rename a Scene Asset (moves the file and updates catalog).
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn rename_scene_asset(asset_id: &str, new_path: &str) -> Result<String, JsValue> {
     let new_path_normalized = scene_asset_catalog::normalize_logical_path(new_path);
@@ -1652,11 +2096,17 @@ pub async fn rename_scene_asset(asset_id: &str, new_path: &str) -> Result<String
     // Update project.json
     update_project_metadata_for_asset(&new_entry, "rename").await?;
 
+    // Invalidate ASSET_BODY_CACHE by old_path (D4)
+    with_asset_body_cache_mut(|cache| {
+        cache.remove(old_path);
+    });
+
     serde_json::to_string(&new_entry)
         .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Duplicate a Scene Asset.
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn duplicate_scene_asset(asset_id: &str) -> Result<String, JsValue> {
     // Get source entry
@@ -1708,6 +2158,7 @@ pub async fn duplicate_scene_asset(asset_id: &str) -> Result<String, JsValue> {
 }
 
 /// Delete a Scene Asset.
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn delete_scene_asset(asset_id: &str) -> Result<(), JsValue> {
     // Get entry
@@ -1727,6 +2178,11 @@ pub async fn delete_scene_asset(asset_id: &str) -> Result<(), JsValue> {
 
     // Update project.json
     update_project_metadata_for_asset(&entry, "delete").await?;
+
+    // Invalidate ASSET_BODY_CACHE by logical_path (D4)
+    with_asset_body_cache_mut(|cache| {
+        cache.remove(&path);
+    });
 
     Ok(())
 }
@@ -1757,6 +2213,7 @@ pub fn list_scene_assets(role_filter: Option<String>) -> Result<String, JsValue>
 }
 
 /// Open a Scene Asset by asset_id into SCENE_ASSET_DOC thread-local.
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn open_scene_asset(asset_id: &str) -> Result<String, JsValue> {
     // Get entry
@@ -1822,6 +2279,7 @@ pub fn get_scene_asset_catalog_json() -> Result<String, JsValue> {
 }
 
 /// Save the active Scene Asset: body-first, then catalog update.
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn save_scene_asset() -> Result<String, JsValue> {
     let (asset_id, path, doc_json) = with_asset_doc_mut(|doc_opt| {
@@ -1868,6 +2326,11 @@ pub async fn save_scene_asset() -> Result<String, JsValue> {
         log.clear();
     });
 
+    // Step 5: Invalidate ASSET_BODY_CACHE by logical_path (D4)
+    with_asset_body_cache_mut(|cache| {
+        cache.remove(&path);
+    });
+
     Ok(format!("Saved {} v{}", path, new_version))
 }
 
@@ -1901,6 +2364,7 @@ fn derive_duplicate_path(original: &str) -> String {
 }
 
 /// Update project.json with a modified scene_assets list.
+#[cfg(target_arch = "wasm32")]
 async fn update_project_metadata_for_asset(
     entry: &scene_asset_catalog::SceneAssetCatalogEntry,
     _operation: &str,
@@ -1923,6 +2387,7 @@ async fn update_project_metadata_for_asset(
 }
 
 /// Load project metadata from OPFS.
+#[cfg(target_arch = "wasm32")]
 async fn load_project_metadata() -> Result<ProjectMetadata, JsValue> {
     if js_exists(persistence::PROJECT_FILE).await {
         let json_str = js_load_file(persistence::PROJECT_FILE)
@@ -1936,6 +2401,7 @@ async fn load_project_metadata() -> Result<ProjectMetadata, JsValue> {
 }
 
 /// Delete a file from OPFS.
+#[cfg(target_arch = "wasm32")]
 async fn js_delete_file(path: &str) -> Result<(), String> {
     let promise = opfs_delete_file_raw(path);
     js_await(promise).await.map_err(|e| format!("{:?}", e))?;
