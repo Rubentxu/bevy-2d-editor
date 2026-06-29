@@ -56,8 +56,7 @@ export async function initEngine(
   const wasmModule = await import("./wasm/editor_core.js");
   await wasmModule.default();
   wasm = wasmModule;
-  wasmMemory = (wasmModule as any).__wasm.memory ?? null;
-  console.log("[bridge] WASM module loaded, memory size:", wasmMemory?.buffer.byteLength ?? 0);
+  console.log("[bridge] WASM module loaded");
 
   frameCallback = onEvent;
 
@@ -106,6 +105,31 @@ export async function initEngine(
   (window as any).scene_rename = (id: string, newName: string) => wasm.scene_rename(id, newName);
   (window as any).list_scenes_extended = () => wasm.list_scenes_extended();
   (window as any).get_current_scene_id = () => wasm.get_current_scene_id();
+
+  // ── Scene Asset Browser + Authoring (PR3) ──────────────────────────────────
+  (window as any).create_scene_asset = (name: string, role: string) =>
+    wasm.create_scene_asset(name, role);
+  (window as any).rename_scene_asset = (assetId: string, newPath: string) =>
+    wasm.rename_scene_asset(assetId, newPath);
+  (window as any).duplicate_scene_asset = (assetId: string) =>
+    wasm.duplicate_scene_asset(assetId);
+  (window as any).delete_scene_asset = (assetId: string) =>
+    wasm.delete_scene_asset(assetId);
+  (window as any).list_scene_assets = (roleFilter?: string) =>
+    wasm.list_scene_assets(roleFilter ?? null);
+  (window as any).open_scene_asset = (assetId: string) =>
+    wasm.open_scene_asset(assetId);
+  (window as any).close_scene_asset = () => wasm.close_scene_asset();
+  (window as any).get_asset_document_json = () => wasm.get_asset_document_json();
+  (window as any).get_scene_asset_catalog_json = () =>
+    wasm.get_scene_asset_catalog_json();
+  (window as any).dispatch_asset_command = (cmdJson: string) =>
+    wasm.dispatch_asset_command(cmdJson);
+  (window as any).undo_asset = () => wasm.undo_asset();
+  (window as any).redo_asset = () => wasm.redo_asset();
+  (window as any).get_asset_log_state = () => wasm.get_asset_log_state();
+  (window as any).save_scene_asset = () => wasm.save_scene_asset();
+
   // Expose sendMoveSprite (LinearBus raw command, used by legacy tests)
   (window as any).sendMoveSprite = sendMoveSprite;
   // Expose OPFS bridge functions for wasm_bindgen externs
