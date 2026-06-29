@@ -4,7 +4,10 @@
 //! as structured JSON documents.
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::fmt;
+
+use crate::scene_instance::SceneInstance;
 
 /// Opaque stable identifier for entities.
 /// Uses #[serde(transparent)] so it serializes as a plain string.
@@ -88,6 +91,11 @@ pub struct SceneDocument {
     pub scene_id: String,
     pub name: String,
     pub entities: Vec<Entity>,
+    /// Placed Scene Instances indexed by StableId.
+    /// Serialized as a BTreeMap for deterministic key ordering.
+    /// Defaults to empty BTreeMap when absent from older documents (S7).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub instances: BTreeMap<StableId, SceneInstance>,
 }
 
 /// A single entity within a scene with its associated components.
