@@ -1,6 +1,6 @@
 # Hito 0 Specification — Bevy 2D Scene Editor MVP
 
-> **Status:** Accepted (all architectural decisions closed)
+> ⚠️ **DEPRECATED / LEGACY** — This document describes the original Hito 0 scope from the pre-SDD era. It is no longer maintained and does not reflect the current architecture (post-BSN migration, v0.20.0). See [ROADMAP.md](./ROADMAP.md) for the authoritative project state and [CONTEXT.md](./CONTEXT.md) for current domain language.
 > **Vision:** [CONTEXT.md](../CONTEXT.md) · **Key decision:** [ADR-0001](./adr/0001-scene-document-json-as-source-of-truth.md)
 > **Research basis:** `/tmp/opencode/cursor-research-2026-06-25.md`
 
