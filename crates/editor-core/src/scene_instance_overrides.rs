@@ -77,6 +77,44 @@ fn find_component<'a>(
     entity.components.iter().find(|c| c.type_id == type_id)
 }
 
+/// Walk a field-path through a JSON value.
+///
+/// Segments are traversed in order; returns the value at the terminal segment,
+/// or `None` if any segment is missing or the path is empty.
+fn walk_field_path<'a>(
+    root: &'a serde_json::Value,
+    segments: &[String],
+) -> Option<&'a serde_json::Value> {
+    if segments.is_empty() {
+        return Some(root);
+    }
+    let mut current: &serde_json::Value = root;
+    for seg in segments.iter().take(segments.len().saturating_sub(1)) {
+        current = current.as_object()?.get(seg)?;
+    }
+    let last = segments.last()?;
+    Some(current.as_object()?.get(last)?)
+}
+
+/// Walk a field-path through a JSON value (mutable, for insertion).
+///
+/// Returns the mutable reference to the terminal value, or `None` if the path
+/// cannot be fully traversed.
+fn walk_field_path_mut<'a>(
+    root: &'a mut serde_json::Value,
+    segments: &[String],
+) -> Option<&'a mut serde_json::Value> {
+    if segments.is_empty() {
+        return Some(root);
+    }
+    let mut current: &mut serde_json::Value = root;
+    for seg in segments.iter().take(segments.len().saturating_sub(1)) {
+        current = current.as_object_mut()?.get_mut(seg)?;
+    }
+    let last = segments.last()?;
+    Some(current.as_object_mut()?.get_mut(last)?)
+}
+
 /// Walk `field_path[1..]` inside `values` and insert `value` at the terminal key.
 fn apply_field_path(
     component: &mut ComponentInstance,
@@ -86,28 +124,13 @@ fn apply_field_path(
     if field_path.is_empty() {
         return Ok(());
     }
-    if field_path.len() == 1 {
-        component
-            .values
-            .as_object_mut()
-            .ok_or(())?
-            .insert(field_path[0].clone(), value);
-        Ok(())
-    } else {
-        let mut current = &mut component.values;
-        for seg in field_path.iter().take(field_path.len() - 1) {
-            let next = current.as_object_mut().and_then(|m| m.get_mut(seg));
-            match next {
-                Some(v) => current = v,
-                None => return Err(()),
-            }
+    let target = walk_field_path_mut(&mut component.values, field_path);
+    match target {
+        Some(t) => {
+            *t = value;
+            Ok(())
         }
-        let last = field_path.last().ok_or(())?;
-        current
-            .as_object_mut()
-            .ok_or(())?
-            .insert(last.clone(), value);
-        Ok(())
+        None => Err(()),
     }
 }
 
@@ -179,34 +202,7 @@ pub fn classify_overrides(
 
             // Walk field_path to check field existence inside the target component.
             if !patch.field_path.is_empty() {
-                let segments: Vec<&str> = patch
-                    .field_path
-                    .iter()
-                    .map(|s| s.as_str())
-                    .collect();
-                let mut current: Option<&serde_json::Value> = Some(&component.values);
-                let mut is_stale = false;
-
-                for (i, seg) in segments.iter().enumerate() {
-                    match current {
-                        Some(serde_json::Value::Object(map)) => {
-                            if i < segments.len() - 1 {
-                                current = map.get(*seg);
-                            } else {
-                                if !map.contains_key(*seg) {
-                                    is_stale = true;
-                                }
-                                break;
-                            }
-                        }
-                        _ => {
-                            is_stale = true;
-                            break;
-                        }
-                    }
-                }
-
-                if is_stale {
+                if walk_field_path(&component.values, &patch.field_path).is_none() {
                     return ComponentOverride {
                         status: ComponentOverrideStatus::Stale,
                         ..patch.clone()
@@ -216,29 +212,7 @@ pub fn classify_overrides(
 
             // Kind mismatch check
             let existing_value: Option<serde_json::Value> = if !patch.field_path.is_empty() {
-                let segments: Vec<&str> = patch
-                    .field_path
-                    .iter()
-                    .map(|s| s.as_str())
-                    .collect();
-                let mut current: Option<&serde_json::Value> = Some(&component.values);
-                for (i, seg) in segments.iter().enumerate() {
-                    match current {
-                        Some(serde_json::Value::Object(map)) => {
-                            if i < segments.len() - 1 {
-                                current = map.get(*seg);
-                            } else {
-                                current = map.get(*seg);
-                                break;
-                            }
-                        }
-                        _ => {
-                            current = None;
-                            break;
-                        }
-                    }
-                }
-                current.cloned()
+                walk_field_path(&component.values, &patch.field_path).cloned()
             } else {
                 Some(component.values.clone())
             };
@@ -359,32 +333,7 @@ pub fn validate_overrides(
 
         // Walk field path for missing_field check
         if !patch.field_path.is_empty() {
-            let segments: Vec<&str> = patch
-                .field_path
-                .iter()
-                .map(|s| s.as_str())
-                .collect();
-            let mut current: Option<&serde_json::Value> = Some(&component.values);
-            let mut found = true;
-
-            for (i, seg) in segments.iter().enumerate() {
-                match current {
-                    Some(serde_json::Value::Object(map)) => {
-                        if i < segments.len() - 1 {
-                            current = map.get(*seg);
-                        } else if !map.contains_key(*seg) {
-                            found = false;
-                            break;
-                        }
-                    }
-                    _ => {
-                        found = false;
-                        break;
-                    }
-                }
-            }
-
-            if !found {
+            if walk_field_path(&component.values, &patch.field_path).is_none() {
                 issues.push(OverrideIssue {
                     code: "missing_field".to_string(),
                     patch: patch.clone(),
@@ -399,29 +348,7 @@ pub fn validate_overrides(
 
         // Type conflict check
         let terminal: Option<serde_json::Value> = if !patch.field_path.is_empty() {
-            let segments: Vec<&str> = patch
-                .field_path
-                .iter()
-                .map(|s| s.as_str())
-                .collect();
-            let mut current: Option<&serde_json::Value> = Some(&component.values);
-            for (i, seg) in segments.iter().enumerate() {
-                match current {
-                    Some(serde_json::Value::Object(map)) => {
-                        if i < segments.len() - 1 {
-                            current = map.get(*seg);
-                        } else {
-                            current = map.get(*seg);
-                            break;
-                        }
-                    }
-                    _ => {
-                        current = None;
-                        break;
-                    }
-                }
-            }
-            current.cloned()
+            walk_field_path(&component.values, &patch.field_path).cloned()
         } else {
             Some(component.values.clone())
         };
@@ -445,6 +372,70 @@ pub fn validate_overrides(
 }
 
 /// Compute effective values: read-only merge of asset + active overrides.
+/// Validates that a patch can be applied to a resolved entity.
+///
+/// Returns `Ok(())` if the patch is valid, or `Err(patch)` if it cannot be applied.
+fn validate_patch_target(
+    resolved_entity: &ResolvedEntity,
+    patch: &ComponentOverride,
+) -> Result<(), ComponentOverride> {
+    let type_id = patch.component_type_id.as_str();
+    let component = match resolved_entity
+        .components
+        .iter()
+        .find(|c| c.type_id == type_id)
+    {
+        Some(c) => c,
+        None => return Err(patch.clone()),
+    };
+
+    // Walk field_path to verify path inside the target component.
+    if !patch.field_path.is_empty() {
+        if walk_field_path(&component.values, &patch.field_path).is_none() {
+            return Err(patch.clone());
+        }
+    }
+
+    // Kind check
+    let terminal: Option<&serde_json::Value> = if !patch.field_path.is_empty() {
+        walk_field_path(&component.values, &patch.field_path)
+    } else {
+        Some(&component.values)
+    };
+
+    if let Some(existing) = terminal {
+        if detect_kind_mismatch(existing, &patch.value) {
+            return Err(patch.clone());
+        }
+    }
+
+    Ok(())
+}
+
+/// Applies a validated patch to a resolved entity's component.
+fn apply_patch_to_resolved_entity(
+    resolved_entity: &mut ResolvedEntity,
+    patch: &ComponentOverride,
+) -> Result<(), ComponentOverride> {
+    let type_id = patch.component_type_id.as_str();
+    let component = match resolved_entity
+        .components
+        .iter_mut()
+        .find(|c| c.type_id == type_id)
+    {
+        Some(c) => c,
+        None => return Err(patch.clone()),
+    };
+
+    let mut comp = component.clone();
+    if apply_field_path(&mut comp, &patch.field_path, patch.value.clone()).is_ok() {
+        *component = comp;
+        Ok(())
+    } else {
+        Err(patch.clone())
+    }
+}
+
 pub fn effective_values(
     asset: &SceneAssetDocument,
     instance: &SceneInstance,
@@ -486,93 +477,14 @@ pub fn effective_values(
             }
         };
 
-        let type_id = patch.component_type_id.as_str();
-        let component = match resolved_entity
-            .components
-            .iter_mut()
-            .find(|c| c.type_id == type_id)
-        {
-            Some(c) => c,
-            None => {
-                unresolved.push(patch.clone());
-                continue;
-            }
-        };
-
-        // Walk field_path to verify path inside the target component.
-        if !patch.field_path.is_empty() {
-            let segments: Vec<&str> = patch
-                .field_path
-                .iter()
-                .map(|s| s.as_str())
-                .collect();
-            let mut current: Option<&serde_json::Value> = Some(&component.values);
-            let mut valid_path = true;
-
-            for (i, seg) in segments.iter().enumerate() {
-                match current {
-                    Some(serde_json::Value::Object(map)) => {
-                        if i < segments.len() - 1 {
-                            current = map.get(*seg);
-                        } else if !map.contains_key(*seg) {
-                            valid_path = false;
-                            break;
-                        }
-                    }
-                    _ => {
-                        valid_path = false;
-                        break;
-                    }
-                }
-            }
-
-            if !valid_path {
-                unresolved.push(patch.clone());
-                continue;
-            }
+        // Validate the patch target
+        if validate_patch_target(resolved_entity, patch).is_err() {
+            unresolved.push(patch.clone());
+            continue;
         }
 
-        // Kind check
-        let terminal: Option<serde_json::Value> = if !patch.field_path.is_empty() {
-            let segments: Vec<&str> = patch
-                .field_path
-                .iter()
-                .map(|s| s.as_str())
-                .collect();
-            let mut current: Option<&serde_json::Value> = Some(&component.values);
-            for (i, seg) in segments.iter().enumerate() {
-                match current {
-                    Some(serde_json::Value::Object(map)) => {
-                        if i < segments.len() - 1 {
-                            current = map.get(*seg);
-                        } else {
-                            current = map.get(*seg);
-                            break;
-                        }
-                    }
-                    _ => {
-                        current = None;
-                        break;
-                    }
-                }
-            }
-            current.cloned()
-        } else {
-            Some(component.values.clone())
-        };
-
-        if let Some(existing) = terminal {
-            if detect_kind_mismatch(&existing, &patch.value) {
-                unresolved.push(patch.clone());
-                continue;
-            }
-        }
-
-        // Apply patch
-        let mut comp = component.clone();
-        if apply_field_path(&mut comp, &patch.field_path, patch.value.clone()).is_ok() {
-            *component = comp;
-        } else {
+        // Apply the validated patch
+        if apply_patch_to_resolved_entity(resolved_entity, patch).is_err() {
             unresolved.push(patch.clone());
         }
     }
@@ -771,6 +683,34 @@ mod tests {
             field_path: field_path.into_iter().map(str::to_string).collect(),
             value,
             status,
+        }
+    }
+
+    /// Base fixture for `SceneAssetDocument` with common defaults.
+    fn fixture_asset() -> SceneAssetDocument {
+        SceneAssetDocument {
+            layers: vec![],
+            asset_id: "asset_1".to_string(),
+            logical_path: "assets/test".to_string(),
+            role: crate::scene_asset::SceneAssetRole::Actor,
+            version: 1,
+            entities: vec![],
+            relationships: vec![],
+            exposed_properties: vec![],
+            metadata: Default::default(),
+        }
+    }
+
+    /// Base fixture for `SceneInstance` with common defaults.
+    fn fixture_instance() -> SceneInstance {
+        SceneInstance {
+            instance_components: vec![],
+            instance_id: StableId::new("inst_1"),
+            asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
+            asset_version_seen: 1,
+            id_map: Default::default(),
+            component_overrides: vec![],
+            orphaned_component_overrides: vec![],
         }
     }
 

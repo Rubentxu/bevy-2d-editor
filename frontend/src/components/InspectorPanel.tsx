@@ -18,6 +18,16 @@ import AddComponentButton from "./AddComponentButton";
 import SchemaAuthoringPanel from "./SchemaAuthoringPanel";
 import RuntimePreviewInspector from "./RuntimePreviewInspector";
 
+/**
+ * Parse a stable ID like "inst_i001_player" into its instance_id and local_id components.
+ * Returns null if the stable ID does not match the scene instance child pattern.
+ */
+function parseInstanceChild(stableId: string): { instance_id: string; local_id: string } | null {
+  const match = stableId.match(/^inst_([^_]+)_(.*)$/);
+  if (!match) return null;
+  return { instance_id: match[1], local_id: match[2] };
+}
+
 interface Props {
   scene: SceneDocument | null;
   selectedId: string | null;
@@ -116,14 +126,15 @@ export default function InspectorPanel({
   // Load override issues, resync reports, effective values, and field override status
   // when a scene instance entity is selected (Phase 6.2, 6.3)
   useEffect(() => {
-    if (!entity || !entity.id.startsWith("inst_")) {
+    const parsed = entity ? parseInstanceChild(entity.id) : null;
+    if (!entity || !parsed) {
       setOverrideIssues([]);
       setResyncReports([]);
       setResolvedEntity(null);
       setFieldOverrideIndex([]);
       return;
     }
-    const instId = entity.id.replace(/_[^_]+$/, ""); // strip suffix after last _
+    const instId = parsed.instance_id;
     const instance = instances[instId];
     if (!instance) {
       setOverrideIssues([]);
@@ -158,8 +169,8 @@ export default function InspectorPanel({
         try {
           const resolved = await effectiveValues(instance, asset);
           // Find the resolved entity matching this entity's local_id
-          const localId = entity.id.replace(/^inst_[^_]+_/, "");
-          const matching = resolved.entities[localId];
+          const localId = parsed?.local_id;
+          const matching = localId ? resolved.entities[localId] : null;
           setResolvedEntity(matching ?? null);
         } catch {
           setResolvedEntity(null);
@@ -251,9 +262,7 @@ export default function InspectorPanel({
   const showInstanceList = instanceList.length > 0 || !entity;
 
   // Extract selected instance ID if entity is a scene instance child
-  const selectedInstanceId = entity?.id.startsWith("inst_")
-    ? entity.id.replace(/_[^_]+$/, "")
-    : null;
+  const selectedInstanceId = parseInstanceChild(entity?.id ?? "")?.instance_id ?? null;
   const selectedInstance = selectedInstanceId ? instances[selectedInstanceId] : null;
 
   // Build per-field override status map from fieldOverrideIndex (Phase 6.3)
@@ -268,7 +277,8 @@ export default function InspectorPanel({
   // Phase 6.5: Revert a field override, then re-poll effective values + override status
   const handleRevertField = async (typeId: string, fieldPath: string) => {
     if (!selectedInstance || !entity) return;
-    const localId = entity.id.replace(/^inst_[^_]+_/, "");
+    const localId = parseInstanceChild(entity.id)?.local_id;
+    if (!localId) return;
     try {
       await revertOverride(selectedInstance.instance_id, localId, typeId, [fieldPath]);
       // Re-poll effective values and field override status
