@@ -740,29 +740,4 @@ export async function fetchAssetForInstance(
   return typeof assetJson === "string" ? JSON.parse(assetJson) : assetJson;
 }
 
-/**
- * Upsert a component override via typed wrapper.
- * Returns CommandResult JSON string.
- */
-export async function upsertOverrideTyped(
-  instanceId: string,
-  localId: string,
-  typeId: string,
-  fieldPath: string[],
-  value: unknown
-): Promise<string> {
-  return upsertOverride(instanceId, localId, typeId, fieldPath, value);
-}
 
-/**
- * Revert a component override via typed wrapper.
- * Returns CommandResult JSON string.
- */
-export async function revertOverrideTyped(
-  instanceId: string,
-  localId: string,
-  typeId: string,
-  fieldPath: string[]
-): Promise<string> {
-  return revertOverride(instanceId, localId, typeId, fieldPath);
-}
