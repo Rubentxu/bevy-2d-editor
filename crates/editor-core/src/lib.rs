@@ -17,6 +17,7 @@ mod dynamic_scene;
 mod operation_log;
 mod persistence;
 pub mod bsn_export;
+pub mod bsn_import;
 pub mod preview_inspector;
 pub mod processor;
 pub mod scene_asset;
@@ -116,6 +117,7 @@ pub use bsn_export::{
     BevyBsnExporter, BsnExportError, BsnExporter, EditorCoreBsnExporter, export_to_bsn_text,
     export_to_bsn_text_with_warnings,
 };
+pub use bsn_import::{BsnImportError, parse_bsn_text, scene_asset_from_bsn_ir};
 pub use preview_inspector::{
     PreviewMappingEntry, PreviewMetrics, PreviewProvenance,
 };
@@ -908,6 +910,25 @@ pub fn export_asset_to_bsn_wasm_from_json(asset_json: &str) -> Result<String, Js
         .map_err(|e| JsValue::from_str(&format!("Invalid asset JSON: {}", e)))?;
     crate::bsn_export::export_to_bsn_text(&doc)
         .map_err(|e| JsValue::from_str(&format!("BSN export error: {}", e)))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BSN file import WASM surface
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Parse `.bsn` text into a `SceneAssetDocument` via `BsnIr` round-trip.
+/// Returns the document JSON string on success.
+///
+/// Use this to import `.bsn` files produced by `EditorCoreBsnExporter`
+/// (the editor's own export). Import of Bevy-native `.bsn` files from other
+/// tools requires type mapping that is not yet implemented.
+#[wasm_bindgen]
+pub fn import_bsn_text_to_asset_wasm(bsn_text: &str) -> Result<String, JsValue> {
+    let ir = crate::bsn_import::parse_bsn_text(bsn_text)
+        .map_err(|e| JsValue::from_str(&format!("BSN parse error: {:?}", e)))?;
+    let doc = crate::bsn_import::scene_asset_from_bsn_ir(ir);
+    serde_json::to_string(&doc)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
