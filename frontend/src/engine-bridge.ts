@@ -135,6 +135,12 @@ export async function initEngine(
   (window as any).set_asset_document_wasm = (assetJson: string) =>
     wasm.set_asset_document_wasm(assetJson);
 
+  // ── Runtime Preview Inspector (runtime-preview-inspector) ────────────────
+  (window as any).get_preview_metrics_wasm = () => wasm.get_preview_metrics_wasm();
+  (window as any).get_preview_mapping_wasm = () => wasm.get_preview_mapping_wasm();
+  (window as any).get_preview_provenance_wasm = (stableId: string) =>
+    wasm.get_preview_provenance_wasm(stableId);
+
   // ── Scene Registry (PR2 multi-scene) ──────────────────────────────────────
   (window as any).scene_create = (name: string) => wasm.scene_create(name);
   (window as any).scene_switch = (id: string) => wasm.scene_switch(id);

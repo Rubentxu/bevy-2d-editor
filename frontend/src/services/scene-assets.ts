@@ -77,6 +77,40 @@ export interface LevelLayerPayload {
   instances: SceneInstance[];
 }
 
+// ── Runtime Preview Inspector types (runtime-preview-inspector) ───────────
+
+/**
+ * Live preview metrics. Updated by Bevy's emit_events and rebuild_preview_world
+ * systems. Read by the JS-side inspector via WASM bridge.
+ */
+export interface PreviewMetrics {
+  fps: number;
+  frame_time_ms: number;
+  rebuild_count: number;
+}
+
+/**
+ * One entry in the preview entity mapping list. StableId-only on the editor
+ * side; no Bevy Entity ID is exposed to JS.
+ */
+export interface PreviewMappingEntry {
+  stable_id: string;
+  local_id: string;
+  asset_ref: string;
+  component_count: number;
+}
+
+/**
+ * Per-instance provenance detail. Returned by getPreviewProvenance.
+ */
+export interface PreviewProvenance {
+  stable_id: string;
+  local_id: string;
+  asset_ref: string;
+  components: string[];
+  is_from_instance: boolean;
+}
+
 async function waitForEngine(): Promise<void> {
   let attempts = 0;
   while (
@@ -547,4 +581,37 @@ export async function deleteSceneInstanceLayer(
 export async function setAssetDocumentJson(assetJson: string): Promise<void> {
   await waitForEngine();
   (window as any).set_asset_document_wasm(assetJson);
+}
+
+// ── Runtime Preview Inspector wrappers (runtime-preview-inspector) ────────
+
+/**
+ * Read live preview metrics: fps, frame time in ms, total rebuild count.
+ */
+export async function getPreviewMetrics(): Promise<PreviewMetrics> {
+  await waitForEngine();
+  const result = (window as any).get_preview_metrics_wasm();
+  return typeof result === "string" ? JSON.parse(result) : result;
+}
+
+/**
+ * Read the preview entity mapping list. StableId-only on the editor side.
+ */
+export async function getPreviewMapping(): Promise<PreviewMappingEntry[]> {
+  await waitForEngine();
+  const result = (window as any).get_preview_mapping_wasm();
+  return typeof result === "string" ? JSON.parse(result) : result;
+}
+
+/**
+ * Read per-instance provenance detail. Returns `null` if the `stable_id`
+ * is not currently projected.
+ */
+export async function getPreviewProvenance(
+  stableId: string
+): Promise<PreviewProvenance | null> {
+  await waitForEngine();
+  const result = (window as any).get_preview_provenance_wasm(stableId);
+  if (result === null || result === undefined) return null;
+  return typeof result === "string" ? JSON.parse(result) : result;
 }

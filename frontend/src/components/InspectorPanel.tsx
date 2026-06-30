@@ -10,6 +10,7 @@ import {
 import ComponentCard from "./ComponentCard";
 import AddComponentButton from "./AddComponentButton";
 import SchemaAuthoringPanel from "./SchemaAuthoringPanel";
+import RuntimePreviewInspector from "./RuntimePreviewInspector";
 
 interface Props {
   scene: SceneDocument | null;
@@ -366,6 +367,11 @@ export default function InspectorPanel({
           )}
         </div>
       )}
+
+      {/* Runtime Preview tab — live Bevy preview inspection */}
+      <div className="preview-tab-section" data-testid="preview-tab-section">
+        <RuntimePreviewInspector />
+      </div>
     </div>
   );
 }

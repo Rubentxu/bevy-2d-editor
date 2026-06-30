@@ -100,6 +100,14 @@ _Avoid_: name, slug, label
 The soft-typed category of a `SceneInstanceLayer`: `actors`, `props`, `spawns`, `triggers`, `collision`, or `custom`. The kind is set at layer creation and is immutable afterwards to keep layered semantics stable for downstream tooling.
 _Avoid_: hard enum without custom, vendor-specific layer type names
 
+**Preview Metrics**:
+Live runtime data of the Bevy preview world exposed to the JS-side inspector: frames per second, last frame time in milliseconds, and the total number of preview rebuilds. Updated by the Bevy `emit_events` and `rebuild_preview_world` systems.
+_Avoid_: Bevy entity handles, raw renderer stats, platform-specific counters
+
+**Preview Mapping**:
+Per-instance runtime projection list. Each entry references a `StableId`, a `LocalId`, an `AssetReference`, and a component count. StableId-only on the editor side — Bevy Entity IDs are NOT exposed to the editor model.
+_Avoid_: leaking Bevy entity indices, raw entity handles, transient world pointers
+
 **DynamicScene Export**:
 The adapter that materializes editor-owned scene data into a Bevy-compatible runtime scene representation.
 _Avoid_: source of truth, primary scene model
