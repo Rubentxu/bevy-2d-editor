@@ -32,6 +32,7 @@ fn test_place_instance_serializes_pascal_case() {
         asset_ref: AssetReference::new("characters/player"),
         asset_version: 1,
         id_map,
+        instance_components: vec![],
         component_overrides: vec![],
         orphaned_component_overrides: vec![],
     };
@@ -84,6 +85,7 @@ fn test_replace_instance_asset_serializes_pascal_case() {
         id_map: vec![(LocalId::new("local_1"), StableId::new("inst_test_1"))]
             .into_iter()
             .collect(),
+        instance_components: vec![],
         component_overrides: vec![],
         orphaned_component_overrides: vec![],
     });
@@ -134,6 +136,7 @@ fn test_place_instance_deserializes() {
             asset_ref,
             asset_version,
             id_map,
+            instance_components,
             component_overrides,
             orphaned_component_overrides,
         } => {
@@ -215,6 +218,7 @@ fn s15_place_instance_apply_and_inverse() {
         asset_ref: AssetReference::new("characters/player"),
         asset_version: 1,
         id_map,
+        instance_components: vec![],
         component_overrides: vec![],
         orphaned_component_overrides: vec![],
     };
@@ -255,6 +259,7 @@ fn s16_remove_instance_apply_and_inverse() {
         id_map: vec![(LocalId::new("local_1"), StableId::new("inst_test_1"))]
             .into_iter()
             .collect(),
+        instance_components: vec![],
         component_overrides: vec![],
         orphaned_component_overrides: vec![],
     };
@@ -307,6 +312,7 @@ fn s17_replace_instance_asset_apply_and_inverse() {
         id_map: vec![(LocalId::new("local_1"), StableId::new("inst_test_1"))]
             .into_iter()
             .collect(),
+        instance_components: vec![],
         component_overrides: vec![],
         orphaned_component_overrides: vec![],
     };
@@ -379,6 +385,7 @@ fn s3_remove_instance_only_affects_instance() {
         id_map: vec![(LocalId::new("root"), StableId::new("inst_001_root"))]
             .into_iter()
             .collect(),
+        instance_components: vec![],
         component_overrides: vec![],
         orphaned_component_overrides: vec![],
     };

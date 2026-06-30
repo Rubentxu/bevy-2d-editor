@@ -1,10 +1,11 @@
-//! Scene Instance — placed use of a Scene Asset (reference + component overrides + id_map).
-//! Per ADR-0005 §Overrides, §Versioning.
+//! Scene Instance — placed use of a Scene Asset (reference + instance components +
+//! component overrides + id_map).
+//! Per ADR-0005 §Overrides, §Versioning; ADR-0009; level-design-layers-research design.
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-use crate::document::StableId;
+use crate::document::{ComponentInstance, StableId};
 use crate::scene_asset::LocalId;
 use crate::schema::ComponentTypeId;
 
@@ -28,13 +29,26 @@ pub struct ComponentOverride {
     pub status: ComponentOverrideStatus,
 }
 
-/// A placed use of a Scene Asset: reference + component overrides, NOT a deep clone (ADR-0005/ADR-0009).
+/// A placed use of a Scene Asset: reference + instance components + component overrides,
+/// NOT a deep clone (ADR-0005/ADR-0009/level-design-layers-research).
+///
+/// Three distinct concept groups coexist on a `SceneInstance`:
+/// 1. **Asset components** live in the referenced `SceneAssetDocument` and are
+///    composed at projection time.
+/// 2. **Instance components** (`instance_components`) are owned by the placed
+///    occurrence itself — e.g. `editor.Transform2D` placement, future
+///    `editor.Name` for local labels.
+/// 3. **Component Overrides** (`component_overrides` / `orphaned_component_overrides`)
+///    are non-destructive patches against asset-local Entity components only.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SceneInstance {
     pub instance_id: StableId,
     pub asset_ref: crate::scene_asset::AssetReference,
     pub asset_version_seen: u32,
     pub id_map: BTreeMap<LocalId, StableId>,
+    /// Components owned by this placed occurrence (placement-time).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub instance_components: Vec<ComponentInstance>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub component_overrides: Vec<ComponentOverride>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

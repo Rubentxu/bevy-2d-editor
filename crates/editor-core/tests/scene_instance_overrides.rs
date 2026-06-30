@@ -35,7 +35,8 @@ fn make_instance(
     id_map: BTreeMap<LocalId, StableId>,
     asset_version_seen: u32,
 ) -> SceneInstance {
-    SceneInstance {
+    SceneInstance {        instance_components: vec![],
+
         instance_id: StableId::new("inst_1"),
         asset_ref: AssetReference::new("assets/test"),
         asset_version_seen,

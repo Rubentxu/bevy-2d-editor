@@ -40,7 +40,8 @@ fn e8_two_instances_isolated_id_maps() {
     .into_iter()
     .collect();
 
-    let cmd1 = Command::PlaceInstance {
+    let cmd1 = Command::PlaceInstance {        instance_components: vec![],
+
         instance_id: instance_id_1.clone(),
         asset_ref: AssetReference::new("characters/player"),
         asset_version: 1,
@@ -60,7 +61,8 @@ fn e8_two_instances_isolated_id_maps() {
     .into_iter()
     .collect();
 
-    let cmd2 = Command::PlaceInstance {
+    let cmd2 = Command::PlaceInstance {        instance_components: vec![],
+
         instance_id: instance_id_2.clone(),
         asset_ref: AssetReference::new("characters/player"), // Same asset!
         asset_version: 1,
@@ -110,7 +112,8 @@ fn e8_inverse_independence() {
     let mut doc = empty_doc();
 
     // Place two instances
-    let cmd1 = Command::PlaceInstance {
+    let cmd1 = Command::PlaceInstance {        instance_components: vec![],
+
         instance_id: StableId::new("inst_a"),
         asset_ref: AssetReference::new("shared_asset"),
         asset_version: 1,
@@ -121,7 +124,8 @@ fn e8_inverse_independence() {
         orphaned_component_overrides: vec![],
     };
 
-    let cmd2 = Command::PlaceInstance {
+    let cmd2 = Command::PlaceInstance {        instance_components: vec![],
+
         instance_id: StableId::new("inst_b"),
         asset_ref: AssetReference::new("shared_asset"),
         asset_version: 1,
@@ -177,7 +181,8 @@ fn e8_three_instances_maintain_isolation() {
         .into_iter()
         .collect();
 
-        let cmd = Command::PlaceInstance {
+        let cmd = Command::PlaceInstance {            instance_components: vec![],
+
             instance_id,
             asset_ref: AssetReference::new("shared"),
             asset_version: 1,

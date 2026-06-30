@@ -354,6 +354,7 @@ pub fn apply(doc: &mut SceneDocument, cmd: &Command) -> Result<Command, CommandE
             asset_ref,
             asset_version,
             id_map,
+            instance_components,
             component_overrides,
             orphaned_component_overrides,
         } => {
@@ -363,6 +364,7 @@ pub fn apply(doc: &mut SceneDocument, cmd: &Command) -> Result<Command, CommandE
                 asset_ref: asset_ref.clone(),
                 asset_version_seen: *asset_version,
                 id_map: id_map.clone(),
+                instance_components: instance_components.clone(),
                 component_overrides: component_overrides.clone(),
                 orphaned_component_overrides: orphaned_component_overrides.clone(),
             };
@@ -385,6 +387,7 @@ pub fn apply(doc: &mut SceneDocument, cmd: &Command) -> Result<Command, CommandE
                 asset_ref: removed.asset_ref.clone(),
                 asset_version: removed.asset_version_seen,
                 id_map: removed.id_map.clone(),
+                instance_components: removed.instance_components.clone(),
                 component_overrides: removed.component_overrides.clone(),
                 orphaned_component_overrides: removed.orphaned_component_overrides.clone(),
             })

@@ -21,7 +21,8 @@ fn make_instance_with_overrides(
     version_seen: u32,
     component_overrides: Vec<ComponentOverride>,
 ) -> SceneInstance {
-    SceneInstance {
+    SceneInstance {        instance_components: vec![],
+
         instance_id: StableId::new(instance_id),
         asset_ref: AssetReference::new(asset_ref),
         asset_version_seen: version_seen,
@@ -191,7 +192,8 @@ fn s8_multiple_version_bumps() {
 /// S9 Variant: Multiple orphaned overrides.
 #[test]
 fn s9_multiple_orphaned_overrides() {
-    let mut instance = SceneInstance {
+    let mut instance = SceneInstance {        instance_components: vec![],
+
         instance_id: StableId::new("inst_multi_orphan"),
         asset_ref: AssetReference::new("multi_asset"),
         asset_version_seen: 1,

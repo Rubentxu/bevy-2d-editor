@@ -903,7 +903,8 @@ mod tests {
             metadata: Default::default(),
         };
 
-        let mut instance = SceneInstance {
+        let mut instance = SceneInstance {            instance_components: vec![],
+
             instance_id: StableId::new("inst_1"),
             asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
             asset_version_seen: 1,
@@ -945,7 +946,8 @@ mod tests {
             metadata: Default::default(),
         };
 
-        let mut instance = SceneInstance {
+        let mut instance = SceneInstance {            instance_components: vec![],
+
             instance_id: StableId::new("inst_1"),
             asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
             asset_version_seen: 1,
@@ -997,7 +999,8 @@ mod tests {
             metadata: Default::default(),
         };
 
-        let mut instance = SceneInstance {
+        let mut instance = SceneInstance {            instance_components: vec![],
+
             instance_id: StableId::new("inst_1"),
             asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
             asset_version_seen: 1,
@@ -1041,7 +1044,8 @@ mod tests {
             metadata: Default::default(),
         };
 
-        let mut instance = SceneInstance {
+        let mut instance = SceneInstance {            instance_components: vec![],
+
             instance_id: StableId::new("inst_1"),
             asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
             asset_version_seen: 1,
@@ -1076,7 +1080,8 @@ mod tests {
             metadata: Default::default(),
         };
 
-        let mut instance = SceneInstance {
+        let mut instance = SceneInstance {            instance_components: vec![],
+
             instance_id: StableId::new("inst_1"),
             asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
             asset_version_seen: 1,
@@ -1144,7 +1149,8 @@ mod tests {
             metadata: Default::default(),
         };
 
-        let instance = SceneInstance {
+        let instance = SceneInstance {            instance_components: vec![],
+
             instance_id: StableId::new("inst_1"),
             asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
             asset_version_seen: 1,
@@ -1204,7 +1210,8 @@ mod tests {
             metadata: Default::default(),
         };
 
-        let instance = SceneInstance {
+        let instance = SceneInstance {            instance_components: vec![],
+
             instance_id: StableId::new("inst_1"),
             asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
             asset_version_seen: 1,
@@ -1241,7 +1248,8 @@ mod tests {
             metadata: Default::default(),
         };
 
-        let instance = SceneInstance {
+        let instance = SceneInstance {            instance_components: vec![],
+
             instance_id: StableId::new("inst_1"),
             asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
             asset_version_seen: 1,

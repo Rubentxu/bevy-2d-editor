@@ -247,14 +247,17 @@ export interface ComponentOverride {
 }
 
 /**
- * A placed use of a Scene Asset: reference + patches, NOT a deep clone.
- * Per ADR-0005 §Overrides, §Versioning.
+ * A placed use of a Scene Asset: reference + instance components + overrides,
+ * NOT a deep clone.
+ * Per ADR-0005 §Overrides, §Versioning; ADR-0009; level-design-layers-research.
  */
 export interface SceneInstance {
   instance_id: string;
   asset_ref: string;
   asset_version_seen: number;
   id_map: Record<string, string>;
+  /** Components owned by this placed occurrence (placement-time data). */
+  instance_components: ComponentInstance[];
   component_overrides: ComponentOverride[];
   orphaned_component_overrides: ComponentOverride[];
 }
@@ -331,6 +334,19 @@ export async function getSceneInstances(): Promise<
 > {
   await waitForEngine();
   const result = (window as any).get_scene_instances();
+  return typeof result === "string" ? JSON.parse(result) : result;
+}
+
+/**
+ * Read `instance_components` for a given placed `instance_id`.
+ * Returns `null` if no instance with that id is loaded.
+ */
+export async function getInstanceComponents(
+  instanceId: string,
+): Promise<ComponentInstance[] | null> {
+  await waitForEngine();
+  const result = (window as any).get_instance_components_wasm(instanceId);
+  if (result === null || result === undefined) return null;
   return typeof result === "string" ? JSON.parse(result) : result;
 }
 

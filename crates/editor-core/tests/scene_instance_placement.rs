@@ -99,7 +99,8 @@ fn s1_place_instance_creates_new_instance() {
     let mut id_map = BTreeMap::new();
     id_map.insert(LocalId::new("root"), StableId::new("inst_test_001_root"));
 
-    let cmd = Command::PlaceInstance {
+    let cmd = Command::PlaceInstance {        instance_components: vec![],
+
         instance_id: instance_id.clone(),
         asset_ref: asset_ref.clone(),
         asset_version,
@@ -154,7 +155,8 @@ fn s5_multi_root_rejected_with_error() {
 
     // Create a PlaceInstance command that would represent a multi-root asset
     // The validation happens in validate() before apply()
-    let cmd = Command::PlaceInstance {
+    let cmd = Command::PlaceInstance {        instance_components: vec![],
+
         instance_id: StableId::new("inst_multi"),
         asset_ref: AssetReference::new("multi_root_asset"),
         asset_version: 1,
@@ -168,7 +170,8 @@ fn s5_multi_root_rejected_with_error() {
     // Here we test that the command validates correctly when instance_id is duplicate.
 
     // Add first instance
-    let cmd1 = Command::PlaceInstance {
+    let cmd1 = Command::PlaceInstance {        instance_components: vec![],
+
         instance_id: StableId::new("inst_first"),
         asset_ref: AssetReference::new("assets/first"),
         asset_version: 1,
@@ -181,7 +184,8 @@ fn s5_multi_root_rejected_with_error() {
     processor::apply(&mut doc, &cmd1).expect("first apply should succeed");
 
     // Try to add duplicate instance_id - should fail with DuplicateId
-    let cmd2 = Command::PlaceInstance {
+    let cmd2 = Command::PlaceInstance {        instance_components: vec![],
+
         instance_id: StableId::new("inst_first"), // same id
         asset_ref: AssetReference::new("assets/second"),
         asset_version: 1,
@@ -204,7 +208,8 @@ fn s12_empty_asset_rejected() {
     // For the processor test, we verify that if the id_map would be empty,
     // the behavior is defined.
 
-    let cmd = Command::PlaceInstance {
+    let cmd = Command::PlaceInstance {        instance_components: vec![],
+
         instance_id: StableId::new("inst_empty"),
         asset_ref: AssetReference::new("empty_asset"),
         asset_version: 1,
@@ -242,7 +247,8 @@ fn s1_s2_integration_place_instance_with_namespaced_id_map() {
     .into_iter()
     .collect();
 
-    let cmd = Command::PlaceInstance {
+    let cmd = Command::PlaceInstance {        instance_components: vec![],
+
         instance_id: instance_id.clone(),
         asset_ref: AssetReference::new("test_asset"),
         asset_version: 3,
