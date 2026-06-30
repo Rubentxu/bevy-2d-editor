@@ -1670,3 +1670,208 @@ body {
 .layer-delete-btn:hover {
   background: rgba(243, 139, 168, 0.15);
 }
+
+/* ── Runtime Preview Inspector ───────────────────────────────────────────── */
+
+.runtime-preview-inspector {
+  border-top: 1px solid #313244;
+  padding: 12px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: #cdd6f4;
+}
+
+.rpi-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.rpi-header h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.rpi-error {
+  color: #f38ba8;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.rpi-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 0 0 12px 0;
+}
+
+.rpi-metric {
+  background: #181825;
+  border: 1px solid #313244;
+  border-radius: 4px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.rpi-metric dt {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6c7086;
+  margin: 0;
+}
+
+.rpi-metric dd {
+  font-size: 16px;
+  font-weight: 600;
+  color: #a6e3a1;
+  margin: 2px 0 0 0;
+  font-family: "Fira Code", "Cascadia Code", monospace;
+}
+
+.runtime-preview-inspector h4 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6c7086;
+  margin: 8px 0 4px 0;
+}
+
+.rpi-empty {
+  color: #6c7086;
+  font-size: 12px;
+  font-style: italic;
+  margin: 4px 0;
+}
+
+.rpi-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #313244;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.rpi-row {
+  border-bottom: 1px solid #313244;
+}
+
+.rpi-row:last-child {
+  border-bottom: none;
+}
+
+.rpi-row-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: #cdd6f4;
+  padding: 4px 8px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: 11px;
+}
+
+.rpi-row-btn:hover {
+  background: rgba(137, 180, 250, 0.08);
+}
+
+.rpi-row-name {
+  flex: 1;
+  font-family: "Fira Code", "Cascadia Code", monospace;
+  font-size: 11px;
+}
+
+.rpi-row-asset {
+  color: #89b4fa;
+  font-size: 10px;
+  font-family: "Fira Code", "Cascadia Code", monospace;
+}
+
+.rpi-row-count {
+  color: #6c7086;
+  font-size: 10px;
+}
+
+.rpi-provenance {
+  background: #181825;
+  border: 1px solid #313244;
+  border-radius: 4px;
+  padding: 8px;
+  margin-top: 8px;
+  font-size: 11px;
+}
+
+.rpi-provenance-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.rpi-provenance-header h4 {
+  margin: 0;
+  font-size: 11px;
+  color: #a6e3a1;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.rpi-provenance-close {
+  background: transparent;
+  border: none;
+  color: #6c7086;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.rpi-provenance-close:hover {
+  color: #cdd6f4;
+}
+
+.rpi-provenance dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 8px;
+  margin: 0 0 8px 0;
+}
+
+.rpi-provenance dt {
+  color: #6c7086;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.rpi-provenance dd {
+  margin: 0;
+  color: #cdd6f4;
+  font-family: "Fira Code", "Cascadia Code", monospace;
+  font-size: 11px;
+}
+
+.rpi-provenance ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.rpi-provenance li {
+  font-size: 10px;
+  font-family: "Fira Code", "Cascadia Code", monospace;
+  background: rgba(137, 180, 250, 0.15);
+  color: #89b4fa;
+  padding: 1px 6px;
+  border-radius: 3px;
+}

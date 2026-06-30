@@ -16,6 +16,7 @@ pub mod document;
 mod dynamic_scene;
 mod operation_log;
 mod persistence;
+pub mod preview_inspector;
 pub mod processor;
 pub mod scene_asset;
 pub mod scene_asset_catalog;
@@ -109,6 +110,9 @@ pub use scene_asset::{
 };
 pub use scene_asset_catalog::{
     CatalogError, CatalogWarning, SceneAssetCatalog, SceneAssetCatalogEntry, mint_asset_id,
+};
+pub use preview_inspector::{
+    PreviewMappingEntry, PreviewMetrics, PreviewProvenance,
 };
 pub use scene_instance::{
     ComponentOverride, ComponentOverrideStatus, SceneInstance,
@@ -863,6 +867,42 @@ pub fn get_validation_issues_wasm() -> Result<String, JsValue> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Runtime Preview Inspector WASM surface
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Live preview metrics (fps, frame time in ms, total rebuild count).
+/// Read-only; updated by the Bevy `emit_events` and `rebuild_preview_world`
+/// systems.
+#[wasm_bindgen]
+pub fn get_preview_metrics_wasm() -> Result<String, JsValue> {
+    let m = crate::preview_inspector::get_metrics();
+    serde_json::to_string(&m)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize metrics: {}", e)))
+}
+
+/// Live preview mapping list. Each entry is editor-owned (`StableId`,
+/// `LocalId`, `AssetReference`); no Bevy Entity IDs leak to JS.
+#[wasm_bindgen]
+pub fn get_preview_mapping_wasm() -> Result<String, JsValue> {
+    let m = crate::preview_inspector::get_mapping();
+    serde_json::to_string(&m)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize mapping: {}", e)))
+}
+
+/// Per-instance provenance detail. Returns `null` if the `stable_id` is not
+/// currently projected.
+#[wasm_bindgen]
+pub fn get_preview_provenance_wasm(stable_id: &str) -> JsValue {
+    match crate::preview_inspector::get_provenance(stable_id) {
+        Some(p) => match serde_json::to_string(&p) {
+            Ok(json) => JsValue::from_str(&json),
+            Err(_) => JsValue::NULL,
+        },
+        None => JsValue::NULL,
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Scene Instance Layer WASM surface
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1169,12 +1209,70 @@ fn rebuild_preview_world(
     };
     let projected = project_instances(&state.document, &resolver);
 
-    for preview in projected {
-        spawn_preview_entity(&mut commands, &preview);
+    for preview in &projected {
+        spawn_preview_entity(&mut commands, preview);
     }
+
+    // runtime-preview-inspector: push mapping + provenance + bump rebuild_count
+    push_preview_inspector_state(&state.document, &projected);
 
     state.dirty = false;
     DIRTY_FLAG.with(|d| *d.borrow_mut() = false);
+}
+
+/// Update the runtime preview inspector thread-locals after a rebuild.
+/// `projected` is the list returned by `project_instances` for the same doc.
+fn push_preview_inspector_state(
+    doc: &SceneDocument,
+    projected: &[crate::instance_projection::PreviewEntity],
+) {
+    use std::collections::BTreeMap;
+    use crate::preview_inspector::{
+        PreviewMappingEntry, PreviewProvenance, set_mapping, set_provenance,
+    };
+
+    let mut mapping: Vec<PreviewMappingEntry> = Vec::new();
+    let mut provenance: BTreeMap<StableId, PreviewProvenance> = BTreeMap::new();
+
+    // Build per-instance mapping/provenance from doc.instances + projected.
+    for instance in doc.instances.values() {
+        let projected_for_instance: Vec<&crate::instance_projection::PreviewEntity> = projected
+            .iter()
+            .filter(|p| p.stable_id == instance.instance_id)
+            .collect();
+        if projected_for_instance.is_empty() {
+            continue;
+        }
+        // For the listing we keep one entry per (instance, root local_id) pair.
+        // We expose the asset_ref of the instance plus the local_id of the
+        // first projected root for context.
+        for preview in projected_for_instance {
+            mapping.push(PreviewMappingEntry {
+                stable_id: preview.stable_id.clone(),
+                local_id: preview.local_id.clone(),
+                asset_ref: instance.asset_ref.clone(),
+                component_count: preview.component_values.len(),
+            });
+            provenance.insert(
+                preview.stable_id.clone(),
+                PreviewProvenance {
+                    stable_id: preview.stable_id.clone(),
+                    local_id: preview.local_id.clone(),
+                    asset_ref: instance.asset_ref.clone(),
+                    components: preview
+                        .component_values
+                        .iter()
+                        .map(|c| c.type_id.clone())
+                        .collect(),
+                    is_from_instance: true,
+                },
+            );
+        }
+    }
+
+    set_mapping(mapping);
+    set_provenance(provenance);
+    crate::preview_inspector::increment_rebuild_count();
 }
 
 fn spawn_entity(commands: &mut Commands, entity: &Entity) {
@@ -1466,6 +1564,13 @@ fn emit_events(
                 let mut payload = [0u8; 4];
                 payload.copy_from_slice(&fps.to_le_bytes());
                 bus.write(EVT_FPS, &payload);
+                // runtime-preview-inspector: snapshot live metrics for the JS inspector.
+                let frame_time_ms = (*fps_accum * 1000.0) / (*frame_count as f32).max(1.0);
+                crate::preview_inspector::set_metrics(crate::preview_inspector::PreviewMetrics {
+                    fps,
+                    frame_time_ms,
+                    rebuild_count: crate::preview_inspector::get_metrics().rebuild_count,
+                });
                 *fps_accum = 0.0;
                 *frame_count = 0;
             }
