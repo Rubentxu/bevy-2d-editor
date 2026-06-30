@@ -332,3 +332,104 @@ export async function getSceneInstances(): Promise<
   const result = (window as any).get_scene_instances();
   return typeof result === "string" ? JSON.parse(result) : result;
 }
+
+// ── Override / Resync WASM wrappers ──────────────────────────────────────────
+
+/**
+ * Issue found during override validation.
+ * Codes: missing_entity, missing_component, duplicate_field, missing_field, type_conflict.
+ */
+export interface OverrideIssue {
+  code: string;
+  patch: OverridePatch;
+  message: string;
+}
+
+/**
+ * Summary of a resync operation — counts of what happened to overrides.
+ */
+export interface ResyncReport {
+  active: number;
+  orphaned: number;
+  stale: number;
+  conflict: number;
+  rebound: number;
+}
+
+/**
+ * Resolved scene: asset entities with overrides merged in (read-only).
+ */
+export interface ResolvedEntity {
+  local_id: string;
+  local_path: string;
+  name: string;
+  components: ComponentInstance[];
+}
+
+export interface ResolvedScene {
+  entities: Record<string, ResolvedEntity>;
+  id_map: Record<string, string>;
+  minted_stable_ids: string[];
+  unresolved: OverridePatch[];
+}
+
+/**
+ * Validate a SceneInstance's overrides against an asset.
+ * @returns Array of OverrideIssue objects (empty if all overrides are valid).
+ */
+export async function validateOverrides(
+  instance: SceneInstance,
+  asset: SceneAssetDocument
+): Promise<OverrideIssue[]> {
+  await waitForEngine();
+  const result = (window as any).validate_overrides_wasm(
+    JSON.stringify(instance),
+    JSON.stringify(asset)
+  );
+  return typeof result === "string" ? JSON.parse(result) : result;
+}
+
+/**
+ * Compute effective values: read-only merge of asset + active overrides.
+ * @returns ResolvedScene with merged component values.
+ */
+export async function effectiveValues(
+  instance: SceneInstance,
+  asset: SceneAssetDocument
+): Promise<ResolvedScene> {
+  await waitForEngine();
+  const result = (window as any).effective_values_wasm(
+    JSON.stringify(instance),
+    JSON.stringify(asset)
+  );
+  return typeof result === "string" ? JSON.parse(result) : result;
+}
+
+/**
+ * Try to rebind an orphaned patch to a new asset.
+ * @returns LocalId string if match found, null otherwise.
+ */
+export async function tryRebind(
+  orphanedPatch: OverridePatch,
+  asset: SceneAssetDocument
+): Promise<string | null> {
+  await waitForEngine();
+  const result = (window as any).try_rebind_wasm(
+    JSON.stringify(orphanedPatch),
+    JSON.stringify(asset)
+  );
+  const parsed = typeof result === "string" ? JSON.parse(result) : result;
+  return parsed === null ? null : parsed;
+}
+
+/**
+ * Drain accumulated resync reports from the last scene load / replace operation.
+ * @returns Array of [instance_id, ResyncReport] tuples.
+ */
+export async function getResyncReports(): Promise<
+  Array<[string, ResyncReport]>
+> {
+  await waitForEngine();
+  const result = (window as any).get_resync_reports();
+  return typeof result === "string" ? JSON.parse(result) : result;
+}

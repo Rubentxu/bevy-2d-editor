@@ -1191,3 +1191,114 @@ body {
 .dialog button.danger:hover {
   background: #922222;
 }
+
+/* ── Override Status Dot (HierarchyPanel) ─────────────────────────────────── */
+.override-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-left: 4px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+/* ── Override Summary (InspectorPanel) ─────────────────────────────────────── */
+.override-summary {
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.override-summary h4 {
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  color: #a0aec0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.override-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.override-count {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.override-count.active {
+  background: rgba(56, 161, 105, 0.2);
+  color: #68d391;
+}
+
+.override-count.stale {
+  background: rgba(214, 158, 46, 0.2);
+  color: #f6e05e;
+}
+
+.override-count.orphaned,
+.override-count.conflict {
+  background: rgba(229, 62, 62, 0.2);
+  color: #fc8181;
+}
+
+.resync-reports {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #718096;
+}
+
+.resync-label {
+  margin-right: 4px;
+  font-weight: 500;
+}
+
+.resync-report {
+  font-family: monospace;
+  margin-left: 8px;
+}
+
+.override-issues-toggle {
+  margin-top: 8px;
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  color: #a0aec0;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 3px 8px;
+  width: 100%;
+  text-align: left;
+}
+
+.override-issues-toggle:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.override-issues-list {
+  margin: 6px 0 0 0;
+  padding-left: 16px;
+  list-style: disc;
+}
+
+.override-issue {
+  font-size: 11px;
+  padding: 2px 0;
+  color: #e2e8f0;
+}
+
+.override-issue-code {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  padding: 0 4px;
+  font-size: 10px;
+  color: #81e8d9;
+  margin-right: 4px;
+}

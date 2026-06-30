@@ -461,6 +461,7 @@ export default function App() {
               selectedId={selectedEntityId}
               onSelect={setSelectedEntityId}
               onRename={handleRename}
+              instances={instances}
             />
             <InspectorPanel
               scene={scene}

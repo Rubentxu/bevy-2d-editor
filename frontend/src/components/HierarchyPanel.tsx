@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { SceneDocument } from "../hooks/useSceneState";
+import { SceneInstance, OverrideStatus } from "../services/scene-assets";
 
 interface Props {
   scene: SceneDocument | null;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onRename: (entityId: string, newName: string) => void;
+  instances?: Record<string, SceneInstance>;
 }
 
 /**
@@ -25,7 +27,29 @@ function entityDepth(entity: SceneDocument["entities"][number], allEntities: Sce
   return depth;
 }
 
-export default function HierarchyPanel({ scene, selectedId, onSelect, onRename }: Props) {
+/**
+ * Extract the instance_id prefix from an entity id that starts with "inst_".
+ * e.g. "inst_abc123_root" → "inst_abc123"
+ */
+function extractInstanceId(entityId: string): string | null {
+  if (!entityId.startsWith("inst_")) return null;
+  const underscoreIdx = entityId.indexOf("_", 5); // after "inst_"
+  return underscoreIdx === -1 ? entityId : entityId.slice(0, underscoreIdx);
+}
+
+/**
+ * Compute the override-status color for a Scene Instance.
+ * Returns CSS color string or null if no overrides exist.
+ */
+function overrideStatusColor(instance: SceneInstance): string | null {
+  const allPatches = [...instance.overrides, ...instance.orphaned_overrides];
+  if (allPatches.length === 0) return null;
+  if (allPatches.some((p) => p.status === "conflict" || p.status === "orphaned")) return "#e53e3e"; // red
+  if (allPatches.some((p) => p.status === "stale")) return "#d69e2e"; // yellow
+  return "#38a169"; // green — all active
+}
+
+export default function HierarchyPanel({ scene, selectedId, onSelect, onRename, instances = {} }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -188,6 +212,22 @@ export default function HierarchyPanel({ scene, selectedId, onSelect, onRename }
                   [I]
                 </span>
               )}
+              {(() => {
+                const instId = extractInstanceId(entity.id);
+                if (!instId) return null;
+                const inst = instances[instId];
+                if (!inst) return null;
+                const color = overrideStatusColor(inst);
+                if (!color) return null;
+                return (
+                  <span
+                    className="override-status-dot"
+                    data-testid={`override-dot-${entity.id}`}
+                    title="Override status"
+                    style={{ backgroundColor: color }}
+                  />
+                );
+              })()}
               <span className="id">{entity.id.slice(0, 8)}</span>
             </div>
           );
