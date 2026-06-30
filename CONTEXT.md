@@ -112,6 +112,10 @@ _Avoid_: leaking Bevy entity indices, raw entity handles, transient world pointe
 The adapter that materializes editor-owned scene data into a Bevy-compatible runtime scene representation.
 _Avoid_: source of truth, primary scene model
 
+**BSN Export**:
+The process of converting a `SceneAssetDocument` into raw `.bsn` text via the `BsnExporter` trait. The output is `.bsn`-native syntax (no Rust `commands.spawn_scene_list(...)` wrapper, no `bsn_list![...]` macro, no Rust tuple commas in `Children`). The `EditorCoreBsnExporter` provides the working impl; when Bevy PR #23639 lands, a `BevyBsnExporter` swap-in will use Bevy's official writer. BSN Export is output-only in Hito 3; import (`.bsn` → `SceneAssetDocument`) is deferred.
+_Avoid_: DynamicScene export (different format), `.bsn` asset import, round-trip conversion in Hito 3
+
 ## Example Dialogue
 
 Dev: "For Hito 0, the SceneDocument stays as JSON and each Entity keeps its own stable ID."

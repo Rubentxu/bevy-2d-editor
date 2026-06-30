@@ -1,5 +1,8 @@
 import { useState, useCallback } from "react";
-import { SceneAssetCatalogEntry } from "../services/scene-assets";
+import {
+  SceneAssetCatalogEntry,
+  exportAssetToBsn,
+} from "../services/scene-assets";
 
 interface Props {
   entries: SceneAssetCatalogEntry[];
@@ -30,6 +33,7 @@ export default function ProjectAssetBrowser({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [placingAssetId, setPlacingAssetId] = useState<string | null>(null);
+  const [exportingAssetId, setExportingAssetId] = useState<string | null>(null);
 
   const filteredEntries =
     roleFilter === "all"
@@ -116,6 +120,27 @@ export default function ProjectAssetBrowser({
     },
     [entries, onDelete]
   );
+
+  const handleExportBsn = useCallback(async (assetId: string) => {
+    setExportingAssetId(assetId);
+    try {
+      const bsnText = await exportAssetToBsn(assetId);
+      const blob = new Blob([bsnText], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${assetId}.bsn`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("[ProjectAssetBrowser] Export .bsn failed:", e);
+      window.alert(`Export failed: ${e}`);
+    } finally {
+      setExportingAssetId(null);
+    }
+  }, []);
 
   const handlePlaceInstance = useCallback(
     async (assetId: string) => {
@@ -272,6 +297,16 @@ export default function ProjectAssetBrowser({
                       title="Delete asset"
                     >
                       Delete
+                    </button>
+                    <button
+                      onClick={() => handleExportBsn(entry.asset_id)}
+                      data-testid="asset-export-bsn-btn"
+                      disabled={exportingAssetId === entry.asset_id}
+                      title="Export as .bsn file"
+                    >
+                      {exportingAssetId === entry.asset_id
+                        ? "Exporting…"
+                        : "Export .bsn"}
                     </button>
                   </td>
                 </tr>
