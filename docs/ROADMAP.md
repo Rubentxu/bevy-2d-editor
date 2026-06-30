@@ -111,7 +111,7 @@
 |-------|--------|--------|-----|
 | 1 | `bsn-file-export-research` | ✅ Done (v0.31.0, PR #31) | Validates EditorCoreBsnExporter against Bevy 0.19 PR #23639 draft |
 | 2 | `bsn-file-import-research` | ✅ Done (v0.32.0, PR #32) | Parse `.bsn` text → `SceneAssetDocument` (inverse of Order 1) |
-| 3 | `level-inspector-and-override-panel` | 🔲 Planned | Inspect overrides per Scene Instance; edit component values inline |
+| 3 | `level-inspector-and-override-panel` | 🔲 In Progress (feat/inspector-override, PR #33) | Inspect overrides per Scene Instance; edit component values inline |
 
 ### Research Gates
 
