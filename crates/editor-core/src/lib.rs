@@ -2648,6 +2648,7 @@ pub async fn create_scene_asset(name: &str, role: &str) -> Result<String, JsValu
         relationships: vec![],
         exposed_properties: vec![],
         metadata: Default::default(),
+        layers: vec![],
     };
 
     let doc_json = serde_json::to_string(&doc)
