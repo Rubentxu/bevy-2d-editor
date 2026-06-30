@@ -64,7 +64,7 @@ pub use scene_asset_catalog::{
 pub use scene_instance::{
     OverridePatch, OverrideStatus, SceneInstance, patch_status_after_field_rename,
 };
-pub use scene_instance_overrides::ResyncReport;
+pub use scene_instance_overrides::{OverrideIssue, ResyncReport};
 pub use instance_projection::{root_local_ids, PreviewEntity, project_instances};
 pub use scenes::{SceneInfo, SceneRegistry, SwitchResult};
 /// Marker component for entities spawned from SceneDocument.
@@ -125,6 +125,8 @@ thread_local! {
     // Asset body cache: BTreeMap<asset_ref, SceneAssetDocument> for O(1) lookups
     // during instance placement projection. No invalidation hooks yet (Task 1.5).
     static ASSET_BODY_CACHE: RefCell<Option<BTreeMap<String, SceneAssetDocument>>> = const { RefCell::new(None) };
+    // Resync reports: accumulated during load/resync, drained by get_resync_reports().
+    static RESYNC_REPORTS: RefCell<Vec<(crate::document::StableId, ResyncReport)>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Get an immutable borrowed reference to the SceneRegistry, initializing if needed.
@@ -608,6 +610,99 @@ pub fn get_scene_instances() -> Result<String, JsValue> {
         serde_json::to_string(&doc.instances)
             .map_err(|e| JsValue::from_str(&format!("Failed to serialize instances: {}", e)))
     })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Override / Resync WASM surface
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Validate a SceneInstance's overrides against an asset document.
+/// Returns a JSON array of OverrideIssue objects.
+#[wasm_bindgen]
+pub fn validate_overrides_wasm(
+    instance_json: &str,
+    asset_json: &str,
+) -> Result<String, JsValue> {
+    let instance: SceneInstance = serde_json::from_str(instance_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid instance JSON: {}", e)))?;
+    let asset: SceneAssetDocument = serde_json::from_str(asset_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid asset JSON: {}", e)))?;
+
+    let issues = crate::scene_instance_overrides::validate_overrides(&asset, &instance);
+    serde_json::to_string(&issues)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize issues: {}", e)))
+}
+
+/// Compute effective values: read-only merge of asset + active overrides.
+/// Returns a JSON ResolvedScene object.
+#[wasm_bindgen]
+pub fn effective_values_wasm(
+    instance_json: &str,
+    asset_json: &str,
+) -> Result<String, JsValue> {
+    let instance: SceneInstance = serde_json::from_str(instance_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid instance JSON: {}", e)))?;
+    let asset: SceneAssetDocument = serde_json::from_str(asset_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid asset JSON: {}", e)))?;
+
+    let mut counter = 0u32;
+    let mut mint = || {
+        counter += 1;
+        crate::document::StableId::new(format!("sid_{}", counter))
+    };
+
+    let resolved = crate::scene_instance_overrides::effective_values(&asset, &instance, &mut mint)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    serde_json::to_string(&resolved)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize resolved scene: {}", e)))
+}
+
+/// Try to rebind an orphaned OverridePatch to a new asset.
+/// Returns the matching LocalId as JSON string, or null if no match.
+#[wasm_bindgen]
+pub fn try_rebind_wasm(
+    orphaned_patch_json: &str,
+    asset_json: &str,
+) -> Result<String, JsValue> {
+    let patch: OverridePatch = serde_json::from_str(orphaned_patch_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid patch JSON: {}", e)))?;
+    let asset: SceneAssetDocument = serde_json::from_str(asset_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid asset JSON: {}", e)))?;
+
+    match crate::scene_instance_overrides::try_rebind(&asset, &patch) {
+        Some(local_id) => serde_json::to_string(&local_id)
+            .map_err(|e| JsValue::from_str(&format!("Failed to serialize local_id: {}", e))),
+        None => Ok("null".to_string()),
+    }
+}
+
+/// Drain and return all accumulated resync reports from the last load/resync.
+/// Returns JSON array of [stable_id, ResyncReport] tuples.
+/// Clears the internal reports cache after draining.
+#[wasm_bindgen]
+pub fn get_resync_reports() -> Result<String, JsValue> {
+    let reports = RESYNC_REPORTS.with(|r| {
+        let mut reports = r.borrow_mut();
+        let result = reports.clone();
+        reports.clear();
+        result
+    });
+
+    // Serialize as a JSON array of [stable_id, ResyncReport] tuples
+    let mut as_arrays: Vec<serde_json::Value> = Vec::with_capacity(reports.len());
+    for (stable_id, report) in reports {
+        let report_obj = serde_json::json!({
+            "active": report.active,
+            "orphaned": report.orphaned,
+            "stale": report.stale,
+            "conflict": report.conflict,
+            "rebound": report.rebound,
+        });
+        as_arrays.push(serde_json::json!([stable_id.as_str(), report_obj]));
+    }
+
+    serde_json::to_string(&as_arrays)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize reports: {}", e)))
 }
 
 /// Undo the last operation. Returns the new document snapshot as JSON.
@@ -1868,7 +1963,9 @@ pub async fn load_scene(name: &str) -> Result<(), JsValue> {
         .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
 
     // Run resync to catch any asset version bumps since last save
-    let _reports = resync_instances_on_load(&mut doc);
+    let reports = resync_instances_on_load(&mut doc);
+    // Store in thread-local for UI to drain via get_resync_reports()
+    RESYNC_REPORTS.with(|r| *r.borrow_mut() = reports);
 
     SCENE_DOC.with(|s| *s.borrow_mut() = Some(doc));
     mark_dirty();

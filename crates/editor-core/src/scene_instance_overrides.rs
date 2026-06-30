@@ -4,6 +4,7 @@
 //! ADR-0005 §Overrides and §Versioning and Resync.
 
 use std::collections::{BTreeMap, BTreeSet};
+use serde::Serialize;
 
 use crate::document::{ComponentInstance, StableId};
 use crate::scene_asset::{LocalId, SceneAssetDocument, SceneAssetEntity};
@@ -14,7 +15,7 @@ use crate::scene_instance::{OverridePatch, OverrideStatus, SceneInstance};
 // ---------------------------------------------------------------------------
 
 /// Result of merging a `SceneAssetDocument` with an instance's overrides.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ResolvedScene {
     pub entities: BTreeMap<LocalId, ResolvedEntity>,
     pub id_map: BTreeMap<LocalId, StableId>,
@@ -23,7 +24,7 @@ pub struct ResolvedScene {
 }
 
 /// One entity inside a resolved scene (projection of `SceneAssetEntity`).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ResolvedEntity {
     pub local_id: LocalId,
     pub local_path: String,
@@ -32,7 +33,7 @@ pub struct ResolvedEntity {
 }
 
 /// Summary of what happened during a `resync` call.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct ResyncReport {
     pub active: usize,
     pub orphaned: usize,
@@ -42,7 +43,7 @@ pub struct ResyncReport {
 }
 
 /// An issue found by `validate_overrides`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct OverrideIssue {
     pub code: String,
     pub patch: OverridePatch,
