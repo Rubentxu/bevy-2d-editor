@@ -495,7 +495,8 @@ pub fn dispatch_command(json: &str) -> Result<String, JsValue> {
 /// - Resolves asset via catalog + cache
 /// - Checks single-root gate via `root_local_ids`
 /// - Mints fresh `instance_id` and `id_map` with `inst_` prefix
-/// - Creates ComponentOverride for translation if provided
+/// - Creates an `editor.Transform2D` ComponentInstance in `instance_components`
+///   when `translation_json` is provided (placement-time data, not asset patch)
 /// - Dispatches `Command::PlaceInstance` through the shared OperationLog
 ///
 /// Returns the `CommandResult` JSON on success.
@@ -505,8 +506,6 @@ pub fn place_scene_instance(
     translation_json: Option<String>,
 ) -> Result<String, JsValue> {
     use crate::instance_projection::root_local_ids;
-    use crate::scene_instance::ComponentOverride;
-    use crate::scene_instance::ComponentOverrideStatus;
 
     // Step 1: Look up catalog entry
     let entry = with_asset_catalog(|cat| cat.get(asset_id).cloned())
@@ -550,19 +549,26 @@ pub fn place_scene_instance(
         })
         .collect();
 
-    // Step 6: Create ComponentOverride for translation if provided
-    let mut component_overrides = Vec::new();
+    // Step 6: Build instance_components from translation_json (placement-time data).
+    // Per level-design-layers-research design, placement is NOT a ComponentOverride
+    // against the asset's components; it is owned by the placed occurrence.
+    let mut instance_components: Vec<crate::document::ComponentInstance> = Vec::new();
     if let Some(trans_json) = translation_json {
         let translation: serde_json::Value = serde_json::from_str(&trans_json)
             .map_err(|e| JsValue::from_str(&format!("Invalid translation JSON: {}", e)))?;
 
-        let root_local_id = roots[0].clone();
-        component_overrides.push(ComponentOverride {
-            target_local_id: root_local_id,
-            component_type_id: crate::schema::ComponentTypeId::new("editor.Transform2D"),
-            field_path: vec!["translation".to_string()],
-            value: translation,
-            status: ComponentOverrideStatus::Active,
+        // Validate translation shape early to surface bad input before dispatch.
+        if !translation.is_object() {
+            return Err(JsValue::from_str(
+                "Invalid translation JSON: expected an object with `translation` or full Transform2D fields",
+            ));
+        }
+
+        instance_components.push(crate::document::ComponentInstance {
+            type_id: "editor.Transform2D".to_string(),
+            values: serde_json::json!({
+                "translation": translation,
+            }),
         });
     }
 
@@ -572,7 +578,8 @@ pub fn place_scene_instance(
         asset_ref: crate::scene_asset::AssetReference::new(entry.logical_path.clone()),
         asset_version: entry.current_version,
         id_map,
-        component_overrides,
+        instance_components,
+        component_overrides: Vec::new(),
         orphaned_component_overrides: Vec::new(),
     };
 
@@ -659,6 +666,30 @@ pub fn get_scene_instances() -> Result<String, JsValue> {
 
         serde_json::to_string(&doc.instances)
             .map_err(|e| JsValue::from_str(&format!("Failed to serialize instances: {}", e)))
+    })
+}
+
+/// Get `instance_components` for a given placed `instance_id`.
+///
+/// Returns a JSON array of `ComponentInstance` objects, or `null` if no
+/// instance with that id is loaded. Useful for the Scene Instance Layer
+/// authoring UI to surface placement-time components (e.g. the
+/// `editor.Transform2D` translation created by `place_scene_instance`).
+#[wasm_bindgen]
+pub fn get_instance_components_wasm(instance_id: &str) -> JsValue {
+    let stable_id = crate::document::StableId::new(instance_id);
+    SCENE_DOC.with(|s| {
+        let doc_ref = s.borrow();
+        match doc_ref.as_ref() {
+            None => JsValue::NULL,
+            Some(doc) => match doc.instances.get(&stable_id) {
+                None => JsValue::NULL,
+                Some(instance) => match serde_json::to_string(&instance.instance_components) {
+                    Ok(json) => JsValue::from_str(&json),
+                    Err(_) => JsValue::NULL,
+                },
+            },
+        }
     })
 }
 

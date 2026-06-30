@@ -105,6 +105,8 @@ export async function initEngine(
   (window as any).replace_scene_instance_asset = (instanceId: string, newAssetId: string) =>
     wasm.replace_scene_instance_asset(instanceId, newAssetId);
   (window as any).get_scene_instances = () => wasm.get_scene_instances();
+  (window as any).get_instance_components_wasm = (instanceId: string) =>
+    wasm.get_instance_components_wasm(instanceId);
 
   // ── Override / Resync (override-resync-workbench) ──────────────────────────
   (window as any).validate_overrides_wasm = (instanceJson: string, assetJson: string) =>

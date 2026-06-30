@@ -102,7 +102,8 @@ fn s2_scene_instance_roundtrip() {
     id_map.insert(LocalId("root".to_string()), StableId::new("ent_a"));
     id_map.insert(LocalId("weapon".to_string()), StableId::new("ent_b"));
 
-    let instance = SceneInstance {
+    let instance = SceneInstance {        instance_components: vec![],
+
         instance_id: StableId::new("instance-001"),
         asset_ref: AssetReference("assets/player.bsn".into()),
         asset_version_seen: 7,

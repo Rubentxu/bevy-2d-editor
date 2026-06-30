@@ -81,6 +81,9 @@ pub enum Command {
         asset_ref: AssetReference,
         asset_version: u32,
         id_map: BTreeMap<LocalId, StableId>,
+        /// Components owned by the placed occurrence (placement-time).
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        instance_components: Vec<crate::document::ComponentInstance>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         component_overrides: Vec<crate::scene_instance::ComponentOverride>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]

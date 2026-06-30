@@ -41,7 +41,7 @@ A Level Layer whose purpose is to organize placed Scene Instances inside a Level
 _Avoid_: Object Layer, Entity Layer, GameObject layer, instance collection
 
 **Scene Instance**:
-A placed use of a Scene Asset inside a SceneDocument, represented as an asset reference plus instance-owned Component Instances and explicit local patches/overrides, with references and Stable IDs owned by the editor.
+A placed use of a Scene Asset inside a SceneDocument, represented as an asset reference plus instance-owned Component Instances and explicit local patches/overrides, with references and Stable IDs owned by the editor. A Scene Instance carries three distinct concept groups: (1) **asset components** in the referenced Scene Asset, (2) **instance components** owned by the placed occurrence itself (e.g. `editor.Transform2D` for placement), and (3) **Component Overrides** that non-destructively patch asset-local Entity components.
 _Avoid_: prefab instance, cloned template, deep copy, Bevy Entity
 
 **Component Override**:
@@ -81,7 +81,7 @@ The project-global catalog of component types and their field definitions, used 
 _Avoid_: per-scene schema, per-entity schema, inline component definition
 
 **Component Instance**:
-The values attached to an Entity for one component type, referring back to a schema in the Component Schema Registry.
+The values attached to an Entity for one component type, referring back to a schema in the Component Schema Registry. When attached to a Scene Instance, it serves as an **instance component** (placement-time data such as `editor.Transform2D`).
 _Avoid_: full schema copy, ad hoc props
 
 **Asset Reference**:

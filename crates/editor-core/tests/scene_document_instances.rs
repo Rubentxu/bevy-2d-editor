@@ -51,7 +51,8 @@ fn s7_instances_field_absent_then_present_roundtrip() {
     id_map.insert(LocalId("root".into()), StableId::new("ent_001"));
     instances.insert(
         StableId::new("inst_001"),
-        SceneInstance {
+        SceneInstance {            instance_components: vec![],
+
             instance_id: StableId::new("inst_001"),
             asset_ref: AssetReference("assets/player.bsn".into()),
             asset_version_seen: 1,
@@ -98,7 +99,8 @@ fn s13_entities_array_shape_unchanged_when_instances_present() {
         }],
         instances: BTreeMap::from([(
             StableId::new("inst_001"),
-            SceneInstance {
+            SceneInstance {                instance_components: vec![],
+
                 instance_id: StableId::new("inst_001"),
                 asset_ref: AssetReference("assets/player.bsn".into()),
                 asset_version_seen: 1,
@@ -173,7 +175,8 @@ fn s6_instances_with_id_map_3_entries_byte_equal_roundtrip() {
         entities: vec![],
         instances: BTreeMap::from([(
             StableId::new("inst_001"),
-            SceneInstance {
+            SceneInstance {                instance_components: vec![],
+
                 instance_id: StableId::new("inst_001"),
                 asset_ref: AssetReference("assets/player.bsn".into()),
                 asset_version_seen: 3,
