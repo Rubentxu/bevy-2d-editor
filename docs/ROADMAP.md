@@ -52,7 +52,9 @@
 
 | Change | Branch | Status |
 |--------|--------|--------|
-| — | — | — |
+| `bsn-file-export-research` | `feat/bsn-file-export-research` | ✅ Merged (v0.31.0, PR #31) |
+| `bsn-file-import-research` | — | 🔲 Planned |
+| `level-inspector-and-override-panel` | — | 🔲 Planned |
 
 ---
 
@@ -96,6 +98,27 @@
 | Plugin system | Schema packs and validation extension points have at least one built-in example |
 | Physical `.bsn` import/export | Bevy ships stable loader/write-back APIs |
 | Visual scripting/state machines | Scene Asset workflows and runtime preview inspection are mature |
+
+---
+
+## Hito 3: .bsn File Workflow & Inspector UX
+
+**Goal**: Enable .bsn file round-trip (export + import) and improve inspector UX for override inspection and editing.
+
+### Planned Sequence
+
+| Order | Change | Status | Why |
+|-------|--------|--------|-----|
+| 1 | `bsn-file-export-research` | ✅ Done (v0.31.0, PR #31) | Validates EditorCoreBsnExporter against Bevy 0.19 PR #23639 draft |
+| 2 | `bsn-file-import-research` | 🔲 Planned | Parse `.bsn` text → `SceneAssetDocument` (inverse of Order 1) |
+| 3 | `level-inspector-and-override-panel` | 🔲 Planned | Inspect overrides per Scene Instance; edit component values inline |
+
+### Research Gates
+
+| Capability | Required research before `sddk-propose` |
+|------------|------------------------------------------|
+| .bsn file import | Bevy PR #23639 `.bsn` asset loader API, jackdaw parser, BsnIr round-trip fidelity |
+| Level Inspector | Unity override inspector, Godot inspector plugin patterns, override panel UX research |
 
 ---
 
@@ -274,6 +297,8 @@ Validation Center UI + WASM Surface (validation-center)                         
 | ADR-0006 | Authoring-first roadmap after the BSN migration | ✅ |
 | ADR-0007 | Separate `AssetCommand` surface for Scene Asset Authoring (LocalId, parallel processor/log, no shared Command surface with scenes) | ✅ |
 | ADR-0008 | Path-based Scene Asset OPFS layout (`assets/<logical_path>.asset.json` + catalog inside `ProjectMetadata.scene_assets` with `#[serde(default)]`, body-first/catalog-second save order) | ✅ |
+| ADR-0009 | ComponentOverride as ECS/BSN-friendly replacement for OverridePatch (explicit `component_type_id`, field_path semantic) | ✅ |
+| ADR-0010 | BsnExporter trait + EditorCoreBsnExporter as working impl; BevyBsnExporter placeholder for future Bevy PR #23639 swap | ✅ |
 
 ---
 
@@ -293,8 +318,8 @@ Validation Center UI + WASM Surface (validation-center)                         
 
 See [`CONTEXT.md`](../CONTEXT.md) for authoritative domain language.
 
-Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level Scene Asset**, **Level Layer**, **Scene Instance Layer**, **Scene Instance**, **Scene Asset Catalog**, **Project Asset Browser**, **Scene Asset Authoring Mode**, **Override / Resync Workbench**, **Validation Center**, **Runtime Preview Inspector**, **Component Schema Registry**, **Component Instance**, **Component Override**, **Operation Log**, **BsnIr**.
+Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level Scene Asset**, **Level Layer**, **Scene Instance Layer**, **Scene Instance**, **Scene Asset Catalog**, **Project Asset Browser**, **Scene Asset Authoring Mode**, **Override / Resync Workbench**, **Validation Center**, **Runtime Preview Inspector**, **Component Schema Registry**, **Component Instance**, **Component Override**, **Operation Log**, **BsnIr**, **BSN Export**.
 
 ---
 
-*Last updated: v0.28.0 — 2026-06-30 (validation-center merged; component-override-migration inserted before level-design-layers-research)*
+*Last updated: v0.31.0 — 2026-06-30 (bsn-file-export-research merged; Hito 3 started)*
