@@ -106,6 +106,15 @@ export async function initEngine(
     wasm.replace_scene_instance_asset(instanceId, newAssetId);
   (window as any).get_scene_instances = () => wasm.get_scene_instances();
 
+  // ── Override / Resync (override-resync-workbench) ──────────────────────────
+  (window as any).validate_overrides_wasm = (instanceJson: string, assetJson: string) =>
+    wasm.validate_overrides_wasm(instanceJson, assetJson);
+  (window as any).effective_values_wasm = (instanceJson: string, assetJson: string) =>
+    wasm.effective_values_wasm(instanceJson, assetJson);
+  (window as any).try_rebind_wasm = (orphanedPatchJson: string, assetJson: string) =>
+    wasm.try_rebind_wasm(orphanedPatchJson, assetJson);
+  (window as any).get_resync_reports = () => wasm.get_resync_reports();
+
   // ── Scene Registry (PR2 multi-scene) ──────────────────────────────────────
   (window as any).scene_create = (name: string) => wasm.scene_create(name);
   (window as any).scene_switch = (id: string) => wasm.scene_switch(id);

@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { SceneDocument } from "../hooks/useSceneState";
-import { SceneInstance } from "../services/scene-assets";
+import {
+  SceneInstance,
+  OverrideIssue,
+  ResyncReport,
+  validateOverrides,
+  getResyncReports,
+} from "../services/scene-assets";
 import ComponentCard from "./ComponentCard";
 import AddComponentButton from "./AddComponentButton";
 import SchemaAuthoringPanel from "./SchemaAuthoringPanel";
@@ -93,6 +99,60 @@ export default function InspectorPanel({
   const [nameDraft, setNameDraft] = useState(entity?.name ?? "");
   const [showSchemaPanel, setShowSchemaPanel] = useState(false);
   const [schemaRefreshKey, setSchemaRefreshKey] = useState(0);
+  const [overrideIssues, setOverrideIssues] = useState<OverrideIssue[]>([]);
+  const [resyncReports, setResyncReports] = useState<Array<[string, ResyncReport]>>([]);
+  const [showOverrideDetails, setShowOverrideDetails] = useState(false);
+
+  // Load override issues and resync reports when a scene instance entity is selected
+  useEffect(() => {
+    if (!entity || !entity.id.startsWith("inst_")) {
+      setOverrideIssues([]);
+      setResyncReports([]);
+      return;
+    }
+    const instId = entity.id.replace(/_[^_]+$/, ""); // strip suffix after last _
+    const instance = instances[instId];
+    if (!instance) {
+      setOverrideIssues([]);
+      return;
+    }
+    // Load override issues by finding the instance's asset
+    // We need the asset document — load via open_scene_asset then validate
+    (async () => {
+      try {
+        // Use asset_ref to look up the catalog entry and open the asset
+        const assetEntries = (window as any).list_scene_assets
+          ? await (window as any).list_scene_assets()
+          : [];
+        const entries = typeof assetEntries === "string" ? JSON.parse(assetEntries) : assetEntries;
+        const entry = entries.find(
+          (e: any) => e.logical_path === instance.asset_ref || e.asset_id === instance.asset_ref
+        );
+        if (!entry) {
+          setOverrideIssues([]);
+          return;
+        }
+        await (window as any).open_scene_asset(entry.asset_id);
+        const assetJson = await (window as any).get_asset_document_json();
+        const asset = typeof assetJson === "string" ? JSON.parse(assetJson) : assetJson;
+        const issues = await validateOverrides(instance, asset);
+        setOverrideIssues(issues);
+      } catch {
+        setOverrideIssues([]);
+      }
+    })();
+
+    // Load resync reports
+    (async () => {
+      try {
+        const reports = await getResyncReports();
+        // Filter to only this instance
+        setResyncReports(reports.filter(([id]) => id === instId));
+      } catch {
+        setResyncReports([]);
+      }
+    })();
+  }, [entity?.id, instances]);
 
   useEffect(() => {
     setNameDraft(entity?.name ?? "");
@@ -146,6 +206,24 @@ export default function InspectorPanel({
   // Show InstanceList section when there are instances OR when no entity selected
   const showInstanceList = instanceList.length > 0 || !entity;
 
+  // Extract selected instance ID if entity is a scene instance child
+  const selectedInstanceId = entity?.id.startsWith("inst_")
+    ? entity.id.replace(/_[^_]+$/, "")
+    : null;
+  const selectedInstance = selectedInstanceId ? instances[selectedInstanceId] : null;
+
+  // Compute override status summary
+  const overrideCounts = selectedInstance
+    ? {
+        active: selectedInstance.overrides.filter((p) => p.status === "active").length,
+        stale: selectedInstance.overrides.filter((p) => p.status === "stale").length,
+        orphaned: selectedInstance.overrides.filter((p) => p.status === "orphaned").length
+          + selectedInstance.orphaned_overrides.filter((p) => p.status === "orphaned").length,
+        conflict: selectedInstance.overrides.filter((p) => p.status === "conflict").length
+          + selectedInstance.orphaned_overrides.filter((p) => p.status === "conflict").length,
+      }
+    : null;
+
   return (
     <div className="panel inspector" data-testid="inspector-panel">
       <h2>Inspector</h2>
@@ -190,6 +268,70 @@ export default function InspectorPanel({
               + New Schema
             </button>
           </div>
+          {/* Override Summary (override-resync-workbench) */}
+          {overrideCounts && (
+            <div className="override-summary" data-testid="override-summary">
+              <h4>Overrides</h4>
+              <div className="override-counts">
+                {overrideCounts.active > 0 && (
+                  <span className="override-count active" title="Active overrides">
+                    {overrideCounts.active} active
+                  </span>
+                )}
+                {overrideCounts.stale > 0 && (
+                  <span className="override-count stale" title="Overrides on renamed/removed fields">
+                    {overrideCounts.stale} stale
+                  </span>
+                )}
+                {overrideCounts.orphaned > 0 && (
+                  <span className="override-count orphaned" title="Orphaned overrides — entity removed from asset">
+                    {overrideCounts.orphaned} orphaned
+                  </span>
+                )}
+                {overrideCounts.conflict > 0 && (
+                  <span className="override-count conflict" title="Type conflict overrides">
+                    {overrideCounts.conflict} conflict
+                  </span>
+                )}
+              </div>
+              {/* Resync reports for this instance */}
+              {resyncReports.length > 0 && (
+                <div className="resync-reports">
+                  <span className="resync-label">Resync:</span>
+                  {resyncReports.map(([id, report]) => (
+                    <span key={id} className="resync-report" data-testid={`resync-${id}`}>
+                      {report.active}a {report.stale}s {report.orphaned}o {report.conflict}c
+                    </span>
+                  ))}
+                </div>
+              )}
+              {/* Override issues details */}
+              {overrideIssues.length > 0 && (
+                <button
+                  type="button"
+                  className="override-issues-toggle"
+                  onClick={() => setShowOverrideDetails(!showOverrideDetails)}
+                >
+                  {overrideIssues.length} issue{overrideIssues.length !== 1 ? "s" : ""}{" "}
+                  {showOverrideDetails ? "▲" : "▼"}
+                </button>
+              )}
+              {showOverrideDetails && overrideIssues.length > 0 && (
+                <ul className="override-issues-list" data-testid="override-issues-list">
+                  {overrideIssues.map((issue, i) => (
+                    <li
+                      key={i}
+                      className={`override-issue override-issue-${issue.code}`}
+                      data-testid={`override-issue-${i}`}
+                    >
+                      <code className="override-issue-code">{issue.code}</code>
+                      <span className="override-issue-message">{issue.message}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </>
       )}
       {!entity && (
