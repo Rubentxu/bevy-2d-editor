@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { SceneDocument } from "../hooks/useSceneState";
-import { SceneInstance } from "../services/scene-assets";
+import { SceneInstance, parseInstanceChild } from "../services/scene-assets";
 
 interface Props {
   scene: SceneDocument | null;
@@ -25,16 +25,6 @@ function entityDepth(entity: SceneDocument["entities"][number], allEntities: Sce
     current = parent.parent;
   }
   return depth;
-}
-
-/**
- * Extract the instance_id prefix from an entity id that starts with "inst_".
- * e.g. "inst_abc123_root" → "inst_abc123"
- */
-function extractInstanceId(entityId: string): string | null {
-  if (!entityId.startsWith("inst_")) return null;
-  const underscoreIdx = entityId.indexOf("_", 5); // after "inst_"
-  return underscoreIdx === -1 ? entityId : entityId.slice(0, underscoreIdx);
 }
 
 /**
@@ -216,7 +206,7 @@ export default function HierarchyPanel({ scene, selectedId, onSelect, onRename, 
                 </span>
               )}
               {(() => {
-                const instId = extractInstanceId(entity.id);
+                const instId = parseInstanceChild(entity.id)?.instance_id ?? null;
                 if (!instId) return null;
                 const inst = instances[instId];
                 if (!inst) return null;

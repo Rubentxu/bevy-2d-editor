@@ -2,6 +2,124 @@ import { test, expect, Page } from "@playwright/test";
 
 const WASM_LOAD_TIMEOUT = 120_000;
 
+interface PlaceAssetOptions {
+  assetName: string;
+  role?: string;
+  entityLocalId?: string;
+  entityName?: string;
+  entityPath?: string;
+  componentTypeId?: string;
+  componentValues?: Record<string, unknown>;
+}
+
+interface PlaceAssetResult {
+  assetId: string;
+  instanceId: string;
+  instance: Record<string, unknown>;
+  asset: Record<string, unknown>;
+}
+
+/**
+ * Page-object helper: create a Scene Asset, add an entity with component, place as instance.
+ * Reduces ~280 LOC of fixture duplication across tests.
+ */
+async function placeAssetWithComponent(
+  page: Page,
+  opts: PlaceAssetOptions
+): Promise<PlaceAssetResult> {
+  const {
+    assetName,
+    role = "actor",
+    entityLocalId = "root",
+    entityName = "Test",
+    entityPath = "/test",
+    componentTypeId = "editor.Sprite2D",
+    componentValues = { asset: "player.png", anchor: "Center" },
+  } = opts;
+
+  // Create asset
+  const assetId = await page.evaluate(
+    (name: string) => (window as any).create_scene_asset(name, role),
+    assetName
+  );
+  await page.waitForTimeout(300);
+
+  // Open asset and add entity with component
+  await page.evaluate((id: string) => (window as any).open_scene_asset(id), assetId);
+  await page.waitForTimeout(200);
+
+  await page.evaluate(
+    (params: { localId: string; name: string; path: string }) => {
+      (window as any).dispatch_asset_command(
+        JSON.stringify({
+          command: {
+            type: "AddEntity",
+            local_id: params.localId,
+            name: params.name,
+            local_path: params.path,
+            components: [],
+          },
+          metadata: { authorship: "user", timestamp: Date.now() },
+        })
+      );
+    },
+    { localId: entityLocalId, name: entityName, path: entityPath }
+  );
+  await page.waitForTimeout(100);
+
+  await page.evaluate(
+    (params: { localId: string; typeId: string; values: Record<string, unknown> }) => {
+      (window as any).dispatch_asset_command(
+        JSON.stringify({
+          command: {
+            type: "AddComponent",
+            local_id: params.localId,
+            component: {
+              type_id: params.typeId,
+              values: params.values,
+            },
+          },
+          metadata: { authorship: "user", timestamp: Date.now() },
+        })
+      );
+    },
+    { localId: entityLocalId, typeId: componentTypeId, values: componentValues }
+  );
+  await page.waitForTimeout(100);
+
+  await page.evaluate(() => (window as any).save_scene_asset());
+  await page.waitForTimeout(200);
+  await page.evaluate(() => (window as any).close_scene_asset());
+  await page.waitForTimeout(200);
+
+  // Place as instance
+  await page.evaluate(
+    (id: string) => (window as any).place_scene_instance(id),
+    assetId
+  );
+  await page.waitForTimeout(300);
+
+  // Get instance
+  const instances = await page.evaluate(
+    () => (window as any).get_scene_instances() as Record<string, Record<string, unknown>>
+  );
+  const instanceId = Object.keys(instances)[0];
+  const instance = instances[instanceId];
+
+  // Get asset JSON
+  await page.evaluate((id: string) => (window as any).open_scene_asset(id), assetId);
+  await page.waitForTimeout(200);
+  const assetJson = await page.evaluate(
+    () => (window as any).get_asset_document_json()
+  );
+  const asset =
+    typeof assetJson === "string" ? JSON.parse(assetJson) : assetJson;
+  await page.evaluate(() => (window as any).close_scene_asset());
+  await page.waitForTimeout(200);
+
+  return { assetId, instanceId, instance, asset };
+}
+
 /**
  * Playwright E2E tests for Inspector Override Panel (Phase 7.2, 7.3).
  *

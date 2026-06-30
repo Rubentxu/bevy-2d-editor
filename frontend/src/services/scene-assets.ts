@@ -706,3 +706,63 @@ export async function exportAssetToBsn(assetId: string): Promise<string> {
   // Safety: coerce any error value to string.
   return String(result);
 }
+
+// ── Instance Child ID Parsing ────────────────────────────────────────────────
+
+/**
+ * Parse a stable ID like "inst_i001_player" into its instance_id and local_id components.
+ * Returns null if the stable ID does not match the scene instance child pattern.
+ */
+export function parseInstanceChild(
+  stableId: string
+): { instance_id: string; local_id: string } | null {
+  const match = stableId.match(/^inst_([^_]+)_(.*)$/);
+  if (!match) return null;
+  return { instance_id: match[1], local_id: match[2] };
+}
+
+// ── Typed wrappers for WASM bridge calls ─────────────────────────────────────
+
+/**
+ * Fetch and parse the asset document for a given Scene Instance.
+ * Returns the parsed SceneAssetDocument or null if not found.
+ */
+export async function fetchAssetForInstance(
+  instance: SceneInstance
+): Promise<SceneAssetDocument | null> {
+  const entries = await listSceneAssets();
+  const entry = entries.find(
+    (e) => e.logical_path === instance.asset_ref || e.asset_id === instance.asset_ref
+  );
+  if (!entry) return null;
+  await openSceneAsset(entry.asset_id);
+  const assetJson = await getAssetDocumentJson();
+  return typeof assetJson === "string" ? JSON.parse(assetJson) : assetJson;
+}
+
+/**
+ * Upsert a component override via typed wrapper.
+ * Returns CommandResult JSON string.
+ */
+export async function upsertOverrideTyped(
+  instanceId: string,
+  localId: string,
+  typeId: string,
+  fieldPath: string[],
+  value: unknown
+): Promise<string> {
+  return upsertOverride(instanceId, localId, typeId, fieldPath, value);
+}
+
+/**
+ * Revert a component override via typed wrapper.
+ * Returns CommandResult JSON string.
+ */
+export async function revertOverrideTyped(
+  instanceId: string,
+  localId: string,
+  typeId: string,
+  fieldPath: string[]
+): Promise<string> {
+  return revertOverride(instanceId, localId, typeId, fieldPath);
+}

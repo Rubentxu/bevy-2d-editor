@@ -12,21 +12,13 @@ import {
   effectiveValues,
   overrideFieldStatus,
   revertOverride,
+  parseInstanceChild,
+  fetchAssetForInstance,
 } from "../services/scene-assets";
 import ComponentCard from "./ComponentCard";
 import AddComponentButton from "./AddComponentButton";
 import SchemaAuthoringPanel from "./SchemaAuthoringPanel";
 import RuntimePreviewInspector from "./RuntimePreviewInspector";
-
-/**
- * Parse a stable ID like "inst_i001_player" into its instance_id and local_id components.
- * Returns null if the stable ID does not match the scene instance child pattern.
- */
-function parseInstanceChild(stableId: string): { instance_id: string; local_id: string } | null {
-  const match = stableId.match(/^inst_([^_]+)_(.*)$/);
-  if (!match) return null;
-  return { instance_id: match[1], local_id: match[2] };
-}
 
 interface Props {
   scene: SceneDocument | null;
@@ -147,23 +139,13 @@ export default function InspectorPanel({
     // We need the asset document — load via open_scene_asset then validate
     (async () => {
       try {
-        // Use asset_ref to look up the catalog entry and open the asset
-        const assetEntries = (window as any).list_scene_assets
-          ? await (window as any).list_scene_assets()
-          : [];
-        const entries = typeof assetEntries === "string" ? JSON.parse(assetEntries) : assetEntries;
-        const entry = entries.find(
-          (e: any) => e.logical_path === instance.asset_ref || e.asset_id === instance.asset_ref
-        );
-        if (!entry) {
+        const asset = await fetchAssetForInstance(instance);
+        if (!asset) {
           setOverrideIssues([]);
           setResolvedEntity(null);
           setFieldOverrideIndex([]);
           return;
         }
-        await (window as any).open_scene_asset(entry.asset_id);
-        const assetJson = await (window as any).get_asset_document_json();
-        const asset = typeof assetJson === "string" ? JSON.parse(assetJson) : assetJson;
 
         // Load effective values (Phase 6.2)
         try {
@@ -207,7 +189,7 @@ export default function InspectorPanel({
   }, [entity?.id, instances]);
 
   /** Whether the selected entity belongs to a Scene Instance. */
-  const isInstanceEntity = !!(entity && entity.id.startsWith("inst_"));
+  const isInstanceEntity = !!(entity && parseInstanceChild(entity.id) !== null);
 
   useEffect(() => {
     setNameDraft(entity?.name ?? "");
@@ -282,19 +264,8 @@ export default function InspectorPanel({
     try {
       await revertOverride(selectedInstance.instance_id, localId, typeId, [fieldPath]);
       // Re-poll effective values and field override status
-      const assetEntries = (window as any).list_scene_assets
-        ? await (window as any).list_scene_assets()
-        : [];
-      const entries = typeof assetEntries === "string" ? JSON.parse(assetEntries) : assetEntries;
-      const entry = entries.find(
-        (e: any) =>
-          e.logical_path === selectedInstance.asset_ref ||
-          e.asset_id === selectedInstance.asset_ref
-      );
-      if (entry) {
-        await (window as any).open_scene_asset(entry.asset_id);
-        const assetJson = await (window as any).get_asset_document_json();
-        const asset = typeof assetJson === "string" ? JSON.parse(assetJson) : assetJson;
+      const asset = await fetchAssetForInstance(selectedInstance);
+      if (asset) {
         const resolved = await effectiveValues(selectedInstance, asset);
         const matching = resolved.entities[localId];
         setResolvedEntity(matching ?? null);
