@@ -421,6 +421,17 @@ export async function getInstanceComponents(
 // ── Override / Resync WASM wrappers ──────────────────────────────────────────
 
 /**
+ * Per-field override status index entry.
+ * Mirrors Rust `FieldOverrideEntry` from `scene_instance_overrides.rs`.
+ */
+export interface FieldOverrideEntry {
+  local_id: string;
+  component_type_id: string;
+  field_path: string[];
+  status: ComponentOverrideStatus;
+}
+
+/**
  * Issue found during override validation.
  * Codes: missing_entity, missing_component, duplicate_field, missing_field, type_conflict.
  */
@@ -517,6 +528,67 @@ export async function getResyncReports(): Promise<
   await waitForEngine();
   const result = (window as any).get_resync_reports();
   return typeof result === "string" ? JSON.parse(result) : result;
+}
+
+/**
+ * Get per-field override status index for a SceneInstance.
+ * @param instance - The SceneInstance to index
+ * @returns Array of FieldOverrideEntry objects describing each override's status.
+ */
+export async function overrideFieldStatus(
+  instance: SceneInstance
+): Promise<FieldOverrideEntry[]> {
+  await waitForEngine();
+  const result = (window as any).override_field_status_wasm(
+    JSON.stringify(instance)
+  );
+  return typeof result === "string" ? JSON.parse(result) : result;
+}
+
+/**
+ * Upsert a component override on a Scene Instance.
+ * Dispatches `Command::UpsertOverride` through the shared OperationLog.
+ *
+ * @returns CommandResult JSON (inverse + snapshot).
+ */
+export async function upsertOverride(
+  instanceId: string,
+  localId: string,
+  typeId: string,
+  fieldPath: string[],
+  value: unknown
+): Promise<string> {
+  await waitForEngine();
+  const result = (window as any).upsert_override_wasm(
+    instanceId,
+    localId,
+    typeId,
+    JSON.stringify(fieldPath),
+    JSON.stringify(value)
+  );
+  return typeof result === "string" ? result : String(result);
+}
+
+/**
+ * Revert a component override on a Scene Instance.
+ * Dispatches `Command::RevertOverride` through the shared OperationLog.
+ *
+ * @returns CommandResult JSON (inverse + snapshot).
+ */
+export async function revertOverride(
+  instanceId: string,
+  localId: string,
+  typeId: string,
+  fieldPath: string[]
+): Promise<string> {
+  await waitForEngine();
+  const result = (window as any).revert_override_wasm(
+    instanceId,
+    localId,
+    typeId,
+    JSON.stringify(fieldPath)
+  );
+  return typeof result === "string" ? result : String(result);
 }
 
 // ── Scene Instance Layer WASM wrappers (scene-instance-layer) ─────────────

@@ -4,8 +4,14 @@ import {
   SceneInstance,
   OverrideIssue,
   ResyncReport,
+  ResolvedEntity,
+  ComponentOverrideStatus,
+  FieldOverrideEntry,
   validateOverrides,
   getResyncReports,
+  effectiveValues,
+  overrideFieldStatus,
+  revertOverride,
 } from "../services/scene-assets";
 import ComponentCard from "./ComponentCard";
 import AddComponentButton from "./AddComponentButton";
@@ -103,18 +109,27 @@ export default function InspectorPanel({
   const [overrideIssues, setOverrideIssues] = useState<OverrideIssue[]>([]);
   const [resyncReports, setResyncReports] = useState<Array<[string, ResyncReport]>>([]);
   const [showOverrideDetails, setShowOverrideDetails] = useState(false);
+  // Phase 6: Effective values + override indicators for instance entities
+  const [resolvedEntity, setResolvedEntity] = useState<ResolvedEntity | null>(null);
+  const [fieldOverrideIndex, setFieldOverrideIndex] = useState<FieldOverrideEntry[]>([]);
 
-  // Load override issues and resync reports when a scene instance entity is selected
+  // Load override issues, resync reports, effective values, and field override status
+  // when a scene instance entity is selected (Phase 6.2, 6.3)
   useEffect(() => {
     if (!entity || !entity.id.startsWith("inst_")) {
       setOverrideIssues([]);
       setResyncReports([]);
+      setResolvedEntity(null);
+      setFieldOverrideIndex([]);
       return;
     }
     const instId = entity.id.replace(/_[^_]+$/, ""); // strip suffix after last _
     const instance = instances[instId];
     if (!instance) {
       setOverrideIssues([]);
+      setResyncReports([]);
+      setResolvedEntity(null);
+      setFieldOverrideIndex([]);
       return;
     }
     // Load override issues by finding the instance's asset
@@ -131,15 +146,40 @@ export default function InspectorPanel({
         );
         if (!entry) {
           setOverrideIssues([]);
+          setResolvedEntity(null);
+          setFieldOverrideIndex([]);
           return;
         }
         await (window as any).open_scene_asset(entry.asset_id);
         const assetJson = await (window as any).get_asset_document_json();
         const asset = typeof assetJson === "string" ? JSON.parse(assetJson) : assetJson;
+
+        // Load effective values (Phase 6.2)
+        try {
+          const resolved = await effectiveValues(instance, asset);
+          // Find the resolved entity matching this entity's local_id
+          const localId = entity.id.replace(/^inst_[^_]+_/, "");
+          const matching = resolved.entities[localId];
+          setResolvedEntity(matching ?? null);
+        } catch {
+          setResolvedEntity(null);
+        }
+
+        // Load field override index (Phase 6.3)
+        try {
+          const index = await overrideFieldStatus(instance);
+          setFieldOverrideIndex(index);
+        } catch {
+          setFieldOverrideIndex([]);
+        }
+
+        // Validate overrides
         const issues = await validateOverrides(instance, asset);
         setOverrideIssues(issues);
       } catch {
         setOverrideIssues([]);
+        setResolvedEntity(null);
+        setFieldOverrideIndex([]);
       }
     })();
 
@@ -154,6 +194,9 @@ export default function InspectorPanel({
       }
     })();
   }, [entity?.id, instances]);
+
+  /** Whether the selected entity belongs to a Scene Instance. */
+  const isInstanceEntity = !!(entity && entity.id.startsWith("inst_"));
 
   useEffect(() => {
     setNameDraft(entity?.name ?? "");
@@ -213,6 +256,46 @@ export default function InspectorPanel({
     : null;
   const selectedInstance = selectedInstanceId ? instances[selectedInstanceId] : null;
 
+  // Build per-field override status map from fieldOverrideIndex (Phase 6.3)
+  // Key: "component_type_id:field_name", Value: ComponentOverrideStatus
+  const fieldOverrideStatusMap: Record<string, ComponentOverrideStatus> = {};
+  for (const entry of fieldOverrideIndex) {
+    const fieldName = entry.field_path[entry.field_path.length - 1];
+    const key = `${entry.component_type_id}:${fieldName}`;
+    fieldOverrideStatusMap[key] = entry.status;
+  }
+
+  // Phase 6.5: Revert a field override, then re-poll effective values + override status
+  const handleRevertField = async (typeId: string, fieldPath: string) => {
+    if (!selectedInstance || !entity) return;
+    const localId = entity.id.replace(/^inst_[^_]+_/, "");
+    try {
+      await revertOverride(selectedInstance.instance_id, localId, typeId, [fieldPath]);
+      // Re-poll effective values and field override status
+      const assetEntries = (window as any).list_scene_assets
+        ? await (window as any).list_scene_assets()
+        : [];
+      const entries = typeof assetEntries === "string" ? JSON.parse(assetEntries) : assetEntries;
+      const entry = entries.find(
+        (e: any) =>
+          e.logical_path === selectedInstance.asset_ref ||
+          e.asset_id === selectedInstance.asset_ref
+      );
+      if (entry) {
+        await (window as any).open_scene_asset(entry.asset_id);
+        const assetJson = await (window as any).get_asset_document_json();
+        const asset = typeof assetJson === "string" ? JSON.parse(assetJson) : assetJson;
+        const resolved = await effectiveValues(selectedInstance, asset);
+        const matching = resolved.entities[localId];
+        setResolvedEntity(matching ?? null);
+        const index = await overrideFieldStatus(selectedInstance);
+        setFieldOverrideIndex(index);
+      }
+    } catch (e) {
+      console.error("Revert override failed:", e);
+    }
+  };
+
   // Compute override status summary
   const overrideCounts = selectedInstance
     ? {
@@ -224,6 +307,20 @@ export default function InspectorPanel({
           + selectedInstance.orphaned_component_overrides.filter((p) => p.status === "conflict").length,
       }
     : null;
+
+  // Phase 6.4: Use resolvedEntity.components when instance entity selected
+  const componentsToRender = isInstanceEntity && resolvedEntity
+    ? resolvedEntity.components
+    : entity?.components ?? [];
+
+  // Phase 6.6: Check if resync warning banner should be shown
+  const showResyncWarning = resyncReports.some(
+    ([, report]) => report.stale > 0 || report.conflict > 0
+  );
+  const totalProblemCount = resyncReports.reduce(
+    (sum, [, report]) => sum + report.stale + report.conflict,
+    0
+  );
 
   return (
     <div className="panel inspector" data-testid="inspector-panel">
@@ -247,18 +344,30 @@ export default function InspectorPanel({
             }}
             data-testid={`entity-name-${entity.id}`}
           />
-          {entity.components.length === 0 && (
+          {componentsToRender.length === 0 && (
             <div className="panel-empty">No components</div>
           )}
-          {entity.components.map((c) => (
-            <ComponentCard
-              key={c.type_id}
-              component={c}
-              entityId={entity.id}
-              onCommit={(fieldPath, value) => onSetField(entity.id, c.type_id, fieldPath, value)}
-              onRemove={() => onRemoveComponent(entity.id, c.type_id)}
-            />
-          ))}
+          {componentsToRender.map((c) => {
+            // Build per-component field override status lookup for this component
+            const componentFieldStatus: Record<string, ComponentOverrideStatus> = {};
+            for (const [key, status] of Object.entries(fieldOverrideStatusMap)) {
+              const [typeId, fieldName] = key.split(":");
+              if (typeId === c.type_id) {
+                componentFieldStatus[fieldName] = status;
+              }
+            }
+            return (
+              <ComponentCard
+                key={c.type_id}
+                component={c}
+                entityId={entity.id}
+                onCommit={(fieldPath, value) => onSetField(entity.id, c.type_id, fieldPath, value)}
+                onRemove={() => onRemoveComponent(entity.id, c.type_id)}
+                fieldOverrideStatus={isInstanceEntity ? componentFieldStatus : undefined}
+                onRevertField={isInstanceEntity ? (fieldPath) => handleRevertField(c.type_id, fieldPath) : undefined}
+              />
+            );
+          })}
           <AddComponentButton key={schemaRefreshKey} entityId={entity.id} onAdd={(typeId) => onAddComponent(entity.id, typeId)} />
           <div className="inspector-actions">
             <button
@@ -269,10 +378,28 @@ export default function InspectorPanel({
               + New Schema
             </button>
           </div>
+          {/* Phase 6.6: Resync warning banner */}
+          {isInstanceEntity && showResyncWarning && (
+            <div className="resync-warning-banner" data-testid="resync-warning-banner">
+              <span className="resync-warning-icon">⚠️</span>
+              <span className="resync-warning-text">
+                {totalProblemCount} override{totalProblemCount !== 1 ? "s" : ""} need review
+              </span>
+              <button
+                type="button"
+                className="open-workbench-btn"
+                onClick={() => alert("TODO: Open Override/Resync Workbench")}
+                data-testid="open-workbench-btn"
+              >
+                Open Workbench
+              </button>
+            </div>
+          )}
           {/* Component Override Summary (override-resync-workbench) */}
           {overrideCounts && (
             <div className="override-summary" data-testid="override-summary">
-              <h4>Component Overrides</h4>
+              {/* Phase 6.4: Normalized "Overrides" section header with badges */}
+              <h4 className="overrides-section-header">Overrides</h4>
               <div className="override-counts">
                 {overrideCounts.active > 0 && (
                   <span className="override-count active" title="Active component overrides">
