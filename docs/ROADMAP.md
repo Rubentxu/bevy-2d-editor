@@ -53,7 +53,7 @@
 | Change | Branch | Status |
 |--------|--------|--------|
 | `bsn-file-export-research` | `feat/bsn-file-export-research` | ✅ Merged (v0.31.0, PR #31) |
-| `bsn-file-import-research` | — | 🔲 Planned |
+| `bsn-file-import-research` | `feat/bsn-file-import-research` | ✅ Merged (v0.32.0, PR #32) |
 | `level-inspector-and-override-panel` | — | 🔲 Planned |
 
 ---
@@ -110,14 +110,14 @@
 | Order | Change | Status | Why |
 |-------|--------|--------|-----|
 | 1 | `bsn-file-export-research` | ✅ Done (v0.31.0, PR #31) | Validates EditorCoreBsnExporter against Bevy 0.19 PR #23639 draft |
-| 2 | `bsn-file-import-research` | 🔲 Planned | Parse `.bsn` text → `SceneAssetDocument` (inverse of Order 1) |
+| 2 | `bsn-file-import-research` | ✅ Done (v0.32.0, PR #32) | Parse `.bsn` text → `SceneAssetDocument` (inverse of Order 1) |
 | 3 | `level-inspector-and-override-panel` | 🔲 Planned | Inspect overrides per Scene Instance; edit component values inline |
 
 ### Research Gates
 
 | Capability | Required research before `sddk-propose` |
 |------------|------------------------------------------|
-| .bsn file import | Bevy PR #23639 `.bsn` asset loader API, jackdaw parser, BsnIr round-trip fidelity |
+| .bsn file import | ✅ Research done (Bevy PRs #23639/#23648 are DRAFT — implement editor-internal round-trip) |
 | Level Inspector | Unity override inspector, Godot inspector plugin patterns, override panel UX research |
 
 ---
