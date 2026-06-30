@@ -141,6 +141,10 @@ export async function initEngine(
   (window as any).get_preview_provenance_wasm = (stableId: string) =>
     wasm.get_preview_provenance_wasm(stableId);
 
+  // ── BSN file export (bsn-file-export-research) ────────────────────────────
+  (window as any).export_asset_to_bsn_wasm = (assetId: string) =>
+    wasm.export_asset_to_bsn_wasm(assetId);
+
   // ── Scene Registry (PR2 multi-scene) ──────────────────────────────────────
   (window as any).scene_create = (name: string) => wasm.scene_create(name);
   (window as any).scene_switch = (id: string) => wasm.scene_switch(id);

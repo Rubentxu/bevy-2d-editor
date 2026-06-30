@@ -16,6 +16,7 @@ pub mod document;
 mod dynamic_scene;
 mod operation_log;
 mod persistence;
+pub mod bsn_export;
 pub mod preview_inspector;
 pub mod processor;
 pub mod scene_asset;
@@ -110,6 +111,10 @@ pub use scene_asset::{
 };
 pub use scene_asset_catalog::{
     CatalogError, CatalogWarning, SceneAssetCatalog, SceneAssetCatalogEntry, mint_asset_id,
+};
+pub use bsn_export::{
+    BevyBsnExporter, BsnExportError, BsnExporter, EditorCoreBsnExporter, export_to_bsn_text,
+    export_to_bsn_text_with_warnings,
 };
 pub use preview_inspector::{
     PreviewMappingEntry, PreviewMetrics, PreviewProvenance,
@@ -867,6 +872,45 @@ pub fn get_validation_issues_wasm() -> Result<String, JsValue> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// BSN file export WASM surface
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Export a `SceneAsset` by `asset_id` to `.bsn` text without changing the
+/// currently-open document in the editor. Returns raw `.bsn` text or an error.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn export_asset_to_bsn_wasm(asset_id: &str) -> Result<String, JsValue> {
+    use crate::persistence;
+
+    // 1. Get catalog entry to resolve logical_path
+    let entry = with_asset_catalog(|cat| {
+        cat.get(asset_id).cloned()
+    }).ok_or_else(|| JsValue::from_str(&format!("Asset not found: {}", asset_id)))?;
+
+    // 2. Load body JSON from OPFS
+    let body_json = js_load_file(&persistence::asset_path(&entry.logical_path))
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+
+    // 3. Parse and export
+    let doc: SceneAssetDocument = serde_json::from_str(&body_json)
+        .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+    crate::bsn_export::export_to_bsn_text(&doc)
+        .map_err(|e| JsValue::from_str(&format!("BSN export error: {}", e)))
+}
+
+/// Export a `SceneAssetDocument` (as JSON) to `.bsn` text.
+///
+/// Synchronous version for cases where the caller already has the document JSON.
+#[wasm_bindgen]
+pub fn export_asset_to_bsn_wasm_from_json(asset_json: &str) -> Result<String, JsValue> {
+    let doc: SceneAssetDocument = serde_json::from_str(asset_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid asset JSON: {}", e)))?;
+    crate::bsn_export::export_to_bsn_text(&doc)
+        .map_err(|e| JsValue::from_str(&format!("BSN export error: {}", e)))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Runtime Preview Inspector WASM surface
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -972,7 +1016,9 @@ pub fn create_scene_instance_layer_wasm(
     let next_order = doc
         .layers
         .iter()
-        .filter_map(|l| if let LevelLayer::SceneInstance(s) = l { Some(s.order) } else { None })
+        .filter_map(|l| match l {
+            LevelLayer::SceneInstance(s) => Some(s.order),
+        })
         .max()
         .map(|o| o + 1)
         .unwrap_or(0);
@@ -999,7 +1045,7 @@ pub fn delete_scene_instance_layer_wasm(
     let mut doc: SceneAssetDocument = parse_asset_doc(asset_json)?;
     let before = doc.layers.len();
     doc.layers
-        .retain(|l| if let LevelLayer::SceneInstance(s) = l { s.id.as_str() != layer_id } else { true });
+        .retain(|l| match l { LevelLayer::SceneInstance(s) => s.id.as_str() != layer_id, _ => true });
     if doc.layers.len() == before {
         // Unknown id is a no-op; return current asset.
         // Doc comment in spec: "Delete unknown layer is a no-op".

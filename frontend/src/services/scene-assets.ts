@@ -615,3 +615,22 @@ export async function getPreviewProvenance(
   if (result === null || result === undefined) return null;
   return typeof result === "string" ? JSON.parse(result) : result;
 }
+
+// ── BSN file export (bsn-file-export-research) ──────────────────────────────
+
+/**
+ * Export a `SceneAsset` by `asset_id` to `.bsn` text via the editor's
+ * `EditorCoreBsnExporter`. Does NOT change the currently-open document.
+ * The output is raw `.bsn` syntax suitable for hand-off to a Bevy runtime.
+ *
+ * @param assetId The `asset_id` of the SceneAsset to export
+ * @returns The `.bsn` text as a string
+ * @throws if the asset is not found or export fails
+ */
+export async function exportAssetToBsn(assetId: string): Promise<string> {
+  await waitForEngine();
+  const result = await (window as any).export_asset_to_bsn_wasm(assetId);
+  if (typeof result === "string") return result;
+  // Safety: coerce any error value to string.
+  return String(result);
+}
