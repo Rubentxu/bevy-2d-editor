@@ -799,6 +799,90 @@ pub fn get_resync_reports() -> Result<String, JsValue> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Override Mutation WASM surface
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Get per-field override status index for a SceneInstance.
+/// Returns a JSON array of FieldOverrideEntry objects.
+#[wasm_bindgen]
+pub fn override_field_status_wasm(instance_json: &str) -> Result<String, JsValue> {
+    let instance: SceneInstance = serde_json::from_str(instance_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid instance JSON: {}", e)))?;
+
+    let index = crate::scene_instance_overrides::field_override_index(&instance);
+    serde_json::to_string(&index)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize index: {}", e)))
+}
+
+/// Upsert a component override on a Scene Instance.
+///
+/// Dispatches `Command::UpsertOverride` through the shared OperationLog.
+/// Returns the `CommandResult` JSON on success.
+#[wasm_bindgen]
+pub fn upsert_override_wasm(
+    instance_id: &str,
+    local_id: &str,
+    type_id: &str,
+    field_path_json: &str,
+    value_json: &str,
+) -> Result<String, JsValue> {
+    let field_path: Vec<String> = serde_json::from_str(field_path_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid field_path JSON: {}", e)))?;
+    let value: serde_json::Value = serde_json::from_str(value_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid value JSON: {}", e)))?;
+
+    let command = Command::UpsertOverride {
+        instance_id: crate::document::StableId::new(instance_id.to_string()),
+        target_local_id: crate::scene_asset::LocalId::new(local_id.to_string()),
+        component_type_id: ComponentTypeId::new(type_id.to_string()),
+        field_path,
+        value,
+    };
+
+    let envelope = CommandEnvelope {
+        command,
+        metadata: CommandMetadata::now("user"),
+    };
+
+    let envelope_json = serde_json::to_string(&envelope)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize envelope: {}", e)))?;
+
+    dispatch_command(&envelope_json)
+}
+
+/// Revert a component override on a Scene Instance.
+///
+/// Dispatches `Command::RevertOverride` through the shared OperationLog.
+/// Returns the `CommandResult` JSON on success.
+#[wasm_bindgen]
+pub fn revert_override_wasm(
+    instance_id: &str,
+    local_id: &str,
+    type_id: &str,
+    field_path_json: &str,
+) -> Result<String, JsValue> {
+    let field_path: Vec<String> = serde_json::from_str(field_path_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid field_path JSON: {}", e)))?;
+
+    let command = Command::RevertOverride {
+        instance_id: crate::document::StableId::new(instance_id.to_string()),
+        target_local_id: crate::scene_asset::LocalId::new(local_id.to_string()),
+        component_type_id: ComponentTypeId::new(type_id.to_string()),
+        field_path,
+    };
+
+    let envelope = CommandEnvelope {
+        command,
+        metadata: CommandMetadata::now("user"),
+    };
+
+    let envelope_json = serde_json::to_string(&envelope)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize envelope: {}", e)))?;
+
+    dispatch_command(&envelope_json)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Validation Center WASM surface
 // ─────────────────────────────────────────────────────────────────────────────
 
