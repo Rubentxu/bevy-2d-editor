@@ -42,14 +42,15 @@
 | project-asset-browser-and-scene-asset-authoring (PR1 slice) | v0.21.0 | ✅ (partial) | Scene Asset persistence + catalog holder foundation. Path-based OPFS layout (`assets/<logical_path>.asset.json`), `ProjectMetadata.scene_assets` with `#[serde(default)]`, `SCENE_ASSET_CATALOG` / `SCENE_ASSET_DOC` / `SCENE_ASSET_CATALOG_WARNINGS` thread-locals, typed `CatalogWarning` for orphaned entries (S16), 9/9 PR1 spec scenarios compliant (S4–S8, S16–S19). PR #16 (docs/plan) and PR #17 (code) merged; tag `v0.21.0`. ADR-0007/ADR-0008/ADR README and SDDK artifacts (`docs/sddk/project-asset-browser-and-scene-asset-authoring/`) added. |
 | project-asset-browser-and-scene-asset-authoring (PR2 slice) | v0.22.0 | ✅ (partial) | AssetCommand surface + WASM bridge. Separate `AssetCommand` enum (AddEntity, RemoveEntity, RenameEntity, SetComponentValue) per ADR-0007, `AssetOperationLog` (undo/redo) scoped to scene assets, `AssetProcessor` with `set_field_path_vec` helper, thread-local `ASSET_OPERATION_LOG`, WASM CRUD bridge (dispatch_asset_command, create/rename/duplicate/delete/list_scene_assets, open/close/get_asset_document/get_scene_asset_catalog, save_scene_asset body-first/catalog-second). 16/16 PR2 tasks complete; 23/23 spec scenarios covered (S10, S13, S14, S15 PR2 + PR1 regression). PR #18 merged; tag `v0.22.0`.
 | project-asset-browser-and-scene-asset-authoring (PR3 slice) | v0.23.0 | ✅ | Project Asset Browser + Scene Asset Authoring Mode frontend. React components (ProjectAssetBrowser, AssetAuthoringView, AssetUnsavedChangesDialog), hooks (useSceneAssets), services (scene-assets.ts), App.tsx editorMode state, TopBar mode-aware toolbar, Playwright E2E tests (14 scenarios + EC1-EC6). C-1 (engine-bridge TypeError) and C-4 (canvas unmount) fixed in correction commit f85333b. Follow-up issue #19 tracks C-NEW (SystemTime::now panic on wasm32). PR #20 merged; tag `v0.23.0`. **Capability 1 (Project Asset Browser + Scene Asset Authoring) CLOSED**. |
-| scene-instance-placement (PR1 slice) | v0.24.0 | ✅ (partial) | Storage seam + cache + gate. `SceneDocument.instances: BTreeMap<StableId, SceneInstance>` with `#[serde(default)]`, `ASSET_BODY_CACHE` skeleton (resolve, warm, invalidate, clear), `instance_projection.rs` with `root_local_ids` gate (single-root enforcement). Rust unit tests compile cleanly; runtime env-blocked (libudev missing). PR #21 merged; tag `v0.24.0`. PR2 (commands+WASM) and PR3 (frontend+E2E) remain pending for full Hito 2 Order 2 closure. ADR-0009/ADR-0010 to be written post-merge. |
+| scene-instance-placement (PR1 slice) | v0.24.0 | ✅ (partial) | Storage seam + cache + gate. `SceneDocument.instances: BTreeMap<StableId, SceneInstance>` with `#[serde(default)]`, `ASSET_BODY_CACHE` skeleton (resolve, warm, invalidate, clear), `instance_projection.rs` with `root_local_ids` gate (single-root enforcement). PR #21 merged; tag `v0.24.0`. |
+| scene-instance-placement (PR2 slice) | v0.25.0 | ✅ | Commands + WASM + projection. `PlaceSceneInstance`/`RemoveSceneInstance` commands, `instance_projection.rs` with `place_instance`/`remove_instance`/`root_local_ids`, WASM bridge (`dispatch_scene_instance_command`, `place_scene_instance`, `remove_scene_instance`), warm_asset_body_cache integration. PR #22 merged; tag `v0.25.0`. |
+| scene-instance-placement (PR3 slice) | v0.26.0 | ✅ | Frontend + E2E. HierarchyPanel/InspectorPanel/ProjectAssetBrowser UI updates, `useSceneAssets` hook, `scene-assets.ts` service, `engine-bridge` methods, 14 Playwright E2E tests (13 blocked by OPFS headless, S21 terminology passed). PR #23 merged; tag `v0.26.0`. **Hito 2 Order 2 CLOSED**. |
 
 ### Active Work
 
 | Change | Branch | Status |
 |--------|--------|--------|
-| `scene-instance-placement` PR2 (commands + WASM) | next | Pending — base=`main@PR1`, depends on PR1 storage seam |
-| `scene-instance-placement` PR3 (frontend + E2E) | next | Pending — base=`main@PR2`, depends on PR2 command surface |
+| — | — | — |
 
 ---
 
@@ -67,8 +68,7 @@
 | Order | Change | Status | Why |
 |-------|--------|--------|-----|
 | 1 | `project-asset-browser-and-scene-asset-authoring` (PR1 ✅ v0.21.0; PR2 ✅ v0.22.0; PR3 ✅ v0.23.0) | ✅ DONE | Exposes existing `SceneAssetDocument` + `SceneAssetCatalog` as usable Project workflows |
-| 2 | `scene-instance-placement` (PR1 ✅ v0.24.0; PR2 pending; PR3 pending) | In Progress | Lets users place Scene Assets in SceneDocuments without deep cloning |
-| 2 | `scene-instance-placement` | Planned | Lets users place Scene Assets in SceneDocuments without deep cloning |
+| 2 | `scene-instance-placement` (PR1 ✅ v0.24.0; PR2 ✅ v0.25.0; PR3 ✅ v0.26.0) | ✅ DONE | Lets users place Scene Assets in SceneDocuments without deep cloning |
 | 3 | `override-resync-workbench` | Planned | Makes `OverridePatch` status and resync reports visible/actionable |
 | 4 | `validation-center` | Planned | Centralizes broken refs, schema issues, export warnings, override conflicts, dirty scenes, and invalid AI proposals |
 | 5 | `level-design-layers-research` | Planned research | Defines tile/object/IntGrid/auto-layer semantics before committing to a tilemap model |
@@ -139,6 +139,8 @@ Scene Asset Persistence + Catalog Holder (PR1 slice)                            
 AssetCommand Surface + WASM Bridge (PR2 slice)                                                ✅    ✅    ✅
 Project Asset Browser + Authoring Mode Frontend (PR3 slice)                                         ✅    ✅
 Instance Storage Seam + Cache + Gate (PR1 slice)                                             ✅
+Instance Commands + WASM + Projection (PR2 slice)                                              ✅
+Instance Frontend + E2E (PR3 slice)                                                          ✅
 ```
 
 ---
@@ -290,4 +292,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Scene
 
 ---
 
-*Last updated: v0.24.0 — 2026-06-29 (PR1 storage seam + cache + gate for scene-instance-placement landed; PR2 commands+WASM and PR3 frontend+E2E remain pending for Hito 2 Order 2)*
+*Last updated: v0.26.0 — 2026-06-30 (scene-instance-placement PR1/PR2/PR3 all merged; Hito 2 Order 2 CLOSED)*
