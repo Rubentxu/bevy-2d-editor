@@ -1,5 +1,6 @@
 use bevy::prelude::Entity as BevyEntity;
 use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use wasm_bindgen::prelude::*;
@@ -39,6 +40,53 @@ mod schema;
 // - [ADR-0008](../../adr/0008-path-based-scene-asset-opfs-layout.md):
 //   `assets/<logical_path>.asset.json` path layout; catalog in `ProjectMetadata`.
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Validation Issue — unified issue type for Validation Center
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Unified validation issue surfaced by the Validation Center.
+/// Aggregates CatalogWarning, OverrideIssue, ExportWarning, and other
+/// project-wide issues into a single typed structure.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ValidationIssue {
+    /// Unique identifier for this issue (stable across polls).
+    pub id: String,
+    /// Error = blocks save/export. Warning = non-fatal. Info = advisory.
+    pub severity: ValidationSeverity,
+    /// Which subsystem generated this issue.
+    pub category: ValidationCategory,
+    /// Machine-readable issue code (e.g. "orphaned_index", "missing_entity").
+    pub code: String,
+    /// Human-readable description.
+    pub message: String,
+    /// StableId of the affected entity, if applicable.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub affected_entity_id: Option<String>,
+    /// asset_id of the affected asset, if applicable.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub affected_asset_id: Option<String>,
+    /// scene_id of the affected scene, if applicable.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub affected_scene_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ValidationSeverity {
+    Error,
+    Warning,
+    Info,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ValidationCategory {
+    Catalog,
+    Override,
+    Export,
+    Schema,
+    Dirty,
+}
 
 pub use bevy_anchor::anchor_str_to_bevy_anchor;
 pub use bsn_ir::{
@@ -127,6 +175,8 @@ thread_local! {
     static ASSET_BODY_CACHE: RefCell<Option<BTreeMap<String, SceneAssetDocument>>> = const { RefCell::new(None) };
     // Resync reports: accumulated during load/resync, drained by get_resync_reports().
     static RESYNC_REPORTS: RefCell<Vec<(crate::document::StableId, ResyncReport)>> = const { RefCell::new(Vec::new()) };
+    // Validation issues: accumulated during get_validation_issues, drained after.
+    static VALIDATION_ISSUES: RefCell<Vec<ValidationIssue>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Get an immutable borrowed reference to the SceneRegistry, initializing if needed.
@@ -703,6 +753,81 @@ pub fn get_resync_reports() -> Result<String, JsValue> {
 
     serde_json::to_string(&as_arrays)
         .map_err(|e| JsValue::from_str(&format!("Failed to serialize reports: {}", e)))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Validation Center WASM surface
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Collect all project-wide validation issues.
+///
+/// This is a synchronous function that aggregates:
+/// - Catalog warnings (from SCENE_ASSET_CATALOG_WARNINGS)
+/// - Export warnings (by re-exporting the current scene document)
+///
+/// Override issues are NOT collected here because validating overrides requires
+/// loading asset bodies from OPFS (async). Override validation is handled
+/// separately on the TypeScript side via validateOverrides().
+///
+/// Returns a JSON array of ValidationIssue objects.
+#[wasm_bindgen]
+pub fn get_validation_issues_wasm() -> Result<String, JsValue> {
+    let mut issues: Vec<ValidationIssue> = Vec::new();
+    let mut next_id: u32 = 0;
+    let mut mint_id = || {
+        next_id += 1;
+        format!("vi_{}", next_id)
+    };
+
+    // 1. Catalog warnings
+    let catalog_warnings = get_asset_catalog_warnings();
+    for cw in catalog_warnings {
+        issues.push(ValidationIssue {
+            id: mint_id(),
+            severity: ValidationSeverity::Warning,
+            category: ValidationCategory::Catalog,
+            code: cw.code,
+            message: cw.message,
+            affected_entity_id: None,
+            affected_asset_id: cw.asset_id,
+            affected_scene_id: None,
+        });
+    }
+
+    // 2. Export warnings from the current scene document
+    let current_doc_opt = SCENE_DOC.with(|s| s.borrow().clone());
+    if let Some(doc) = current_doc_opt {
+        match dynamic_scene::export_dynamic_scene(&doc) {
+            Ok(export) => {
+                for ew in export.warnings {
+                    issues.push(ValidationIssue {
+                        id: mint_id(),
+                        severity: ValidationSeverity::Warning,
+                        category: ValidationCategory::Export,
+                        code: ew
+                            .component_type_id
+                            .as_deref()
+                            .unwrap_or("export_warning")
+                            .to_string(),
+                        message: ew.message,
+                        affected_entity_id: ew.entity_stable_id,
+                        affected_asset_id: None,
+                        affected_scene_id: Some(doc.scene_id.clone()),
+                    });
+                }
+            }
+            Err(_) => {
+                // Export failed — skip export warnings for this poll
+            }
+        }
+    }
+
+    // 3. Dirty scene issues — not available synchronously in WASM.
+    //    The frontend manages dirty state per-scene. Dirty issues are handled
+    //    by the TypeScript ValidationCenter service separately.
+
+    serde_json::to_string(&issues)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize issues: {}", e)))
 }
 
 /// Undo the last operation. Returns the new document snapshot as JSON.

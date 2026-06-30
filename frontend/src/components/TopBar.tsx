@@ -14,6 +14,8 @@ interface Props {
   onExportRust: () => void;
   onToggleAI: () => void;
   aiPanelOpen: boolean;
+  onToggleValidationCenter: () => void;
+  validationCenterOpen: boolean;
   error: string | null;
   onDismissError: () => void;
 }
@@ -30,6 +32,8 @@ export default function TopBar({
   onExportRust,
   onToggleAI,
   aiPanelOpen,
+  onToggleValidationCenter,
+  validationCenterOpen,
   error,
   onDismissError,
 }: Props) {
@@ -74,6 +78,14 @@ export default function TopBar({
             className={aiPanelOpen ? "ai-btn active" : "ai-btn"}
           >
             ✨ AI
+          </button>
+          <button
+            onClick={onToggleValidationCenter}
+            data-testid="validation-center-btn"
+            title={validationCenterOpen ? "Close Validation Center" : "Open Validation Center"}
+            className={validationCenterOpen ? "vc-btn active" : "vc-btn"}
+          >
+            ✅ Validation
           </button>
         </>
       )}

@@ -115,6 +115,9 @@ export async function initEngine(
     wasm.try_rebind_wasm(orphanedPatchJson, assetJson);
   (window as any).get_resync_reports = () => wasm.get_resync_reports();
 
+  // ── Validation Center (validation-center) ──────────────────────────────────
+  (window as any).get_validation_issues_wasm = () => wasm.get_validation_issues_wasm();
+
   // ── Scene Registry (PR2 multi-scene) ──────────────────────────────────────
   (window as any).scene_create = (name: string) => wasm.scene_create(name);
   (window as any).scene_switch = (id: string) => wasm.scene_switch(id);
