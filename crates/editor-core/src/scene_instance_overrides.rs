@@ -704,6 +704,7 @@ mod tests {
     #[test]
     fn test_classify_overrides_active() {
         let asset = SceneAssetDocument {
+            layers: vec![],
             asset_id: "asset_1".to_string(),
             logical_path: "assets/test".to_string(),
             role: crate::scene_asset::SceneAssetRole::Actor,
@@ -738,6 +739,7 @@ mod tests {
     #[test]
     fn test_classify_overrides_orphaned_short_form() {
         let asset = SceneAssetDocument {
+            layers: vec![],
             asset_id: "asset_1".to_string(),
             logical_path: "assets/test".to_string(),
             role: crate::scene_asset::SceneAssetRole::Actor,
@@ -772,6 +774,7 @@ mod tests {
     #[test]
     fn test_mint_id_map() {
         let asset = SceneAssetDocument {
+            layers: vec![],
             asset_id: "asset_1".to_string(),
             logical_path: "assets/test".to_string(),
             role: crate::scene_asset::SceneAssetRole::Actor,
@@ -810,6 +813,7 @@ mod tests {
     #[test]
     fn test_reconcile_id_map_preserves_existing() {
         let asset = SceneAssetDocument {
+            layers: vec![],
             asset_id: "asset_1".to_string(),
             logical_path: "assets/test".to_string(),
             role: crate::scene_asset::SceneAssetRole::Actor,
@@ -855,6 +859,7 @@ mod tests {
     #[test]
     fn test_try_rebind_exact_match() {
         let asset = SceneAssetDocument {
+            layers: vec![],
             asset_id: "asset_1".to_string(),
             logical_path: "assets/test".to_string(),
             role: crate::scene_asset::SceneAssetRole::Actor,
@@ -885,6 +890,7 @@ mod tests {
     #[test]
     fn test_resync_preserves_active_on_rename() {
         let asset = SceneAssetDocument {
+            layers: vec![],
             asset_id: "asset_1".to_string(),
             logical_path: "assets/test".to_string(),
             role: crate::scene_asset::SceneAssetRole::Actor,
@@ -936,6 +942,7 @@ mod tests {
     #[test]
     fn test_resync_moves_to_orphaned_on_entity_removed() {
         let asset_v2 = SceneAssetDocument {
+            layers: vec![],
             asset_id: "asset_1".to_string(),
             logical_path: "assets/test".to_string(),
             role: crate::scene_asset::SceneAssetRole::Actor,
@@ -981,6 +988,7 @@ mod tests {
     #[test]
     fn test_resync_marks_stale_on_field_rename() {
         let asset_v2 = SceneAssetDocument {
+            layers: vec![],
             asset_id: "asset_1".to_string(),
             logical_path: "assets/test".to_string(),
             role: crate::scene_asset::SceneAssetRole::Actor,
@@ -1026,6 +1034,7 @@ mod tests {
     #[test]
     fn test_resync_marks_conflict_on_type_change() {
         let asset_v2 = SceneAssetDocument {
+            layers: vec![],
             asset_id: "asset_1".to_string(),
             logical_path: "assets/test".to_string(),
             role: crate::scene_asset::SceneAssetRole::Actor,
@@ -1070,6 +1079,7 @@ mod tests {
     #[test]
     fn test_resync_rebinds_via_local_id() {
         let asset_v2 = SceneAssetDocument {
+            layers: vec![],
             asset_id: "asset_1".to_string(),
             logical_path: "assets/test".to_string(),
             role: crate::scene_asset::SceneAssetRole::Actor,
@@ -1102,6 +1112,7 @@ mod tests {
         assert_eq!(instance.orphaned_component_overrides.len(), 1);
 
         let asset_v3 = SceneAssetDocument {
+            layers: vec![],
             asset_id: "asset_1".to_string(),
             logical_path: "assets/test".to_string(),
             role: crate::scene_asset::SceneAssetRole::Actor,
@@ -1131,6 +1142,7 @@ mod tests {
     #[test]
     fn test_effective_values_minimal() {
         let asset = SceneAssetDocument {
+            layers: vec![],
             asset_id: "asset_1".to_string(),
             logical_path: "assets/test".to_string(),
             role: crate::scene_asset::SceneAssetRole::Actor,
@@ -1181,6 +1193,7 @@ mod tests {
     #[test]
     fn test_effective_values_no_overrides() {
         let asset = SceneAssetDocument {
+            layers: vec![],
             asset_id: "asset_1".to_string(),
             logical_path: "assets/test".to_string(),
             role: crate::scene_asset::SceneAssetRole::Actor,
@@ -1233,6 +1246,7 @@ mod tests {
     #[test]
     fn test_validate_overrides_missing_entity() {
         let asset = SceneAssetDocument {
+            layers: vec![],
             asset_id: "asset_1".to_string(),
             logical_path: "assets/test".to_string(),
             role: crate::scene_asset::SceneAssetRole::Actor,

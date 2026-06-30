@@ -9,6 +9,7 @@ use editor_core::scene_asset::{
 #[test]
 fn s7_fragment_standalone_warning() {
     let doc = SceneAssetDocument {
+        layers: vec![],
         asset_id: "frag-001".to_string(),
         logical_path: "assets/fragments/health_pickup.bsn".to_string(),
         role: SceneAssetRole::Fragment,
@@ -40,6 +41,7 @@ fn s7_fragment_standalone_warning() {
 #[test]
 fn s9_hierarchy_via_relationships_only() {
     let doc = SceneAssetDocument {
+        layers: vec![],
         asset_id: "actor-001".to_string(),
         logical_path: "assets/player.bsn".to_string(),
         role: SceneAssetRole::Actor,

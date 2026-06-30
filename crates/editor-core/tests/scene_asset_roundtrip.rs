@@ -1,12 +1,13 @@
 //! Serde round-trip tests for scene asset and instance types.
-//! Covers scenarios S1, S2, S6.
+//! Covers scenarios S1, S2, S6, S7, S8.
 
 use editor_core::{
     StableId,
     bsn_ir::{BsnIr, BsnIrNode, BsnIrRelationship, BsnPatch, BsnPatchOp},
     scene_asset::{
-        AssetReference, ExposedProperty, LocalId, RelationshipKind, SceneAssetDocument,
-        SceneAssetEntity, SceneAssetMetadata, SceneAssetRelationship, SceneAssetRole,
+        AssetReference, ExposedProperty, LayerId, LevelLayer, LocalId, RelationshipKind,
+        SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata, SceneAssetRelationship,
+        SceneAssetRole, SceneInstanceLayer, SceneInstanceLayerKind,
     },
     scene_instance::{ComponentOverride, ComponentOverrideStatus, SceneInstance},
 };
@@ -14,6 +15,7 @@ use editor_core::{
 #[test]
 fn s1_scene_asset_document_roundtrip() {
     let doc = SceneAssetDocument {
+        layers: vec![],
         asset_id: "asset-001".to_string(),
         logical_path: "assets/player.bsn".to_string(),
         role: SceneAssetRole::Actor,
@@ -182,4 +184,73 @@ fn s6_bsn_ir_roundtrip() {
     assert_eq!(roundtripped.patches.len(), 1);
     assert_eq!(roundtripped.scene_root.identifier, "root");
     assert_eq!(roundtripped.scene_root.children.len(), 1);
+}
+
+/// S7: SceneAssetDocument with Scene Instance Layers round-trips (level-scene-asset slice).
+#[test]
+fn s7_scene_asset_document_with_layers_roundtrip() {
+    use std::collections::BTreeMap;
+
+    let mut id_map = BTreeMap::new();
+    id_map.insert(LocalId("root".to_string()), StableId::new("ent_x"));
+
+    let instance = SceneInstance {
+        instance_components: vec![],
+        instance_id: StableId::new("inst-x"),
+        asset_ref: AssetReference("assets/enemy.bsn".into()),
+        asset_version_seen: 1,
+        id_map,
+        component_overrides: vec![],
+        orphaned_component_overrides: vec![],
+    };
+
+    let doc = SceneAssetDocument {
+        layers: vec![LevelLayer::SceneInstance(SceneInstanceLayer {
+            id: LayerId::new("lyr_1"),
+            name: "Enemies".to_string(),
+            kind: SceneInstanceLayerKind::Actors,
+            order: 0,
+            instances: vec![instance.clone()],
+        })],
+        asset_id: "asset-002".to_string(),
+        logical_path: "assets/level_01.bsn".to_string(),
+        role: editor_core::scene_asset::SceneAssetRole::Level,
+        version: 1,
+        entities: vec![],
+        relationships: vec![],
+        exposed_properties: vec![],
+        metadata: Default::default(),
+    };
+
+    let json = serde_json::to_string(&doc).expect("serialize level asset");
+    let roundtripped: SceneAssetDocument =
+        serde_json::from_str(&json).expect("deserialize level asset");
+
+    assert_eq!(roundtripped, doc);
+    assert_eq!(roundtripped.layers.len(), 1);
+    let LevelLayer::SceneInstance(layer) = &roundtripped.layers[0];
+    assert_eq!(layer.id.as_str(), "lyr_1");
+    assert_eq!(layer.name, "Enemies");
+    assert_eq!(layer.kind, SceneInstanceLayerKind::Actors);
+    assert_eq!(layer.order, 0);
+    assert_eq!(layer.instances.len(), 1);
+}
+
+/// S8: Legacy documents without `layers` deserialize cleanly (serde default).
+#[test]
+fn s8_legacy_document_without_layers_deserializes() {
+    let json = r#"{
+        "asset_id": "asset-003",
+        "logical_path": "assets/actor.bsn",
+        "role": "actor",
+        "version": 1,
+        "entities": [],
+        "relationships": [],
+        "exposed_properties": [],
+        "metadata": {}
+    }"#;
+
+    let doc: SceneAssetDocument = serde_json::from_str(json).expect("deserialize");
+    assert_eq!(doc.layers.len(), 0);
+    assert_eq!(doc.asset_id, "asset-003");
 }

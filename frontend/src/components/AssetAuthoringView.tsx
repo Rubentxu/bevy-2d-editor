@@ -1,7 +1,16 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import ComponentCard from "./ComponentCard";
 import AddComponentButton from "./AddComponentButton";
-import { SceneAssetDocument, SceneAssetEntity } from "../services/scene-assets";
+import {
+  SceneAssetDocument,
+  SceneAssetEntity,
+  SceneInstanceLayerSummary,
+  SceneInstanceLayerKind,
+  listSceneInstanceLayers,
+  createSceneInstanceLayer,
+  deleteSceneInstanceLayer,
+  setAssetDocumentJson,
+} from "../services/scene-assets";
 
 interface Props {
   document: SceneAssetDocument;
@@ -40,9 +49,12 @@ export default function AssetAuthoringView({
   canRedo,
   dirty,
 }: Props) {
-  const [selectedTab, setSelectedTab] = useState<"entities" | "relationships">(
-    "entities"
-  );
+  const [selectedTab, setSelectedTab] = useState<
+    "entities" | "relationships" | "layers"
+  >("entities");
+
+  // Layers tab is only available for Level Scene Assets.
+  const isLevel = document.role === "level";
 
   const activeEntity = document.entities.find(
     (e) => e.local_id === activeEntityId
@@ -138,6 +150,15 @@ export default function AssetAuthoringView({
         >
           Relationships ({document.relationships.length})
         </button>
+        {isLevel && (
+          <button
+            className={selectedTab === "layers" ? "active" : ""}
+            onClick={() => setSelectedTab("layers")}
+            data-testid="tab-layers"
+          >
+            Layers ({(document.layers ?? []).length})
+          </button>
+        )}
       </div>
 
       <div className="authoring-content">
@@ -147,11 +168,18 @@ export default function AssetAuthoringView({
             activeEntityId={activeEntityId}
             onSelectEntity={onSelectEntity}
           />
-        ) : (
+        ) : selectedTab === "relationships" ? (
           <RelationshipsPanel
             relationships={document.relationships}
             entities={document.entities}
           />
+        ) : (
+          isLevel && (
+            <LayersPanel
+              document={document}
+              onAssetJsonChanged={(json) => setAssetDocumentJson(json)}
+            />
+          )
         )}
       </div>
 
@@ -288,6 +316,190 @@ function RelationshipsPanel({ relationships, entities }: RelationshipsPanelProps
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Read-first Scene Instance Layers panel.
+ * Calls into WASM bridges for list/create/delete; the resulting
+ * updated asset JSON is sent back to the backend via `set_asset_document_wasm`
+ * so a subsequent save persists the layers.
+ */
+interface LayersPanelProps {
+  document: SceneAssetDocument;
+  onAssetJsonChanged: (json: string) => Promise<void> | void;
+}
+
+function LayersPanel({ document, onAssetJsonChanged }: LayersPanelProps) {
+  const [layers, setLayers] = useState<SceneInstanceLayerSummary[]>([]);
+  const [creatingName, setCreatingName] = useState("");
+  const [creatingKind, setCreatingKind] =
+    useState<SceneInstanceLayerKind>("actors");
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setError(null);
+    try {
+      const assetJson = JSON.stringify(document);
+      const list = await listSceneInstanceLayers(assetJson);
+      setLayers(list);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, [document]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const handleCreate = useCallback(async () => {
+    const name = creatingName.trim();
+    if (!name) return;
+    setError(null);
+    try {
+      const updated = await createSceneInstanceLayer(
+        JSON.stringify(document),
+        name,
+        creatingKind
+      );
+      await onAssetJsonChanged(updated);
+      setCreatingName("");
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, [creatingName, creatingKind, document, onAssetJsonChanged, refresh]);
+
+  const handleDelete = useCallback(
+    async (layerId: string) => {
+      setError(null);
+      try {
+        const updated = await deleteSceneInstanceLayer(
+          JSON.stringify(document),
+          layerId
+        );
+        await onAssetJsonChanged(updated);
+        await refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [document, onAssetJsonChanged, refresh]
+  );
+
+  if (layers.length === 0) {
+    return (
+      <div className="layers-panel" data-testid="layers-panel">
+        <div className="layers-create">
+          <input
+            type="text"
+            placeholder="New layer name"
+            value={creatingName}
+            onChange={(e) => setCreatingName(e.target.value)}
+            data-testid="layers-new-name"
+          />
+          <select
+            value={creatingKind}
+            onChange={(e) =>
+              setCreatingKind(e.target.value as SceneInstanceLayerKind)
+            }
+            data-testid="layers-new-kind"
+          >
+            <option value="actors">actors</option>
+            <option value="props">props</option>
+            <option value="spawns">spawns</option>
+            <option value="triggers">triggers</option>
+            <option value="collision">collision</option>
+            <option value="custom">custom</option>
+          </select>
+          <button
+            onClick={handleCreate}
+            disabled={!creatingName.trim()}
+            data-testid="layers-create-btn"
+          >
+            Create Layer
+          </button>
+        </div>
+        {error && (
+          <div className="layers-error" data-testid="layers-error">
+            {error}
+          </div>
+        )}
+        <div className="layers-empty" data-testid="layers-empty">
+          No Scene Instance Layers yet. Create one above.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="layers-panel" data-testid="layers-panel">
+      <div className="layers-create">
+        <input
+          type="text"
+          placeholder="New layer name"
+          value={creatingName}
+          onChange={(e) => setCreatingName(e.target.value)}
+          data-testid="layers-new-name"
+        />
+        <select
+          value={creatingKind}
+          onChange={(e) =>
+            setCreatingKind(e.target.value as SceneInstanceLayerKind)
+          }
+          data-testid="layers-new-kind"
+        >
+          <option value="actors">actors</option>
+          <option value="props">props</option>
+          <option value="spawns">spawns</option>
+          <option value="triggers">triggers</option>
+          <option value="collision">collision</option>
+          <option value="custom">custom</option>
+        </select>
+        <button
+          onClick={handleCreate}
+          disabled={!creatingName.trim()}
+          data-testid="layers-create-btn"
+        >
+          Create Layer
+        </button>
+      </div>
+      {error && (
+        <div className="layers-error" data-testid="layers-error">
+          {error}
+        </div>
+      )}
+      <ul className="layers-list" data-testid="layers-list">
+        {layers.map((l) => (
+          <li
+            key={l.id}
+            className="layer-row"
+            data-testid={`layer-row-${l.id}`}
+          >
+            <span className="layer-name" data-testid={`layer-name-${l.id}`}>
+              {l.name}
+            </span>
+            <span className="layer-kind" data-testid={`layer-kind-${l.id}`}>
+              {l.kind}
+            </span>
+            <span className="layer-order" data-testid={`layer-order-${l.id}`}>
+              order {l.order}
+            </span>
+            <span className="layer-count">
+              {l.instances_count} instance
+              {l.instances_count === 1 ? "" : "s"}
+            </span>
+            <button
+              className="layer-delete-btn"
+              onClick={() => handleDelete(l.id)}
+              data-testid={`layer-delete-${l.id}`}
+            >
+              Delete
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

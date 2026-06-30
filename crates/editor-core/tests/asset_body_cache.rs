@@ -14,6 +14,7 @@ use std::collections::BTreeMap;
 
 fn make_test_asset(logical_path: &str) -> SceneAssetDocument {
     SceneAssetDocument {
+        layers: vec![],
         asset_id: format!("asset-{}", logical_path.replace("/", "-")),
         logical_path: logical_path.to_string(),
         role: SceneAssetRole::Actor,

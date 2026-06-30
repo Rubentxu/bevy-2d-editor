@@ -18,6 +18,7 @@ use editor_core::{ComponentInstance, StableId};
 
 fn make_asset(entities: Vec<SceneAssetEntity>, version: u32) -> SceneAssetDocument {
     SceneAssetDocument {
+        layers: vec![],
         asset_id: "asset_test".to_string(),
         logical_path: "assets/test".to_string(),
         role: SceneAssetRole::Actor,

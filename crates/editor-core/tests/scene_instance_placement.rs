@@ -21,6 +21,7 @@ use std::collections::BTreeMap;
 // Helper: create a minimal SceneAssetDocument with one entity
 fn make_single_entity_asset(asset_id: &str, local_id: &str) -> SceneAssetDocument {
     SceneAssetDocument {
+        layers: vec![],
         asset_id: asset_id.to_string(),
         logical_path: format!("assets/{}.bsn", asset_id),
         role: SceneAssetRole::Actor,
@@ -40,6 +41,7 @@ fn make_single_entity_asset(asset_id: &str, local_id: &str) -> SceneAssetDocumen
 // Helper: create a multi-root SceneAssetDocument (two entities with no parent relationship)
 fn make_multi_root_asset(asset_id: &str) -> SceneAssetDocument {
     SceneAssetDocument {
+        layers: vec![],
         asset_id: asset_id.to_string(),
         logical_path: format!("assets/{}.bsn", asset_id),
         role: SceneAssetRole::Actor,
@@ -67,6 +69,7 @@ fn make_multi_root_asset(asset_id: &str) -> SceneAssetDocument {
 // Helper: create an empty SceneAssetDocument
 fn make_empty_asset(asset_id: &str) -> SceneAssetDocument {
     SceneAssetDocument {
+        layers: vec![],
         asset_id: asset_id.to_string(),
         logical_path: format!("assets/{}.bsn", asset_id),
         role: SceneAssetRole::Actor,

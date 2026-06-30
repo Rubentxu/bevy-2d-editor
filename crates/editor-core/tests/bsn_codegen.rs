@@ -22,6 +22,7 @@ fn make_scene_asset(
     relationships: Vec<SceneAssetRelationship>,
 ) -> SceneAssetDocument {
     SceneAssetDocument {
+        layers: vec![],
         asset_id: "test_asset".to_string(),
         logical_path: "test/level".to_string(),
         role: SceneAssetRole::Level,

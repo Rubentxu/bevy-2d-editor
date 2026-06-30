@@ -37,6 +37,7 @@ fn make_instance_with_overrides(
 // Helper: create a simple SceneAssetDocument
 fn make_asset(asset_id: &str, entities: Vec<SceneAssetEntity>) -> SceneAssetDocument {
     SceneAssetDocument {
+        layers: vec![],
         asset_id: asset_id.to_string(),
         logical_path: format!("assets/{}.bsn", asset_id),
         role: SceneAssetRole::Actor,
