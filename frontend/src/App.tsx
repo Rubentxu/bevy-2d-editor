@@ -10,6 +10,7 @@ import HierarchyPanel from "./components/HierarchyPanel";
 import InspectorPanel from "./components/InspectorPanel";
 import AIAssistantPanel from "./components/AIAssistantPanel";
 import ExportRustModal from "./components/ExportRustModal";
+import ValidationCenter from "./components/ValidationCenter";
 import SceneTabs from "./components/SceneTabs";
 import UnsavedChangesDialog from "./components/UnsavedChangesDialog";
 import ProjectAssetBrowser from "./components/ProjectAssetBrowser";
@@ -34,6 +35,7 @@ export default function App() {
   const { scene, refresh, dispatch } = useSceneState();
   const logState = useLogState();
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [validationCenterOpen, setValidationCenterOpen] = useState(false);
   const [exportRustOpen, setExportRustOpen] = useState(false);
   const [applyingIds, setApplyingIds] = useState<Set<string>>(new Set());
   const { scenes, currentId, refresh: refreshScenes } = useScenes();
@@ -82,6 +84,10 @@ export default function App() {
 
   const handleToggleAI = useCallback(() => {
     setAiPanelOpen((prev) => !prev);
+  }, []);
+
+  const handleToggleValidationCenter = useCallback(() => {
+    setValidationCenterOpen((prev) => !prev);
   }, []);
 
   const handleSubmitAI = useCallback(async () => {
@@ -420,6 +426,8 @@ export default function App() {
         onExportRust={() => setExportRustOpen(true)}
         onToggleAI={handleToggleAI}
         aiPanelOpen={aiPanelOpen}
+        onToggleValidationCenter={handleToggleValidationCenter}
+        validationCenterOpen={validationCenterOpen}
         error={error || initError}
         onDismissError={() => setError(null)}
       />
@@ -455,6 +463,9 @@ export default function App() {
                 onDiscard={discardProposal}
                 applyingIds={applyingIds}
               />
+            )}
+            {validationCenterOpen && (
+              <ValidationCenter onClose={handleToggleValidationCenter} />
             )}
             <HierarchyPanel
               scene={scene}

@@ -45,6 +45,7 @@
 | scene-instance-placement (PR1 slice) | v0.24.0 | ✅ (partial) | Storage seam + cache + gate. `SceneDocument.instances: BTreeMap<StableId, SceneInstance>` with `#[serde(default)]`, `ASSET_BODY_CACHE` skeleton (resolve, warm, invalidate, clear), `instance_projection.rs` with `root_local_ids` gate (single-root enforcement). PR #21 merged; tag `v0.24.0`. |
 | scene-instance-placement (PR2 slice) | v0.25.0 | ✅ | Commands + WASM + projection. `PlaceSceneInstance`/`RemoveSceneInstance` commands, `instance_projection.rs` with `place_instance`/`remove_instance`/`root_local_ids`, WASM bridge (`dispatch_scene_instance_command`, `place_scene_instance`, `remove_scene_instance`), warm_asset_body_cache integration. PR #22 merged; tag `v0.25.0`. |
 | scene-instance-placement (PR3 slice) | v0.26.0 | ✅ | Frontend + E2E. HierarchyPanel/InspectorPanel/ProjectAssetBrowser UI updates, `useSceneAssets` hook, `scene-assets.ts` service, `engine-bridge` methods, 14 Playwright E2E tests (13 blocked by OPFS headless, S21 terminology passed). PR #23 merged; tag `v0.26.0`. **Hito 2 Order 2 CLOSED**. |
+| override-resync-workbench | v0.27.0 | ✅ | Override status surfacing UI. 4 new WASM functions (validate_overrides_wasm, effective_values_wasm, try_rebind_wasm, get_resync_reports), RESYNC_REPORTS thread-local, HierarchyPanel colored override dot, InspectorPanel override summary + collapsible issues list. PR #24 merged; tag `v0.27.0`. **Hito 2 Order 3 CLOSED**. |
 
 ### Active Work
 
@@ -69,7 +70,7 @@
 |-------|--------|--------|-----|
 | 1 | `project-asset-browser-and-scene-asset-authoring` (PR1 ✅ v0.21.0; PR2 ✅ v0.22.0; PR3 ✅ v0.23.0) | ✅ DONE | Exposes existing `SceneAssetDocument` + `SceneAssetCatalog` as usable Project workflows |
 | 2 | `scene-instance-placement` (PR1 ✅ v0.24.0; PR2 ✅ v0.25.0; PR3 ✅ v0.26.0) | ✅ DONE | Lets users place Scene Assets in SceneDocuments without deep cloning |
-| 3 | `override-resync-workbench` | Planned | Makes `OverridePatch` status and resync reports visible/actionable |
+| 3 | `override-resync-workbench` (WASM surface + UI) | ✅ DONE (v0.27.0) | Makes `OverridePatch` status and resync reports visible/actionable |
 | 4 | `validation-center` | Planned | Centralizes broken refs, schema issues, export warnings, override conflicts, dirty scenes, and invalid AI proposals |
 | 5 | `level-design-layers-research` | Planned research | Defines tile/object/IntGrid/auto-layer semantics before committing to a tilemap model |
 | 6 | `runtime-preview-inspector` | Planned | Shows runtime preview provenance, metrics, and editor-to-preview mapping |
@@ -141,6 +142,7 @@ Project Asset Browser + Authoring Mode Frontend (PR3 slice)                     
 Instance Storage Seam + Cache + Gate (PR1 slice)                                             ✅
 Instance Commands + WASM + Projection (PR2 slice)                                              ✅
 Instance Frontend + E2E (PR3 slice)                                                          ✅
+Override Status UI + Resync Report (override-resync-workbench)                               ✅
 ```
 
 ---
