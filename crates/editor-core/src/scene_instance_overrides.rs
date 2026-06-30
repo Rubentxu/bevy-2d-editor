@@ -8,7 +8,7 @@ use serde::Serialize;
 
 use crate::document::{ComponentInstance, StableId};
 use crate::scene_asset::{LocalId, SceneAssetDocument, SceneAssetEntity};
-use crate::scene_instance::{OverridePatch, OverrideStatus, SceneInstance};
+use crate::scene_instance::{ComponentOverride, ComponentOverrideStatus, SceneInstance};
 
 // ---------------------------------------------------------------------------
 // Public Types
@@ -20,7 +20,7 @@ pub struct ResolvedScene {
     pub entities: BTreeMap<LocalId, ResolvedEntity>,
     pub id_map: BTreeMap<LocalId, StableId>,
     pub minted_stable_ids: BTreeSet<StableId>,
-    pub unresolved: Vec<OverridePatch>,
+    pub unresolved: Vec<ComponentOverride>,
 }
 
 /// One entity inside a resolved scene (projection of `SceneAssetEntity`).
@@ -46,7 +46,7 @@ pub struct ResyncReport {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct OverrideIssue {
     pub code: String,
-    pub patch: OverridePatch,
+    pub patch: ComponentOverride,
     pub message: String,
 }
 
@@ -151,38 +151,37 @@ fn suffix_match(orphan_path: &str, candidate_path: &str) -> bool {
 /// Pure re-classification of override patches against a given asset.
 pub fn classify_overrides(
     asset: &SceneAssetDocument,
-    patches: &[OverridePatch],
-) -> Vec<OverridePatch> {
+    patches: &[ComponentOverride],
+) -> Vec<ComponentOverride> {
     patches
         .iter()
         .map(|patch| {
             let entity = match find_entity(asset, &patch.target_local_id) {
                 Some(e) => e,
                 None => {
-                    return OverridePatch {
-                        status: OverrideStatus::Orphaned,
+                    return ComponentOverride {
+                        status: ComponentOverrideStatus::Orphaned,
                         ..patch.clone()
                     };
                 }
             };
 
-            let type_id = patch.field_path.first().map(|s| s.as_str()).unwrap_or("");
+            let type_id = patch.component_type_id.as_str();
             let component = match find_component(entity, type_id) {
                 Some(c) => c,
                 None => {
-                    return OverridePatch {
-                        status: OverrideStatus::Orphaned,
+                    return ComponentOverride {
+                        status: ComponentOverrideStatus::Orphaned,
                         ..patch.clone()
                     };
                 }
             };
 
-            // Walk field_path[1..] to check field existence
-            if patch.field_path.len() > 1 {
+            // Walk field_path to check field existence inside the target component.
+            if !patch.field_path.is_empty() {
                 let segments: Vec<&str> = patch
                     .field_path
                     .iter()
-                    .skip(1)
                     .map(|s| s.as_str())
                     .collect();
                 let mut current: Option<&serde_json::Value> = Some(&component.values);
@@ -208,19 +207,18 @@ pub fn classify_overrides(
                 }
 
                 if is_stale {
-                    return OverridePatch {
-                        status: OverrideStatus::Stale,
+                    return ComponentOverride {
+                        status: ComponentOverrideStatus::Stale,
                         ..patch.clone()
                     };
                 }
             }
 
             // Kind mismatch check
-            let existing_value: Option<serde_json::Value> = if patch.field_path.len() > 1 {
+            let existing_value: Option<serde_json::Value> = if !patch.field_path.is_empty() {
                 let segments: Vec<&str> = patch
                     .field_path
                     .iter()
-                    .skip(1)
                     .map(|s| s.as_str())
                     .collect();
                 let mut current: Option<&serde_json::Value> = Some(&component.values);
@@ -247,15 +245,15 @@ pub fn classify_overrides(
 
             if let Some(existing) = existing_value {
                 if detect_kind_mismatch(&existing, &patch.value) {
-                    return OverridePatch {
-                        status: OverrideStatus::Conflict,
+                    return ComponentOverride {
+                        status: ComponentOverrideStatus::Conflict,
                         ..patch.clone()
                     };
                 }
             }
 
-            OverridePatch {
-                status: OverrideStatus::Active,
+            ComponentOverride {
+                status: ComponentOverrideStatus::Active,
                 ..patch.clone()
             }
         })
@@ -289,8 +287,8 @@ pub fn reconcile_id_map(
     result
 }
 
-/// Try to rebind an orphaned patch by exact `target_local_id` match (spike).
-pub fn try_rebind(asset: &SceneAssetDocument, orphaned: &OverridePatch) -> Option<LocalId> {
+/// Try to rebind an orphaned component override by exact `target_local_id` match (spike).
+pub fn try_rebind(asset: &SceneAssetDocument, orphaned: &ComponentOverride) -> Option<LocalId> {
     find_entity(asset, &orphaned.target_local_id).map(|e| e.local_id.clone())
 }
 
@@ -302,9 +300,9 @@ pub fn validate_overrides(
     let mut issues = Vec::new();
 
     for patch in instance
-        .overrides
+        .component_overrides
         .iter()
-        .chain(instance.orphaned_overrides.iter())
+        .chain(instance.orphaned_component_overrides.iter())
     {
         let entity = match find_entity(asset, &patch.target_local_id) {
             Some(e) => e,
@@ -321,7 +319,7 @@ pub fn validate_overrides(
             }
         };
 
-        let type_id = patch.field_path.first().map(|s| s.as_str()).unwrap_or("");
+        let type_id = patch.component_type_id.as_str();
         let component = match find_component(entity, type_id) {
             Some(c) => c,
             None => {
@@ -338,13 +336,14 @@ pub fn validate_overrides(
         };
 
         // Duplicate field check
-        let field_key = patch.field_path.get(1).map(|s| s.as_str()).unwrap_or("");
+        let field_key = patch.field_path.first().map(|s| s.as_str()).unwrap_or("");
         let dupe_count = instance
-            .overrides
+            .component_overrides
             .iter()
             .filter(|p| {
                 p.target_local_id == patch.target_local_id
-                    && p.field_path.get(1) == patch.field_path.get(1)
+                    && p.component_type_id == patch.component_type_id
+                    && p.field_path == patch.field_path
             })
             .count();
         if dupe_count > 1 {
@@ -359,11 +358,10 @@ pub fn validate_overrides(
         }
 
         // Walk field path for missing_field check
-        if patch.field_path.len() > 1 {
+        if !patch.field_path.is_empty() {
             let segments: Vec<&str> = patch
                 .field_path
                 .iter()
-                .skip(1)
                 .map(|s| s.as_str())
                 .collect();
             let mut current: Option<&serde_json::Value> = Some(&component.values);
@@ -392,7 +390,7 @@ pub fn validate_overrides(
                     patch: patch.clone(),
                     message: format!(
                         "Field path {:?} does not resolve in component '{}'",
-                        &patch.field_path[1..],
+                        &patch.field_path,
                         type_id
                     ),
                 });
@@ -400,11 +398,10 @@ pub fn validate_overrides(
         }
 
         // Type conflict check
-        let terminal: Option<serde_json::Value> = if patch.field_path.len() > 1 {
+        let terminal: Option<serde_json::Value> = if !patch.field_path.is_empty() {
             let segments: Vec<&str> = patch
                 .field_path
                 .iter()
-                .skip(1)
                 .map(|s| s.as_str())
                 .collect();
             let mut current: Option<&serde_json::Value> = Some(&component.values);
@@ -476,8 +473,8 @@ pub fn effective_values(
     let mut unresolved = Vec::new();
     let mut resolved_entities: BTreeMap<LocalId, ResolvedEntity> = entities;
 
-    for patch in &instance.overrides {
-        if patch.status == OverrideStatus::Orphaned {
+    for patch in &instance.component_overrides {
+        if patch.status == ComponentOverrideStatus::Orphaned {
             continue;
         }
 
@@ -489,7 +486,7 @@ pub fn effective_values(
             }
         };
 
-        let type_id = patch.field_path.first().map(|s| s.as_str()).unwrap_or("");
+        let type_id = patch.component_type_id.as_str();
         let component = match resolved_entity
             .components
             .iter_mut()
@@ -502,12 +499,11 @@ pub fn effective_values(
             }
         };
 
-        // Walk field_path[1..] to verify path
-        if patch.field_path.len() > 1 {
+        // Walk field_path to verify path inside the target component.
+        if !patch.field_path.is_empty() {
             let segments: Vec<&str> = patch
                 .field_path
                 .iter()
-                .skip(1)
                 .map(|s| s.as_str())
                 .collect();
             let mut current: Option<&serde_json::Value> = Some(&component.values);
@@ -537,11 +533,10 @@ pub fn effective_values(
         }
 
         // Kind check
-        let terminal: Option<serde_json::Value> = if patch.field_path.len() > 1 {
+        let terminal: Option<serde_json::Value> = if !patch.field_path.is_empty() {
             let segments: Vec<&str> = patch
                 .field_path
                 .iter()
-                .skip(1)
                 .map(|s| s.as_str())
                 .collect();
             let mut current: Option<&serde_json::Value> = Some(&component.values);
@@ -575,7 +570,7 @@ pub fn effective_values(
 
         // Apply patch
         let mut comp = component.clone();
-        if apply_field_path(&mut comp, &patch.field_path[1..], patch.value.clone()).is_ok() {
+        if apply_field_path(&mut comp, &patch.field_path, patch.value.clone()).is_ok() {
             *component = comp;
         } else {
             unresolved.push(patch.clone());
@@ -602,62 +597,62 @@ pub fn resync(
     instance.asset_version_seen = new_asset_version;
 
     let mut report = ResyncReport::default();
-    let mut new_overrides: Vec<OverridePatch> = Vec::new();
-    let mut new_orphaned: Vec<OverridePatch> = Vec::new();
+    let mut new_overrides: Vec<ComponentOverride> = Vec::new();
+    let mut new_orphaned: Vec<ComponentOverride> = Vec::new();
 
-    let classified = classify_overrides(asset, &instance.overrides);
+    let classified = classify_overrides(asset, &instance.component_overrides);
 
-    for (patch, classified_patch) in instance.overrides.iter().zip(classified.iter()) {
+    for (patch, classified_patch) in instance.component_overrides.iter().zip(classified.iter()) {
         match (patch.status, classified_patch.status) {
-            (OverrideStatus::Active, OverrideStatus::Orphaned) => {
+            (ComponentOverrideStatus::Active, ComponentOverrideStatus::Orphaned) => {
                 let mut p = classified_patch.clone();
-                p.status = OverrideStatus::Orphaned;
+                p.status = ComponentOverrideStatus::Orphaned;
                 new_orphaned.push(p);
                 report.orphaned += 1;
             }
-            (OverrideStatus::Active, OverrideStatus::Stale) => {
+            (ComponentOverrideStatus::Active, ComponentOverrideStatus::Stale) => {
                 let mut p = classified_patch.clone();
-                p.status = OverrideStatus::Stale;
+                p.status = ComponentOverrideStatus::Stale;
                 new_overrides.push(p);
                 report.stale += 1;
             }
-            (OverrideStatus::Active, OverrideStatus::Conflict) => {
+            (ComponentOverrideStatus::Active, ComponentOverrideStatus::Conflict) => {
                 let mut p = classified_patch.clone();
-                p.status = OverrideStatus::Conflict;
+                p.status = ComponentOverrideStatus::Conflict;
                 new_overrides.push(p);
                 report.conflict += 1;
             }
-            (OverrideStatus::Active, OverrideStatus::Active) => {
+            (ComponentOverrideStatus::Active, ComponentOverrideStatus::Active) => {
                 new_overrides.push(classified_patch.clone());
                 report.active += 1;
             }
-            (_, OverrideStatus::Orphaned) => {
+            (_, ComponentOverrideStatus::Orphaned) => {
                 let mut p = classified_patch.clone();
-                p.status = OverrideStatus::Orphaned;
+                p.status = ComponentOverrideStatus::Orphaned;
                 new_orphaned.push(p);
                 report.orphaned += 1;
             }
-            (_, OverrideStatus::Stale) => {
+            (_, ComponentOverrideStatus::Stale) => {
                 new_overrides.push(classified_patch.clone());
                 report.stale += 1;
             }
-            (_, OverrideStatus::Conflict) => {
+            (_, ComponentOverrideStatus::Conflict) => {
                 new_overrides.push(classified_patch.clone());
                 report.conflict += 1;
             }
-            (_, OverrideStatus::Active) => {
+            (_, ComponentOverrideStatus::Active) => {
                 new_overrides.push(classified_patch.clone());
                 report.active += 1;
             }
         }
     }
 
-    let mut still_orphaned: Vec<OverridePatch> = Vec::new();
-    for orphan in instance.orphaned_overrides.iter() {
+    let mut still_orphaned: Vec<ComponentOverride> = Vec::new();
+    for orphan in instance.orphaned_component_overrides.iter() {
         if let Some(new_id) = try_rebind(asset, orphan) {
             let mut rebound_patch = orphan.clone();
             rebound_patch.target_local_id = new_id;
-            rebound_patch.status = OverrideStatus::Active;
+            rebound_patch.status = ComponentOverrideStatus::Active;
             new_overrides.push(rebound_patch);
             report.rebound += 1;
         } else {
@@ -672,9 +667,9 @@ pub fn resync(
     };
     instance.id_map = reconcile_id_map(asset, &instance.id_map, &mut mint);
 
-    instance.overrides = new_overrides;
-    instance.orphaned_overrides = new_orphaned;
-    instance.orphaned_overrides.extend(still_orphaned);
+    instance.component_overrides = new_overrides;
+    instance.orphaned_component_overrides = new_orphaned;
+    instance.orphaned_component_overrides.extend(still_orphaned);
 
     report
 }
@@ -687,6 +682,22 @@ mod tests {
         move || {
             *counter += 1;
             StableId::new(format!("sid_{}", *counter))
+        }
+    }
+
+    fn component_override(
+        target_local_id: &str,
+        component_type_id: &str,
+        field_path: Vec<&str>,
+        value: serde_json::Value,
+        status: ComponentOverrideStatus,
+    ) -> ComponentOverride {
+        ComponentOverride {
+            target_local_id: LocalId::new(target_local_id),
+            component_type_id: crate::schema::ComponentTypeId::new(component_type_id),
+            field_path: field_path.into_iter().map(str::to_string).collect(),
+            value,
+            status,
         }
     }
 
@@ -711,16 +722,17 @@ mod tests {
             metadata: Default::default(),
         };
 
-        let patch = OverridePatch {
+        let patch = ComponentOverride {
             target_local_id: LocalId::new("root"),
-            field_path: vec!["editor.Sprite2D".to_string(), "asset".to_string()],
+            component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
+            field_path: vec!["asset".to_string()],
             value: serde_json::Value::String("cannon.png".to_string()),
-            status: OverrideStatus::Active,
+            status: ComponentOverrideStatus::Active,
         };
 
         let result = classify_overrides(&asset, std::slice::from_ref(&patch));
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].status, OverrideStatus::Active);
+        assert_eq!(result[0].status, ComponentOverrideStatus::Active);
     }
 
     #[test]
@@ -744,16 +756,17 @@ mod tests {
             metadata: Default::default(),
         };
 
-        let patch = OverridePatch {
+        let patch = ComponentOverride {
             target_local_id: LocalId::new("root"),
-            field_path: vec!["Sprite2D".to_string(), "asset".to_string()],
+            component_type_id: crate::schema::ComponentTypeId::new("Sprite2D"),
+            field_path: vec!["asset".to_string()],
             value: serde_json::Value::String("cannon.png".to_string()),
-            status: OverrideStatus::Active,
+            status: ComponentOverrideStatus::Active,
         };
 
         let result = classify_overrides(&asset, std::slice::from_ref(&patch));
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].status, OverrideStatus::Orphaned);
+        assert_eq!(result[0].status, ComponentOverrideStatus::Orphaned);
     }
 
     #[test]
@@ -857,11 +870,12 @@ mod tests {
             metadata: Default::default(),
         };
 
-        let orphan = OverridePatch {
+        let orphan = ComponentOverride {
             target_local_id: LocalId::new("old_abc"),
-            field_path: vec!["editor.Sprite2D".to_string(), "asset".to_string()],
+            component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
+            field_path: vec!["asset".to_string()],
             value: serde_json::Value::String("cannon.png".to_string()),
-            status: OverrideStatus::Orphaned,
+            status: ComponentOverrideStatus::Orphaned,
         };
 
         let result = try_rebind(&asset, &orphan);
@@ -896,13 +910,14 @@ mod tests {
             id_map: vec![(LocalId::new("abc"), StableId::new("ent_a"))]
                 .into_iter()
                 .collect(),
-            overrides: vec![OverridePatch {
+            component_overrides: vec![ComponentOverride {
                 target_local_id: LocalId::new("abc"),
-                field_path: vec!["editor.Sprite2D".to_string(), "asset".to_string()],
+                component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
+                field_path: vec!["asset".to_string()],
                 value: serde_json::Value::String("cannon.png".to_string()),
-                status: OverrideStatus::Active,
+                status: ComponentOverrideStatus::Active,
             }],
-            orphaned_overrides: vec![],
+            orphaned_component_overrides: vec![],
         };
 
         let report = resync(&asset, &mut instance, 2);
@@ -913,8 +928,8 @@ mod tests {
         assert_eq!(report.conflict, 0);
         assert_eq!(report.rebound, 0);
         assert_eq!(instance.asset_version_seen, 2);
-        assert_eq!(instance.overrides.len(), 1);
-        assert_eq!(instance.overrides[0].status, OverrideStatus::Active);
+        assert_eq!(instance.component_overrides.len(), 1);
+        assert_eq!(instance.component_overrides[0].status, ComponentOverrideStatus::Active);
     }
 
     #[test]
@@ -935,27 +950,28 @@ mod tests {
             asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
             asset_version_seen: 1,
             id_map: Default::default(),
-            overrides: vec![OverridePatch {
+            component_overrides: vec![ComponentOverride {
                 target_local_id: LocalId::new("abc"),
-                field_path: vec!["editor.Sprite2D".to_string(), "asset".to_string()],
+                component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
+                field_path: vec!["asset".to_string()],
                 value: serde_json::Value::String("cannon.png".to_string()),
-                status: OverrideStatus::Active,
+                status: ComponentOverrideStatus::Active,
             }],
-            orphaned_overrides: vec![],
+            orphaned_component_overrides: vec![],
         };
 
         let report = resync(&asset_v2, &mut instance, 2);
 
         assert_eq!(report.active, 0);
         assert_eq!(report.orphaned, 1);
-        assert_eq!(instance.overrides.len(), 0);
-        assert_eq!(instance.orphaned_overrides.len(), 1);
+        assert_eq!(instance.component_overrides.len(), 0);
+        assert_eq!(instance.orphaned_component_overrides.len(), 1);
         assert_eq!(
-            instance.orphaned_overrides[0].status,
-            OverrideStatus::Orphaned
+            instance.orphaned_component_overrides[0].status,
+            ComponentOverrideStatus::Orphaned
         );
         assert_eq!(
-            instance.orphaned_overrides[0].target_local_id,
+            instance.orphaned_component_overrides[0].target_local_id,
             LocalId::new("abc")
         );
     }
@@ -986,21 +1002,22 @@ mod tests {
             asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
             asset_version_seen: 1,
             id_map: Default::default(),
-            overrides: vec![OverridePatch {
+            component_overrides: vec![ComponentOverride {
                 target_local_id: LocalId::new("root"),
-                field_path: vec!["editor.Sprite2D".to_string(), "asset".to_string()],
+                component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
+                field_path: vec!["asset".to_string()],
                 value: serde_json::Value::String("cannon.png".to_string()),
-                status: OverrideStatus::Active,
+                status: ComponentOverrideStatus::Active,
             }],
-            orphaned_overrides: vec![],
+            orphaned_component_overrides: vec![],
         };
 
         let report = resync(&asset_v2, &mut instance, 2);
 
         assert_eq!(report.stale, 1);
         assert_eq!(report.active, 0);
-        assert_eq!(instance.overrides.len(), 1);
-        assert_eq!(instance.overrides[0].status, OverrideStatus::Stale);
+        assert_eq!(instance.component_overrides.len(), 1);
+        assert_eq!(instance.component_overrides[0].status, ComponentOverrideStatus::Stale);
     }
 
     #[test]
@@ -1029,20 +1046,21 @@ mod tests {
             asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
             asset_version_seen: 1,
             id_map: Default::default(),
-            overrides: vec![OverridePatch {
+            component_overrides: vec![ComponentOverride {
                 target_local_id: LocalId::new("player"),
-                field_path: vec!["editor.Health".to_string(), "current".to_string()],
+                component_type_id: crate::schema::ComponentTypeId::new("editor.Health"),
+                field_path: vec!["current".to_string()],
                 value: serde_json::json!(42),
-                status: OverrideStatus::Active,
+                status: ComponentOverrideStatus::Active,
             }],
-            orphaned_overrides: vec![],
+            orphaned_component_overrides: vec![],
         };
 
         let report = resync(&asset_v2, &mut instance, 2);
 
         assert_eq!(report.conflict, 1);
-        assert_eq!(instance.overrides.len(), 1);
-        assert_eq!(instance.overrides[0].status, OverrideStatus::Conflict);
+        assert_eq!(instance.component_overrides.len(), 1);
+        assert_eq!(instance.component_overrides[0].status, ComponentOverrideStatus::Conflict);
     }
 
     #[test]
@@ -1065,17 +1083,18 @@ mod tests {
             id_map: vec![(LocalId::new("abc"), StableId::new("ent_a"))]
                 .into_iter()
                 .collect(),
-            overrides: vec![OverridePatch {
+            component_overrides: vec![ComponentOverride {
                 target_local_id: LocalId::new("abc"),
-                field_path: vec!["editor.Sprite2D".to_string(), "asset".to_string()],
+                component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
+                field_path: vec!["asset".to_string()],
                 value: serde_json::Value::String("cannon.png".to_string()),
-                status: OverrideStatus::Active,
+                status: ComponentOverrideStatus::Active,
             }],
-            orphaned_overrides: vec![],
+            orphaned_component_overrides: vec![],
         };
 
         resync(&asset_v2, &mut instance, 2);
-        assert_eq!(instance.orphaned_overrides.len(), 1);
+        assert_eq!(instance.orphaned_component_overrides.len(), 1);
 
         let asset_v3 = SceneAssetDocument {
             asset_id: "asset_1".to_string(),
@@ -1099,9 +1118,9 @@ mod tests {
         let report = resync(&asset_v3, &mut instance, 3);
 
         assert_eq!(report.rebound, 1);
-        assert_eq!(instance.overrides.len(), 1);
-        assert_eq!(instance.overrides[0].status, OverrideStatus::Active);
-        assert_eq!(instance.overrides[0].target_local_id, LocalId::new("abc"));
+        assert_eq!(instance.component_overrides.len(), 1);
+        assert_eq!(instance.component_overrides[0].status, ComponentOverrideStatus::Active);
+        assert_eq!(instance.component_overrides[0].target_local_id, LocalId::new("abc"));
     }
 
     #[test]
@@ -1130,13 +1149,14 @@ mod tests {
             asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
             asset_version_seen: 1,
             id_map: Default::default(),
-            overrides: vec![OverridePatch {
+            component_overrides: vec![ComponentOverride {
                 target_local_id: LocalId::new("root"),
-                field_path: vec!["editor.Sprite2D".to_string(), "asset".to_string()],
+                component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
+                field_path: vec!["asset".to_string()],
                 value: serde_json::Value::String("cannon.png".to_string()),
-                status: OverrideStatus::Active,
+                status: ComponentOverrideStatus::Active,
             }],
-            orphaned_overrides: vec![],
+            orphaned_component_overrides: vec![],
         };
 
         let mut counter = 0u32;
@@ -1189,8 +1209,8 @@ mod tests {
             asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
             asset_version_seen: 1,
             id_map: Default::default(),
-            overrides: vec![],
-            orphaned_overrides: vec![],
+            component_overrides: vec![],
+            orphaned_component_overrides: vec![],
         };
 
         let resolved = {
@@ -1226,13 +1246,14 @@ mod tests {
             asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
             asset_version_seen: 1,
             id_map: Default::default(),
-            overrides: vec![OverridePatch {
+            component_overrides: vec![ComponentOverride {
                 target_local_id: LocalId::new("nonexistent"),
-                field_path: vec!["editor.Sprite2D".to_string(), "asset".to_string()],
+                component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
+                field_path: vec!["asset".to_string()],
                 value: serde_json::Value::String("cannon.png".to_string()),
-                status: OverrideStatus::Active,
+                status: ComponentOverrideStatus::Active,
             }],
-            orphaned_overrides: vec![],
+            orphaned_component_overrides: vec![],
         };
 
         let issues = validate_overrides(&asset, &instance);

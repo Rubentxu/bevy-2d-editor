@@ -82,9 +82,9 @@ pub enum Command {
         asset_version: u32,
         id_map: BTreeMap<LocalId, StableId>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        overrides: Vec<crate::scene_instance::OverridePatch>,
+        component_overrides: Vec<crate::scene_instance::ComponentOverride>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        orphaned_overrides: Vec<crate::scene_instance::OverridePatch>,
+        orphaned_component_overrides: Vec<crate::scene_instance::ComponentOverride>,
     },
     /// Remove a Scene Instance from the document.
     /// Inverse is PlaceInstance restoring the full captured pre-state.

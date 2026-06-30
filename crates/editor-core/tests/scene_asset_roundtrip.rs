@@ -8,7 +8,7 @@ use editor_core::{
         AssetReference, ExposedProperty, LocalId, RelationshipKind, SceneAssetDocument,
         SceneAssetEntity, SceneAssetMetadata, SceneAssetRelationship, SceneAssetRole,
     },
-    scene_instance::{OverridePatch, OverrideStatus, SceneInstance},
+    scene_instance::{ComponentOverride, ComponentOverrideStatus, SceneInstance},
 };
 
 #[test]
@@ -107,13 +107,14 @@ fn s2_scene_instance_roundtrip() {
         asset_ref: AssetReference("assets/player.bsn".into()),
         asset_version_seen: 7,
         id_map,
-        overrides: vec![OverridePatch {
+        component_overrides: vec![ComponentOverride {
             target_local_id: LocalId("weapon".to_string()),
-            field_path: vec!["Sprite2D".to_string(), "color".to_string()],
+            component_type_id: editor_core::schema::ComponentTypeId::new("Sprite2D"),
+            field_path: vec!["color".to_string()],
             value: serde_json::json!({"r": 1.0, "g": 0.3, "b": 0.3, "a": 1.0}),
-            status: OverrideStatus::Active,
+            status: ComponentOverrideStatus::Active,
         }],
-        orphaned_overrides: vec![],
+        orphaned_component_overrides: vec![],
     };
 
     let json = serde_json::to_string(&instance).expect("serialize SceneInstance");
@@ -124,8 +125,8 @@ fn s2_scene_instance_roundtrip() {
     assert_eq!(roundtripped.asset_ref.as_str(), "assets/player.bsn");
     assert_eq!(roundtripped.asset_version_seen, 7);
     assert_eq!(roundtripped.id_map.len(), 2);
-    assert_eq!(roundtripped.overrides.len(), 1);
-    assert_eq!(roundtripped.overrides[0].status, OverrideStatus::Active);
+    assert_eq!(roundtripped.component_overrides.len(), 1);
+    assert_eq!(roundtripped.component_overrides[0].status, ComponentOverrideStatus::Active);
 }
 
 #[test]

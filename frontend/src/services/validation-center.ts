@@ -18,7 +18,7 @@ async function waitForEngine(): Promise<void> {
 
 /**
  * Unified validation issue surfaced by the Validation Center.
- * Aggregates: CatalogWarning, OverrideIssue, ExportWarning, dirty scenes, schema issues.
+ * Aggregates: CatalogWarning, Component Override issues, ExportWarning, dirty scenes, schema issues.
  */
 export interface ValidationIssue {
   id: string;
@@ -42,7 +42,7 @@ export interface ValidationIssue {
 
 /**
  * Get all validation issues from Rust/WASM (catalog warnings + export warnings).
- * Override issues are collected separately on the TS side via validateOverrides().
+ * Component Override issues are collected separately on the TS side via validateOverrides().
  * Dirty scene issues are tracked in frontend state (useScenes hook).
  */
 export async function getValidationIssues(): Promise<ValidationIssue[]> {

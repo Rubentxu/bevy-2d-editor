@@ -23,7 +23,7 @@ pub mod scene_instance;
 pub mod scene_instance_overrides;
 pub mod instance_projection;
 mod scenes;
-mod schema;
+pub mod schema;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ADR References (documentation only — no code changes here)
@@ -110,10 +110,12 @@ pub use scene_asset_catalog::{
     CatalogError, CatalogWarning, SceneAssetCatalog, SceneAssetCatalogEntry, mint_asset_id,
 };
 pub use scene_instance::{
-    OverridePatch, OverrideStatus, SceneInstance, patch_status_after_field_rename,
+    ComponentOverride, ComponentOverrideStatus, SceneInstance,
+    component_override_status_after_field_rename,
 };
 pub use scene_instance_overrides::{OverrideIssue, ResyncReport};
 pub use instance_projection::{root_local_ids, PreviewEntity, project_instances};
+pub use schema::ComponentTypeId;
 pub use scenes::{SceneInfo, SceneRegistry, SwitchResult};
 /// Marker component for entities spawned from SceneDocument.
 /// These are despawned and respawned when the document is mutated
@@ -493,7 +495,7 @@ pub fn dispatch_command(json: &str) -> Result<String, JsValue> {
 /// - Resolves asset via catalog + cache
 /// - Checks single-root gate via `root_local_ids`
 /// - Mints fresh `instance_id` and `id_map` with `inst_` prefix
-/// - Creates OverridePatch for translation if provided
+/// - Creates ComponentOverride for translation if provided
 /// - Dispatches `Command::PlaceInstance` through the shared OperationLog
 ///
 /// Returns the `CommandResult` JSON on success.
@@ -503,8 +505,8 @@ pub fn place_scene_instance(
     translation_json: Option<String>,
 ) -> Result<String, JsValue> {
     use crate::instance_projection::root_local_ids;
-    use crate::scene_instance::OverridePatch;
-    use crate::scene_instance::OverrideStatus;
+    use crate::scene_instance::ComponentOverride;
+    use crate::scene_instance::ComponentOverrideStatus;
 
     // Step 1: Look up catalog entry
     let entry = with_asset_catalog(|cat| cat.get(asset_id).cloned())
@@ -548,21 +550,19 @@ pub fn place_scene_instance(
         })
         .collect();
 
-    // Step 6: Create OverridePatch for translation if provided
-    let mut overrides = Vec::new();
+    // Step 6: Create ComponentOverride for translation if provided
+    let mut component_overrides = Vec::new();
     if let Some(trans_json) = translation_json {
         let translation: serde_json::Value = serde_json::from_str(&trans_json)
             .map_err(|e| JsValue::from_str(&format!("Invalid translation JSON: {}", e)))?;
 
         let root_local_id = roots[0].clone();
-        overrides.push(OverridePatch {
+        component_overrides.push(ComponentOverride {
             target_local_id: root_local_id,
-            field_path: vec![
-                "editor.Transform2D".to_string(),
-                "translation".to_string(),
-            ],
+            component_type_id: crate::schema::ComponentTypeId::new("editor.Transform2D"),
+            field_path: vec!["translation".to_string()],
             value: translation,
-            status: OverrideStatus::Active,
+            status: ComponentOverrideStatus::Active,
         });
     }
 
@@ -572,8 +572,8 @@ pub fn place_scene_instance(
         asset_ref: crate::scene_asset::AssetReference::new(entry.logical_path.clone()),
         asset_version: entry.current_version,
         id_map,
-        overrides,
-        orphaned_overrides: Vec::new(),
+        component_overrides,
+        orphaned_component_overrides: Vec::new(),
     };
 
     // Step 8: Wrap in envelope and dispatch
@@ -707,15 +707,15 @@ pub fn effective_values_wasm(
         .map_err(|e| JsValue::from_str(&format!("Failed to serialize resolved scene: {}", e)))
 }
 
-/// Try to rebind an orphaned OverridePatch to a new asset.
+/// Try to rebind an orphaned ComponentOverride to a new asset.
 /// Returns the matching LocalId as JSON string, or null if no match.
 #[wasm_bindgen]
 pub fn try_rebind_wasm(
-    orphaned_patch_json: &str,
+    orphaned_override_json: &str,
     asset_json: &str,
 ) -> Result<String, JsValue> {
-    let patch: OverridePatch = serde_json::from_str(orphaned_patch_json)
-        .map_err(|e| JsValue::from_str(&format!("Invalid patch JSON: {}", e)))?;
+    let patch: ComponentOverride = serde_json::from_str(orphaned_override_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid component override JSON: {}", e)))?;
     let asset: SceneAssetDocument = serde_json::from_str(asset_json)
         .map_err(|e| JsValue::from_str(&format!("Invalid asset JSON: {}", e)))?;
 

@@ -45,8 +45,8 @@ fn e8_two_instances_isolated_id_maps() {
         asset_ref: AssetReference::new("characters/player"),
         asset_version: 1,
         id_map: id_map_1.clone(),
-        overrides: vec![],
-        orphaned_overrides: vec![],
+        component_overrides: vec![],
+        orphaned_component_overrides: vec![],
     };
 
     processor::apply(&mut doc, &cmd1).expect("first place should succeed");
@@ -65,8 +65,8 @@ fn e8_two_instances_isolated_id_maps() {
         asset_ref: AssetReference::new("characters/player"), // Same asset!
         asset_version: 1,
         id_map: id_map_2.clone(),
-        overrides: vec![],
-        orphaned_overrides: vec![],
+        component_overrides: vec![],
+        orphaned_component_overrides: vec![],
     };
 
     processor::apply(&mut doc, &cmd2).expect("second place should succeed");
@@ -117,8 +117,8 @@ fn e8_inverse_independence() {
         id_map: vec![(LocalId::new("root"), StableId::new("inst_a_root"))]
             .into_iter()
             .collect(),
-        overrides: vec![],
-        orphaned_overrides: vec![],
+        component_overrides: vec![],
+        orphaned_component_overrides: vec![],
     };
 
     let cmd2 = Command::PlaceInstance {
@@ -128,8 +128,8 @@ fn e8_inverse_independence() {
         id_map: vec![(LocalId::new("root"), StableId::new("inst_b_root"))]
             .into_iter()
             .collect(),
-        overrides: vec![],
-        orphaned_overrides: vec![],
+        component_overrides: vec![],
+        orphaned_component_overrides: vec![],
     };
 
     processor::apply(&mut doc, &cmd1).expect("first apply should succeed");
@@ -182,8 +182,8 @@ fn e8_three_instances_maintain_isolation() {
             asset_ref: AssetReference::new("shared"),
             asset_version: 1,
             id_map,
-            overrides: vec![],
-            orphaned_overrides: vec![],
+            component_overrides: vec![],
+            orphaned_component_overrides: vec![],
         };
 
         processor::apply(&mut doc, &cmd).expect(&format!("instance {} should succeed", i));

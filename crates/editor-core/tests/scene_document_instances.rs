@@ -56,8 +56,8 @@ fn s7_instances_field_absent_then_present_roundtrip() {
             asset_ref: AssetReference("assets/player.bsn".into()),
             asset_version_seen: 1,
             id_map,
-            overrides: vec![],
-            orphaned_overrides: vec![],
+            component_overrides: vec![],
+            orphaned_component_overrides: vec![],
         },
     );
 
@@ -103,8 +103,8 @@ fn s13_entities_array_shape_unchanged_when_instances_present() {
                 asset_ref: AssetReference("assets/player.bsn".into()),
                 asset_version_seen: 1,
                 id_map,
-                overrides: vec![],
-                orphaned_overrides: vec![],
+                component_overrides: vec![],
+                orphaned_component_overrides: vec![],
             },
         )]),
     };
@@ -178,8 +178,8 @@ fn s6_instances_with_id_map_3_entries_byte_equal_roundtrip() {
                 asset_ref: AssetReference("assets/player.bsn".into()),
                 asset_version_seen: 3,
                 id_map,
-                overrides: vec![],
-                orphaned_overrides: vec![],
+                component_overrides: vec![],
+                orphaned_component_overrides: vec![],
             },
         )]),
     };

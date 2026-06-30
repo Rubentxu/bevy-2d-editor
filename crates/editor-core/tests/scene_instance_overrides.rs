@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use editor_core::scene_asset::{
     AssetReference, LocalId, SceneAssetDocument, SceneAssetEntity, SceneAssetRole,
 };
-use editor_core::scene_instance::{OverridePatch, OverrideStatus, SceneInstance};
+use editor_core::scene_instance::{ComponentOverride, ComponentOverrideStatus, SceneInstance};
 use editor_core::scene_instance_overrides::{
     classify_overrides, effective_values, mint_id_map, reconcile_id_map, resync, try_rebind,
     validate_overrides,
@@ -30,8 +30,8 @@ fn make_asset(entities: Vec<SceneAssetEntity>, version: u32) -> SceneAssetDocume
 }
 
 fn make_instance(
-    overrides: Vec<OverridePatch>,
-    orphaned_overrides: Vec<OverridePatch>,
+    component_overrides: Vec<ComponentOverride>,
+    orphaned_component_overrides: Vec<ComponentOverride>,
     id_map: BTreeMap<LocalId, StableId>,
     asset_version_seen: u32,
 ) -> SceneInstance {
@@ -40,8 +40,8 @@ fn make_instance(
         asset_ref: AssetReference::new("assets/test"),
         asset_version_seen,
         id_map,
-        overrides,
-        orphaned_overrides,
+        component_overrides,
+        orphaned_component_overrides,
     }
 }
 
@@ -64,16 +64,17 @@ fn classify_overrides_namespaced_active() {
         1,
     );
 
-    let patch = OverridePatch {
+    let patch = ComponentOverride {
         target_local_id: LocalId::new("root"),
-        field_path: vec!["editor.Sprite2D".to_string(), "asset".to_string()],
+        component_type_id: editor_core::schema::ComponentTypeId::new("editor.Sprite2D"),
+        field_path: vec!["asset".to_string()],
         value: serde_json::Value::String("cannon.png".to_string()),
-        status: OverrideStatus::Active,
+        status: ComponentOverrideStatus::Active,
     };
 
     let result = classify_overrides(&asset, std::slice::from_ref(&patch));
     assert_eq!(result.len(), 1);
-    assert_eq!(result[0].status, OverrideStatus::Active);
+    assert_eq!(result[0].status, ComponentOverrideStatus::Active);
 }
 
 // ---------------------------------------------------------------------------
@@ -96,16 +97,17 @@ fn classify_overrides_short_form_orphans() {
     );
 
     // Short form: "Sprite2D" instead of "editor.Sprite2D"
-    let patch = OverridePatch {
+    let patch = ComponentOverride {
         target_local_id: LocalId::new("root"),
-        field_path: vec!["Sprite2D".to_string(), "asset".to_string()],
+        component_type_id: editor_core::schema::ComponentTypeId::new("Sprite2D"),
+        field_path: vec!["asset".to_string()],
         value: serde_json::Value::String("cannon.png".to_string()),
-        status: OverrideStatus::Active,
+        status: ComponentOverrideStatus::Active,
     };
 
     let result = classify_overrides(&asset, std::slice::from_ref(&patch));
     assert_eq!(result.len(), 1);
-    assert_eq!(result[0].status, OverrideStatus::Orphaned);
+    assert_eq!(result[0].status, ComponentOverrideStatus::Orphaned);
 }
 
 // ---------------------------------------------------------------------------
@@ -133,11 +135,12 @@ fn resync_preserves_override_on_rename() {
         .collect();
 
     let instance = make_instance(
-        vec![OverridePatch {
+        vec![ComponentOverride {
             target_local_id: LocalId::new("abc"),
-            field_path: vec!["editor.Sprite2D".to_string(), "asset".to_string()],
+            component_type_id: editor_core::schema::ComponentTypeId::new("editor.Sprite2D"),
+            field_path: vec!["asset".to_string()],
             value: serde_json::Value::String("cannon.png".to_string()),
-            status: OverrideStatus::Active,
+            status: ComponentOverrideStatus::Active,
         }],
         vec![],
         id_map,
@@ -153,8 +156,8 @@ fn resync_preserves_override_on_rename() {
     assert_eq!(report.conflict, 0);
     assert_eq!(report.rebound, 0);
     assert_eq!(instance.asset_version_seen, 2);
-    assert_eq!(instance.overrides.len(), 1);
-    assert_eq!(instance.overrides[0].status, OverrideStatus::Active);
+    assert_eq!(instance.component_overrides.len(), 1);
+    assert_eq!(instance.component_overrides[0].status, ComponentOverrideStatus::Active);
 }
 
 // ---------------------------------------------------------------------------
@@ -166,11 +169,12 @@ fn resync_moves_to_orphaned_on_entity_removed() {
     let asset_v2 = make_asset(vec![], 2);
 
     let instance = make_instance(
-        vec![OverridePatch {
+        vec![ComponentOverride {
             target_local_id: LocalId::new("abc"),
-            field_path: vec!["editor.Sprite2D".to_string(), "asset".to_string()],
+            component_type_id: editor_core::schema::ComponentTypeId::new("editor.Sprite2D"),
+            field_path: vec!["asset".to_string()],
             value: serde_json::Value::String("cannon.png".to_string()),
-            status: OverrideStatus::Active,
+            status: ComponentOverrideStatus::Active,
         }],
         vec![],
         BTreeMap::new(),
@@ -182,14 +186,14 @@ fn resync_moves_to_orphaned_on_entity_removed() {
 
     assert_eq!(report.active, 0);
     assert_eq!(report.orphaned, 1);
-    assert_eq!(instance.overrides.len(), 0);
-    assert_eq!(instance.orphaned_overrides.len(), 1);
+    assert_eq!(instance.component_overrides.len(), 0);
+    assert_eq!(instance.orphaned_component_overrides.len(), 1);
     assert_eq!(
-        instance.orphaned_overrides[0].status,
-        OverrideStatus::Orphaned
+        instance.orphaned_component_overrides[0].status,
+        ComponentOverrideStatus::Orphaned
     );
     assert_eq!(
-        instance.orphaned_overrides[0].target_local_id,
+        instance.orphaned_component_overrides[0].target_local_id,
         LocalId::new("abc")
     );
 }
@@ -215,11 +219,12 @@ fn resync_marks_stale_on_field_rename() {
     );
 
     let instance = make_instance(
-        vec![OverridePatch {
+        vec![ComponentOverride {
             target_local_id: LocalId::new("root"),
-            field_path: vec!["editor.Sprite2D".to_string(), "asset".to_string()],
+            component_type_id: editor_core::schema::ComponentTypeId::new("editor.Sprite2D"),
+            field_path: vec!["asset".to_string()],
             value: serde_json::Value::String("cannon.png".to_string()),
-            status: OverrideStatus::Active,
+            status: ComponentOverrideStatus::Active,
         }],
         vec![],
         BTreeMap::new(),
@@ -246,8 +251,8 @@ fn resync_marks_stale_on_field_rename() {
 
     assert_eq!(report.stale, 1);
     assert_eq!(report.active, 0);
-    assert_eq!(instance.overrides.len(), 1);
-    assert_eq!(instance.overrides[0].status, OverrideStatus::Stale);
+    assert_eq!(instance.component_overrides.len(), 1);
+    assert_eq!(instance.component_overrides[0].status, ComponentOverrideStatus::Stale);
 }
 
 // ---------------------------------------------------------------------------
@@ -270,11 +275,12 @@ fn resync_marks_conflict_on_type_change() {
     );
 
     let instance = make_instance(
-        vec![OverridePatch {
+        vec![ComponentOverride {
             target_local_id: LocalId::new("player"),
-            field_path: vec!["editor.Health".to_string(), "current".to_string()],
+            component_type_id: editor_core::schema::ComponentTypeId::new("editor.Health"),
+            field_path: vec!["current".to_string()],
             value: serde_json::json!(42),
-            status: OverrideStatus::Active,
+            status: ComponentOverrideStatus::Active,
         }],
         vec![],
         BTreeMap::new(),
@@ -285,8 +291,8 @@ fn resync_marks_conflict_on_type_change() {
     let report = resync(&asset_v2, &mut instance, 2);
 
     assert_eq!(report.conflict, 1);
-    assert_eq!(instance.overrides.len(), 1);
-    assert_eq!(instance.overrides[0].status, OverrideStatus::Conflict);
+    assert_eq!(instance.component_overrides.len(), 1);
+    assert_eq!(instance.component_overrides[0].status, ComponentOverrideStatus::Conflict);
 }
 
 // ---------------------------------------------------------------------------
@@ -303,11 +309,12 @@ fn resync_rebinds_via_local_path() {
         .collect();
 
     let instance = make_instance(
-        vec![OverridePatch {
+        vec![ComponentOverride {
             target_local_id: LocalId::new("abc"),
-            field_path: vec!["editor.Sprite2D".to_string(), "asset".to_string()],
+            component_type_id: editor_core::schema::ComponentTypeId::new("editor.Sprite2D"),
+            field_path: vec!["asset".to_string()],
             value: serde_json::Value::String("cannon.png".to_string()),
-            status: OverrideStatus::Active,
+            status: ComponentOverrideStatus::Active,
         }],
         vec![],
         id_map,
@@ -316,7 +323,7 @@ fn resync_rebinds_via_local_path() {
 
     let mut instance = instance;
     resync(&asset_v2, &mut instance, 2);
-    assert_eq!(instance.orphaned_overrides.len(), 1);
+    assert_eq!(instance.orphaned_component_overrides.len(), 1);
 
     // Asset v3: same local_id reappears
     let asset_v3 = make_asset(
@@ -335,9 +342,9 @@ fn resync_rebinds_via_local_path() {
     let report = resync(&asset_v3, &mut instance, 3);
 
     assert_eq!(report.rebound, 1);
-    assert_eq!(instance.overrides.len(), 1);
-    assert_eq!(instance.overrides[0].status, OverrideStatus::Active);
-    assert_eq!(instance.overrides[0].target_local_id, LocalId::new("abc"));
+    assert_eq!(instance.component_overrides.len(), 1);
+    assert_eq!(instance.component_overrides[0].status, ComponentOverrideStatus::Active);
+    assert_eq!(instance.component_overrides[0].target_local_id, LocalId::new("abc"));
 }
 
 // ---------------------------------------------------------------------------
@@ -486,27 +493,30 @@ fn validate_overrides_returns_issues_for_each_failure() {
     let instance = make_instance(
         vec![
             // Issue 2: missing_component (short form)
-            OverridePatch {
+            ComponentOverride {
                 target_local_id: LocalId::new("root"),
-                field_path: vec!["WrongComponent".to_string(), "field".to_string()],
+                component_type_id: editor_core::schema::ComponentTypeId::new("WrongComponent"),
+                field_path: vec!["field".to_string()],
                 value: serde_json::Value::Null,
-                status: OverrideStatus::Active,
+                status: ComponentOverrideStatus::Active,
             },
             // Issue 3: type_conflict
-            OverridePatch {
+            ComponentOverride {
                 target_local_id: LocalId::new("root"),
-                field_path: vec!["editor.Sprite2D".to_string(), "asset".to_string()],
+                component_type_id: editor_core::schema::ComponentTypeId::new("editor.Sprite2D"),
+                field_path: vec!["asset".to_string()],
                 value: serde_json::json!(123),
-                status: OverrideStatus::Active,
+                status: ComponentOverrideStatus::Active,
             },
         ],
         vec![
             // Issue 1: missing_entity
-            OverridePatch {
+            ComponentOverride {
                 target_local_id: LocalId::new("nonexistent"),
-                field_path: vec!["editor.Sprite2D".to_string(), "asset".to_string()],
+                component_type_id: editor_core::schema::ComponentTypeId::new("editor.Sprite2D"),
+                field_path: vec!["asset".to_string()],
                 value: serde_json::Value::String("cannon.png".to_string()),
-                status: OverrideStatus::Orphaned,
+                status: ComponentOverrideStatus::Orphaned,
             },
         ],
         BTreeMap::new(),

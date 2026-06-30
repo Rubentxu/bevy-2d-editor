@@ -231,18 +231,19 @@ export async function saveSceneAsset(): Promise<string> {
 // ── Scene Instance Types (PR3) ────────────────────────────────────────────────
 
 /**
- * Override health per ADR-0005 §Overrides, §Versioning.
+ * Component override health per ADR-0005 §Overrides, §Versioning and ADR-0009.
  */
-export type OverrideStatus = "active" | "orphaned" | "stale" | "conflict";
+export type ComponentOverrideStatus = "active" | "orphaned" | "stale" | "conflict";
 
 /**
- * A single non-destructive patch on a placed Scene Instance.
+ * A single non-destructive component field patch on a placed Scene Instance.
  */
-export interface OverridePatch {
+export interface ComponentOverride {
   target_local_id: string;
+  component_type_id: string;
   field_path: string[];
   value: unknown;
-  status: OverrideStatus;
+  status: ComponentOverrideStatus;
 }
 
 /**
@@ -254,8 +255,8 @@ export interface SceneInstance {
   asset_ref: string;
   asset_version_seen: number;
   id_map: Record<string, string>;
-  overrides: OverridePatch[];
-  orphaned_overrides: OverridePatch[];
+  component_overrides: ComponentOverride[];
+  orphaned_component_overrides: ComponentOverride[];
 }
 
 /**
@@ -341,7 +342,7 @@ export async function getSceneInstances(): Promise<
  */
 export interface OverrideIssue {
   code: string;
-  patch: OverridePatch;
+  patch: ComponentOverride;
   message: string;
 }
 
@@ -370,7 +371,7 @@ export interface ResolvedScene {
   entities: Record<string, ResolvedEntity>;
   id_map: Record<string, string>;
   minted_stable_ids: string[];
-  unresolved: OverridePatch[];
+  unresolved: ComponentOverride[];
 }
 
 /**
@@ -410,7 +411,7 @@ export async function effectiveValues(
  * @returns LocalId string if match found, null otherwise.
  */
 export async function tryRebind(
-  orphanedPatch: OverridePatch,
+  orphanedPatch: ComponentOverride,
   asset: SceneAssetDocument
 ): Promise<string | null> {
   await waitForEngine();
