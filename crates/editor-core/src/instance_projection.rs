@@ -141,6 +141,7 @@ mod tests {
         relationships: Vec<SceneAssetRelationship>,
     ) -> SceneAssetDocument {
         SceneAssetDocument {
+            layers: vec![],
             asset_id: "test-asset".to_string(),
             logical_path: "assets/test.bsn".to_string(),
             role: SceneAssetRole::Actor,

@@ -64,6 +64,17 @@ export interface SceneAssetDocument {
   relationships: SceneAssetRelationship[];
   exposed_properties: ExposedProperty[];
   metadata: SceneAssetMetadata;
+  /** Level Layers (only meaningful when role === "level"). */
+  layers?: LevelLayerPayload[];
+}
+
+export interface LevelLayerPayload {
+  kind: "scene_instance";
+  id: string;
+  name: string;
+  layer_kind: SceneInstanceLayerKind;
+  order: number;
+  instances: SceneInstance[];
 }
 
 async function waitForEngine(): Promise<void> {
@@ -263,6 +274,29 @@ export interface SceneInstance {
 }
 
 /**
+ * Soft-typed Scene Instance Layer category (level-design-layers-research).
+ */
+export type SceneInstanceLayerKind =
+  | "actors"
+  | "props"
+  | "spawns"
+  | "triggers"
+  | "collision"
+  | "custom";
+
+/**
+ * Read-side summary of a Scene Instance Layer (instances vector is omitted
+ * for list-affordance UI; full payload lives on the asset document).
+ */
+export interface SceneInstanceLayerSummary {
+  id: string;
+  name: string;
+  kind: SceneInstanceLayerKind;
+  order: number;
+  instances_count: number;
+}
+
+/**
  * Result of a scene instance command (place/remove/replace).
  */
 export interface SceneInstanceCommandResult {
@@ -449,4 +483,68 @@ export async function getResyncReports(): Promise<
   await waitForEngine();
   const result = (window as any).get_resync_reports();
   return typeof result === "string" ? JSON.parse(result) : result;
+}
+
+// ── Scene Instance Layer WASM wrappers (scene-instance-layer) ─────────────
+
+/**
+ * List Scene Instance Layers of a Scene Asset document.
+ * @returns Array of layer summaries (id, name, kind, order, instances_count).
+ */
+export async function listSceneInstanceLayers(
+  assetJson: string
+): Promise<SceneInstanceLayerSummary[]> {
+  await waitForEngine();
+  const result = (window as any).list_scene_instance_layers_wasm(assetJson);
+  return typeof result === "string" ? JSON.parse(result) : result;
+}
+
+/**
+ * Create a Scene Instance Layer in the asset document. Returns the updated
+ * asset JSON string (caller is responsible for merging it back into editor state).
+ * @throws on unknown kind
+ */
+export async function createSceneInstanceLayer(
+  assetJson: string,
+  name: string,
+  kind: SceneInstanceLayerKind
+): Promise<string> {
+  await waitForEngine();
+  const result = (window as any).create_scene_instance_layer_wasm(
+    assetJson,
+    name,
+    kind
+  );
+  if (typeof result === "string") return result;
+  // Some WASM error paths return JsValue objects; coerce to string.
+  return String(result);
+}
+
+/**
+ * Delete a Scene Instance Layer by id. Returns the updated asset JSON string.
+ * Unknown id is a no-op (the returned asset JSON is unchanged).
+ */
+export async function deleteSceneInstanceLayer(
+  assetJson: string,
+  layerId: string
+): Promise<string> {
+  await waitForEngine();
+  const result = (window as any).delete_scene_instance_layer_wasm(
+    assetJson,
+    layerId
+  );
+  return typeof result === "string" ? result : String(result);
+}
+
+/**
+ * Replace the in-memory Scene Asset document in the backend with the given
+ * JSON. Returns no value on success.
+ *
+ * Used after `createSceneInstanceLayer` or `deleteSceneInstanceLayer` to
+ * commit layer mutations back to the backend so the next
+ * `saveSceneAsset()` persists them.
+ */
+export async function setAssetDocumentJson(assetJson: string): Promise<void> {
+  await waitForEngine();
+  (window as any).set_asset_document_wasm(assetJson);
 }

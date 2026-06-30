@@ -16,6 +16,7 @@ use serde_json::json;
 
 fn empty_asset_doc(asset_id: &str, logical_path: &str) -> SceneAssetDocument {
     SceneAssetDocument {
+        layers: vec![],
         asset_id: asset_id.to_string(),
         logical_path: logical_path.to_string(),
         role: SceneAssetRole::Actor,

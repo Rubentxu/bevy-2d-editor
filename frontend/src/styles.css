@@ -1541,3 +1541,132 @@ body {
   color: #a6e3a1;
   border-color: rgba(166, 227, 161, 0.3);
 }
+/* ── Scene Instance Layers panel ──────────────────────────────────────────── */
+
+.layers-panel {
+  padding: 12px 8px;
+}
+
+.layers-create {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+.layers-create input[type="text"] {
+  flex: 1;
+  background: #1e1e2e;
+  border: 1px solid #313244;
+  color: #cdd6f4;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.layers-create select {
+  background: #1e1e2e;
+  border: 1px solid #313244;
+  color: #cdd6f4;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.layers-create button {
+  background: #89b4fa;
+  border: none;
+  color: #1e1e2e;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.layers-create button:disabled {
+  background: #45475a;
+  color: #6c7086;
+  cursor: not-allowed;
+}
+
+.layers-error {
+  color: #f38ba8;
+  background: rgba(243, 139, 168, 0.1);
+  border: 1px solid rgba(243, 139, 168, 0.4);
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.layers-empty {
+  color: #6c7086;
+  font-size: 13px;
+  padding: 16px;
+  text-align: center;
+}
+
+.layers-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #313244;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.layer-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #313244;
+  font-size: 13px;
+  color: #cdd6f4;
+}
+
+.layer-row:last-child {
+  border-bottom: none;
+}
+
+.layer-name {
+  flex: 1;
+  font-weight: 500;
+}
+
+.layer-kind {
+  font-family: "Fira Code", "Cascadia Code", monospace;
+  font-size: 11px;
+  background: rgba(137, 180, 250, 0.2);
+  color: #89b4fa;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.layer-order {
+  font-size: 11px;
+  color: #a6adc8;
+}
+
+.layer-count {
+  font-size: 11px;
+  color: #6c7086;
+}
+
+.layer-delete-btn {
+  background: transparent;
+  border: 1px solid #f38ba8;
+  color: #f38ba8;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.layer-delete-btn:hover {
+  background: rgba(243, 139, 168, 0.15);
+}

@@ -37,7 +37,7 @@ An explicit layer inside a Level Scene Asset that organizes level-design data by
 _Avoid_: raw tilemap layer (when the layer is not visual tiles), render layer (when you mean authoring data), physics layer (unless it specifically controls collision filtering)
 
 **Scene Instance Layer**:
-A Level Layer whose purpose is to organize placed Scene Instances inside a Level Scene Asset, such as actors, props, spawn points, pickups, doors, checkpoints, and triggers. A Scene Instance belongs to exactly one Scene Instance Layer; the layer owns the placement rather than merely referencing a global instance list.
+A Level Layer whose purpose is to organize placed Scene Instances inside a Level Scene Asset, such as actors, props, spawn points, pickups, doors, checkpoints, and triggers. A Scene Instance belongs to exactly one Scene Instance Layer; the layer owns the placement rather than merely referencing a global instance list. Each layer carries a `Layer ID`, a `Layer Kind`, a layer-level `name`, an `order`, and its placed Scene Instances.
 _Avoid_: Object Layer, Entity Layer, GameObject layer, instance collection
 
 **Scene Instance**:
@@ -91,6 +91,14 @@ _Avoid_: runtime handle, opaque asset id, absolute filesystem path
 **Operation Log**:
 The reversible history of typed editor commands, used for undo/redo and future agent auditing.
 _Avoid_: raw event stream, UI history
+
+**Layer ID**:
+The opaque, immutable identifier used to reference a Level Layer (e.g., a `SceneInstanceLayer`) across saves, undo/redo, and future agent operations. Serializes as a plain string and never collides with another layer id within the same Level Scene Asset.
+_Avoid_: name, slug, label
+
+**Layer Kind**:
+The soft-typed category of a `SceneInstanceLayer`: `actors`, `props`, `spawns`, `triggers`, `collision`, or `custom`. The kind is set at layer creation and is immutable afterwards to keep layered semantics stable for downstream tooling.
+_Avoid_: hard enum without custom, vendor-specific layer type names
 
 **DynamicScene Export**:
 The adapter that materializes editor-owned scene data into a Bevy-compatible runtime scene representation.

@@ -1,9 +1,11 @@
 //! Scene Asset Document — editor-owned durable authoring types per ADR-0005.
 //! See docs/adr/0005-scene-asset-bsn-aligned-reusable-scene-model.md.
+//! Level Layer types per docs/sddk/level-design-layers-research/design.md.
 
 use serde::{Deserialize, Serialize};
 
 use crate::document::ComponentInstance;
+use crate::scene_instance::SceneInstance;
 
 /// Opaque stable identity of an entity *inside* a Scene Asset.
 /// Never appears as a SceneDocument StableId. Overrides target this.
@@ -63,6 +65,8 @@ pub struct SceneAssetDocument {
     pub exposed_properties: Vec<ExposedProperty>,
     #[serde(default)]
     pub metadata: SceneAssetMetadata,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub layers: Vec<LevelLayer>,
 }
 
 /// One entity inside a Scene Asset. Reuses existing ComponentInstance.
@@ -172,4 +176,62 @@ pub fn validate_role(role: SceneAssetRole, doc: &SceneAssetDocument) -> Vec<Role
     }
 
     warnings
+}
+
+// =============================================================================
+// Level Layer types
+// =============================================================================
+
+/// Opaque stable identifier for a Level Layer inside a Scene Asset.
+/// Transparent so it serializes as a plain string, e.g. `"lyr_01..."`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct LayerId(pub String);
+
+impl LayerId {
+    pub fn new(id: impl Into<String>) -> Self {
+        Self(id.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Soft-typed Scene Instance Layer category.
+/// The custom variant keeps the model extensible without breaking JSON.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SceneInstanceLayerKind {
+    Actors,
+    Props,
+    Spawns,
+    Triggers,
+    Collision,
+    Custom,
+}
+
+/// A Scene Instance Layer inside a Level Scene Asset.
+///
+/// Owns its placed Scene Instances (`instances`). Layer order is determined by
+/// the `order` field; per-instance `z` lives on individual `SceneInstance`
+/// `instance_components` (see level-scene-asset slice).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SceneInstanceLayer {
+    pub id: LayerId,
+    pub name: String,
+    #[serde(rename = "layer_kind")]
+    pub kind: SceneInstanceLayerKind,
+    pub order: i32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub instances: Vec<SceneInstance>,
+}
+
+/// A Level Layer of a Level Scene Asset. Currently only one variant; future
+/// layer kinds (Tile, IntGrid, Auto) are deferred per
+/// `docs/sddk/level-design-layers-research/design.md`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum LevelLayer {
+    SceneInstance(SceneInstanceLayer),
 }

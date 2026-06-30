@@ -120,6 +120,21 @@ export async function initEngine(
   // ── Validation Center (validation-center) ──────────────────────────────────
   (window as any).get_validation_issues_wasm = () => wasm.get_validation_issues_wasm();
 
+  // ── Scene Instance Layer (scene-instance-layer) ──────────────────────────
+  (window as any).list_scene_instance_layers_wasm = (assetJson: string) =>
+    wasm.list_scene_instance_layers_wasm(assetJson);
+  (window as any).create_scene_instance_layer_wasm = (
+    assetJson: string,
+    name: string,
+    kind: string
+  ) => wasm.create_scene_instance_layer_wasm(assetJson, name, kind);
+  (window as any).delete_scene_instance_layer_wasm = (
+    assetJson: string,
+    layerId: string
+  ) => wasm.delete_scene_instance_layer_wasm(assetJson, layerId);
+  (window as any).set_asset_document_wasm = (assetJson: string) =>
+    wasm.set_asset_document_wasm(assetJson);
+
   // ── Scene Registry (PR2 multi-scene) ──────────────────────────────────────
   (window as any).scene_create = (name: string) => wasm.scene_create(name);
   (window as any).scene_switch = (id: string) => wasm.scene_switch(id);

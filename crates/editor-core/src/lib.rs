@@ -103,8 +103,9 @@ pub use operation_log::{LogEntry, OperationLog, OperationLogError};
 pub use persistence::{asset_path, validate_logical_path, AssetPathError, PROJECT_FILE, ProjectMetadata, SCENES_DIR, SCHEMAS_DIR, ASSETS_DIR};
 pub use asset_command::{AssetCommand, AssetCommandError, AssetOperationLog};
 pub use scene_asset::{
-    AssetReference, ExposedProperty, LocalId, RelationshipKind, RoleWarning, SceneAssetDocument,
-    SceneAssetEntity, SceneAssetMetadata, SceneAssetRelationship, SceneAssetRole, validate_role,
+    AssetReference, ExposedProperty, LayerId, LevelLayer, LocalId, RelationshipKind, RoleWarning,
+    SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata, SceneAssetRelationship,
+    SceneAssetRole, SceneInstanceLayer, SceneInstanceLayerKind, validate_role,
 };
 pub use scene_asset_catalog::{
     CatalogError, CatalogWarning, SceneAssetCatalog, SceneAssetCatalogEntry, mint_asset_id,
@@ -859,6 +860,127 @@ pub fn get_validation_issues_wasm() -> Result<String, JsValue> {
 
     serde_json::to_string(&issues)
         .map_err(|e| JsValue::from_str(&format!("Failed to serialize issues: {}", e)))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scene Instance Layer WASM surface
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Helper: parse `asset_json` as `SceneAssetDocument`. Returns error JsValue on failure.
+fn parse_asset_doc(asset_json: &str) -> Result<SceneAssetDocument, JsValue> {
+    serde_json::from_str(asset_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid asset JSON: {}", e)))
+}
+
+/// List Scene Instance Layers of a Scene Asset document.
+///
+/// Returns a JSON array of `{ id, name, kind, order, instances_count }`,
+/// omitting the `instances` vector for brevity at this level.
+#[wasm_bindgen]
+pub fn list_scene_instance_layers_wasm(asset_json: &str) -> Result<String, JsValue> {
+    let doc: SceneAssetDocument = parse_asset_doc(asset_json)?;
+
+    let mut out: Vec<serde_json::Value> = Vec::with_capacity(doc.layers.len());
+    for layer in &doc.layers {
+        let LevelLayer::SceneInstance(scene_layer) = layer;
+        out.push(serde_json::json!({
+            "id": scene_layer.id.as_str(),
+            "name": scene_layer.name,
+            "kind": scene_layer.kind,
+            "order": scene_layer.order,
+            "instances_count": scene_layer.instances.len(),
+        }));
+    }
+    serde_json::to_string(&out)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize layers: {}", e)))
+}
+
+/// Create a new Scene Instance Layer in the asset document and return the
+/// updated asset JSON. Rejects unknown `kind` values.
+#[wasm_bindgen]
+pub fn create_scene_instance_layer_wasm(
+    asset_json: &str,
+    name: &str,
+    kind: &str,
+) -> Result<String, JsValue> {
+    let mut doc: SceneAssetDocument = parse_asset_doc(asset_json)?;
+
+    // Parse kind
+    let parsed_kind: SceneInstanceLayerKind = match kind {
+        "actors" => SceneInstanceLayerKind::Actors,
+        "props" => SceneInstanceLayerKind::Props,
+        "spawns" => SceneInstanceLayerKind::Spawns,
+        "triggers" => SceneInstanceLayerKind::Triggers,
+        "collision" => SceneInstanceLayerKind::Collision,
+        "custom" => SceneInstanceLayerKind::Custom,
+        other => {
+            return Err(JsValue::from_str(&format!(
+                "Unknown layer kind '{}'. Allowed: actors, props, spawns, triggers, collision, custom",
+                other
+            )))
+        }
+    };
+
+    // Generate a stable layer id.
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0);
+    let new_id = LayerId::new(format!("lyr_{:x}", now));
+
+    // Compute next order = max(order) + 1, falling back to 0.
+    let next_order = doc
+        .layers
+        .iter()
+        .filter_map(|l| if let LevelLayer::SceneInstance(s) = l { Some(s.order) } else { None })
+        .max()
+        .map(|o| o + 1)
+        .unwrap_or(0);
+
+    doc.layers.push(LevelLayer::SceneInstance(SceneInstanceLayer {
+        id: new_id,
+        name: name.to_string(),
+        kind: parsed_kind,
+        order: next_order,
+        instances: Vec::new(),
+    }));
+
+    serde_json::to_string(&doc)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize asset: {}", e)))
+}
+
+/// Delete a Scene Instance Layer by id and return the updated asset JSON.
+/// If the layer id is unknown, the asset is returned unchanged.
+#[wasm_bindgen]
+pub fn delete_scene_instance_layer_wasm(
+    asset_json: &str,
+    layer_id: &str,
+) -> Result<String, JsValue> {
+    let mut doc: SceneAssetDocument = parse_asset_doc(asset_json)?;
+    let before = doc.layers.len();
+    doc.layers
+        .retain(|l| if let LevelLayer::SceneInstance(s) = l { s.id.as_str() != layer_id } else { true });
+    if doc.layers.len() == before {
+        // Unknown id is a no-op; return current asset.
+        // Doc comment in spec: "Delete unknown layer is a no-op".
+    }
+    serde_json::to_string(&doc)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize asset: {}", e)))
+}
+
+/// Replace the open Scene Asset document in the backend with the given JSON.
+///
+/// Used by the scene-instance-layer slice to commit layer mutations back to the
+/// in-memory doc so subsequent saves (save_scene_asset) persist them.
+#[wasm_bindgen]
+pub fn set_asset_document_wasm(asset_json: &str) -> Result<(), JsValue> {
+    let doc: SceneAssetDocument = parse_asset_doc(asset_json)?;
+    SCENE_ASSET_DOC.with(|s| {
+        *s.borrow_mut() = Some(doc);
+    });
+    // Bump version so downstream resync sees a change if same logical content.
+    // (Optional — semantic versioning is out of scope for this slice.)
+    Ok(())
 }
 
 /// Undo the last operation. Returns the new document snapshot as JSON.

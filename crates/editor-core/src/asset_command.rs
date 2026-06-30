@@ -468,6 +468,7 @@ mod tests {
 
     fn empty_doc() -> SceneAssetDocument {
         SceneAssetDocument {
+            layers: vec![],
             asset_id: "id_test".to_string(),
             logical_path: "test/asset".to_string(),
             role: crate::scene_asset::SceneAssetRole::Actor,
