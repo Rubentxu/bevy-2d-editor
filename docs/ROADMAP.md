@@ -73,8 +73,9 @@
 | 2 | `scene-instance-placement` (PR1 ✅ v0.24.0; PR2 ✅ v0.25.0; PR3 ✅ v0.26.0) | ✅ DONE | Lets users place Scene Assets in SceneDocuments without deep cloning |
 | 3 | `override-resync-workbench` (WASM surface + UI) | ✅ DONE (v0.27.0) | Makes `OverridePatch` status and resync reports visible/actionable |
 | 4 | `validation-center` (ValidationIssue types + WASM + UI panel) | ✅ DONE (v0.28.0) | Centralizes catalog warnings, export warnings, and per-instance override issues in one UI panel |
-| 5 | `level-design-layers-research` | Planned research | Defines tile/object/IntGrid/auto-layer semantics before committing to a tilemap model |
-| 6 | `runtime-preview-inspector` | Planned | Shows runtime preview provenance, metrics, and editor-to-preview mapping |
+| 5 | `component-override-migration` | Planned | Replaces legacy `OverridePatch` with ECS/BSN-friendly `ComponentOverride` before Level Layers |
+| 6 | `level-design-layers-research` | Planned research | Defines Scene Instance Layer, Tile Layer, IntGrid, and Auto Layer semantics before committing to a tilemap model |
+| 7 | `runtime-preview-inspector` | Planned | Shows runtime preview provenance, metrics, and editor-to-preview mapping |
 
 ### Research Gates
 
@@ -292,8 +293,8 @@ Validation Center UI + WASM Surface (validation-center)                         
 
 See [`CONTEXT.md`](../CONTEXT.md) for authoritative domain language.
 
-Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Scene Instance**, **Scene Asset Catalog**, **Project Asset Browser**, **Scene Asset Authoring Mode**, **Override / Resync Workbench**, **Validation Center**, **Runtime Preview Inspector**, **Component Schema Registry**, **Component Instance**, **Operation Log**, **BsnIr**, **OverridePatch**.
+Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level Scene Asset**, **Level Layer**, **Scene Instance Layer**, **Scene Instance**, **Scene Asset Catalog**, **Project Asset Browser**, **Scene Asset Authoring Mode**, **Override / Resync Workbench**, **Validation Center**, **Runtime Preview Inspector**, **Component Schema Registry**, **Component Instance**, **Component Override**, **Operation Log**, **BsnIr**.
 
 ---
 
-*Last updated: v0.26.0 — 2026-06-30 (scene-instance-placement PR1/PR2/PR3 all merged; Hito 2 Order 2 CLOSED)*
+*Last updated: v0.28.0 — 2026-06-30 (validation-center merged; component-override-migration inserted before level-design-layers-research)*

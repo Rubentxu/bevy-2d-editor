@@ -259,8 +259,9 @@ Users can understand how editor-authored data appears in the running preview.
 | 2 | `scene-instance-placement` | Converts assets into reusable scene content | Capability 1 |
 | 3 | `override-resync-workbench` | Makes instance-local changes safe and understandable | Capability 2 |
 | 4 | `validation-center` | Gives users project-wide confidence before scale | Capabilities 1-3 |
-| 5 | `level-design-layers-research` | Prevents premature tilemap model mistakes | Capability 1 |
-| 6 | `runtime-preview-inspector` | Connects authoring to runtime behavior | Capability 2+4 |
+| 5 | `component-override-migration` | Cleans ECS/BSN override semantics before Level Layers | Capabilities 2-4 |
+| 6 | `level-design-layers-research` | Prevents premature tilemap model mistakes | Capability 1 + Order 5 |
+| 7 | `runtime-preview-inspector` | Connects authoring to runtime behavior | Capability 2+4 |
 
 ## Verification Baseline
 

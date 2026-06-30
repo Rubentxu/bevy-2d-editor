@@ -28,9 +28,25 @@ _Avoid_: Bevy Entity, object, node
 A reusable Bevy-aligned scene composition stored in the Project and intended to converge with Bevy Scene Notation (`.bsn`) assets. A Scene Asset can describe one Entity, a hierarchy of Entities, a reusable fragment, a UI composition, or a full level. Use a role/kind such as `actor`, `fragment`, `screen`, `level`, `ui`, or `effect` instead of creating separate prefab/collection concepts.
 _Avoid_: prefab, blueprint, Entity Template, DynamicScene Export, Defold-style split between GameObject/Collection/Factory/Proxy
 
+**Level Scene Asset**:
+A Scene Asset with role `level` used as the editor-owned unit for level design. Level-specific data such as tile/object/semantic/generated layers belongs inside the Level Scene Asset unless future research proves it breaks the Scene Asset contract.
+_Avoid_: LevelDocument, tilemap document, map file, room document, separate level asset type
+
+**Level Layer**:
+An explicit layer inside a Level Scene Asset that organizes level-design data by purpose, such as placed Scene Instances, tile painting, semantic IntGrid-like cells, or generated auto-layer output.
+_Avoid_: raw tilemap layer (when the layer is not visual tiles), render layer (when you mean authoring data), physics layer (unless it specifically controls collision filtering)
+
+**Scene Instance Layer**:
+A Level Layer whose purpose is to organize placed Scene Instances inside a Level Scene Asset, such as actors, props, spawn points, pickups, doors, checkpoints, and triggers. A Scene Instance belongs to exactly one Scene Instance Layer; the layer owns the placement rather than merely referencing a global instance list.
+_Avoid_: Object Layer, Entity Layer, GameObject layer, instance collection
+
 **Scene Instance**:
-A placed use of a Scene Asset inside a SceneDocument, represented as an asset reference plus explicit local patches/overrides, with references and Stable IDs owned by the editor.
+A placed use of a Scene Asset inside a SceneDocument, represented as an asset reference plus instance-owned Component Instances and explicit local patches/overrides, with references and Stable IDs owned by the editor.
 _Avoid_: prefab instance, cloned template, deep copy, Bevy Entity
+
+**Component Override**:
+A non-destructive patch applied by a Scene Instance to a specific Component Instance on an asset-local Entity inside the referenced Scene Asset. Component identity is explicit (`component_type_id`) and field paths only address fields inside that component.
+_Avoid_: property override, prefab override, opaque patch, field path that hides the component type
 
 **Project Asset Browser**:
 The editor UI surface for browsing Project-level assets such as scenes, schemas, Scene Assets, and future level-design assets. It is not a filesystem browser and must show editor-owned logical assets, not raw OPFS implementation details.

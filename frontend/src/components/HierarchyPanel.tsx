@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { SceneDocument } from "../hooks/useSceneState";
-import { SceneInstance, OverrideStatus } from "../services/scene-assets";
+import { SceneInstance } from "../services/scene-assets";
 
 interface Props {
   scene: SceneDocument | null;
@@ -38,11 +38,14 @@ function extractInstanceId(entityId: string): string | null {
 }
 
 /**
- * Compute the override-status color for a Scene Instance.
- * Returns CSS color string or null if no overrides exist.
+ * Compute the component-override status color for a Scene Instance.
+ * Returns CSS color string or null if no component overrides exist.
  */
 function overrideStatusColor(instance: SceneInstance): string | null {
-  const allPatches = [...instance.overrides, ...instance.orphaned_overrides];
+  const allPatches = [
+    ...instance.component_overrides,
+    ...instance.orphaned_component_overrides,
+  ];
   if (allPatches.length === 0) return null;
   if (allPatches.some((p) => p.status === "conflict" || p.status === "orphaned")) return "#e53e3e"; // red
   if (allPatches.some((p) => p.status === "stale")) return "#d69e2e"; // yellow

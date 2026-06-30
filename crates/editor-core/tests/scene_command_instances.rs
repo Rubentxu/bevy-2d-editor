@@ -32,8 +32,8 @@ fn test_place_instance_serializes_pascal_case() {
         asset_ref: AssetReference::new("characters/player"),
         asset_version: 1,
         id_map,
-        overrides: vec![],
-        orphaned_overrides: vec![],
+        component_overrides: vec![],
+        orphaned_component_overrides: vec![],
     };
 
     let json = serde_json::to_string(&cmd).unwrap();
@@ -84,8 +84,8 @@ fn test_replace_instance_asset_serializes_pascal_case() {
         id_map: vec![(LocalId::new("local_1"), StableId::new("inst_test_1"))]
             .into_iter()
             .collect(),
-        overrides: vec![],
-        orphaned_overrides: vec![],
+        component_overrides: vec![],
+        orphaned_component_overrides: vec![],
     });
 
     let cmd = Command::ReplaceInstanceAsset {
@@ -124,7 +124,7 @@ fn test_place_instance_deserializes() {
         "asset_version": 3,
         "id_map": {"local_x": "inst_abc123_local_x"},
         "overrides": [],
-        "orphaned_overrides": []
+        "orphaned_component_overrides": []
     }"#;
 
     let cmd: Command = serde_json::from_str(json).unwrap();
@@ -134,15 +134,15 @@ fn test_place_instance_deserializes() {
             asset_ref,
             asset_version,
             id_map,
-            overrides,
-            orphaned_overrides,
+            component_overrides,
+            orphaned_component_overrides,
         } => {
             assert_eq!(instance_id.as_str(), "inst_abc123");
             assert_eq!(asset_ref.as_str(), "assets/hero");
             assert_eq!(asset_version, 3);
             assert_eq!(id_map.len(), 1);
-            assert!(overrides.is_empty());
-            assert!(orphaned_overrides.is_empty());
+            assert!(component_overrides.is_empty());
+            assert!(orphaned_component_overrides.is_empty());
         }
         _ => panic!("Expected PlaceInstance variant"),
     }
@@ -215,8 +215,8 @@ fn s15_place_instance_apply_and_inverse() {
         asset_ref: AssetReference::new("characters/player"),
         asset_version: 1,
         id_map,
-        overrides: vec![],
-        orphaned_overrides: vec![],
+        component_overrides: vec![],
+        orphaned_component_overrides: vec![],
     };
 
     // Apply PlaceInstance
@@ -255,8 +255,8 @@ fn s16_remove_instance_apply_and_inverse() {
         id_map: vec![(LocalId::new("local_1"), StableId::new("inst_test_1"))]
             .into_iter()
             .collect(),
-        overrides: vec![],
-        orphaned_overrides: vec![],
+        component_overrides: vec![],
+        orphaned_component_overrides: vec![],
     };
     doc.instances.insert(StableId::new("inst_test"), instance);
 
@@ -307,8 +307,8 @@ fn s17_replace_instance_asset_apply_and_inverse() {
         id_map: vec![(LocalId::new("local_1"), StableId::new("inst_test_1"))]
             .into_iter()
             .collect(),
-        overrides: vec![],
-        orphaned_overrides: vec![],
+        component_overrides: vec![],
+        orphaned_component_overrides: vec![],
     };
     doc.instances.insert(StableId::new("inst_test"), instance);
 
@@ -379,8 +379,8 @@ fn s3_remove_instance_only_affects_instance() {
         id_map: vec![(LocalId::new("root"), StableId::new("inst_001_root"))]
             .into_iter()
             .collect(),
-        overrides: vec![],
-        orphaned_overrides: vec![],
+        component_overrides: vec![],
+        orphaned_component_overrides: vec![],
     };
     doc.instances
         .insert(StableId::new("inst_001"), instance);

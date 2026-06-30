@@ -215,12 +215,12 @@ export default function InspectorPanel({
   // Compute override status summary
   const overrideCounts = selectedInstance
     ? {
-        active: selectedInstance.overrides.filter((p) => p.status === "active").length,
-        stale: selectedInstance.overrides.filter((p) => p.status === "stale").length,
-        orphaned: selectedInstance.overrides.filter((p) => p.status === "orphaned").length
-          + selectedInstance.orphaned_overrides.filter((p) => p.status === "orphaned").length,
-        conflict: selectedInstance.overrides.filter((p) => p.status === "conflict").length
-          + selectedInstance.orphaned_overrides.filter((p) => p.status === "conflict").length,
+        active: selectedInstance.component_overrides.filter((p) => p.status === "active").length,
+        stale: selectedInstance.component_overrides.filter((p) => p.status === "stale").length,
+        orphaned: selectedInstance.component_overrides.filter((p) => p.status === "orphaned").length
+          + selectedInstance.orphaned_component_overrides.filter((p) => p.status === "orphaned").length,
+        conflict: selectedInstance.component_overrides.filter((p) => p.status === "conflict").length
+          + selectedInstance.orphaned_component_overrides.filter((p) => p.status === "conflict").length,
       }
     : null;
 
@@ -268,28 +268,28 @@ export default function InspectorPanel({
               + New Schema
             </button>
           </div>
-          {/* Override Summary (override-resync-workbench) */}
+          {/* Component Override Summary (override-resync-workbench) */}
           {overrideCounts && (
             <div className="override-summary" data-testid="override-summary">
-              <h4>Overrides</h4>
+              <h4>Component Overrides</h4>
               <div className="override-counts">
                 {overrideCounts.active > 0 && (
-                  <span className="override-count active" title="Active overrides">
+                  <span className="override-count active" title="Active component overrides">
                     {overrideCounts.active} active
                   </span>
                 )}
                 {overrideCounts.stale > 0 && (
-                  <span className="override-count stale" title="Overrides on renamed/removed fields">
+                  <span className="override-count stale" title="Component overrides on renamed/removed fields">
                     {overrideCounts.stale} stale
                   </span>
                 )}
                 {overrideCounts.orphaned > 0 && (
-                  <span className="override-count orphaned" title="Orphaned overrides — entity removed from asset">
+                  <span className="override-count orphaned" title="Orphaned component overrides — entity removed from asset">
                     {overrideCounts.orphaned} orphaned
                   </span>
                 )}
                 {overrideCounts.conflict > 0 && (
-                  <span className="override-count conflict" title="Type conflict overrides">
+                  <span className="override-count conflict" title="Type conflict component overrides">
                     {overrideCounts.conflict} conflict
                   </span>
                 )}
@@ -305,7 +305,7 @@ export default function InspectorPanel({
                   ))}
                 </div>
               )}
-              {/* Override issues details */}
+              {/* Component override issues details */}
               {overrideIssues.length > 0 && (
                 <button
                   type="button"

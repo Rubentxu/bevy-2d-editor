@@ -9,6 +9,22 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 use thiserror::Error;
 
+/// Opaque component type identifier used by the Component Schema Registry.
+/// Transparent so it serializes as a plain string, e.g. `editor.Transform2D`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ComponentTypeId(pub String);
+
+impl ComponentTypeId {
+    pub fn new(id: impl Into<String>) -> Self {
+        Self(id.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 /// Field type enumeration for schema field definitions.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FieldType {

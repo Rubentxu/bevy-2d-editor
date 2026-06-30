@@ -3,22 +3,24 @@
 
 use editor_core::{
     scene_asset::LocalId,
-    scene_instance::{OverridePatch, OverrideStatus, patch_status_after_field_rename},
+    scene_instance::{ComponentOverride, ComponentOverrideStatus, component_override_status_after_field_rename},
 };
 
 #[test]
 fn s3_override_targets_local_id() {
-    let patch = OverridePatch {
+    let patch = ComponentOverride {
         target_local_id: LocalId("weapon".to_string()),
-        field_path: vec!["Sprite2D".to_string(), "asset".to_string()],
+        component_type_id: editor_core::schema::ComponentTypeId::new("Sprite2D"),
+        field_path: vec!["asset".to_string()],
         value: serde_json::json!("cannon.png"),
-        status: OverrideStatus::Active,
+        status: ComponentOverrideStatus::Active,
     };
 
     assert_eq!(patch.target_local_id.as_str(), "weapon");
 
-    let renamed_name_patch = OverridePatch {
+    let renamed_name_patch = ComponentOverride {
         target_local_id: LocalId("weapon".to_string()),
+        component_type_id: patch.component_type_id.clone(),
         field_path: patch.field_path.clone(),
         value: serde_json::json!("cannon.png"),
         status: patch.status,
@@ -28,37 +30,39 @@ fn s3_override_targets_local_id() {
 
 #[test]
 fn s4_rename_marks_stale() {
-    let patch = OverridePatch {
+    let patch = ComponentOverride {
         target_local_id: LocalId("weapon".to_string()),
-        field_path: vec!["Sprite2D".to_string(), "asset".to_string()],
+        component_type_id: editor_core::schema::ComponentTypeId::new("Sprite2D"),
+        field_path: vec!["asset".to_string()],
         value: serde_json::json!("cannon.png"),
-        status: OverrideStatus::Active,
+        status: ComponentOverrideStatus::Active,
     };
 
-    let result = patch_status_after_field_rename(&patch, ("Sprite2D", "Sprite"));
+    let result = component_override_status_after_field_rename(&patch, ("Sprite2D", "Sprite"));
     assert_eq!(
         result,
-        OverrideStatus::Stale,
+        ComponentOverrideStatus::Stale,
         "Renaming component field should mark override Stale"
     );
 
-    let unchanged_result = patch_status_after_field_rename(&patch, ("Transform2D", "Transform"));
+    let unchanged_result = component_override_status_after_field_rename(&patch, ("Transform2D", "Transform"));
     assert_eq!(
         unchanged_result,
-        OverrideStatus::Active,
+        ComponentOverrideStatus::Active,
         "Absent field rename should leave status Active"
     );
 
-    let orphan_patch = OverridePatch {
+    let orphan_patch = ComponentOverride {
         target_local_id: LocalId("weapon".to_string()),
-        field_path: vec!["Sprite2D".to_string(), "asset".to_string()],
+        component_type_id: editor_core::schema::ComponentTypeId::new("Sprite2D"),
+        field_path: vec!["asset".to_string()],
         value: serde_json::json!("cannon.png"),
-        status: OverrideStatus::Orphaned,
+        status: ComponentOverrideStatus::Orphaned,
     };
-    let orphan_result = patch_status_after_field_rename(&orphan_patch, ("Sprite2D", "Sprite"));
+    let orphan_result = component_override_status_after_field_rename(&orphan_patch, ("Sprite2D", "Sprite"));
     assert_eq!(
         orphan_result,
-        OverrideStatus::Orphaned,
+        ComponentOverrideStatus::Orphaned,
         "Orphaned patch should remain Orphaned even on field rename"
     );
 }

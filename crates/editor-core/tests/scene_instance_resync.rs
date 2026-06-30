@@ -8,7 +8,7 @@
 use editor_core::{
     document::SceneDocument,
     scene_asset::{AssetReference, LocalId, SceneAssetDocument, SceneAssetEntity, SceneAssetRole},
-    scene_instance::{OverridePatch, OverrideStatus, SceneInstance},
+    scene_instance::{ComponentOverride, ComponentOverrideStatus, SceneInstance},
     scene_instance_overrides::{resync, ResyncReport},
     StableId,
 };
@@ -19,7 +19,7 @@ fn make_instance_with_overrides(
     instance_id: &str,
     asset_ref: &str,
     version_seen: u32,
-    overrides: Vec<OverridePatch>,
+    component_overrides: Vec<ComponentOverride>,
 ) -> SceneInstance {
     SceneInstance {
         instance_id: StableId::new(instance_id),
@@ -28,8 +28,8 @@ fn make_instance_with_overrides(
         id_map: vec![(LocalId::new("root"), StableId::new(format!("{}_root", instance_id)))]
             .into_iter()
             .collect(),
-        overrides,
-        orphaned_overrides: vec![],
+        component_overrides,
+        orphaned_component_overrides: vec![],
     }
 }
 
@@ -56,11 +56,12 @@ fn s8_version_bump_triggers_resync() {
         "player_asset",
         1, // old version
         vec![
-            OverridePatch {
+            ComponentOverride {
                 target_local_id: LocalId::new("root".to_string()),
-                field_path: vec!["editor.Transform2D".to_string(), "translation".to_string()],
+                component_type_id: editor_core::schema::ComponentTypeId::new("editor.Transform2D"),
+                field_path: vec!["translation".to_string()],
                 value: serde_json::json!({"x": 100.0, "y": 200.0}),
-                status: OverrideStatus::Active,
+                status: ComponentOverrideStatus::Active,
             },
         ],
     );
@@ -99,23 +100,25 @@ fn s9_resync_never_silently_deletes_overrides() {
         1,
         vec![
             // Override targeting a deleted entity
-            OverridePatch {
+            ComponentOverride {
                 target_local_id: LocalId::new("deleted_entity".to_string()),
-                field_path: vec!["editor.Transform2D".to_string(), "translation".to_string()],
+                component_type_id: editor_core::schema::ComponentTypeId::new("editor.Transform2D"),
+                field_path: vec!["translation".to_string()],
                 value: serde_json::json!({"x": 50.0, "y": 75.0}),
-                status: OverrideStatus::Active,
+                status: ComponentOverrideStatus::Active,
             },
             // Override targeting existing entity
-            OverridePatch {
+            ComponentOverride {
                 target_local_id: LocalId::new("root".to_string()),
-                field_path: vec!["editor.Transform2D".to_string(), "scale".to_string()],
+                component_type_id: editor_core::schema::ComponentTypeId::new("editor.Transform2D"),
+                field_path: vec!["scale".to_string()],
                 value: serde_json::json!({"x": 2.0, "y": 2.0}),
-                status: OverrideStatus::Active,
+                status: ComponentOverrideStatus::Active,
             },
         ],
     );
 
-    let original_override_count = instance.overrides.len();
+    let original_override_count = instance.component_overrides.len();
 
     // Create asset at version 2 where "deleted_entity" no longer exists
     let asset = make_asset(
@@ -134,23 +137,23 @@ fn s9_resync_never_silently_deletes_overrides() {
 
     // The patch targeting deleted_entity should be moved to orphaned_overrides
     assert!(
-        instance.orphaned_overrides.len() > 0 || report.orphaned > 0,
+        instance.orphaned_component_overrides.len() > 0 || report.orphaned > 0,
         "Override targeting deleted entity should be marked as orphaned"
     );
 
     // Total override count should be preserved (no silent deletion)
-    let total_after = instance.overrides.len() + instance.orphaned_overrides.len();
+    let total_after = instance.component_overrides.len() + instance.orphaned_component_overrides.len();
     assert_eq!(
         total_after, original_override_count,
         "Total override count should be preserved - no silent deletion"
     );
 
     // Verify the orphaned override has Orphaned status
-    if !instance.orphaned_overrides.is_empty() {
+    if !instance.orphaned_component_overrides.is_empty() {
         assert!(
             matches!(
-                instance.orphaned_overrides[0].status,
-                OverrideStatus::Orphaned
+                instance.orphaned_component_overrides[0].status,
+                ComponentOverrideStatus::Orphaned
             ),
             "Orphaned override should have Orphaned status"
         );
@@ -199,27 +202,30 @@ fn s9_multiple_orphaned_overrides() {
         ]
         .into_iter()
         .collect(),
-        overrides: vec![
-            OverridePatch {
+        component_overrides: vec![
+            ComponentOverride {
                 target_local_id: LocalId::new("deleted1".to_string()),
-                field_path: vec!["editor.Transform2D".to_string(), "translation".to_string()],
+                component_type_id: editor_core::schema::ComponentTypeId::new("editor.Transform2D"),
+                field_path: vec!["translation".to_string()],
                 value: serde_json::json!({"x": 1.0, "y": 1.0}),
-                status: OverrideStatus::Active,
+                status: ComponentOverrideStatus::Active,
             },
-            OverridePatch {
+            ComponentOverride {
                 target_local_id: LocalId::new("deleted2".to_string()),
-                field_path: vec!["editor.Transform2D".to_string(), "rotation".to_string()],
+                component_type_id: editor_core::schema::ComponentTypeId::new("editor.Transform2D"),
+                field_path: vec!["rotation".to_string()],
                 value: serde_json::json!(45.0),
-                status: OverrideStatus::Active,
+                status: ComponentOverrideStatus::Active,
             },
-            OverridePatch {
+            ComponentOverride {
                 target_local_id: LocalId::new("root".to_string()), // This one survives
-                field_path: vec!["editor.Transform2D".to_string(), "scale".to_string()],
+                component_type_id: editor_core::schema::ComponentTypeId::new("editor.Transform2D"),
+                field_path: vec!["scale".to_string()],
                 value: serde_json::json!({"x": 1.5, "y": 1.5}),
-                status: OverrideStatus::Active,
+                status: ComponentOverrideStatus::Active,
             },
         ],
-        orphaned_overrides: vec![],
+        orphaned_component_overrides: vec![],
     };
 
     // Asset only has "root" entity now
@@ -236,10 +242,10 @@ fn s9_multiple_orphaned_overrides() {
     let report = resync(&asset, &mut instance, 2);
 
     // Should have 2 orphaned overrides
-    assert_eq!(instance.orphaned_overrides.len(), 2, "Should have 2 orphaned overrides");
-    assert_eq!(instance.overrides.len(), 1, "Should have 1 remaining override");
+    assert_eq!(instance.orphaned_component_overrides.len(), 2, "Should have 2 orphaned overrides");
+    assert_eq!(instance.component_overrides.len(), 1, "Should have 1 remaining override");
 
     // Total preserved
-    let total = instance.overrides.len() + instance.orphaned_overrides.len();
+    let total = instance.component_overrides.len() + instance.orphaned_component_overrides.len();
     assert_eq!(total, 3, "All 3 overrides should be preserved");
 }

@@ -18,6 +18,7 @@ ADR numbering is monotonic and never reused. Superseded decisions keep their ori
 | [ADR-0006](./0006-authoring-first-roadmap-after-bsn-migration.md) | Authoring-first roadmap after the BSN migration | Accepted (2026-06-29) |
 | [ADR-0007](./0007-separate-asset-command-surface.md) | Separate Asset command surface for Scene Asset Authoring | Accepted (2026-06-29) |
 | [ADR-0008](./0008-path-based-scene-asset-opfs-layout.md) | Path-based OPFS layout for Scene Assets | Accepted (2026-06-29) |
+| [ADR-0009](./0009-component-override-ecs-bsn-replacement-for-override-patch.md) | ComponentOverride as the ECS/BSN-friendly replacement for OverridePatch | Accepted (2026-06-30) |
 
 ## Related Documents
 

@@ -3,38 +3,39 @@
 
 use editor_core::StableId;
 use editor_core::scene_asset::{LocalId, SceneAssetEntity};
-use editor_core::scene_instance::{OverridePatch, OverrideStatus};
+use editor_core::scene_instance::{ComponentOverride, ComponentOverrideStatus};
 use std::any::TypeId;
 
 #[test]
 fn s5_override_status_is_closed_enum() {
-    // Construct an OverridePatch with status Active, serialize to JSON,
+    // Construct an ComponentOverride with status Active, serialize to JSON,
     // deserialize back, assert status equals Active (lowercase snake_case string).
-    let patch = OverridePatch {
+    let patch = ComponentOverride {
         target_local_id: LocalId("weapon".into()),
-        field_path: vec!["Sprite2D".into(), "asset".into()],
+        component_type_id: editor_core::schema::ComponentTypeId::new("Sprite2D"),
+        field_path: vec!["asset".into()],
         value: serde_json::json!("cannon.png"),
-        status: OverrideStatus::Active,
+        status: ComponentOverrideStatus::Active,
     };
 
-    let json = serde_json::to_string(&patch).expect("serialize OverridePatch");
-    let roundtripped: OverridePatch =
-        serde_json::from_str(&json).expect("deserialize OverridePatch");
+    let json = serde_json::to_string(&patch).expect("serialize ComponentOverride");
+    let roundtripped: ComponentOverride =
+        serde_json::from_str(&json).expect("deserialize ComponentOverride");
 
     assert_eq!(
         roundtripped.status,
-        OverrideStatus::Active,
-        "OverrideStatus::Active should round-trip correctly"
+        ComponentOverrideStatus::Active,
+        "ComponentOverrideStatus::Active should round-trip correctly"
     );
 
     // Assert the enum has exactly 4 variants by exhaustive match.
-    // If a new variant is added to OverrideStatus, this test will fail to compile
+    // If a new variant is added to ComponentOverrideStatus, this test will fail to compile
     // unless this match is updated — providing a compile-time exhaustiveness check.
     match patch.status {
-        OverrideStatus::Active
-        | OverrideStatus::Orphaned
-        | OverrideStatus::Stale
-        | OverrideStatus::Conflict => {
+        ComponentOverrideStatus::Active
+        | ComponentOverrideStatus::Orphaned
+        | ComponentOverrideStatus::Stale
+        | ComponentOverrideStatus::Conflict => {
             // Exhaustiveness confirmed: only the 4 expected variants exist.
         }
     }

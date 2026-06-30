@@ -12,7 +12,7 @@ use editor_core::{
     command::{Command, CommandError},
     document::SceneDocument,
     scene_asset::{AssetReference, LocalId, SceneAssetDocument, SceneAssetEntity, SceneAssetRole},
-    scene_instance::{OverridePatch, SceneInstance},
+    scene_instance::{ComponentOverride, SceneInstance},
     processor,
     StableId,
 };
@@ -104,8 +104,8 @@ fn s1_place_instance_creates_new_instance() {
         asset_ref: asset_ref.clone(),
         asset_version,
         id_map: id_map.clone(),
-        overrides: vec![],
-        orphaned_overrides: vec![],
+        component_overrides: vec![],
+        orphaned_component_overrides: vec![],
     };
 
     let inverse = processor::apply(&mut doc, &cmd).expect("apply should succeed");
@@ -159,8 +159,8 @@ fn s5_multi_root_rejected_with_error() {
         asset_ref: AssetReference::new("multi_root_asset"),
         asset_version: 1,
         id_map: BTreeMap::new(),
-        overrides: vec![],
-        orphaned_overrides: vec![],
+        component_overrides: vec![],
+        orphaned_component_overrides: vec![],
     };
 
     // The processor doesn't have access to the asset to check roots directly.
@@ -175,8 +175,8 @@ fn s5_multi_root_rejected_with_error() {
         id_map: vec![(LocalId::new("root"), StableId::new("inst_first_root"))]
             .into_iter()
             .collect(),
-        overrides: vec![],
-        orphaned_overrides: vec![],
+        component_overrides: vec![],
+        orphaned_component_overrides: vec![],
     };
     processor::apply(&mut doc, &cmd1).expect("first apply should succeed");
 
@@ -186,8 +186,8 @@ fn s5_multi_root_rejected_with_error() {
         asset_ref: AssetReference::new("assets/second"),
         asset_version: 1,
         id_map: BTreeMap::new(),
-        overrides: vec![],
-        orphaned_overrides: vec![],
+        component_overrides: vec![],
+        orphaned_component_overrides: vec![],
     };
 
     let result = processor::apply(&mut doc, &cmd2);
@@ -209,8 +209,8 @@ fn s12_empty_asset_rejected() {
         asset_ref: AssetReference::new("empty_asset"),
         asset_version: 1,
         id_map: BTreeMap::new(), // Empty id_map for empty asset
-        overrides: vec![],
-        orphaned_overrides: vec![],
+        component_overrides: vec![],
+        orphaned_component_overrides: vec![],
     };
 
     // This would fail at the WASM layer's root_local_ids check
@@ -247,8 +247,8 @@ fn s1_s2_integration_place_instance_with_namespaced_id_map() {
         asset_ref: AssetReference::new("test_asset"),
         asset_version: 3,
         id_map,
-        overrides: vec![],
-        orphaned_overrides: vec![],
+        component_overrides: vec![],
+        orphaned_component_overrides: vec![],
     };
 
     let inverse = processor::apply(&mut doc, &cmd).expect("apply should succeed");
