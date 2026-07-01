@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  type AutoRulePayload,
-  type Pattern3x3Payload,
+  type AutoRule,
+  type Pattern3x3,
   type PatternCell,
   type TileRefPayload,
   regenerateAutoLayer,
@@ -36,7 +36,7 @@ const CELL_LABELS: Record<string, string> = {
   '2,0': 'BL', '2,1': 'B',  '2,2': 'BR',
 };
 
-function buildDefaultPattern(): Pattern3x3Payload {
+function buildDefaultPattern(): Pattern3x3 {
   return [
     [('any' as PatternCell), ('any' as PatternCell), ('any' as PatternCell)],
     [('any' as PatternCell), ('any' as PatternCell), ('any' as PatternCell)],
@@ -45,12 +45,12 @@ function buildDefaultPattern(): Pattern3x3Payload {
 }
 
 export const AutoLayerPanel: React.FC<Props> = ({ layer, assetRef, onRegenerate }) => {
-  const [rules, setRules] = useState<AutoRulePayload[]>(layer.rules ?? []);
+  const [rules, setRules] = useState<AutoRule[]>(layer.rules ?? []);
   const [selectedRuleIndex, setSelectedRuleIndex] = useState<number>(0);
   const [tilesets, setTilesets] = useState<TilesetMetadata[]>([]);
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const stale = useAutoLayerStale(assetRef, layer.id);
+  const [stale, setStale, refreshStale] = useAutoLayerStale(assetRef, layer.id);
 
   // Current rule being edited
   const currentRule = rules[selectedRuleIndex] ?? {
@@ -66,9 +66,23 @@ export const AutoLayerPanel: React.FC<Props> = ({ layer, assetRef, onRegenerate 
 
   const handleCellChange = useCallback((row: number, col: number, value: PatternCell) => {
     if (row === 1 && col === 1) return; // center is always ignored
-    const newPattern: Pattern3x3Payload = currentRule.pattern.map((r, ri) =>
-      r.map((c, ci) => (ri === row && ci === col ? value : c))
-    );
+    const newPattern: Pattern3x3 = [
+      [
+        row === 0 && col === 0 ? value : currentRule.pattern[0][0],
+        row === 0 && col === 1 ? value : currentRule.pattern[0][1],
+        row === 0 && col === 2 ? value : currentRule.pattern[0][2],
+      ],
+      [
+        row === 1 && col === 0 ? value : currentRule.pattern[1][0],
+        currentRule.pattern[1][1], // center is always ignored
+        row === 1 && col === 2 ? value : currentRule.pattern[1][2],
+      ],
+      [
+        row === 2 && col === 0 ? value : currentRule.pattern[2][0],
+        row === 2 && col === 1 ? value : currentRule.pattern[2][1],
+        row === 2 && col === 2 ? value : currentRule.pattern[2][2],
+      ],
+    ];
     const updated = [...rules];
     updated[selectedRuleIndex] = { ...currentRule, pattern: newPattern };
     setRules(updated);
@@ -94,7 +108,7 @@ export const AutoLayerPanel: React.FC<Props> = ({ layer, assetRef, onRegenerate 
   }, [currentRule, rules, selectedRuleIndex]);
 
   const handleAddRule = useCallback(async () => {
-    const newRule: AutoRulePayload = {
+    const newRule: AutoRule = {
       pattern: buildDefaultPattern(),
       output: [],
       chance: undefined,
@@ -135,7 +149,7 @@ export const AutoLayerPanel: React.FC<Props> = ({ layer, assetRef, onRegenerate 
     }
   }, [assetRef, layer.id, onRegenerate]);
 
-  const persistRuleUpdate = async (index: number, rule: AutoRulePayload) => {
+  const persistRuleUpdate = async (index: number, rule: AutoRule) => {
     try {
       if (index < rules.length) {
         await updateAutoRule(assetRef, layer.id, index, rule);

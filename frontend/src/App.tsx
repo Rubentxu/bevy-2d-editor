@@ -541,12 +541,19 @@ export default function App() {
               onOpen={handleOpenAsset}
               onPlaceInstance={placeInstance}
             />
-            {autoLayerPanelOpen && selectedAutoLayer && (
+            {autoLayerPanelOpen && (
+              selectedAutoLayer ? (
               <AutoLayerPanel
                 layer={selectedAutoLayer}
                 assetRef={activeAssetLogicalPath ?? ""}
                 onRegenerate={refresh}
               />
+            ) : (
+              <div className="tileset-panel">
+                <h3>Auto Layer</h3>
+                <p style={{ fontSize: 12, color: '#666' }}>No auto layers in this asset. Open a level scene asset to edit auto layers.</p>
+              </div>
+            )
             )}
             {assetDoc && (
               <AssetAuthoringView
