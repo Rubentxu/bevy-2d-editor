@@ -3120,6 +3120,7 @@ pub fn paint_tile(
         cache.insert(asset_ref.to_string(), doc);
     });
 
+    mark_dirty();
     Ok(JsValue::NULL)
 }
 
@@ -3161,6 +3162,7 @@ pub fn erase_tile(
         cache.insert(asset_ref.to_string(), doc);
     });
 
+    mark_dirty();
     Ok(JsValue::NULL)
 }
 
