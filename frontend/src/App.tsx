@@ -18,13 +18,14 @@ import AssetAuthoringView from "./components/AssetAuthoringView";
 import AssetUnsavedChangesDialog from "./components/AssetUnsavedChangesDialog";
 import { TilesetPanel } from "./components/TilesetPanel";
 import { AutoLayerPanel } from "./components/AutoLayerPanel";
+import LogicGraphEditor from "./components/LogicGraphEditor";
 import { useScenes } from "./hooks/useScenes";
 import { useSceneAssets } from "./hooks/useSceneAssets";
 import { sceneCreate, sceneSwitch, sceneSwitchCommit, sceneDelete, sceneRename } from "./services/scenes";
 import { type TilesetMetadata } from "./services/tilesets";
 import { type AutoLayerPayload, type LevelLayerPayload } from "./services/scene-assets";
 
-type EditorMode = "scene" | "asset-authoring";
+type EditorMode = "scene" | "asset-authoring" | "logic";
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -487,7 +488,11 @@ export default function App() {
         <canvas id="bevy-canvas" />
       </div>
       <div className="main">
-        {editorMode === "scene" ? (
+        {editorMode === "logic" ? (
+          <>
+            <LogicGraphEditor editorMode={editorMode} />
+          </>
+        ) : editorMode === "scene" ? (
           <>
             {aiPanelOpen && (
               <AIAssistantPanel

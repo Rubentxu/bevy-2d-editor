@@ -1,6 +1,6 @@
 import { LogState } from "../hooks/useLogState";
 
-type EditorMode = "scene" | "asset-authoring";
+type EditorMode = "scene" | "asset-authoring" | "logic";
 
 interface Props {
   editorMode?: EditorMode;
