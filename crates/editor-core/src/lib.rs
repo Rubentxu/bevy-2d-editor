@@ -31,6 +31,7 @@ pub mod schema;
 pub mod tileset;
 pub mod tile_layer;
 pub mod logic_graph;
+pub mod logic_evaluator;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ADR References (documentation only — no code changes here)
@@ -118,6 +119,10 @@ pub use logic_graph::{
     count_logic_bindings, editor_logic_binding_component, find_dangling_edge_nodes,
     find_duplicate_node_id, LogicEdge, LogicGraphAsset, LogicInstance, LogicNode,
     LogicNodeRole, NodeId, NodeTypeId, PortId,
+};
+pub use logic_evaluator::{
+    global_node_registry, NodeDescriptor, NodeEvaluator, PortSpec, PortValue, PortValueType,
+    ParamSpec, LogicNodeRegistry,
 };
 pub use auto_layer::{
     AutoLayer, AutoLayerId, AutoRule, Pattern3x3, PatternCell, is_auto_layer_stale, regenerate,

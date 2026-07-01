@@ -176,7 +176,7 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 | Order | Change | Why this order |
 |-------|--------|----------------|
 | 1 | `logic-graph-data-model` | ✅ DONE (v0.37.0, PR #38) — `LogicGraphAsset`, `LogicNode`, `LogicEdge`, `SceneAssetRole::Logic`, `LogicInstance`. Foundation: everything depends on the data shape. |
-| 2 | `logic-registry-and-metadata` | `NodeEvaluator` trait + built-in registry keyed by `node_type_id` / `controller_id`, `logic.*` schemas, port specs. Needed before any node can do anything. |
+| 2 | `logic-registry-and-metadata` | ✅ DONE (v0.38.0, PR #TBD) — `NodeEvaluator` trait + built-in registry keyed by `node_type_id` / `controller_id`, `logic.*` schemas, port specs. Needed before any node can do anything. |
 | 3 | `logic-graph-authoring-ui` | React Flow view-only `LogicGraphEditor.tsx`, `EditorMode="logic"`, `LogicCommand` surface, node palette. Authoring needs data model + registry. |
 | 4 | `logic-graph-validation` | Port-type compatibility, cycle/dangling-ref detection via existing `get_validation_issues_wasm`. Surfaces issues before preview. |
 | 5 | `logic-preview-dispatch-scheduler` | `project_logic_instances()`, `LogicSchedule` system set, fix `spawn_preview_entity` skip-arm (lib.rs:1666), event-driven graph evaluation with a cheap Update gate. |
@@ -395,4 +395,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level
 
 ---
 
-*Last updated: v0.36.0 — 2026-07-01 (Hito 3 Order 4 bsn-file-import done)*
+*Last updated: v0.38.0 — 2026-07-01 (Hito 3 Order 2 logic-registry-and-metadata done)*

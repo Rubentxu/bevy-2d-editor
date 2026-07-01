@@ -203,6 +203,27 @@ impl ComponentSchemaRegistry {
             exports_to_bevy: false,
         });
 
+        // editor.LogicBinding — binds a Scene Instance to a LogicGraphAsset
+        registry.insert(ComponentSchema {
+            type_id: "editor.LogicBinding".to_string(),
+            display_name: "Logic Binding".to_string(),
+            fields: vec![
+                FieldDef {
+                    name: "asset_id".to_string(),
+                    field_type: FieldType::AssetReference,
+                    default: serde_json::json!(""),
+                    constraints: vec![],
+                },
+                FieldDef {
+                    name: "version".to_string(),
+                    field_type: FieldType::F32,
+                    default: serde_json::json!(1.0),
+                    constraints: vec![],
+                },
+            ],
+            exports_to_bevy: true,
+        });
+
         registry
     }
 }
@@ -298,10 +319,10 @@ mod tests {
 
     // §3.1: Built-in schemas are present
     #[test]
-    fn test_registry_has_5_builtin_schemas() {
+    fn test_registry_has_6_builtin_schemas() {
         let registry = ComponentSchemaRegistry::with_builtin_seeds();
         let count = registry.iter().count();
-        assert_eq!(count, 5);
+        assert_eq!(count, 6);
     }
 
     // §3.2: Known type_id returns its schema
@@ -384,13 +405,42 @@ mod tests {
         assert_eq!(locked.fields[0].field_type, FieldType::Bool);
     }
 
+    // §Phase 3.1: editor.LogicBinding resolves through global_registry() and combined_registry()
+    #[test]
+    fn test_logic_binding_schema_in_global_registry() {
+        let registry = ComponentSchemaRegistry::with_builtin_seeds();
+        let schema = registry.get("editor.LogicBinding");
+        assert!(schema.is_some(), "editor.LogicBinding should be in global registry");
+        let schema = schema.unwrap();
+        assert_eq!(schema.type_id, "editor.LogicBinding");
+        assert_eq!(schema.display_name, "Logic Binding");
+
+        // Check fields: asset_id (AssetReference) and version (F32)
+        let field_names: Vec<&str> = schema.fields.iter().map(|f| f.name.as_str()).collect();
+        assert!(field_names.contains(&"asset_id"), "should have asset_id field");
+        assert!(field_names.contains(&"version"), "should have version field");
+
+        let asset_id_field = schema.fields.iter().find(|f| f.name == "asset_id").unwrap();
+        assert_eq!(asset_id_field.field_type, FieldType::AssetReference);
+
+        let version_field = schema.fields.iter().find(|f| f.name == "version").unwrap();
+        assert_eq!(version_field.field_type, FieldType::F32);
+    }
+
+    #[test]
+    fn test_logic_binding_schema_in_combined_registry() {
+        let combined = combined_registry();
+        let schema = combined.get("editor.LogicBinding");
+        assert!(schema.is_some(), "editor.LogicBinding should be in combined registry");
+    }
+
     // §3.8: Global singleton
     #[test]
     fn test_global_registry_singleton() {
         let reg1 = global_registry();
         let reg2 = global_registry();
         assert_eq!(reg1 as *const _, reg2 as *const _);
-        assert_eq!(reg1.iter().count(), 5);
+        assert_eq!(reg1.iter().count(), 6);
     }
 
     // ===== Mutable user schema registry =====
@@ -488,7 +538,7 @@ mod tests {
     #[test]
     fn test_combined_registry_includes_builtins() {
         let combined = combined_registry();
-        assert_eq!(combined.iter().count(), 5);
+        assert_eq!(combined.iter().count(), 6);
         assert!(combined.get("editor.Name").is_some());
         assert!(combined.get("editor.Transform2D").is_some());
     }
@@ -498,7 +548,7 @@ mod tests {
         let _ = unregister_schema("game.Bar");
         register_schema(user_schema("game.Bar")).unwrap();
         let combined = combined_registry();
-        assert_eq!(combined.iter().count(), 6);
+        assert_eq!(combined.iter().count(), 7);
         assert!(combined.get("game.Bar").is_some());
         let _ = unregister_schema("game.Bar");
     }
