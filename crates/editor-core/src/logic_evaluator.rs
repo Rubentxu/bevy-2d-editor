@@ -104,6 +104,11 @@ impl LogicNodeRegistry {
         self.descriptors.get(node_type_id)
     }
 
+    /// Get all descriptors as a slice.
+    pub fn all_descriptors(&self) -> &HashMap<NodeTypeId, NodeDescriptor> {
+        &self.descriptors
+    }
+
     /// Register a built-in evaluator with its descriptor (OCP insertion point).
     pub fn register_builtin(
         &mut self,

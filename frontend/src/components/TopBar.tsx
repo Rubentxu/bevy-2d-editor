@@ -1,11 +1,12 @@
 import { LogState } from "../hooks/useLogState";
 
-type EditorMode = "scene" | "asset-authoring";
+type EditorMode = "scene" | "asset-authoring" | "logic";
 
 interface Props {
   editorMode?: EditorMode;
   onOpenAssets?: () => void;
   onBackToScene?: () => void;
+  onOpenLogic?: () => void;
   logState: LogState;
   onUndo: () => void;
   onRedo: () => void;
@@ -28,6 +29,7 @@ export default function TopBar({
   editorMode = "scene",
   onOpenAssets,
   onBackToScene,
+  onOpenLogic,
   logState,
   onUndo,
   onRedo,
@@ -54,6 +56,13 @@ export default function TopBar({
       {/* Scene mode buttons — hidden in asset authoring mode */}
       {!isAssetAuthoring && (
         <>
+          <button
+            onClick={onOpenLogic}
+            data-testid="open-logic-btn"
+            title="Open Logic Graph Editor"
+          >
+            ⚡ Logic
+          </button>
           <button
             onClick={onUndo}
             disabled={!logState.can_undo}

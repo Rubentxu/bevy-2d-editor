@@ -223,6 +223,18 @@ export async function initEngine(
   (window as any).get_asset_log_state = () => wasm.get_asset_log_state();
   (window as any).save_scene_asset = () => wasm.save_scene_asset();
 
+  // ── Logic Graph Authoring (logic-graph-authoring-ui) ────────────────────────
+  (window as any).dispatch_logic_command = (cmdJson: string) =>
+    wasm.dispatch_logic_command(cmdJson);
+  (window as any).undo_logic = () => wasm.undo_logic();
+  (window as any).redo_logic = () => wasm.redo_logic();
+  (window as any).get_logic_log_state = () => wasm.get_logic_log_state();
+  (window as any).get_logic_graph = () => wasm.get_logic_graph();
+  (window as any).create_logic_graph_asset = (assetId: string, logicalPath: string) =>
+    wasm.create_logic_graph_asset(assetId, logicalPath);
+  (window as any).list_logic_graph_assets = () => wasm.list_logic_graph_assets();
+  (window as any).get_node_descriptors = () => wasm.get_node_descriptors();
+
   // Expose sendMoveSprite (LinearBus raw command, used by legacy tests)
   (window as any).sendMoveSprite = sendMoveSprite;
   // Expose OPFS bridge functions for wasm_bindgen externs

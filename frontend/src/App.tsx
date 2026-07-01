@@ -18,13 +18,14 @@ import AssetAuthoringView from "./components/AssetAuthoringView";
 import AssetUnsavedChangesDialog from "./components/AssetUnsavedChangesDialog";
 import { TilesetPanel } from "./components/TilesetPanel";
 import { AutoLayerPanel } from "./components/AutoLayerPanel";
+import LogicGraphEditor from "./components/LogicGraphEditor";
 import { useScenes } from "./hooks/useScenes";
 import { useSceneAssets } from "./hooks/useSceneAssets";
 import { sceneCreate, sceneSwitch, sceneSwitchCommit, sceneDelete, sceneRename } from "./services/scenes";
 import { type TilesetMetadata } from "./services/tilesets";
 import { type AutoLayerPayload, type LevelLayerPayload } from "./services/scene-assets";
 
-type EditorMode = "scene" | "asset-authoring";
+type EditorMode = "scene" | "asset-authoring" | "logic";
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -383,6 +384,11 @@ export default function App() {
     setPendingBackToScene(false);
   }, []);
 
+  // ── Logic Graph handlers ─────────────────────────────────────────────────
+  const handleOpenLogic = useCallback(() => {
+    setEditorMode("logic");
+  }, []);
+
   // Asset command dispatch with C-2 adapter: fieldPath string → [fieldPath]
   const handleAssetCommit = useCallback(
     async (localId: string, typeId: string, fieldPath: string, value: any) => {
@@ -450,6 +456,7 @@ export default function App() {
         editorMode={editorMode}
         onOpenAssets={() => {}}
         onBackToScene={editorMode === "asset-authoring" ? handleBackToScene : undefined}
+        onOpenLogic={editorMode === "scene" ? handleOpenLogic : undefined}
         logState={editorMode === "scene" ? logState : assetLogState}
         onUndo={editorMode === "scene" ? handleUndo : handleAssetUndo}
         onRedo={editorMode === "scene" ? handleRedo : handleAssetRedo}
@@ -487,7 +494,11 @@ export default function App() {
         <canvas id="bevy-canvas" />
       </div>
       <div className="main">
-        {editorMode === "scene" ? (
+        {editorMode === "logic" ? (
+          <>
+            <LogicGraphEditor editorMode={editorMode} />
+          </>
+        ) : editorMode === "scene" ? (
           <>
             {aiPanelOpen && (
               <AIAssistantPanel
