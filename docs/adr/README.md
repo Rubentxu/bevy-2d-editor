@@ -19,6 +19,8 @@ ADR numbering is monotonic and never reused. Superseded decisions keep their ori
 | [ADR-0007](./0007-separate-asset-command-surface.md) | Separate Asset command surface for Scene Asset Authoring | Accepted (2026-06-29) |
 | [ADR-0008](./0008-path-based-scene-asset-opfs-layout.md) | Path-based OPFS layout for Scene Assets | Accepted (2026-06-29) |
 | [ADR-0009](./0009-component-override-ecs-bsn-replacement-for-override-patch.md) | ComponentOverride as the ECS/BSN-friendly replacement for OverridePatch | Accepted (2026-06-30) |
+| [ADR-0010](./0010-bsn-exporter-trait-file-export.md) | BsnExporter trait — output-only .bsn file export | Accepted (2026-06-30) |
+| [ADR-0011](./0011-logic-bricks-compiled-rust-controllers.md) | Logic Bricks — compiled Rust controllers and dispatch scheduler (no VM) | Accepted (2026-07-01) |
 
 ## Related Documents
 
