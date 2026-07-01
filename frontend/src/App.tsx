@@ -17,10 +17,12 @@ import ProjectAssetBrowser from "./components/ProjectAssetBrowser";
 import AssetAuthoringView from "./components/AssetAuthoringView";
 import AssetUnsavedChangesDialog from "./components/AssetUnsavedChangesDialog";
 import { TilesetPanel } from "./components/TilesetPanel";
+import { AutoLayerPanel } from "./components/AutoLayerPanel";
 import { useScenes } from "./hooks/useScenes";
 import { useSceneAssets } from "./hooks/useSceneAssets";
 import { sceneCreate, sceneSwitch, sceneSwitchCommit, sceneDelete, sceneRename } from "./services/scenes";
 import { type TilesetMetadata } from "./services/tilesets";
+import { type AutoLayerPayload, type LevelLayerPayload } from "./services/scene-assets";
 
 type EditorMode = "scene" | "asset-authoring";
 
@@ -40,6 +42,8 @@ export default function App() {
   const [validationCenterOpen, setValidationCenterOpen] = useState(false);
   const [tilesetPanelOpen, setTilesetPanelOpen] = useState(false);
   const [selectedTilesetId, setSelectedTilesetId] = useState<string | null>(null);
+  const [autoLayerPanelOpen, setAutoLayerPanelOpen] = useState(false);
+  const [selectedAutoLayerId, setSelectedAutoLayerId] = useState<string | null>(null);
   const [exportRustOpen, setExportRustOpen] = useState(false);
   const [applyingIds, setApplyingIds] = useState<Set<string>>(new Set());
   const { scenes, currentId, refresh: refreshScenes } = useScenes();
@@ -72,6 +76,18 @@ export default function App() {
     replaceInstanceAsset,
   } = useSceneAssets();
 
+  // ── Auto Layer State ────────────────────────────────────────────────────
+  // Derive the first auto layer from assetDoc as a fallback for AutoLayerPanel
+  const autoLayers: AutoLayerPayload[] =
+    (assetDoc?.layers?.filter(
+      (l: LevelLayerPayload) => l.kind === "auto"
+    ) as AutoLayerPayload[]) ?? [];
+
+  const selectedAutoLayer: AutoLayerPayload | null =
+    selectedAutoLayerId
+      ? autoLayers.find((l) => l.id === selectedAutoLayerId) ?? null
+      : autoLayers[0] ?? null;
+
   // ── AI Assistant ─────────────────────────────────────────────────────────
   const {
     prompt,
@@ -100,6 +116,10 @@ export default function App() {
 
   const handleSelectTileset = useCallback((tileset: TilesetMetadata) => {
     setSelectedTilesetId(tileset.id);
+  }, []);
+
+  const handleToggleAutoLayer = useCallback(() => {
+    setAutoLayerPanelOpen((prev) => !prev);
   }, []);
 
   const handleSubmitAI = useCallback(async () => {
@@ -442,6 +462,8 @@ export default function App() {
         validationCenterOpen={validationCenterOpen}
         onToggleTileset={handleToggleTileset}
         tilesetPanelOpen={tilesetPanelOpen}
+        onToggleAutoLayer={handleToggleAutoLayer}
+        autoLayerPanelOpen={autoLayerPanelOpen}
         error={error || initError}
         onDismissError={() => setError(null)}
       />
@@ -519,6 +541,13 @@ export default function App() {
               onOpen={handleOpenAsset}
               onPlaceInstance={placeInstance}
             />
+            {autoLayerPanelOpen && selectedAutoLayer && (
+              <AutoLayerPanel
+                layer={selectedAutoLayer}
+                assetRef={activeAssetLogicalPath ?? ""}
+                onRegenerate={refresh}
+              />
+            )}
             {assetDoc && (
               <AssetAuthoringView
                 document={assetDoc}

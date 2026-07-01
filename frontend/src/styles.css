@@ -1875,3 +1875,235 @@ body {
   padding: 1px 6px;
   border-radius: 3px;
 }
+
+/* ── Auto Layer Panel ────────────────────────────────────────────────────── */
+
+.auto-layer-panel {
+  width: 280px;
+  padding: 12px;
+  border-right: 1px solid #333;
+  background: #16213e;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.auto-layer-panel h3 {
+  font-size: 14px;
+  margin: 0 0 12px 0;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.auto-layer-panel .stale-banner {
+  background: #3d2e00;
+  border: 1px solid #d69e2e;
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: #f0e060;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.auto-layer-panel .stale-banner button {
+  background: #d69e2e;
+  border: none;
+  color: #1a1a2e;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.auto-layer-panel .stale-banner button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.auto-layer-panel .auto-layer-error {
+  background: rgba(243, 139, 168, 0.15);
+  border: 1px solid rgba(243, 139, 168, 0.5);
+  border-radius: 4px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #f38ba8;
+}
+
+/* 3x3 Pattern Grid */
+.auto-layer-panel .pattern-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.auto-layer-panel .pattern-cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1e1e2e;
+  border: 1px solid #313244;
+  border-radius: 4px;
+  min-height: 40px;
+}
+
+.auto-layer-panel .pattern-cell.center {
+  background: #111122;
+  border-color: #444466;
+}
+
+.auto-layer-panel .pattern-cell.center-disabled {
+  cursor: default;
+}
+
+.auto-layer-panel .pattern-cell select {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  border: none;
+  color: #cdd6f4;
+  font-size: 10px;
+  text-align: center;
+  cursor: pointer;
+  padding: 2px;
+}
+
+.auto-layer-panel .center-label {
+  color: #444466;
+  font-size: 14px;
+}
+
+/* Tile Picker */
+.auto-layer-panel .tile-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.auto-layer-panel .tile-picker label {
+  font-size: 11px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.auto-layer-panel .tile-picker select {
+  background: #1e1e2e;
+  border: 1px solid #313244;
+  color: #cdd6f4;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+/* Chance Slider */
+.auto-layer-panel .chance-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.auto-layer-panel .chance-slider label {
+  font-size: 12px;
+  color: #cdd6f4;
+}
+
+.auto-layer-panel .chance-slider input[type="range"] {
+  width: 100%;
+  accent-color: #89b4fa;
+}
+
+/* Rule List */
+.auto-layer-panel .rule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.auto-layer-panel .rule-list label {
+  font-size: 11px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.auto-layer-panel .rule-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #313244;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.auto-layer-panel .rule-list li {
+  padding: 6px 10px;
+  font-size: 13px;
+  color: #cdd6f4;
+  border-bottom: 1px solid #313244;
+  cursor: pointer;
+}
+
+.auto-layer-panel .rule-list li:last-child {
+  border-bottom: none;
+}
+
+.auto-layer-panel .rule-list li:hover {
+  background: rgba(137, 180, 250, 0.1);
+}
+
+.auto-layer-panel .rule-list li.selected {
+  background: #0f3460;
+  color: #fff;
+}
+
+/* Rule Actions */
+.auto-layer-panel .rule-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.auto-layer-panel .rule-actions button {
+  background: #1a1a2e;
+  color: #eee;
+  border: 1px solid #444;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.auto-layer-panel .rule-actions button:hover:not(:disabled) {
+  background: #0f3460;
+  border-color: #666;
+}
+
+.auto-layer-panel .rule-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.auto-layer-panel .rule-actions .regen-btn {
+  background: #89b4fa;
+  border-color: #89b4fa;
+  color: #1a1a2e;
+  font-weight: 600;
+}
+
+.auto-layer-panel .rule-actions .regen-btn:hover:not(:disabled) {
+  background: #6cb6ff;
+}

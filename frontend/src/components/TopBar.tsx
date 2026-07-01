@@ -18,6 +18,8 @@ interface Props {
   validationCenterOpen: boolean;
   onToggleTileset: () => void;
   tilesetPanelOpen: boolean;
+  onToggleAutoLayer: () => void;
+  autoLayerPanelOpen: boolean;
   error: string | null;
   onDismissError: () => void;
 }
@@ -38,6 +40,8 @@ export default function TopBar({
   validationCenterOpen,
   onToggleTileset,
   tilesetPanelOpen,
+  onToggleAutoLayer,
+  autoLayerPanelOpen,
   error,
   onDismissError,
 }: Props) {
@@ -98,6 +102,14 @@ export default function TopBar({
             className={tilesetPanelOpen ? "tileset-btn active" : "tileset-btn"}
           >
             🏠 Tileset
+          </button>
+          <button
+            onClick={onToggleAutoLayer}
+            data-testid="auto-layer-panel-btn"
+            title={autoLayerPanelOpen ? "Close Auto Layer Panel" : "Open Auto Layer Panel"}
+            className={autoLayerPanelOpen ? "auto-layer-btn active" : "auto-layer-btn"}
+          >
+            🔄 Auto Layer
           </button>
         </>
       )}
