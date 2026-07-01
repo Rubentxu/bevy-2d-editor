@@ -103,6 +103,23 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         captured_old: Option<SceneInstance>,
     },
+    /// Insert or replace a component override on a Scene Instance.
+    /// Inverse: RevertOverride if no prior override existed; UpsertOverride{old_patch} otherwise.
+    UpsertOverride {
+        instance_id: StableId,
+        target_local_id: LocalId,
+        component_type_id: crate::schema::ComponentTypeId,
+        field_path: Vec<String>,
+        value: serde_json::Value,
+    },
+    /// Remove a component override from a Scene Instance.
+    /// Idempotent no-op when absent; inverse re-inserts the captured patch.
+    RevertOverride {
+        instance_id: StableId,
+        target_local_id: LocalId,
+        component_type_id: crate::schema::ComponentTypeId,
+        field_path: Vec<String>,
+    },
 }
 
 /// Metadata attached to each command for future agent auditing (Hito 0 §6.4).
@@ -379,5 +396,66 @@ mod tests {
         let err = CommandError::EntityNotFound(StableId::new("ent_missing"));
         let msg = err.to_string();
         assert!(msg.contains("ent_missing"));
+    }
+
+    #[test]
+    fn test_upsert_override_serializes_with_type_tag() {
+        let cmd = Command::UpsertOverride {
+            instance_id: StableId::new("inst_1"),
+            target_local_id: LocalId::new("root"),
+            component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
+            field_path: vec!["asset".to_string()],
+            value: serde_json::json!("cannon.png"),
+        };
+        let json = serde_json::to_string(&cmd).unwrap();
+        assert!(json.contains("\"type\":\"UpsertOverride\""));
+        assert!(json.contains("\"instance_id\":\"inst_1\""));
+        assert!(json.contains("\"target_local_id\":\"root\""));
+        assert!(json.contains("\"component_type_id\":\"editor.Sprite2D\""));
+        assert!(json.contains("\"field_path\":[\"asset\"]"));
+        assert!(json.contains("\"value\":\"cannon.png\""));
+    }
+
+    #[test]
+    fn test_revert_override_serializes_with_type_tag() {
+        let cmd = Command::RevertOverride {
+            instance_id: StableId::new("inst_1"),
+            target_local_id: LocalId::new("root"),
+            component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
+            field_path: vec!["asset".to_string()],
+        };
+        let json = serde_json::to_string(&cmd).unwrap();
+        assert!(json.contains("\"type\":\"RevertOverride\""));
+        assert!(json.contains("\"instance_id\":\"inst_1\""));
+        assert!(json.contains("\"target_local_id\":\"root\""));
+        assert!(json.contains("\"component_type_id\":\"editor.Sprite2D\""));
+        assert!(json.contains("\"field_path\":[\"asset\"]"));
+    }
+
+    #[test]
+    fn test_upsert_override_roundtrip() {
+        let cmd = Command::UpsertOverride {
+            instance_id: StableId::new("inst_1"),
+            target_local_id: LocalId::new("root"),
+            component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
+            field_path: vec!["asset".to_string()],
+            value: serde_json::json!("cannon.png"),
+        };
+        let json = serde_json::to_string(&cmd).unwrap();
+        let roundtripped: Command = serde_json::from_str(&json).unwrap();
+        assert_eq!(cmd, roundtripped);
+    }
+
+    #[test]
+    fn test_revert_override_roundtrip() {
+        let cmd = Command::RevertOverride {
+            instance_id: StableId::new("inst_1"),
+            target_local_id: LocalId::new("root"),
+            component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
+            field_path: vec!["asset".to_string(), "x".to_string()],
+        };
+        let json = serde_json::to_string(&cmd).unwrap();
+        let roundtripped: Command = serde_json::from_str(&json).unwrap();
+        assert_eq!(cmd, roundtripped);
     }
 }

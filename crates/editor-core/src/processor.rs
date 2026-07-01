@@ -10,7 +10,7 @@
 use crate::command::{Command, CommandError};
 use crate::document::{ComponentInstance, Entity, SceneDocument, StableId};
 use crate::scene_instance::SceneInstance;
-use crate::scene_instance_overrides::resync;
+use crate::scene_instance_overrides::{resync, upsert_override, remove_override};
 use crate::schema::global_registry;
 
 /// Find an entity by id and return a mutable reference.
@@ -188,6 +188,18 @@ pub fn validate(doc: &SceneDocument, cmd: &Command) -> Result<(), CommandError> 
             }
         }
         Command::ReplaceInstanceAsset { instance_id, .. } => {
+            // Instance must exist
+            if !doc.instances.contains_key(instance_id) {
+                return Err(CommandError::InstanceNotFound(instance_id.clone()));
+            }
+        }
+        Command::UpsertOverride { instance_id, .. } => {
+            // Instance must exist
+            if !doc.instances.contains_key(instance_id) {
+                return Err(CommandError::InstanceNotFound(instance_id.clone()));
+            }
+        }
+        Command::RevertOverride { instance_id, .. } => {
             // Instance must exist
             if !doc.instances.contains_key(instance_id) {
                 return Err(CommandError::InstanceNotFound(instance_id.clone()));
@@ -434,6 +446,96 @@ pub fn apply(doc: &mut SceneDocument, cmd: &Command) -> Result<Command, CommandE
                 new_asset_version: old_instance.asset_version_seen,
                 captured_old: Some(old_instance),
             })
+        }
+        Command::UpsertOverride {
+            instance_id,
+            target_local_id,
+            component_type_id,
+            field_path,
+            value,
+        } => {
+            let instance = doc
+                .instances
+                .get_mut(instance_id)
+                .ok_or_else(|| CommandError::InstanceNotFound(instance_id.clone()))?;
+
+            // Build the incoming patch
+            let patch = crate::scene_instance::ComponentOverride {
+                target_local_id: target_local_id.clone(),
+                component_type_id: component_type_id.clone(),
+                field_path: field_path.clone(),
+                value: value.clone(),
+                status: crate::scene_instance::ComponentOverrideStatus::Active,
+            };
+
+            // Check for existing override at same key to capture for inverse
+            let existing = instance.component_overrides.iter().find(|p| {
+                p.target_local_id == *target_local_id
+                    && p.component_type_id == *component_type_id
+                    && p.field_path == *field_path
+            }).cloned();
+
+            // Apply the upsert (replaces or appends)
+            upsert_override(instance, patch);
+
+            // Inverse: if there was a prior override, restore it via UpsertOverride;
+            // otherwise remove it via RevertOverride
+            match existing {
+                Some(old_patch) => Ok(Command::UpsertOverride {
+                    instance_id: instance_id.clone(),
+                    target_local_id: old_patch.target_local_id,
+                    component_type_id: old_patch.component_type_id,
+                    field_path: old_patch.field_path,
+                    value: old_patch.value,
+                }),
+                None => Ok(Command::RevertOverride {
+                    instance_id: instance_id.clone(),
+                    target_local_id: target_local_id.clone(),
+                    component_type_id: component_type_id.clone(),
+                    field_path: field_path.clone(),
+                }),
+            }
+        }
+        Command::RevertOverride {
+            instance_id,
+            target_local_id,
+            component_type_id,
+            field_path,
+        } => {
+            let instance = doc
+                .instances
+                .get_mut(instance_id)
+                .ok_or_else(|| CommandError::InstanceNotFound(instance_id.clone()))?;
+
+            // Idempotent remove: capture if present
+            let removed = remove_override(
+                instance,
+                target_local_id.clone(),
+                component_type_id.clone(),
+                field_path.clone(),
+            );
+
+            match removed {
+                Some(patch) => {
+                    // Inverse: re-insert via UpsertOverride
+                    Ok(Command::UpsertOverride {
+                        instance_id: instance_id.clone(),
+                        target_local_id: patch.target_local_id,
+                        component_type_id: patch.component_type_id,
+                        field_path: patch.field_path,
+                        value: patch.value,
+                    })
+                }
+                None => {
+                    // No-op: inverse is self
+                    Ok(Command::RevertOverride {
+                        instance_id: instance_id.clone(),
+                        target_local_id: target_local_id.clone(),
+                        component_type_id: component_type_id.clone(),
+                        field_path: field_path.clone(),
+                    })
+                }
+            }
         }
     }
 }
@@ -942,5 +1044,124 @@ mod tests {
         let mut v = json!({"a": 1});
         let result = set_field_path(&mut v, "b", json!(42));
         assert!(matches!(result, Err(CommandError::FieldNotFound(_))));
+    }
+
+    // ===== UpsertOverride =====
+
+    fn make_instance(instance_id: &str) -> (SceneInstance, SceneDocument) {
+        let inst = SceneInstance {
+            instance_components: vec![],
+            instance_id: StableId::new(instance_id),
+            asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
+            asset_version_seen: 1,
+            id_map: Default::default(),
+            component_overrides: vec![],
+            orphaned_component_overrides: vec![],
+        };
+        let mut doc = empty_doc();
+        doc.instances
+            .insert(StableId::new(instance_id), inst.clone());
+        (inst, doc)
+    }
+
+    // S1 — Upsert inserts into empty overrides
+    #[test]
+    fn test_upsert_override_inserts_into_empty() {
+        let (_, mut doc) = make_instance("inst_1");
+        let cmd = Command::UpsertOverride {
+            instance_id: StableId::new("inst_1"),
+            target_local_id: crate::scene_asset::LocalId::new("root"),
+            component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
+            field_path: vec!["asset".to_string()],
+            value: serde_json::json!("cannon.png"),
+        };
+        let inverse = apply(&mut doc, &cmd).unwrap();
+        assert_eq!(doc.instances.get(&StableId::new("inst_1")).unwrap().component_overrides.len(), 1);
+        // Inverse should be RevertOverride since there was no prior override
+        assert!(matches!(inverse, Command::RevertOverride { .. }));
+    }
+
+    // S2 — Upsert forward/inverse roundtrip (replaces same-key override)
+    #[test]
+    fn test_forward_inverse_roundtrip_upsert_override() {
+        let (_, mut doc) = make_instance("inst_1");
+        // Pre-populate with an override
+        doc.instances.get_mut(&StableId::new("inst_1")).unwrap().component_overrides.push(
+            crate::scene_instance::ComponentOverride {
+                target_local_id: crate::scene_asset::LocalId::new("root"),
+                component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
+                field_path: vec!["asset".to_string()],
+                value: serde_json::json!("cannon.png"),
+                status: crate::scene_instance::ComponentOverrideStatus::Active,
+            },
+        );
+
+        let cmd = Command::UpsertOverride {
+            instance_id: StableId::new("inst_1"),
+            target_local_id: crate::scene_asset::LocalId::new("root"),
+            component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
+            field_path: vec!["asset".to_string()],
+            value: serde_json::json!("enemy.png"),
+        };
+        let inverse = apply(&mut doc, &cmd).unwrap();
+
+        // Verify new value is stored
+        assert_eq!(
+            doc.instances.get(&StableId::new("inst_1")).unwrap().component_overrides[0].value,
+            serde_json::json!("enemy.png")
+        );
+
+        // Apply inverse — should restore original value
+        apply(&mut doc, &inverse).unwrap();
+        assert_eq!(
+            doc.instances.get(&StableId::new("inst_1")).unwrap().component_overrides[0].value,
+            serde_json::json!("cannon.png")
+        );
+    }
+
+    // ===== RevertOverride =====
+
+    // S3 — Revert removes the matching override
+    #[test]
+    fn test_revert_override_removes_matching() {
+        let (_, mut doc) = make_instance("inst_1");
+        doc.instances.get_mut(&StableId::new("inst_1")).unwrap().component_overrides.push(
+            crate::scene_instance::ComponentOverride {
+                target_local_id: crate::scene_asset::LocalId::new("root"),
+                component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
+                field_path: vec!["asset".to_string()],
+                value: serde_json::json!("cannon.png"),
+                status: crate::scene_instance::ComponentOverrideStatus::Active,
+            },
+        );
+
+        let cmd = Command::RevertOverride {
+            instance_id: StableId::new("inst_1"),
+            target_local_id: crate::scene_asset::LocalId::new("root"),
+            component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
+            field_path: vec!["asset".to_string()],
+        };
+        let inverse = apply(&mut doc, &cmd).unwrap();
+        assert!(doc.instances.get(&StableId::new("inst_1")).unwrap().component_overrides.is_empty());
+
+        // Inverse should re-insert
+        assert!(matches!(inverse, Command::UpsertOverride { .. }));
+    }
+
+    // S4 — Revert of absent override is no-op
+    #[test]
+    fn test_revert_override_noop() {
+        let (_, mut doc) = make_instance("inst_1");
+        let cmd = Command::RevertOverride {
+            instance_id: StableId::new("inst_1"),
+            target_local_id: crate::scene_asset::LocalId::new("root"),
+            component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
+            field_path: vec!["asset".to_string()],
+        };
+        let inverse = apply(&mut doc, &cmd).unwrap();
+        // No override was present — still no override
+        assert!(doc.instances.get(&StableId::new("inst_1")).unwrap().component_overrides.is_empty());
+        // Inverse is self (noop)
+        assert!(matches!(inverse, Command::RevertOverride { .. }));
     }
 }

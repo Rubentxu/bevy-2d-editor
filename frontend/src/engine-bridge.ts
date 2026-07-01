@@ -116,6 +116,22 @@ export async function initEngine(
   (window as any).try_rebind_wasm = (orphanedPatchJson: string, assetJson: string) =>
     wasm.try_rebind_wasm(orphanedPatchJson, assetJson);
   (window as any).get_resync_reports = () => wasm.get_resync_reports();
+  // ── Override Mutation (level-inspector-and-override-panel PR3) ────────────
+  (window as any).override_field_status_wasm = (instanceJson: string) =>
+    wasm.override_field_status_wasm(instanceJson);
+  (window as any).upsert_override_wasm = (
+    instanceId: string,
+    localId: string,
+    typeId: string,
+    fieldPathJson: string,
+    valueJson: string
+  ) => wasm.upsert_override_wasm(instanceId, localId, typeId, fieldPathJson, valueJson);
+  (window as any).revert_override_wasm = (
+    instanceId: string,
+    localId: string,
+    typeId: string,
+    fieldPathJson: string
+  ) => wasm.revert_override_wasm(instanceId, localId, typeId, fieldPathJson);
 
   // ── Validation Center (validation-center) ──────────────────────────────────
   (window as any).get_validation_issues_wasm = () => wasm.get_validation_issues_wasm();

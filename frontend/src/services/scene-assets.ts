@@ -421,6 +421,17 @@ export async function getInstanceComponents(
 // ── Override / Resync WASM wrappers ──────────────────────────────────────────
 
 /**
+ * Per-field override status index entry.
+ * Mirrors Rust `FieldOverrideEntry` from `scene_instance_overrides.rs`.
+ */
+export interface FieldOverrideEntry {
+  local_id: string;
+  component_type_id: string;
+  field_path: string[];
+  status: ComponentOverrideStatus;
+}
+
+/**
  * Issue found during override validation.
  * Codes: missing_entity, missing_component, duplicate_field, missing_field, type_conflict.
  */
@@ -517,6 +528,67 @@ export async function getResyncReports(): Promise<
   await waitForEngine();
   const result = (window as any).get_resync_reports();
   return typeof result === "string" ? JSON.parse(result) : result;
+}
+
+/**
+ * Get per-field override status index for a SceneInstance.
+ * @param instance - The SceneInstance to index
+ * @returns Array of FieldOverrideEntry objects describing each override's status.
+ */
+export async function overrideFieldStatus(
+  instance: SceneInstance
+): Promise<FieldOverrideEntry[]> {
+  await waitForEngine();
+  const result = (window as any).override_field_status_wasm(
+    JSON.stringify(instance)
+  );
+  return typeof result === "string" ? JSON.parse(result) : result;
+}
+
+/**
+ * Upsert a component override on a Scene Instance.
+ * Dispatches `Command::UpsertOverride` through the shared OperationLog.
+ *
+ * @returns CommandResult JSON (inverse + snapshot).
+ */
+export async function upsertOverride(
+  instanceId: string,
+  localId: string,
+  typeId: string,
+  fieldPath: string[],
+  value: unknown
+): Promise<string> {
+  await waitForEngine();
+  const result = (window as any).upsert_override_wasm(
+    instanceId,
+    localId,
+    typeId,
+    JSON.stringify(fieldPath),
+    JSON.stringify(value)
+  );
+  return typeof result === "string" ? result : String(result);
+}
+
+/**
+ * Revert a component override on a Scene Instance.
+ * Dispatches `Command::RevertOverride` through the shared OperationLog.
+ *
+ * @returns CommandResult JSON (inverse + snapshot).
+ */
+export async function revertOverride(
+  instanceId: string,
+  localId: string,
+  typeId: string,
+  fieldPath: string[]
+): Promise<string> {
+  await waitForEngine();
+  const result = (window as any).revert_override_wasm(
+    instanceId,
+    localId,
+    typeId,
+    JSON.stringify(fieldPath)
+  );
+  return typeof result === "string" ? result : String(result);
 }
 
 // ── Scene Instance Layer WASM wrappers (scene-instance-layer) ─────────────
@@ -634,3 +706,38 @@ export async function exportAssetToBsn(assetId: string): Promise<string> {
   // Safety: coerce any error value to string.
   return String(result);
 }
+
+// ── Instance Child ID Parsing ────────────────────────────────────────────────
+
+/**
+ * Parse a stable ID like "inst_i001_player" into its instance_id and local_id components.
+ * Returns null if the stable ID does not match the scene instance child pattern.
+ */
+export function parseInstanceChild(
+  stableId: string
+): { instance_id: string; local_id: string } | null {
+  const match = stableId.match(/^inst_([^_]+)_(.*)$/);
+  if (!match) return null;
+  return { instance_id: match[1], local_id: match[2] };
+}
+
+// ── Typed wrappers for WASM bridge calls ─────────────────────────────────────
+
+/**
+ * Fetch and parse the asset document for a given Scene Instance.
+ * Returns the parsed SceneAssetDocument or null if not found.
+ */
+export async function fetchAssetForInstance(
+  instance: SceneInstance
+): Promise<SceneAssetDocument | null> {
+  const entries = await listSceneAssets();
+  const entry = entries.find(
+    (e) => e.logical_path === instance.asset_ref || e.asset_id === instance.asset_ref
+  );
+  if (!entry) return null;
+  await openSceneAsset(entry.asset_id);
+  const assetJson = await getAssetDocumentJson();
+  return typeof assetJson === "string" ? JSON.parse(assetJson) : assetJson;
+}
+
+

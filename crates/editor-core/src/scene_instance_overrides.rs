@@ -77,6 +77,44 @@ fn find_component<'a>(
     entity.components.iter().find(|c| c.type_id == type_id)
 }
 
+/// Walk a field-path through a JSON value.
+///
+/// Segments are traversed in order; returns the value at the terminal segment,
+/// or `None` if any segment is missing or the path is empty.
+fn walk_field_path<'a>(
+    root: &'a serde_json::Value,
+    segments: &[String],
+) -> Option<&'a serde_json::Value> {
+    if segments.is_empty() {
+        return Some(root);
+    }
+    let mut current: &serde_json::Value = root;
+    for seg in segments.iter().take(segments.len().saturating_sub(1)) {
+        current = current.as_object()?.get(seg)?;
+    }
+    let last = segments.last()?;
+    Some(current.as_object()?.get(last)?)
+}
+
+/// Walk a field-path through a JSON value (mutable, for insertion).
+///
+/// Returns the mutable reference to the terminal value, or `None` if the path
+/// cannot be fully traversed.
+fn walk_field_path_mut<'a>(
+    root: &'a mut serde_json::Value,
+    segments: &[String],
+) -> Option<&'a mut serde_json::Value> {
+    if segments.is_empty() {
+        return Some(root);
+    }
+    let mut current: &mut serde_json::Value = root;
+    for seg in segments.iter().take(segments.len().saturating_sub(1)) {
+        current = current.as_object_mut()?.get_mut(seg)?;
+    }
+    let last = segments.last()?;
+    Some(current.as_object_mut()?.get_mut(last)?)
+}
+
 /// Walk `field_path[1..]` inside `values` and insert `value` at the terminal key.
 fn apply_field_path(
     component: &mut ComponentInstance,
@@ -86,28 +124,13 @@ fn apply_field_path(
     if field_path.is_empty() {
         return Ok(());
     }
-    if field_path.len() == 1 {
-        component
-            .values
-            .as_object_mut()
-            .ok_or(())?
-            .insert(field_path[0].clone(), value);
-        Ok(())
-    } else {
-        let mut current = &mut component.values;
-        for seg in field_path.iter().take(field_path.len() - 1) {
-            let next = current.as_object_mut().and_then(|m| m.get_mut(seg));
-            match next {
-                Some(v) => current = v,
-                None => return Err(()),
-            }
+    let target = walk_field_path_mut(&mut component.values, field_path);
+    match target {
+        Some(t) => {
+            *t = value;
+            Ok(())
         }
-        let last = field_path.last().ok_or(())?;
-        current
-            .as_object_mut()
-            .ok_or(())?
-            .insert(last.clone(), value);
-        Ok(())
+        None => Err(()),
     }
 }
 
@@ -179,34 +202,7 @@ pub fn classify_overrides(
 
             // Walk field_path to check field existence inside the target component.
             if !patch.field_path.is_empty() {
-                let segments: Vec<&str> = patch
-                    .field_path
-                    .iter()
-                    .map(|s| s.as_str())
-                    .collect();
-                let mut current: Option<&serde_json::Value> = Some(&component.values);
-                let mut is_stale = false;
-
-                for (i, seg) in segments.iter().enumerate() {
-                    match current {
-                        Some(serde_json::Value::Object(map)) => {
-                            if i < segments.len() - 1 {
-                                current = map.get(*seg);
-                            } else {
-                                if !map.contains_key(*seg) {
-                                    is_stale = true;
-                                }
-                                break;
-                            }
-                        }
-                        _ => {
-                            is_stale = true;
-                            break;
-                        }
-                    }
-                }
-
-                if is_stale {
+                if walk_field_path(&component.values, &patch.field_path).is_none() {
                     return ComponentOverride {
                         status: ComponentOverrideStatus::Stale,
                         ..patch.clone()
@@ -216,29 +212,7 @@ pub fn classify_overrides(
 
             // Kind mismatch check
             let existing_value: Option<serde_json::Value> = if !patch.field_path.is_empty() {
-                let segments: Vec<&str> = patch
-                    .field_path
-                    .iter()
-                    .map(|s| s.as_str())
-                    .collect();
-                let mut current: Option<&serde_json::Value> = Some(&component.values);
-                for (i, seg) in segments.iter().enumerate() {
-                    match current {
-                        Some(serde_json::Value::Object(map)) => {
-                            if i < segments.len() - 1 {
-                                current = map.get(*seg);
-                            } else {
-                                current = map.get(*seg);
-                                break;
-                            }
-                        }
-                        _ => {
-                            current = None;
-                            break;
-                        }
-                    }
-                }
-                current.cloned()
+                walk_field_path(&component.values, &patch.field_path).cloned()
             } else {
                 Some(component.values.clone())
             };
@@ -359,32 +333,7 @@ pub fn validate_overrides(
 
         // Walk field path for missing_field check
         if !patch.field_path.is_empty() {
-            let segments: Vec<&str> = patch
-                .field_path
-                .iter()
-                .map(|s| s.as_str())
-                .collect();
-            let mut current: Option<&serde_json::Value> = Some(&component.values);
-            let mut found = true;
-
-            for (i, seg) in segments.iter().enumerate() {
-                match current {
-                    Some(serde_json::Value::Object(map)) => {
-                        if i < segments.len() - 1 {
-                            current = map.get(*seg);
-                        } else if !map.contains_key(*seg) {
-                            found = false;
-                            break;
-                        }
-                    }
-                    _ => {
-                        found = false;
-                        break;
-                    }
-                }
-            }
-
-            if !found {
+            if walk_field_path(&component.values, &patch.field_path).is_none() {
                 issues.push(OverrideIssue {
                     code: "missing_field".to_string(),
                     patch: patch.clone(),
@@ -399,29 +348,7 @@ pub fn validate_overrides(
 
         // Type conflict check
         let terminal: Option<serde_json::Value> = if !patch.field_path.is_empty() {
-            let segments: Vec<&str> = patch
-                .field_path
-                .iter()
-                .map(|s| s.as_str())
-                .collect();
-            let mut current: Option<&serde_json::Value> = Some(&component.values);
-            for (i, seg) in segments.iter().enumerate() {
-                match current {
-                    Some(serde_json::Value::Object(map)) => {
-                        if i < segments.len() - 1 {
-                            current = map.get(*seg);
-                        } else {
-                            current = map.get(*seg);
-                            break;
-                        }
-                    }
-                    _ => {
-                        current = None;
-                        break;
-                    }
-                }
-            }
-            current.cloned()
+            walk_field_path(&component.values, &patch.field_path).cloned()
         } else {
             Some(component.values.clone())
         };
@@ -445,6 +372,70 @@ pub fn validate_overrides(
 }
 
 /// Compute effective values: read-only merge of asset + active overrides.
+/// Validates that a patch can be applied to a resolved entity.
+///
+/// Returns `Ok(())` if the patch is valid, or `Err(patch)` if it cannot be applied.
+fn validate_patch_target(
+    resolved_entity: &ResolvedEntity,
+    patch: &ComponentOverride,
+) -> Result<(), ComponentOverride> {
+    let type_id = patch.component_type_id.as_str();
+    let component = match resolved_entity
+        .components
+        .iter()
+        .find(|c| c.type_id == type_id)
+    {
+        Some(c) => c,
+        None => return Err(patch.clone()),
+    };
+
+    // Walk field_path to verify path inside the target component.
+    if !patch.field_path.is_empty() {
+        if walk_field_path(&component.values, &patch.field_path).is_none() {
+            return Err(patch.clone());
+        }
+    }
+
+    // Kind check
+    let terminal: Option<&serde_json::Value> = if !patch.field_path.is_empty() {
+        walk_field_path(&component.values, &patch.field_path)
+    } else {
+        Some(&component.values)
+    };
+
+    if let Some(existing) = terminal {
+        if detect_kind_mismatch(existing, &patch.value) {
+            return Err(patch.clone());
+        }
+    }
+
+    Ok(())
+}
+
+/// Applies a validated patch to a resolved entity's component.
+fn apply_patch_to_resolved_entity(
+    resolved_entity: &mut ResolvedEntity,
+    patch: &ComponentOverride,
+) -> Result<(), ComponentOverride> {
+    let type_id = patch.component_type_id.as_str();
+    let component = match resolved_entity
+        .components
+        .iter_mut()
+        .find(|c| c.type_id == type_id)
+    {
+        Some(c) => c,
+        None => return Err(patch.clone()),
+    };
+
+    let mut comp = component.clone();
+    if apply_field_path(&mut comp, &patch.field_path, patch.value.clone()).is_ok() {
+        *component = comp;
+        Ok(())
+    } else {
+        Err(patch.clone())
+    }
+}
+
 pub fn effective_values(
     asset: &SceneAssetDocument,
     instance: &SceneInstance,
@@ -486,93 +477,14 @@ pub fn effective_values(
             }
         };
 
-        let type_id = patch.component_type_id.as_str();
-        let component = match resolved_entity
-            .components
-            .iter_mut()
-            .find(|c| c.type_id == type_id)
-        {
-            Some(c) => c,
-            None => {
-                unresolved.push(patch.clone());
-                continue;
-            }
-        };
-
-        // Walk field_path to verify path inside the target component.
-        if !patch.field_path.is_empty() {
-            let segments: Vec<&str> = patch
-                .field_path
-                .iter()
-                .map(|s| s.as_str())
-                .collect();
-            let mut current: Option<&serde_json::Value> = Some(&component.values);
-            let mut valid_path = true;
-
-            for (i, seg) in segments.iter().enumerate() {
-                match current {
-                    Some(serde_json::Value::Object(map)) => {
-                        if i < segments.len() - 1 {
-                            current = map.get(*seg);
-                        } else if !map.contains_key(*seg) {
-                            valid_path = false;
-                            break;
-                        }
-                    }
-                    _ => {
-                        valid_path = false;
-                        break;
-                    }
-                }
-            }
-
-            if !valid_path {
-                unresolved.push(patch.clone());
-                continue;
-            }
+        // Validate the patch target
+        if validate_patch_target(resolved_entity, patch).is_err() {
+            unresolved.push(patch.clone());
+            continue;
         }
 
-        // Kind check
-        let terminal: Option<serde_json::Value> = if !patch.field_path.is_empty() {
-            let segments: Vec<&str> = patch
-                .field_path
-                .iter()
-                .map(|s| s.as_str())
-                .collect();
-            let mut current: Option<&serde_json::Value> = Some(&component.values);
-            for (i, seg) in segments.iter().enumerate() {
-                match current {
-                    Some(serde_json::Value::Object(map)) => {
-                        if i < segments.len() - 1 {
-                            current = map.get(*seg);
-                        } else {
-                            current = map.get(*seg);
-                            break;
-                        }
-                    }
-                    _ => {
-                        current = None;
-                        break;
-                    }
-                }
-            }
-            current.cloned()
-        } else {
-            Some(component.values.clone())
-        };
-
-        if let Some(existing) = terminal {
-            if detect_kind_mismatch(&existing, &patch.value) {
-                unresolved.push(patch.clone());
-                continue;
-            }
-        }
-
-        // Apply patch
-        let mut comp = component.clone();
-        if apply_field_path(&mut comp, &patch.field_path, patch.value.clone()).is_ok() {
-            *component = comp;
-        } else {
+        // Apply the validated patch
+        if apply_patch_to_resolved_entity(resolved_entity, patch).is_err() {
             unresolved.push(patch.clone());
         }
     }
@@ -587,6 +499,79 @@ pub fn effective_values(
         unresolved,
     })
 }
+
+// ---------------------------------------------------------------------------
+// Override Mutation Helpers
+// ---------------------------------------------------------------------------
+
+/// Insert or replace a component override on a `SceneInstance`.
+///
+/// Key is `(target_local_id, component_type_id, field_path)`. If an override
+/// with the same key already exists, it is replaced. Otherwise the patch is
+/// appended. The patch's `status` is forced to `Active` regardless of input.
+///
+/// This function does NOT mutate `id_map` or `instance_components`.
+pub fn upsert_override(inst: &mut SceneInstance, mut patch: ComponentOverride) {
+    patch.status = ComponentOverrideStatus::Active;
+    if let Some(pos) = inst.component_overrides.iter().position(|p| {
+        p.target_local_id == patch.target_local_id
+            && p.component_type_id == patch.component_type_id
+            && p.field_path == patch.field_path
+    }) {
+        inst.component_overrides[pos] = patch;
+    } else {
+        inst.component_overrides.push(patch);
+    }
+}
+
+/// Remove a component override from a `SceneInstance` by key.
+///
+/// Returns the removed `ComponentOverride` if one matched the key, or `None`
+/// if no override matched (idempotent). Does not touch `orphaned_component_overrides`.
+pub fn remove_override(
+    inst: &mut SceneInstance,
+    target_local_id: LocalId,
+    component_type_id: crate::schema::ComponentTypeId,
+    field_path: Vec<String>,
+) -> Option<ComponentOverride> {
+    let pos = inst.component_overrides.iter().position(|p| {
+        p.target_local_id == target_local_id
+            && p.component_type_id == component_type_id
+            && p.field_path == field_path
+    });
+    pos.map(|p| inst.component_overrides.remove(p))
+}
+
+/// A flat projection of a stored override, used by the inspector to render
+/// per-field indicators without re-walking the asset schema.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct FieldOverrideEntry {
+    pub local_id: LocalId,
+    pub component_type_id: crate::schema::ComponentTypeId,
+    pub field_path: Vec<String>,
+    pub status: ComponentOverrideStatus,
+}
+
+/// Build a flat index of every stored override (active + orphaned) on a `SceneInstance`.
+///
+/// This is a read-only projection used by `override_field_status_wasm` to supply
+/// per-field override indicators to the inspector UI.
+pub fn field_override_index(inst: &SceneInstance) -> Vec<FieldOverrideEntry> {
+    inst.component_overrides
+        .iter()
+        .chain(inst.orphaned_component_overrides.iter())
+        .map(|p| FieldOverrideEntry {
+            local_id: p.target_local_id.clone(),
+            component_type_id: p.component_type_id.clone(),
+            field_path: p.field_path.clone(),
+            status: p.status,
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
+// Override Mutation Helpers — end
+// ---------------------------------------------------------------------------
 
 /// Re-validate overrides when the asset version has changed.
 pub fn resync(
@@ -701,35 +686,124 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_classify_overrides_active() {
-        let asset = SceneAssetDocument {
+    /// Base fixture for `SceneAssetDocument` with common defaults.
+    fn fixture_asset() -> SceneAssetDocument {
+        SceneAssetDocument {
             layers: vec![],
             asset_id: "asset_1".to_string(),
             logical_path: "assets/test".to_string(),
             role: crate::scene_asset::SceneAssetRole::Actor,
             version: 1,
-            entities: vec![SceneAssetEntity {
-                local_id: LocalId::new("root"),
-                local_path: "root".to_string(),
-                name: "Root".to_string(),
-                components: vec![ComponentInstance {
-                    type_id: "editor.Sprite2D".to_string(),
-                    values: serde_json::json!({"asset": "player.png"}),
-                }],
-            }],
+            entities: vec![],
             relationships: vec![],
             exposed_properties: vec![],
             metadata: Default::default(),
-        };
+        }
+    }
 
-        let patch = ComponentOverride {
-            target_local_id: LocalId::new("root"),
-            component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
-            field_path: vec!["asset".to_string()],
-            value: serde_json::Value::String("cannon.png".to_string()),
-            status: ComponentOverrideStatus::Active,
-        };
+    /// Base fixture for `SceneInstance` with common defaults.
+    fn fixture_instance() -> SceneInstance {
+        SceneInstance {
+            instance_components: vec![],
+            instance_id: StableId::new("inst_1"),
+            asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
+            asset_version_seen: 1,
+            id_map: Default::default(),
+            component_overrides: vec![],
+            orphaned_component_overrides: vec![],
+        }
+    }
+
+    /// Build a `SceneAssetDocument` base fixture with one entity.
+    fn fixture_asset_with_entity(
+        local_id: &str,
+        local_path: &str,
+        name: &str,
+        component_type_id: &str,
+        component_values: serde_json::Value,
+    ) -> SceneAssetDocument {
+        let mut asset = fixture_asset();
+        asset.entities.push(SceneAssetEntity {
+            local_id: LocalId::new(local_id),
+            local_path: local_path.to_string(),
+            name: name.to_string(),
+            components: vec![ComponentInstance {
+                type_id: component_type_id.to_string(),
+                values: component_values,
+            }],
+        });
+        asset
+    }
+
+    /// Build a `SceneAssetDocument` base fixture with multiple entities (empty components).
+    fn fixture_asset_with_entities(entities: &[(&str, &str, &str)]) -> SceneAssetDocument {
+        let mut asset = fixture_asset();
+        for (local_id, local_path, name) in entities {
+            asset.entities.push(SceneAssetEntity {
+                local_id: LocalId::new(*local_id),
+                local_path: (*local_path).to_string(),
+                name: (*name).to_string(),
+                components: vec![],
+            });
+        }
+        asset
+    }
+
+    /// Build a `SceneAssetDocument` base fixture with multiple entities with components.
+    fn fixture_asset_with_entities_and_components(
+        entities: &[(&str, &str, &str, &str, serde_json::Value)],
+    ) -> SceneAssetDocument {
+        let mut asset = fixture_asset();
+        for (local_id, local_path, name, component_type_id, component_values) in entities {
+            asset.entities.push(SceneAssetEntity {
+                local_id: LocalId::new(*local_id),
+                local_path: (*local_path).to_string(),
+                name: (*name).to_string(),
+                components: vec![ComponentInstance {
+                    type_id: (*component_type_id).to_string(),
+                    values: component_values.clone(),
+                }],
+            });
+        }
+        asset
+    }
+
+    /// Build a `SceneInstance` base fixture with one component override.
+    fn fixture_instance_with_override(
+        target_local_id: &str,
+        component_type_id: &str,
+        field_path: Vec<&str>,
+        value: serde_json::Value,
+        status: ComponentOverrideStatus,
+    ) -> SceneInstance {
+        let mut inst = fixture_instance();
+        inst.component_overrides.push(component_override(
+            target_local_id,
+            component_type_id,
+            field_path,
+            value,
+            status,
+        ));
+        inst
+    }
+
+    #[test]
+    fn test_classify_overrides_active() {
+        let asset = fixture_asset_with_entity(
+            "root",
+            "root",
+            "Root",
+            "editor.Sprite2D",
+            serde_json::json!({"asset": "player.png"}),
+        );
+
+        let patch = component_override(
+            "root",
+            "editor.Sprite2D",
+            vec!["asset"],
+            serde_json::Value::String("cannon.png".to_string()),
+            ComponentOverrideStatus::Active,
+        );
 
         let result = classify_overrides(&asset, std::slice::from_ref(&patch));
         assert_eq!(result.len(), 1);
@@ -738,33 +812,21 @@ mod tests {
 
     #[test]
     fn test_classify_overrides_orphaned_short_form() {
-        let asset = SceneAssetDocument {
-            layers: vec![],
-            asset_id: "asset_1".to_string(),
-            logical_path: "assets/test".to_string(),
-            role: crate::scene_asset::SceneAssetRole::Actor,
-            version: 1,
-            entities: vec![SceneAssetEntity {
-                local_id: LocalId::new("root"),
-                local_path: "root".to_string(),
-                name: "Root".to_string(),
-                components: vec![ComponentInstance {
-                    type_id: "editor.Sprite2D".to_string(),
-                    values: serde_json::json!({"asset": "player.png"}),
-                }],
-            }],
-            relationships: vec![],
-            exposed_properties: vec![],
-            metadata: Default::default(),
-        };
+        let asset = fixture_asset_with_entity(
+            "root",
+            "root",
+            "Root",
+            "editor.Sprite2D",
+            serde_json::json!({"asset": "player.png"}),
+        );
 
-        let patch = ComponentOverride {
-            target_local_id: LocalId::new("root"),
-            component_type_id: crate::schema::ComponentTypeId::new("Sprite2D"),
-            field_path: vec!["asset".to_string()],
-            value: serde_json::Value::String("cannon.png".to_string()),
-            status: ComponentOverrideStatus::Active,
-        };
+        let patch = component_override(
+            "root",
+            "Sprite2D",
+            vec!["asset"],
+            serde_json::Value::String("cannon.png".to_string()),
+            ComponentOverrideStatus::Active,
+        );
 
         let result = classify_overrides(&asset, std::slice::from_ref(&patch));
         assert_eq!(result.len(), 1);
@@ -773,30 +835,7 @@ mod tests {
 
     #[test]
     fn test_mint_id_map() {
-        let asset = SceneAssetDocument {
-            layers: vec![],
-            asset_id: "asset_1".to_string(),
-            logical_path: "assets/test".to_string(),
-            role: crate::scene_asset::SceneAssetRole::Actor,
-            version: 1,
-            entities: vec![
-                SceneAssetEntity {
-                    local_id: LocalId::new("a"),
-                    local_path: "a".to_string(),
-                    name: "A".to_string(),
-                    components: vec![],
-                },
-                SceneAssetEntity {
-                    local_id: LocalId::new("b"),
-                    local_path: "b".to_string(),
-                    name: "B".to_string(),
-                    components: vec![],
-                },
-            ],
-            relationships: vec![],
-            exposed_properties: vec![],
-            metadata: Default::default(),
-        };
+        let asset = fixture_asset_with_entities(&[("a", "a", "A"), ("b", "b", "B")]);
 
         let mut counter = 0u32;
         let id_map = {
@@ -812,30 +851,7 @@ mod tests {
 
     #[test]
     fn test_reconcile_id_map_preserves_existing() {
-        let asset = SceneAssetDocument {
-            layers: vec![],
-            asset_id: "asset_1".to_string(),
-            logical_path: "assets/test".to_string(),
-            role: crate::scene_asset::SceneAssetRole::Actor,
-            version: 1,
-            entities: vec![
-                SceneAssetEntity {
-                    local_id: LocalId::new("a"),
-                    local_path: "a".to_string(),
-                    name: "A".to_string(),
-                    components: vec![],
-                },
-                SceneAssetEntity {
-                    local_id: LocalId::new("b"),
-                    local_path: "b".to_string(),
-                    name: "B".to_string(),
-                    components: vec![],
-                },
-            ],
-            relationships: vec![],
-            exposed_properties: vec![],
-            metadata: Default::default(),
-        };
+        let asset = fixture_asset_with_entities(&[("a", "a", "A"), ("b", "b", "B")]);
 
         let existing: BTreeMap<LocalId, StableId> =
             vec![(LocalId::new("a"), StableId::new("existing_a"))]
@@ -858,30 +874,21 @@ mod tests {
 
     #[test]
     fn test_try_rebind_exact_match() {
-        let asset = SceneAssetDocument {
-            layers: vec![],
-            asset_id: "asset_1".to_string(),
-            logical_path: "assets/test".to_string(),
-            role: crate::scene_asset::SceneAssetRole::Actor,
-            version: 1,
-            entities: vec![SceneAssetEntity {
-                local_id: LocalId::new("new_abc"),
-                local_path: "root/player/weapons/cannon".to_string(),
-                name: "Cannon".to_string(),
-                components: vec![],
-            }],
-            relationships: vec![],
-            exposed_properties: vec![],
-            metadata: Default::default(),
-        };
+        let asset = fixture_asset_with_entity(
+            "new_abc",
+            "root/player/weapons/cannon",
+            "Cannon",
+            "",
+            serde_json::Value::Null,
+        );
 
-        let orphan = ComponentOverride {
-            target_local_id: LocalId::new("old_abc"),
-            component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
-            field_path: vec!["asset".to_string()],
-            value: serde_json::Value::String("cannon.png".to_string()),
-            status: ComponentOverrideStatus::Orphaned,
-        };
+        let orphan = component_override(
+            "old_abc",
+            "editor.Sprite2D",
+            vec!["asset"],
+            serde_json::Value::String("cannon.png".to_string()),
+            ComponentOverrideStatus::Orphaned,
+        );
 
         let result = try_rebind(&asset, &orphan);
         assert_eq!(result, Some(LocalId::new("new_abc")));
@@ -889,43 +896,26 @@ mod tests {
 
     #[test]
     fn test_resync_preserves_active_on_rename() {
-        let asset = SceneAssetDocument {
-            layers: vec![],
-            asset_id: "asset_1".to_string(),
-            logical_path: "assets/test".to_string(),
-            role: crate::scene_asset::SceneAssetRole::Actor,
-            version: 2,
-            entities: vec![SceneAssetEntity {
-                local_id: LocalId::new("abc"),
-                local_path: "abc".to_string(),
-                name: "Cannon".to_string(),
-                components: vec![ComponentInstance {
-                    type_id: "editor.Sprite2D".to_string(),
-                    values: serde_json::json!({"asset": "player.png"}),
-                }],
-            }],
-            relationships: vec![],
-            exposed_properties: vec![],
-            metadata: Default::default(),
-        };
+        let mut asset = fixture_asset_with_entity(
+            "abc",
+            "abc",
+            "Cannon",
+            "editor.Sprite2D",
+            serde_json::json!({"asset": "player.png"}),
+        );
+        asset.version = 2;
 
-        let mut instance = SceneInstance {            instance_components: vec![],
-
-            instance_id: StableId::new("inst_1"),
-            asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
-            asset_version_seen: 1,
-            id_map: vec![(LocalId::new("abc"), StableId::new("ent_a"))]
-                .into_iter()
-                .collect(),
-            component_overrides: vec![ComponentOverride {
-                target_local_id: LocalId::new("abc"),
-                component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
-                field_path: vec!["asset".to_string()],
-                value: serde_json::Value::String("cannon.png".to_string()),
-                status: ComponentOverrideStatus::Active,
-            }],
-            orphaned_component_overrides: vec![],
-        };
+        let mut instance = fixture_instance_with_override(
+            "abc",
+            "editor.Sprite2D",
+            vec!["asset"],
+            serde_json::Value::String("cannon.png".to_string()),
+            ComponentOverrideStatus::Active,
+        );
+        instance.id_map = vec![(LocalId::new("abc"), StableId::new("ent_a"))]
+            .into_iter()
+            .collect();
+        instance.asset_version_seen = 1;
 
         let report = resync(&asset, &mut instance, 2);
 
@@ -941,33 +931,17 @@ mod tests {
 
     #[test]
     fn test_resync_moves_to_orphaned_on_entity_removed() {
-        let asset_v2 = SceneAssetDocument {
-            layers: vec![],
-            asset_id: "asset_1".to_string(),
-            logical_path: "assets/test".to_string(),
-            role: crate::scene_asset::SceneAssetRole::Actor,
-            version: 2,
-            entities: vec![],
-            relationships: vec![],
-            exposed_properties: vec![],
-            metadata: Default::default(),
-        };
+        let mut asset_v2 = fixture_asset();
+        asset_v2.version = 2;
 
-        let mut instance = SceneInstance {            instance_components: vec![],
-
-            instance_id: StableId::new("inst_1"),
-            asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
-            asset_version_seen: 1,
-            id_map: Default::default(),
-            component_overrides: vec![ComponentOverride {
-                target_local_id: LocalId::new("abc"),
-                component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
-                field_path: vec!["asset".to_string()],
-                value: serde_json::Value::String("cannon.png".to_string()),
-                status: ComponentOverrideStatus::Active,
-            }],
-            orphaned_component_overrides: vec![],
-        };
+        let mut instance = fixture_instance_with_override(
+            "abc",
+            "editor.Sprite2D",
+            vec!["asset"],
+            serde_json::Value::String("cannon.png".to_string()),
+            ComponentOverrideStatus::Active,
+        );
+        instance.asset_version_seen = 1;
 
         let report = resync(&asset_v2, &mut instance, 2);
 
@@ -987,41 +961,23 @@ mod tests {
 
     #[test]
     fn test_resync_marks_stale_on_field_rename() {
-        let asset_v2 = SceneAssetDocument {
-            layers: vec![],
-            asset_id: "asset_1".to_string(),
-            logical_path: "assets/test".to_string(),
-            role: crate::scene_asset::SceneAssetRole::Actor,
-            version: 2,
-            entities: vec![SceneAssetEntity {
-                local_id: LocalId::new("root"),
-                local_path: "root".to_string(),
-                name: "Root".to_string(),
-                components: vec![ComponentInstance {
-                    type_id: "editor.Sprite2D".to_string(),
-                    values: serde_json::json!({"image": "player.png"}),
-                }],
-            }],
-            relationships: vec![],
-            exposed_properties: vec![],
-            metadata: Default::default(),
-        };
+        let mut asset_v2 = fixture_asset_with_entity(
+            "root",
+            "root",
+            "Root",
+            "editor.Sprite2D",
+            serde_json::json!({"image": "player.png"}),
+        );
+        asset_v2.version = 2;
 
-        let mut instance = SceneInstance {            instance_components: vec![],
-
-            instance_id: StableId::new("inst_1"),
-            asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
-            asset_version_seen: 1,
-            id_map: Default::default(),
-            component_overrides: vec![ComponentOverride {
-                target_local_id: LocalId::new("root"),
-                component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
-                field_path: vec!["asset".to_string()],
-                value: serde_json::Value::String("cannon.png".to_string()),
-                status: ComponentOverrideStatus::Active,
-            }],
-            orphaned_component_overrides: vec![],
-        };
+        let mut instance = fixture_instance_with_override(
+            "root",
+            "editor.Sprite2D",
+            vec!["asset"],
+            serde_json::Value::String("cannon.png".to_string()),
+            ComponentOverrideStatus::Active,
+        );
+        instance.asset_version_seen = 1;
 
         let report = resync(&asset_v2, &mut instance, 2);
 
@@ -1033,41 +989,23 @@ mod tests {
 
     #[test]
     fn test_resync_marks_conflict_on_type_change() {
-        let asset_v2 = SceneAssetDocument {
-            layers: vec![],
-            asset_id: "asset_1".to_string(),
-            logical_path: "assets/test".to_string(),
-            role: crate::scene_asset::SceneAssetRole::Actor,
-            version: 2,
-            entities: vec![SceneAssetEntity {
-                local_id: LocalId::new("player"),
-                local_path: "player".to_string(),
-                name: "Player".to_string(),
-                components: vec![ComponentInstance {
-                    type_id: "editor.Health".to_string(),
-                    values: serde_json::json!({"current": "full"}),
-                }],
-            }],
-            relationships: vec![],
-            exposed_properties: vec![],
-            metadata: Default::default(),
-        };
+        let mut asset_v2 = fixture_asset_with_entity(
+            "player",
+            "player",
+            "Player",
+            "editor.Health",
+            serde_json::json!({"current": "full"}),
+        );
+        asset_v2.version = 2;
 
-        let mut instance = SceneInstance {            instance_components: vec![],
-
-            instance_id: StableId::new("inst_1"),
-            asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
-            asset_version_seen: 1,
-            id_map: Default::default(),
-            component_overrides: vec![ComponentOverride {
-                target_local_id: LocalId::new("player"),
-                component_type_id: crate::schema::ComponentTypeId::new("editor.Health"),
-                field_path: vec!["current".to_string()],
-                value: serde_json::json!(42),
-                status: ComponentOverrideStatus::Active,
-            }],
-            orphaned_component_overrides: vec![],
-        };
+        let mut instance = fixture_instance_with_override(
+            "player",
+            "editor.Health",
+            vec!["current"],
+            serde_json::json!(42),
+            ComponentOverrideStatus::Active,
+        );
+        instance.asset_version_seen = 1;
 
         let report = resync(&asset_v2, &mut instance, 2);
 
@@ -1078,58 +1016,32 @@ mod tests {
 
     #[test]
     fn test_resync_rebinds_via_local_id() {
-        let asset_v2 = SceneAssetDocument {
-            layers: vec![],
-            asset_id: "asset_1".to_string(),
-            logical_path: "assets/test".to_string(),
-            role: crate::scene_asset::SceneAssetRole::Actor,
-            version: 2,
-            entities: vec![],
-            relationships: vec![],
-            exposed_properties: vec![],
-            metadata: Default::default(),
-        };
+        let mut asset_v2 = fixture_asset();
+        asset_v2.version = 2;
 
-        let mut instance = SceneInstance {            instance_components: vec![],
-
-            instance_id: StableId::new("inst_1"),
-            asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
-            asset_version_seen: 1,
-            id_map: vec![(LocalId::new("abc"), StableId::new("ent_a"))]
-                .into_iter()
-                .collect(),
-            component_overrides: vec![ComponentOverride {
-                target_local_id: LocalId::new("abc"),
-                component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
-                field_path: vec!["asset".to_string()],
-                value: serde_json::Value::String("cannon.png".to_string()),
-                status: ComponentOverrideStatus::Active,
-            }],
-            orphaned_component_overrides: vec![],
-        };
+        let mut instance = fixture_instance_with_override(
+            "abc",
+            "editor.Sprite2D",
+            vec!["asset"],
+            serde_json::Value::String("cannon.png".to_string()),
+            ComponentOverrideStatus::Active,
+        );
+        instance.asset_version_seen = 1;
+        instance.id_map = vec![(LocalId::new("abc"), StableId::new("ent_a"))]
+            .into_iter()
+            .collect();
 
         resync(&asset_v2, &mut instance, 2);
         assert_eq!(instance.orphaned_component_overrides.len(), 1);
 
-        let asset_v3 = SceneAssetDocument {
-            layers: vec![],
-            asset_id: "asset_1".to_string(),
-            logical_path: "assets/test".to_string(),
-            role: crate::scene_asset::SceneAssetRole::Actor,
-            version: 3,
-            entities: vec![SceneAssetEntity {
-                local_id: LocalId::new("abc"),
-                local_path: "weapons/cannon".to_string(),
-                name: "Cannon".to_string(),
-                components: vec![ComponentInstance {
-                    type_id: "editor.Sprite2D".to_string(),
-                    values: serde_json::json!({"asset": "player.png"}),
-                }],
-            }],
-            relationships: vec![],
-            exposed_properties: vec![],
-            metadata: Default::default(),
-        };
+        let mut asset_v3 = fixture_asset_with_entity(
+            "abc",
+            "weapons/cannon",
+            "Cannon",
+            "editor.Sprite2D",
+            serde_json::json!({"asset": "player.png"}),
+        );
+        asset_v3.version = 3;
 
         let report = resync(&asset_v3, &mut instance, 3);
 
@@ -1141,41 +1053,21 @@ mod tests {
 
     #[test]
     fn test_effective_values_minimal() {
-        let asset = SceneAssetDocument {
-            layers: vec![],
-            asset_id: "asset_1".to_string(),
-            logical_path: "assets/test".to_string(),
-            role: crate::scene_asset::SceneAssetRole::Actor,
-            version: 1,
-            entities: vec![SceneAssetEntity {
-                local_id: LocalId::new("root"),
-                local_path: "root".to_string(),
-                name: "Root".to_string(),
-                components: vec![ComponentInstance {
-                    type_id: "editor.Sprite2D".to_string(),
-                    values: serde_json::json!({"asset": "player.png"}),
-                }],
-            }],
-            relationships: vec![],
-            exposed_properties: vec![],
-            metadata: Default::default(),
-        };
+        let asset = fixture_asset_with_entity(
+            "root",
+            "root",
+            "Root",
+            "editor.Sprite2D",
+            serde_json::json!({"asset": "player.png"}),
+        );
 
-        let instance = SceneInstance {            instance_components: vec![],
-
-            instance_id: StableId::new("inst_1"),
-            asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
-            asset_version_seen: 1,
-            id_map: Default::default(),
-            component_overrides: vec![ComponentOverride {
-                target_local_id: LocalId::new("root"),
-                component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
-                field_path: vec!["asset".to_string()],
-                value: serde_json::Value::String("cannon.png".to_string()),
-                status: ComponentOverrideStatus::Active,
-            }],
-            orphaned_component_overrides: vec![],
-        };
+        let instance = fixture_instance_with_override(
+            "root",
+            "editor.Sprite2D",
+            vec!["asset"],
+            serde_json::Value::String("cannon.png".to_string()),
+            ComponentOverrideStatus::Active,
+        );
 
         let mut counter = 0u32;
         let result = {
@@ -1192,46 +1084,12 @@ mod tests {
 
     #[test]
     fn test_effective_values_no_overrides() {
-        let asset = SceneAssetDocument {
-            layers: vec![],
-            asset_id: "asset_1".to_string(),
-            logical_path: "assets/test".to_string(),
-            role: crate::scene_asset::SceneAssetRole::Actor,
-            version: 1,
-            entities: vec![
-                SceneAssetEntity {
-                    local_id: LocalId::new("a"),
-                    local_path: "a".to_string(),
-                    name: "A".to_string(),
-                    components: vec![ComponentInstance {
-                        type_id: "editor.Sprite2D".to_string(),
-                        values: serde_json::json!({"asset": "a.png"}),
-                    }],
-                },
-                SceneAssetEntity {
-                    local_id: LocalId::new("b"),
-                    local_path: "b".to_string(),
-                    name: "B".to_string(),
-                    components: vec![ComponentInstance {
-                        type_id: "editor.Sprite2D".to_string(),
-                        values: serde_json::json!({"asset": "b.png"}),
-                    }],
-                },
-            ],
-            relationships: vec![],
-            exposed_properties: vec![],
-            metadata: Default::default(),
-        };
+        let asset = fixture_asset_with_entities_and_components(&[
+            ("a", "a", "A", "editor.Sprite2D", serde_json::json!({"asset": "a.png"})),
+            ("b", "b", "B", "editor.Sprite2D", serde_json::json!({"asset": "b.png"})),
+        ]);
 
-        let instance = SceneInstance {            instance_components: vec![],
-
-            instance_id: StableId::new("inst_1"),
-            asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
-            asset_version_seen: 1,
-            id_map: Default::default(),
-            component_overrides: vec![],
-            orphaned_component_overrides: vec![],
-        };
+        let instance = fixture_instance();
 
         let resolved = {
             let mut counter = 0u32;
@@ -1245,41 +1103,181 @@ mod tests {
 
     #[test]
     fn test_validate_overrides_missing_entity() {
-        let asset = SceneAssetDocument {
-            layers: vec![],
-            asset_id: "asset_1".to_string(),
-            logical_path: "assets/test".to_string(),
-            role: crate::scene_asset::SceneAssetRole::Actor,
-            version: 1,
-            entities: vec![SceneAssetEntity {
-                local_id: LocalId::new("root"),
-                local_path: "root".to_string(),
-                name: "Root".to_string(),
-                components: vec![],
-            }],
-            relationships: vec![],
-            exposed_properties: vec![],
-            metadata: Default::default(),
-        };
+        let asset = fixture_asset_with_entity(
+            "root",
+            "root",
+            "Root",
+            "",
+            serde_json::Value::Null,
+        );
 
-        let instance = SceneInstance {            instance_components: vec![],
-
-            instance_id: StableId::new("inst_1"),
-            asset_ref: crate::scene_asset::AssetReference::new("assets/test"),
-            asset_version_seen: 1,
-            id_map: Default::default(),
-            component_overrides: vec![ComponentOverride {
-                target_local_id: LocalId::new("nonexistent"),
-                component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
-                field_path: vec!["asset".to_string()],
-                value: serde_json::Value::String("cannon.png".to_string()),
-                status: ComponentOverrideStatus::Active,
-            }],
-            orphaned_component_overrides: vec![],
-        };
+        let instance = fixture_instance_with_override(
+            "nonexistent",
+            "editor.Sprite2D",
+            vec!["asset"],
+            serde_json::Value::String("cannon.png".to_string()),
+            ComponentOverrideStatus::Active,
+        );
 
         let issues = validate_overrides(&asset, &instance);
         assert!(!issues.is_empty());
         assert_eq!(issues[0].code, "missing_entity");
+    }
+
+    // ===== upsert_override / remove_override / field_override_index =====
+
+    // S11 — Upsert appends to empty overrides
+    #[test]
+    fn test_upsert_override_appends_to_empty() {
+        let mut inst = fixture_instance();
+        let patch = component_override(
+            "root",
+            "editor.Sprite2D",
+            vec!["asset"],
+            serde_json::Value::String("cannon.png".to_string()),
+            ComponentOverrideStatus::Stale, // input status ignored, forced Active
+        );
+        upsert_override(&mut inst, patch);
+        assert_eq!(inst.component_overrides.len(), 1);
+        assert_eq!(inst.component_overrides[0].status, ComponentOverrideStatus::Active);
+        assert_eq!(inst.component_overrides[0].value, serde_json::Value::String("cannon.png".to_string()));
+    }
+
+    // S11 — Upsert replaces a same-key override
+    #[test]
+    fn test_upsert_override_replaces_same_key() {
+        let mut inst = fixture_instance_with_override(
+            "root",
+            "editor.Sprite2D",
+            vec!["asset"],
+            serde_json::Value::String("cannon.png".to_string()),
+            ComponentOverrideStatus::Active,
+        );
+        let patch = component_override(
+            "root",
+            "editor.Sprite2D",
+            vec!["asset"],
+            serde_json::Value::String("enemy.png".to_string()),
+            ComponentOverrideStatus::Active,
+        );
+        upsert_override(&mut inst, patch);
+        assert_eq!(inst.component_overrides.len(), 1);
+        assert_eq!(inst.component_overrides[0].value, serde_json::Value::String("enemy.png".to_string()));
+        assert_eq!(inst.component_overrides[0].status, ComponentOverrideStatus::Active);
+    }
+
+    // S12 — Remove returns the captured patch
+    #[test]
+    fn test_remove_override_returns_captured() {
+        let mut inst = fixture_instance_with_override(
+            "root",
+            "editor.Sprite2D",
+            vec!["asset"],
+            serde_json::Value::String("cannon.png".to_string()),
+            ComponentOverrideStatus::Active,
+        );
+        let result = remove_override(
+            &mut inst,
+            LocalId::new("root"),
+            crate::schema::ComponentTypeId::new("editor.Sprite2D"),
+            vec!["asset".to_string()],
+        );
+        assert!(result.is_some());
+        let removed = result.unwrap();
+        assert_eq!(removed.value, serde_json::Value::String("cannon.png".to_string()));
+        assert!(inst.component_overrides.is_empty());
+    }
+
+    // S13 — Remove of absent override returns None
+    #[test]
+    fn test_remove_override_absent_is_noop() {
+        let mut inst = fixture_instance_with_override(
+            "root",
+            "editor.Sprite2D",
+            vec!["asset"],
+            serde_json::Value::String("cannon.png".to_string()),
+            ComponentOverrideStatus::Active,
+        );
+        let result = remove_override(
+            &mut inst,
+            LocalId::new("root"),
+            crate::schema::ComponentTypeId::new("editor.Sprite2D"),
+            vec!["nonexistent".to_string()], // different field_path
+        );
+        assert!(result.is_none());
+        assert_eq!(inst.component_overrides.len(), 1); // unchanged
+    }
+
+    // field_override_index — covers component_overrides
+    #[test]
+    fn test_field_override_index_active_overrides() {
+        let inst = fixture_instance_with_override(
+            "root",
+            "editor.Sprite2D",
+            vec!["asset"],
+            serde_json::Value::String("cannon.png".to_string()),
+            ComponentOverrideStatus::Active,
+        );
+        let index = field_override_index(&inst);
+        assert_eq!(index.len(), 1);
+        assert_eq!(index[0].local_id, LocalId::new("root"));
+        assert_eq!(index[0].component_type_id.as_str(), "editor.Sprite2D");
+        assert_eq!(index[0].field_path, vec!["asset"]);
+        assert_eq!(index[0].status, ComponentOverrideStatus::Active);
+    }
+
+    // field_override_index — covers orphaned_component_overrides
+    #[test]
+    fn test_field_override_index_includes_orphaned() {
+        let mut inst = fixture_instance_with_override(
+            "root",
+            "editor.Sprite2D",
+            vec!["asset"],
+            serde_json::Value::String("cannon.png".to_string()),
+            ComponentOverrideStatus::Orphaned,
+        );
+        // Add a second orphaned override
+        inst.orphaned_component_overrides.push(component_override(
+            "other",
+            "editor.Transform2D",
+            vec!["translation", "x"],
+            serde_json::json!(1.0),
+            ComponentOverrideStatus::Orphaned,
+        ));
+        let index = field_override_index(&inst);
+        // component_overrides has 1 (orphaned), orphaned_component_overrides has 1
+        assert_eq!(index.len(), 2);
+    }
+
+    // field_override_index — ordering is preserved
+    #[test]
+    fn test_field_override_index_preserves_order() {
+        let mut inst = fixture_instance();
+        inst.component_overrides.push(component_override(
+            "a",
+            "editor.Sprite2D",
+            vec!["asset"],
+            serde_json::Value::String("a.png".to_string()),
+            ComponentOverrideStatus::Active,
+        ));
+        inst.component_overrides.push(component_override(
+            "b",
+            "editor.Sprite2D",
+            vec!["asset"],
+            serde_json::Value::String("b.png".to_string()),
+            ComponentOverrideStatus::Stale,
+        ));
+        inst.orphaned_component_overrides.push(component_override(
+            "c",
+            "editor.Sprite2D",
+            vec!["asset"],
+            serde_json::Value::String("c.png".to_string()),
+            ComponentOverrideStatus::Orphaned,
+        ));
+        let index = field_override_index(&inst);
+        assert_eq!(index.len(), 3);
+        assert_eq!(index[0].local_id, LocalId::new("a"));
+        assert_eq!(index[1].local_id, LocalId::new("b"));
+        assert_eq!(index[2].local_id, LocalId::new("c"));
     }
 }

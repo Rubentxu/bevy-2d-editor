@@ -48,6 +48,18 @@ _Avoid_: prefab instance, cloned template, deep copy, Bevy Entity
 A non-destructive patch applied by a Scene Instance to a specific Component Instance on an asset-local Entity inside the referenced Scene Asset. Component identity is explicit (`component_type_id`) and field paths only address fields inside that component.
 _Avoid_: property override, prefab override, opaque patch, field path that hides the component type
 
+**Override Count Badge**:
+A UI element in the Inspector Panel showing per-status counts of component overrides for a selected Scene Instance. Displays `active | stale | orphaned | conflict` badges derived from the instance's `component_overrides` and `orphaned_component_overrides` vectors.
+_Avoid_: override counter, status badge (when you mean this specific element)
+
+**Per-field Override Indicator**:
+A visual indicator rendered next to each field in a ComponentCard when the selected entity belongs to a Scene Instance. The indicator is a colored dot reflecting the override's status: Active=blue, Stale=warning (amber), Conflict=error (red), Orphaned=dimmed (grey). Status is computed via `override_field_status_wasm` and passed as `fieldOverrideStatus` prop to ComponentCard.
+_Avoid_: override dot, status dot, field indicator
+
+**Resync Warning Banner**:
+A warning banner displayed in the Inspector Panel when `get_resync_reports` reports non-zero `stale` or `conflict` counts for the selected Scene Instance. Shows a count of problem overrides and an "Open Workbench" button that navigates to the Override / Resync Workbench. The button may use a placeholder href until the workbench is fully implemented.
+_Avoid_: stale warning, conflict alert, override banner
+
 **Project Asset Browser**:
 The editor UI surface for browsing Project-level assets such as scenes, schemas, Scene Assets, and future level-design assets. It is not a filesystem browser and must show editor-owned logical assets, not raw OPFS implementation details.
 _Avoid_: file explorer, asset folder, OS browser
