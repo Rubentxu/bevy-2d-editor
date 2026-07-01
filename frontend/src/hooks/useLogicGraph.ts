@@ -165,6 +165,11 @@ export function useLogicGraph() {
     await Promise.all([refreshGraph(), refreshLogState()]);
   }, [refreshGraph, refreshLogState]);
 
+  // RF1: Refresh from WASM on mount
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
   /**
    * Open an existing logic graph asset.
    * Currently not persisted — placeholder for OPFS integration.
@@ -190,14 +195,20 @@ export function useLogicGraph() {
   }, [refresh, refreshDescriptors]);
 
   /**
+   * Create the default empty logic graph for editor mode entry.
+   * Called automatically when entering logic mode with no active graph.
+   */
+  const createDefault = useCallback(async () => {
+    await create("default", "logic/default");
+  }, [create]);
+
+  /**
    * Dispatch a LogicCommand to the open graph.
+   * Sends the raw command JSON directly — Rust dispatch_logic_command parses
+   * a flat LogicCommand (#[serde(tag="type")]), not an envelope.
    */
   const dispatch = useCallback(async (command: object): Promise<string> => {
-    const envelope = {
-      command,
-      metadata: { authorship: "user", timestamp: Date.now() },
-    };
-    const result = await (window as any).dispatch_logic_command(JSON.stringify(envelope));
+    const result = await (window as any).dispatch_logic_command(JSON.stringify(command));
     // Refresh graph and log state after dispatch
     await refresh();
     return result;
@@ -240,6 +251,7 @@ export function useLogicGraph() {
     refreshDescriptors,
     open,
     create,
+    createDefault,
     dispatch,
     undo,
     redo,
