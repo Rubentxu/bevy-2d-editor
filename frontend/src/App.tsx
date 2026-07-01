@@ -507,6 +507,8 @@ export default function App() {
               <TilesetPanel
                 selectedTilesetId={selectedTilesetId}
                 onSelectTileset={handleSelectTileset}
+                assetDoc={assetDoc}
+                activeAssetLogicalPath={activeAssetLogicalPath}
               />
             )}
             <HierarchyPanel

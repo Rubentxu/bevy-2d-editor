@@ -1,14 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import { listTilesets, createTileset, deleteTileset, type TilesetMetadata } from '../services/tilesets';
+import React, { useState, useEffect, useCallback } from 'react';
+import { listTilesets, createTileset, deleteTileset, paintTile, type TilesetMetadata } from '../services/tilesets';
+import { type SceneAssetDocument, type TileLayerPayload } from '../services/scene-assets';
+import { TileCanvas } from './TileCanvas';
 
 interface TilesetPanelProps {
   onSelectTileset: (tileset: TilesetMetadata) => void;
   selectedTilesetId: string | null;
+  assetDoc: SceneAssetDocument | null;
+  activeAssetLogicalPath: string | null;
 }
 
 export const TilesetPanel: React.FC<TilesetPanelProps> = ({
   onSelectTileset,
   selectedTilesetId,
+  assetDoc,
+  activeAssetLogicalPath,
 }) => {
   const [tilesets, setTilesets] = useState<TilesetMetadata[]>([]);
   const [showCreate, setShowCreate] = useState(false);
@@ -20,10 +26,27 @@ export const TilesetPanel: React.FC<TilesetPanelProps> = ({
     columns: 16,
     spacing: 0,
   });
+  const [selectedTileLayerId, setSelectedTileLayerId] = useState<string | null>(null);
+  const [paintMode, setPaintMode] = useState<'paint' | 'erase'>('paint');
+  const [selectedTileIndex, setSelectedTileIndex] = useState<number | null>(null);
+
+  // Derive TileLayers from assetDoc
+  const tileLayers: TileLayerPayload[] =
+    (assetDoc?.layers?.filter((l) => l.kind === 'tile') as TileLayerPayload[]) ?? [];
+
+  // Selected TileLayer and Tileset
+  const selectedTileLayer = tileLayers.find((l) => l.id === selectedTileLayerId) ?? null;
+  const selectedTileset = tilesets.find((ts) => ts.id === selectedTilesetId) ?? null;
 
   useEffect(() => {
     listTilesets().then(setTilesets).catch(console.error);
   }, []);
+
+  // Reset layer selection when asset changes
+  useEffect(() => {
+    setSelectedTileLayerId(null);
+    setSelectedTileIndex(null);
+  }, [assetDoc?.logical_path]);
 
   const handleCreate = async () => {
     try {
@@ -42,6 +65,24 @@ export const TilesetPanel: React.FC<TilesetPanelProps> = ({
       console.error('Failed to create tileset:', e);
     }
   };
+
+  const handlePaint = useCallback(
+    async (x: number, y: number) => {
+      if (!activeAssetLogicalPath || !selectedTileLayerId || !selectedTilesetId || selectedTileIndex === null) return;
+      try {
+        if (paintMode === 'paint') {
+          await paintTile(activeAssetLogicalPath, selectedTileLayerId, x, y, selectedTilesetId, selectedTileIndex);
+        }
+        // erase mode: future work — needs erase_tile WASM binding wired here
+      } catch (e) {
+        console.error('Paint failed:', e);
+      }
+    },
+    [activeAssetLogicalPath, selectedTileLayerId, selectedTilesetId, selectedTileIndex, paintMode]
+  );
+
+  // Show tile canvas when both a tile layer and tileset are selected
+  const showTileCanvas = !!selectedTileLayer && !!selectedTileset;
 
   return (
     <div className="tileset-panel">
@@ -74,6 +115,78 @@ export const TilesetPanel: React.FC<TilesetPanelProps> = ({
           </li>
         ))}
       </ul>
+
+      {/* Tile Layer picker — only in asset-authoring with level assets */}
+      {tileLayers.length > 0 && (
+        <div className="tile-layer-picker">
+          <h4>Tile Layer</h4>
+          <select
+            value={selectedTileLayerId ?? ''}
+            onChange={(e) => setSelectedTileLayerId(e.target.value || null)}
+          >
+            <option value="">— select layer —</option>
+            {tileLayers.map((layer) => (
+              <option key={layer.id} value={layer.id}>
+                {layer.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Tile Canvas — shown when layer + tileset are both selected */}
+      {showTileCanvas && (
+        <>
+          <div className="tile-canvas-toolbar">
+            <button
+              className={paintMode === 'paint' ? 'active' : ''}
+              onClick={() => setPaintMode('paint')}
+            >
+              Paint
+            </button>
+            <button
+              className={paintMode === 'erase' ? 'active' : ''}
+              onClick={() => setPaintMode('erase')}
+            >
+              Erase
+            </button>
+            <span style={{ fontSize: 11, color: '#666', marginLeft: 8 }}>
+              Pick tile:
+            </span>
+            <input
+              type="number"
+              min={0}
+              value={selectedTileIndex ?? ''}
+              onChange={(e) => setSelectedTileIndex(e.target.value ? parseInt(e.target.value) : null)}
+              placeholder="index"
+              style={{ width: 50 }}
+            />
+          </div>
+          <TileCanvas
+            layerId={selectedTileLayer!.id}
+            assetRef={activeAssetLogicalPath ?? ''}
+            tilesetImage={selectedTileset!.image_ref}
+            tileWidth={selectedTileset!.tile_width}
+            tileHeight={selectedTileset!.tile_height}
+            columns={selectedTileset!.columns}
+            gridWidth={selectedTileset!.columns}
+            gridHeight={50}
+            mode={paintMode}
+            selectedTile={
+              selectedTileIndex !== null
+                ? { tilesetId: selectedTilesetId!, localIndex: selectedTileIndex }
+                : null
+            }
+            onPaint={handlePaint}
+          />
+        </>
+      )}
+
+      {selectedTileLayer && !selectedTileset && (
+        <p style={{ fontSize: 12, color: '#666', margin: '8px 0' }}>
+          Select a tileset to paint on &quot;{selectedTileLayer.name}&quot;
+        </p>
+      )}
     </div>
   );
 };
