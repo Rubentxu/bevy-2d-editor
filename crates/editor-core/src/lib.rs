@@ -16,6 +16,7 @@ pub mod document;
 mod dynamic_scene;
 mod operation_log;
 mod persistence;
+pub mod auto_layer;
 pub mod bsn_export;
 pub mod bsn_import;
 pub mod preview_inspector;
@@ -111,6 +112,9 @@ pub use scene_asset::{
     AssetReference, ExposedProperty, LayerId, LevelLayer, LocalId, RelationshipKind, RoleWarning,
     SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata, SceneAssetRelationship,
     SceneAssetRole, SceneInstanceLayer, SceneInstanceLayerKind, validate_role,
+};
+pub use auto_layer::{
+    AutoLayer, AutoLayerId, AutoRule, Pattern3x3, PatternCell, is_auto_layer_stale, regenerate,
 };
 pub use scene_asset_catalog::{
     CatalogError, CatalogWarning, SceneAssetCatalog, SceneAssetCatalogEntry, mint_asset_id,
@@ -1088,8 +1092,8 @@ pub fn list_scene_instance_layers_wasm(asset_json: &str) -> Result<String, JsVal
                     "instances_count": scene_layer.instances.len(),
                 }));
             }
-            LevelLayer::Tile(_) => {
-                // Tile layers are handled separately in the tile layer API
+            LevelLayer::Tile(_) | LevelLayer::Auto(_) => {
+                // Tile and Auto layers are handled separately in their respective APIs
             }
         }
     }
@@ -1136,7 +1140,7 @@ pub fn create_scene_instance_layer_wasm(
         .iter()
         .filter_map(|l| match l {
             LevelLayer::SceneInstance(s) => Some(s.order),
-            LevelLayer::Tile(_) => None,
+            LevelLayer::Tile(_) | LevelLayer::Auto(_) => None,
         })
         .max()
         .map(|o| o + 1)

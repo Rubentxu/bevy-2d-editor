@@ -4,6 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::auto_layer::AutoLayer;
 use crate::document::ComponentInstance;
 use crate::scene_instance::SceneInstance;
 use crate::tile_layer::TileLayer;
@@ -228,9 +229,12 @@ pub struct SceneInstanceLayer {
     pub instances: Vec<SceneInstance>,
 }
 
-/// A Level Layer of a Level Scene Asset. Currently only one variant; future
-/// layer kinds (Tile, IntGrid, Auto) are deferred per
-/// `docs/sddk/level-design-layers-research/design.md`.
+/// A Level Layer of a Level Scene Asset.
+///
+/// Variants:
+/// - `SceneInstance`: placed Scene Instances (actors, props, spawns, etc.)
+/// - `Tile`: a manually painted tile layer
+/// - `Auto`: an auto-generated tile layer driven by pattern-matching rules
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum LevelLayer {
@@ -238,4 +242,9 @@ pub enum LevelLayer {
     /// A tile layer for grid-based level painting.
     /// Stores a sparse grid of tile references from a Tileset.
     Tile(TileLayer),
+    /// An auto-generated tile layer driven by pattern-matching rules.
+    /// Rules are evaluated against a source TileLayer to produce the
+    /// `cached` tile grid. The cache is stale when the source layer's
+    /// generation counter changes.
+    Auto(AutoLayer),
 }
