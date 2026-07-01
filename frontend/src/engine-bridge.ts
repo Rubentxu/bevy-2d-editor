@@ -161,6 +161,13 @@ export async function initEngine(
   (window as any).export_asset_to_bsn_wasm = (assetId: string) =>
     wasm.export_asset_to_bsn_wasm(assetId);
 
+  // ── BSN file import (bsn-file-import) ───────────────────────────────────
+  (window as any).import_bsn_text_to_asset_wasm = (bsnText: string) =>
+    wasm.import_bsn_text_to_asset_wasm(bsnText);
+
+  (window as any).import_bsn_asset_wasm = (name: string, bsnText: string) =>
+    wasm.import_bsn_asset_wasm(name, bsnText);
+
   // ── Tile Painting (level-design-tools PR2) ────────────────────────────────
   (window as any).paint_tile = (
     assetRef: string,

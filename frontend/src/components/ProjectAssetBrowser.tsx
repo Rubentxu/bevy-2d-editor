@@ -1,8 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import {
   SceneAssetCatalogEntry,
   exportAssetToBsn,
 } from "../services/scene-assets";
+import { importBsnAssetFromFile } from "../services/bsnImport";
 
 interface Props {
   entries: SceneAssetCatalogEntry[];
@@ -34,6 +35,7 @@ export default function ProjectAssetBrowser({
   const [renameValue, setRenameValue] = useState("");
   const [placingAssetId, setPlacingAssetId] = useState<string | null>(null);
   const [exportingAssetId, setExportingAssetId] = useState<string | null>(null);
+  const bsnFileInputRef = useRef<HTMLInputElement>(null);
 
   const filteredEntries =
     roleFilter === "all"
@@ -142,6 +144,40 @@ export default function ProjectAssetBrowser({
     }
   }, []);
 
+  const handleImportBsn = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      // Strip .bsn extension if present for use as default name
+      const defaultName = file.name.replace(/\.bsn$/i, "");
+      const name = window.prompt("Asset name:", defaultName);
+      if (!name || !name.trim()) {
+        // User cancelled or gave empty name
+        return;
+      }
+
+      try {
+        const entryJson = await importBsnAssetFromFile(name.trim(), file);
+        const entry = JSON.parse(entryJson);
+        // Notify parent so it can refresh the catalog and open the new asset
+        if ((window as any).refreshAssetCatalog) {
+          (window as any).refreshAssetCatalog();
+        }
+        window.alert(`Imported "${name}" successfully. You can open it from the asset list.`);
+      } catch (err) {
+        console.error("[ProjectAssetBrowser] Import .bsn failed:", err);
+        window.alert(`Import failed: ${err}`);
+      } finally {
+        // Reset the input so the same file can be re-selected
+        if (bsnFileInputRef.current) {
+          bsnFileInputRef.current.value = "";
+        }
+      }
+    },
+    []
+  );
+
   const handlePlaceInstance = useCallback(
     async (assetId: string) => {
       // Show translation dialog (S1, E5)
@@ -186,6 +222,22 @@ export default function ProjectAssetBrowser({
         >
           + Create Scene Asset
         </button>
+        <button
+          onClick={() => bsnFileInputRef.current?.click()}
+          data-testid="import-bsn-btn"
+          className="secondary"
+          title="Import a .bsn file"
+        >
+          Import .bsn
+        </button>
+        <input
+          ref={bsnFileInputRef}
+          type="file"
+          accept=".bsn"
+          style={{ display: "none" }}
+          onChange={handleImportBsn}
+          data-testid="bsn-file-input"
+        />
       </div>
 
       <div className="browser-filters">

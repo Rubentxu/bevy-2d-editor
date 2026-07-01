@@ -2689,6 +2689,47 @@ pub async fn create_scene_asset(name: &str, role: &str) -> Result<String, JsValu
         .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
+/// Import a `.bsn` text file as a new Scene Asset.
+///
+/// This is the counterpart to `export_asset_to_bsn_wasm`: it parses the `.bsn`
+/// text produced by `EditorCoreBsnExporter` and creates a new `SceneAssetDocument`
+/// in the project.
+///
+/// The resulting document has `role = Fragment` (lossy round-trip semantics).
+/// User can rename it after import.
+///
+/// Returns the JSON string of the new `SceneAssetCatalogEntry`.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn import_bsn_asset_wasm(name: &str, bsn_text: &str) -> Result<String, JsValue> {
+    // Parse and convert the BSN text
+    let ir = crate::bsn_import::parse_bsn_text(bsn_text)
+        .map_err(|e| JsValue::from_str(&format!("BSN parse error: {:?}", e)))?;
+    let mut doc = crate::bsn_import::scene_asset_from_bsn_ir(ir);
+
+    // Create an empty asset to get the asset_id and logical_path
+    let entry_json = create_scene_asset(name, "fragment").await?;
+    let entry: scene_asset_catalog::SceneAssetCatalogEntry = serde_json::from_str(&entry_json)
+        .map_err(|e| JsValue::from_str(&format!("Failed to parse created entry: {}", e)))?;
+
+    // Override the imported doc's ids to match the created asset
+    doc.asset_id = entry.asset_id.clone();
+    doc.logical_path = entry.logical_path.clone();
+    doc.role = entry.role.clone();
+    doc.version = entry.current_version;
+
+    // Write the imported body to OPFS (overwriting the empty one created above)
+    let doc_json = serde_json::to_string(&doc)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    js_save_file(&persistence::asset_path(&entry.logical_path), &doc_json)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+
+    // Return the entry (catalog already updated by create_scene_asset)
+    serde_json::to_string(&entry)
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
 /// Rename a Scene Asset (moves the file and updates catalog).
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
