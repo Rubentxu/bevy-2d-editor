@@ -39,20 +39,6 @@ impl PortId {
     }
 }
 
-/// Opaque identity of a compiled Rust controller (resolved at runtime).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct ControllerId(pub String);
-
-impl ControllerId {
-    pub fn new(id: impl Into<String>) -> Self {
-        Self(id.into())
-    }
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
 /// Opaque identity of a node type (e.g. "sensor.key_down", "rust-controller").
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]

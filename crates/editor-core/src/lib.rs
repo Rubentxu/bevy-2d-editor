@@ -116,7 +116,7 @@ pub use scene_asset::{
 };
 pub use logic_graph::{
     count_logic_bindings, editor_logic_binding_component, find_dangling_edge_nodes,
-    find_duplicate_node_id, ControllerId, LogicEdge, LogicGraphAsset, LogicInstance, LogicNode,
+    find_duplicate_node_id, LogicEdge, LogicGraphAsset, LogicInstance, LogicNode,
     LogicNodeRole, NodeId, NodeTypeId, PortId,
 };
 pub use auto_layer::{
