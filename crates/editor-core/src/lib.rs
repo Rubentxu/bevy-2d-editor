@@ -32,6 +32,7 @@ pub mod tileset;
 pub mod tile_layer;
 pub mod logic_graph;
 pub mod logic_evaluator;
+pub mod logic_validation;
 pub mod logic_command;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -95,6 +96,7 @@ pub enum ValidationCategory {
     Export,
     Schema,
     Dirty,
+    Logic,
 }
 
 pub use bevy_anchor::anchor_str_to_bevy_anchor;
@@ -125,6 +127,9 @@ pub use logic_graph::{
 pub use logic_evaluator::{
     global_node_registry, NodeDescriptor, NodeEvaluator, PortSpec, PortValue, PortValueType,
     ParamSpec, LogicNodeRegistry,
+};
+pub use logic_validation::{
+    validate_logic_graph, LogicValidationIssue, LogicValidationIssueCode,
 };
 pub use auto_layer::{
     AutoLayer, AutoLayerId, AutoRule, Pattern3x3, PatternCell, is_auto_layer_stale, regenerate,
@@ -957,6 +962,17 @@ pub fn revert_override_wasm(
 /// separately on the TypeScript side via validateOverrides().
 ///
 /// Returns a JSON array of ValidationIssue objects.
+fn serialize_logic_code(code: &LogicValidationIssueCode) -> String {
+    match code {
+        LogicValidationIssueCode::DuplicateNodeId => "duplicate-node-id".to_string(),
+        LogicValidationIssueCode::DanglingEdgeEndpoint => "dangling-edge-endpoint".to_string(),
+        LogicValidationIssueCode::InvalidPortType => "invalid-port-type".to_string(),
+        LogicValidationIssueCode::Cycle => "cycle".to_string(),
+        LogicValidationIssueCode::DanglingControllerRef => "dangling-controller-ref".to_string(),
+        LogicValidationIssueCode::MissingBinding => "missing-binding".to_string(),
+    }
+}
+
 #[wasm_bindgen]
 pub fn get_validation_issues_wasm() -> Result<String, JsValue> {
     let mut issues: Vec<ValidationIssue> = Vec::new();
@@ -1009,7 +1025,26 @@ pub fn get_validation_issues_wasm() -> Result<String, JsValue> {
         }
     }
 
-    // 3. Dirty scene issues — not available synchronously in WASM.
+    // 3. Logic graph validation
+    with_logic_graph(|doc_opt| {
+        if let Some(asset) = doc_opt {
+            let logic_issues = validate_logic_graph(asset, global_node_registry());
+            for li in logic_issues {
+                issues.push(ValidationIssue {
+                    id: mint_id(),
+                    severity: ValidationSeverity::Error,
+                    category: ValidationCategory::Logic,
+                    code: serialize_logic_code(&li.code),
+                    message: li.message,
+                    affected_entity_id: None,
+                    affected_asset_id: Some(asset.asset_id.clone()),
+                    affected_scene_id: None,
+                });
+            }
+        }
+    });
+
+    // 4. Dirty scene issues — not available synchronously in WASM.
     //    The frontend manages dirty state per-scene. Dirty issues are handled
     //    by the TypeScript ValidationCenter service separately.
 
@@ -3717,5 +3752,192 @@ async fn js_delete_file(path: &str) -> Result<(), String> {
     let promise = opfs_delete_file_raw(path);
     js_await(promise).await.map_err(|e| format!("{:?}", e))?;
     Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Validation Center WASM boundary tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod validation_center_tests {
+    use super::*;
+
+    /// Test helper: set LOGIC_GRAPH_DOC for testing.
+    #[cfg(test)]
+    pub(crate) fn set_logic_graph_for_test(asset: Option<LogicGraphAsset>) {
+        LOGIC_GRAPH_DOC.with(|cell| {
+            *cell.borrow_mut() = asset;
+        });
+    }
+
+    /// Test helper: clear LOGIC_GRAPH_DOC after each test.
+    fn clear_logic_graph() {
+        set_logic_graph_for_test(None);
+    }
+
+    // Test 1: active graph with a cycle → get_validation_issues_wasm returns Logic error
+    #[test]
+    fn wasm_validation_cycle_in_active_graph() {
+        // Build a graph with a cycle: sensor.always -> controller.and -> controller.if
+        // Then wire controller.if -> controller.and to create a cycle
+        let node_sensor = LogicNode {
+            node_id: NodeId::new("sensor"),
+            role: LogicNodeRole::Sensor,
+            node_type_id: NodeTypeId::new("sensor.always"),
+            field_values: serde_json::json!({}),
+            controller_id: None,
+        };
+        let node_and = LogicNode {
+            node_id: NodeId::new("and"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.and"),
+            field_values: serde_json::json!({}),
+            controller_id: None,
+        };
+        let node_if = LogicNode {
+            node_id: NodeId::new("if"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.if"),
+            field_values: serde_json::json!({}),
+            controller_id: None,
+        };
+
+        // sensor.tick -> and.a
+        let edge1 = LogicEdge {
+            from_node: NodeId::new("sensor"),
+            from_port: PortId::new("tick"),
+            to_node: NodeId::new("and"),
+            to_port: PortId::new("a"),
+        };
+        // and.out -> if.condition
+        let edge2 = LogicEdge {
+            from_node: NodeId::new("and"),
+            from_port: PortId::new("out"),
+            to_node: NodeId::new("if"),
+            to_port: PortId::new("condition"),
+        };
+        // if.done -> and.b (creates cycle!)
+        let edge3 = LogicEdge {
+            from_node: NodeId::new("if"),
+            from_port: PortId::new("done"),
+            to_node: NodeId::new("and"),
+            to_port: PortId::new("b"),
+        };
+
+        let asset = LogicGraphAsset {
+            asset_id: "cycle_test".to_string(),
+            logical_path: "logic/cycle".to_string(),
+            version: 1,
+            nodes: vec![node_sensor, node_and, node_if],
+            edges: vec![edge1, edge2, edge3],
+        };
+
+        set_logic_graph_for_test(Some(asset));
+
+        let json = get_validation_issues_wasm().unwrap();
+        let issues: Vec<ValidationIssue> = serde_json::from_str(&json).unwrap();
+
+        let logic_issues: Vec<_> = issues
+            .iter()
+            .filter(|i| i.category == ValidationCategory::Logic)
+            .collect();
+
+        assert!(!logic_issues.is_empty(), "expected logic issues for cycle, got none");
+        let cycle_issue = logic_issues
+            .iter()
+            .find(|i| i.code == "cycle");
+        assert!(cycle_issue.is_some(), "expected code='cycle', got: {:?}", logic_issues);
+        assert!(cycle_issue.unwrap().affected_asset_id.is_some());
+        assert_eq!(cycle_issue.unwrap().affected_asset_id.as_deref(), Some("cycle_test"));
+
+        clear_logic_graph();
+    }
+
+    // Test 2: LOGIC_GRAPH_DOC is None → no logic issues
+    #[test]
+    fn wasm_validation_no_logic_issues_when_no_graph() {
+        clear_logic_graph();
+
+        let json = get_validation_issues_wasm().unwrap();
+        let issues: Vec<ValidationIssue> = serde_json::from_str(&json).unwrap();
+
+        let logic_issues: Vec<_> = issues
+            .iter()
+            .filter(|i| i.category == ValidationCategory::Logic)
+            .collect();
+
+        assert!(logic_issues.is_empty(), "expected no logic issues when no graph, got: {:?}", logic_issues);
+    }
+
+    // Test 3: clean graph → no logic issues
+    #[test]
+    fn wasm_validation_clean_graph_no_logic_issues() {
+        // sensor.always -> controller.and -> controller.if (no cycle)
+        let node_sensor = LogicNode {
+            node_id: NodeId::new("sensor"),
+            role: LogicNodeRole::Sensor,
+            node_type_id: NodeTypeId::new("sensor.always"),
+            field_values: serde_json::json!({}),
+            controller_id: None,
+        };
+        let node_and = LogicNode {
+            node_id: NodeId::new("and"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.and"),
+            field_values: serde_json::json!({}),
+            controller_id: None,
+        };
+        let node_if = LogicNode {
+            node_id: NodeId::new("if"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.if"),
+            field_values: serde_json::json!({}),
+            controller_id: None,
+        };
+
+        let edge1 = LogicEdge {
+            from_node: NodeId::new("sensor"),
+            from_port: PortId::new("tick"),
+            to_node: NodeId::new("and"),
+            to_port: PortId::new("a"),
+        };
+        let edge2 = LogicEdge {
+            from_node: NodeId::new("and"),
+            from_port: PortId::new("out"),
+            to_node: NodeId::new("if"),
+            to_port: PortId::new("condition"),
+        };
+
+        let asset = LogicGraphAsset {
+            asset_id: "clean_test".to_string(),
+            logical_path: "logic/clean".to_string(),
+            version: 1,
+            nodes: vec![node_sensor, node_and, node_if],
+            edges: vec![edge1, edge2],
+        };
+
+        set_logic_graph_for_test(Some(asset));
+
+        let json = get_validation_issues_wasm().unwrap();
+        let issues: Vec<ValidationIssue> = serde_json::from_str(&json).unwrap();
+
+        let logic_issues: Vec<_> = issues
+            .iter()
+            .filter(|i| i.category == ValidationCategory::Logic)
+            .collect();
+
+        assert!(logic_issues.is_empty(), "expected no logic issues for clean graph, got: {:?}", logic_issues);
+
+        clear_logic_graph();
+    }
+
+    // Test: ValidationCategory::Logic serde round-trip
+    #[test]
+    fn validation_category_logic_serde() {
+        let json = serde_json::to_string(&ValidationCategory::Logic).unwrap();
+        assert_eq!(json, "\"logic\"");
+        let parsed: ValidationCategory = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, ValidationCategory::Logic);
+    }
 }
 
