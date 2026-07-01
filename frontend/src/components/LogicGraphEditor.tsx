@@ -9,11 +9,10 @@ import {
   Connection,
   useNodesState,
   useEdgesState,
-  addEdge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { useLogicGraph, type NodeDescriptor, type LogicGraphAsset } from "../hooks/useLogicGraph";
+import { useLogicGraph, type LogicGraphAsset } from "../hooks/useLogicGraph";
 
 interface LogicGraphEditorProps {
   editorMode: "scene" | "asset-authoring" | "logic";
@@ -30,36 +29,6 @@ interface PaletteItem {
 }
 
 /**
- * Convert a LogicGraphAsset to React Flow nodes.
- */
-function toRFNodes(graph: LogicGraphAsset): Node[] {
-  return graph.nodes.map((node, idx) => ({
-    id: node.node_id,
-    type: "logicNode",
-    position: { x: (idx % 4) * 200 + 50, y: Math.floor(idx / 4) * 150 + 50 },
-    data: {
-      label: node.node_type_id || node.role,
-      role: node.role,
-      nodeTypeId: node.node_type_id,
-      fieldValues: node.field_values,
-    },
-  }));
-}
-
-/**
- * Convert a LogicGraphAsset to React Flow edges.
- */
-function toRFEdges(graph: LogicGraphAsset): Edge[] {
-  return graph.edges.map((edge, idx) => ({
-    id: `edge-${idx}`,
-    source: edge.from_node,
-    target: edge.to_node,
-    sourceHandle: edge.from_port,
-    targetHandle: edge.to_port,
-  }));
-}
-
-/**
  * View-only React Flow editor for logic graphs.
  *
  * RF1: Initial mount reads from WASM via useLogicGraph
@@ -69,12 +38,9 @@ function toRFEdges(graph: LogicGraphAsset): Edge[] {
 export default function LogicGraphEditor({ editorMode }: LogicGraphEditorProps) {
   const {
     graph,
-    rfNodes,
-    rfEdges,
     descriptors,
     dispatch,
     createDefault,
-    refresh,
   } = useLogicGraph();
 
   const [nodes, setNodes, onNodesChange] = useNodesState([] as Node[],);
@@ -92,8 +58,24 @@ export default function LogicGraphEditor({ editorMode }: LogicGraphEditorProps) 
   // Sync from WASM whenever graph changes — this implements RF1 and RF3
   useEffect(() => {
     if (editorMode === "logic" && graph) {
-      setNodes(toRFNodes(graph));
-      setEdges(toRFEdges(graph));
+      setNodes(graph.nodes.map((node, idx) => ({
+        id: node.node_id,
+        type: "logicNode",
+        position: { x: (idx % 4) * 200 + 50, y: Math.floor(idx / 4) * 150 + 50 },
+        data: {
+          label: node.node_type_id || node.role,
+          role: node.role,
+          nodeTypeId: node.node_type_id,
+          fieldValues: node.field_values,
+        },
+      })));
+      setEdges(graph.edges.map((edge, idx) => ({
+        id: `edge-${idx}`,
+        source: edge.from_node,
+        target: edge.to_node,
+        sourceHandle: edge.from_port,
+        targetHandle: edge.to_port,
+      })));
     }
   }, [editorMode, graph]);
 

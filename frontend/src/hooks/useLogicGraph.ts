@@ -82,7 +82,7 @@ const DEFAULT_LOG_STATE: LogicLogState = {
 /**
  * Convert a LogicGraphAsset to React Flow nodes.
  */
-function toRFNodes(graph: LogicGraphAsset): RFNode[] {
+export function toRFNodes(graph: LogicGraphAsset): RFNode[] {
   return graph.nodes.map((node, idx) => ({
     id: node.node_id,
     type: "logicNode",
@@ -99,7 +99,7 @@ function toRFNodes(graph: LogicGraphAsset): RFNode[] {
 /**
  * Convert a LogicGraphAsset to React Flow edges.
  */
-function toRFEdges(graph: LogicGraphAsset): RFEdge[] {
+export function toRFEdges(graph: LogicGraphAsset): RFEdge[] {
   return graph.edges.map((edge, idx) => ({
     id: `edge-${idx}`,
     source: edge.from_node,
