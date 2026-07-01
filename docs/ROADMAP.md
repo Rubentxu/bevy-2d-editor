@@ -83,7 +83,7 @@
 
 | Order | Change | Status | Why |
 |-------|--------|--------|-----|
-| 8 | `level-design-tools` | 🔲 Planned | Tile painting, IntGrid authoring, auto-layer generation |
+| 8 | `level-design-tools` | ✅ DONE (v0.34.0, PR #34) | Tile painting, IntGrid authoring, auto-layer generation |
 
 ### Research Gates
 
