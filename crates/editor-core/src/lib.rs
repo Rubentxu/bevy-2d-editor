@@ -32,6 +32,7 @@ pub mod tileset;
 pub mod tile_layer;
 pub mod logic_graph;
 pub mod logic_evaluator;
+pub mod logic_command;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ADR References (documentation only — no code changes here)
@@ -110,6 +111,7 @@ pub use dynamic_scene::{
 pub use operation_log::{LogEntry, OperationLog, OperationLogError};
 pub use persistence::{asset_path, validate_logical_path, AssetPathError, PROJECT_FILE, ProjectMetadata, SCENES_DIR, SCHEMAS_DIR, ASSETS_DIR, TILESETS_DIR, tileset_path};
 pub use asset_command::{AssetCommand, AssetCommandError, AssetOperationLog};
+pub use logic_command::{LogicCommand, LogicCommandError, LogicOperationLog};
 pub use scene_asset::{
     AssetReference, ExposedProperty, LayerId, LevelLayer, LocalId, RelationshipKind, RoleWarning,
     SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata, SceneAssetRelationship,
@@ -213,6 +215,10 @@ thread_local! {
     static RESYNC_REPORTS: RefCell<Vec<(crate::document::StableId, ResyncReport)>> = const { RefCell::new(Vec::new()) };
     // Validation issues: accumulated during get_validation_issues, drained after.
     static VALIDATION_ISSUES: RefCell<Vec<ValidationIssue>> = const { RefCell::new(Vec::new()) };
+    // Logic Graph document: the active logic graph being edited.
+    static LOGIC_GRAPH_DOC: RefCell<Option<LogicGraphAsset>> = const { RefCell::new(None) };
+    // Logic operation log: per-graph undo/redo history.
+    static LOGIC_OPERATION_LOG: RefCell<LogicOperationLog> = const { RefCell::new(LogicOperationLog::new_const()) };
 }
 
 /// Get an immutable borrowed reference to the SceneRegistry, initializing if needed.
@@ -346,6 +352,38 @@ where
 fn mark_dirty() {
     DIRTY_FLAG.with(|d| *d.borrow_mut() = true);
     with_registry_mut(|r| r.mark_current_dirty());
+}
+
+/// Get an immutable borrowed reference to the LogicGraphAsset.
+fn with_logic_graph<F, R>(f: F) -> R
+where
+    F: FnOnce(&Option<LogicGraphAsset>) -> R,
+{
+    LOGIC_GRAPH_DOC.with(|cell| f(&*cell.borrow()))
+}
+
+/// Get a mutable borrowed reference to the LogicGraphAsset.
+fn with_logic_graph_mut<F, R>(f: F) -> R
+where
+    F: FnOnce(&mut Option<LogicGraphAsset>) -> R,
+{
+    LOGIC_GRAPH_DOC.with(|cell| f(&mut *cell.borrow_mut()))
+}
+
+/// Get an immutable borrowed reference to the LogicOperationLog.
+fn with_logic_log<F, R>(f: F) -> R
+where
+    F: FnOnce(&LogicOperationLog) -> R,
+{
+    LOGIC_OPERATION_LOG.with(|cell| f(&*cell.borrow()))
+}
+
+/// Get a mutable borrowed reference to the LogicOperationLog.
+fn with_logic_log_mut<F, R>(f: F) -> R
+where
+    F: FnOnce(&mut LogicOperationLog) -> R,
+{
+    LOGIC_OPERATION_LOG.with(|cell| f(&mut *cell.borrow_mut()))
 }
 
 const CMD_MOVE_SPRITE: u16 = 1;
@@ -2615,6 +2653,141 @@ pub fn get_asset_log_state() -> String {
         })
         .to_string()
     })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Logic Graph WASM surface
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Apply a LogicCommand to the active LogicGraphAsset, mutating it and
+/// producing an inverse command for undo. Returns the inverse as JSON.
+#[wasm_bindgen]
+pub fn dispatch_logic_command(cmd_json: &str) -> Result<String, JsValue> {
+    let cmd: LogicCommand = serde_json::from_str(cmd_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid command JSON: {}", e)))?;
+
+    let result_json = with_logic_graph_mut(|doc_opt| {
+        let doc = doc_opt
+            .as_mut()
+            .ok_or_else(|| JsValue::from_str("No logic graph open — call create_logic_graph_asset first"))?;
+
+        let inverse = logic_command::apply(doc, &cmd)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+        // Record in logic operation log
+        with_logic_log_mut(|log| {
+            log.record(&cmd, inverse.clone());
+        });
+
+        serde_json::to_string(&inverse)
+            .map_err(|e| JsValue::from_str(&format!("Failed to serialize inverse: {}", e)))
+    })?;
+
+    Ok(result_json)
+}
+
+/// Undo the last logic command.
+#[wasm_bindgen]
+pub fn undo_logic() -> Result<String, JsValue> {
+    let result_json = with_logic_graph_mut(|doc_opt| {
+        with_logic_log_mut(|log| {
+            let doc = doc_opt
+                .as_mut()
+                .ok_or_else(|| JsValue::from_str("No logic graph open"))?;
+            log.undo(doc)
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            serde_json::to_string(&())
+                .map_err(|e| JsValue::from_str(&format!("Failed to serialize: {}", e)))
+        })
+    })?;
+    Ok(result_json)
+}
+
+/// Redo the next logic command.
+#[wasm_bindgen]
+pub fn redo_logic() -> Result<String, JsValue> {
+    let result_json = with_logic_graph_mut(|doc_opt| {
+        with_logic_log_mut(|log| {
+            let doc = doc_opt
+                .as_mut()
+                .ok_or_else(|| JsValue::from_str("No logic graph open"))?;
+            log.redo(doc)
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            serde_json::to_string(&())
+                .map_err(|e| JsValue::from_str(&format!("Failed to serialize: {}", e)))
+        })
+    })?;
+    Ok(result_json)
+}
+
+/// Returns logic operation log metadata as JSON.
+#[wasm_bindgen]
+pub fn get_logic_log_state() -> String {
+    with_logic_log(|log| {
+        serde_json::json!({
+            "size": log.get_log_size(),
+            "can_undo": log.can_undo(),
+            "can_redo": log.can_redo(),
+            "cursor": log.get_cursor(),
+        })
+        .to_string()
+    })
+}
+
+/// Get the active LogicGraphAsset as JSON.
+#[wasm_bindgen]
+pub fn get_logic_graph() -> Result<String, JsValue> {
+    with_logic_graph(|doc_opt| {
+        let doc = doc_opt
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("No logic graph open"))?;
+        serde_json::to_string(doc)
+            .map_err(|e| JsValue::from_str(&format!("Failed to serialize: {}", e)))
+    })
+}
+
+/// Create a new empty LogicGraphAsset and set it as the active graph.
+#[wasm_bindgen]
+pub fn create_logic_graph_asset(asset_id: &str, logical_path: &str) -> Result<String, JsValue> {
+    let doc = LogicGraphAsset {
+        asset_id: asset_id.to_string(),
+        logical_path: logical_path.to_string(),
+        version: 1,
+        nodes: Vec::new(),
+        edges: Vec::new(),
+    };
+
+    let json = serde_json::to_string(&doc)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize: {}", e)))?;
+
+    with_logic_graph_mut(|doc_opt| {
+        *doc_opt = Some(doc);
+    });
+
+    // Clear the operation log for the new graph
+    with_logic_log_mut(|log| {
+        log.clear();
+    });
+
+    Ok(json)
+}
+
+/// List all logic graph assets (placeholder — returns empty for now).
+/// TODO: Wire to OPFS persistence.
+#[wasm_bindgen]
+pub fn list_logic_graph_assets() -> Result<String, JsValue> {
+    // Placeholder: return empty list until OPFS persistence is wired
+    serde_json::to_string(&Vec::<LogicGraphAsset>::new())
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize: {}", e)))
+}
+
+/// Get node descriptors from the global registry as JSON.
+#[wasm_bindgen]
+pub fn get_node_descriptors() -> Result<String, JsValue> {
+    let registry = crate::logic_evaluator::global_node_registry();
+    let descriptors: Vec<_> = registry.all_descriptors().values().cloned().collect();
+    serde_json::to_string(&descriptors)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize: {}", e)))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
