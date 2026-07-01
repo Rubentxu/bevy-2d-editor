@@ -19,7 +19,6 @@ import AssetUnsavedChangesDialog from "./components/AssetUnsavedChangesDialog";
 import { TilesetPanel } from "./components/TilesetPanel";
 import { AutoLayerPanel } from "./components/AutoLayerPanel";
 import LogicGraphEditor from "./components/LogicGraphEditor";
-import { useLogicGraph } from "./hooks/useLogicGraph";
 import { useScenes } from "./hooks/useScenes";
 import { useSceneAssets } from "./hooks/useSceneAssets";
 import { sceneCreate, sceneSwitch, sceneSwitchCommit, sceneDelete, sceneRename } from "./services/scenes";
@@ -386,18 +385,9 @@ export default function App() {
   }, []);
 
   // ── Logic Graph handlers ─────────────────────────────────────────────────
-  const { createDefault } = useLogicGraph();
-
   const handleOpenLogic = useCallback(() => {
     setEditorMode("logic");
   }, []);
-
-  // Auto-create empty graph when entering logic mode
-  useEffect(() => {
-    if (editorMode === "logic") {
-      createDefault();
-    }
-  }, [editorMode, createDefault]);
 
   // Asset command dispatch with C-2 adapter: fieldPath string → [fieldPath]
   const handleAssetCommit = useCallback(

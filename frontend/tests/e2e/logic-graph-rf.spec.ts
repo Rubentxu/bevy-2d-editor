@@ -10,9 +10,9 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Logic Graph React Flow Editor", () => {
   test.beforeEach(async ({ page }) => {
-    // Navigate to the app and wait for WASM to load
+    // Navigate to the app and wait for WASM to initialize
     await page.goto("/");
-    await page.waitForSelector("#bevy-canvas", { timeout: 10000 });
+    await page.waitForFunction(() => (window as any).get_logic_graph !== undefined, { timeout: 15000 });
   });
 
   test("RF1: Initial mount reads from WASM", async ({ page }) => {
@@ -46,7 +46,7 @@ test.describe("Logic Graph React Flow Editor", () => {
       const cmd = {
         type: "AddNode",
         node_id: "node_a",
-        role: "Sensor",
+        role: "sensor",
         node_type_id: "sensor.key_down",
         field_values: { key: "Space" },
         controller_id: null,
@@ -62,7 +62,7 @@ test.describe("Logic Graph React Flow Editor", () => {
 
     expect(graph.nodes.length).toBe(1);
     expect(graph.nodes[0].node_id).toBe("node_a");
-    expect(graph.nodes[0].role).toBe("Sensor");
+    expect(graph.nodes[0].role).toBe("sensor");
   });
 
   test("RF3: Undo/redo operations work", async ({ page }) => {
@@ -76,7 +76,7 @@ test.describe("Logic Graph React Flow Editor", () => {
       const cmd = {
         type: "AddNode",
         node_id: "node_a",
-        role: "Sensor",
+        role: "sensor",
         node_type_id: "sensor.key_down",
         field_values: {},
         controller_id: null,
@@ -141,7 +141,7 @@ test.describe("Logic Graph React Flow Editor", () => {
       await (window as any).dispatch_logic_command(JSON.stringify({
         type: "AddNode",
         node_id: "node_a",
-        role: "Sensor",
+        role: "sensor",
         node_type_id: "sensor.key_down",
         field_values: {},
         controller_id: null,
@@ -150,7 +150,7 @@ test.describe("Logic Graph React Flow Editor", () => {
       await (window as any).dispatch_logic_command(JSON.stringify({
         type: "AddNode",
         node_id: "node_b",
-        role: "Actuator",
+        role: "actuator",
         node_type_id: "actuator.jump",
         field_values: {},
         controller_id: null,
@@ -187,7 +187,7 @@ test.describe("Logic Graph React Flow Editor", () => {
       await (window as any).dispatch_logic_command(JSON.stringify({
         type: "AddNode",
         node_id: "node_a",
-        role: "Controller",
+        role: "controller",
         node_type_id: "controller.if",
         field_values: { threshold: 0.5 },
         controller_id: null,
@@ -233,7 +233,7 @@ test.describe("Logic Graph React Flow Editor", () => {
       await (window as any).dispatch_logic_command(JSON.stringify({
         type: "AddNode",
         node_id: "node_a",
-        role: "Sensor",
+        role: "sensor",
         node_type_id: "sensor.key_down",
         field_values: {},
         controller_id: null,

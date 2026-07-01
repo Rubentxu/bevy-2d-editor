@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ReactFlow,
   Background,
@@ -13,7 +13,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { useLogicGraph, type NodeDescriptor } from "../hooks/useLogicGraph";
+import { useLogicGraph, type NodeDescriptor, type LogicGraphAsset } from "../hooks/useLogicGraph";
 
 interface LogicGraphEditorProps {
   editorMode: "scene" | "asset-authoring" | "logic";
@@ -30,6 +30,36 @@ interface PaletteItem {
 }
 
 /**
+ * Convert a LogicGraphAsset to React Flow nodes.
+ */
+function toRFNodes(graph: LogicGraphAsset): Node[] {
+  return graph.nodes.map((node, idx) => ({
+    id: node.node_id,
+    type: "logicNode",
+    position: { x: (idx % 4) * 200 + 50, y: Math.floor(idx / 4) * 150 + 50 },
+    data: {
+      label: node.node_type_id || node.role,
+      role: node.role,
+      nodeTypeId: node.node_type_id,
+      fieldValues: node.field_values,
+    },
+  }));
+}
+
+/**
+ * Convert a LogicGraphAsset to React Flow edges.
+ */
+function toRFEdges(graph: LogicGraphAsset): Edge[] {
+  return graph.edges.map((edge, idx) => ({
+    id: `edge-${idx}`,
+    source: edge.from_node,
+    target: edge.to_node,
+    sourceHandle: edge.from_port,
+    targetHandle: edge.to_port,
+  }));
+}
+
+/**
  * View-only React Flow editor for logic graphs.
  *
  * RF1: Initial mount reads from WASM via useLogicGraph
@@ -38,24 +68,34 @@ interface PaletteItem {
  */
 export default function LogicGraphEditor({ editorMode }: LogicGraphEditorProps) {
   const {
-    rfNodes: initialNodes,
-    rfEdges: initialEdges,
+    graph,
+    rfNodes,
+    rfEdges,
     descriptors,
     dispatch,
+    createDefault,
+    refresh,
   } = useLogicGraph();
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [nodes, setNodes, onNodesChange] = useNodesState([] as Node[],);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([] as Edge[]);
 
-  // Sync from WASM on every render when mode is "logic"
-  // This implements RF1 and RF3: always re-mirror from WASM state
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useMemo(() => {
-    if (editorMode === "logic") {
-      setNodes(initialNodes);
-      setEdges(initialEdges);
+  // Auto-create default graph when entering logic mode with no graph
+  const hasAutoCreatedRef = useRef(false);
+  useEffect(() => {
+    if (editorMode === "logic" && !graph && !hasAutoCreatedRef.current) {
+      hasAutoCreatedRef.current = true;
+      createDefault();
     }
-  }, [editorMode, initialNodes, initialEdges]);
+  }, [editorMode, graph, createDefault]);
+
+  // Sync from WASM whenever graph changes — this implements RF1 and RF3
+  useEffect(() => {
+    if (editorMode === "logic" && graph) {
+      setNodes(toRFNodes(graph));
+      setEdges(toRFEdges(graph));
+    }
+  }, [editorMode, graph]);
 
   // Group descriptors by category for the palette
   const paletteByCategory = useMemo(() => {
