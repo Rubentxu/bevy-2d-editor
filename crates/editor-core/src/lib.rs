@@ -3116,11 +3116,11 @@ pub fn paint_tile(
     }
 
     // Update the cache with modified document
+    // Note: does NOT call mark_dirty() — asset changes don't affect Bevy preview (lib.rs:2530)
     with_asset_body_cache_mut(|cache| {
         cache.insert(asset_ref.to_string(), doc);
     });
 
-    mark_dirty();
     Ok(JsValue::NULL)
 }
 
@@ -3158,11 +3158,11 @@ pub fn erase_tile(
     }
 
     // Update the cache with modified document
+    // Note: does NOT call mark_dirty() — asset changes don't affect Bevy preview (lib.rs:2530)
     with_asset_body_cache_mut(|cache| {
         cache.insert(asset_ref.to_string(), doc);
     });
 
-    mark_dirty();
     Ok(JsValue::NULL)
 }
 
