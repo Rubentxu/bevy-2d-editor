@@ -42,6 +42,12 @@ impl TileLayerId {
 /// The `order` field controls rendering order (lower = rendered first).
 /// This allows foreground/background layering in the viewport.
 ///
+/// # Generation Counter
+///
+/// The `generation` field increments every time the layer is mutated
+/// (`paint_tile` or `erase_tile`). AutoLayers track this counter to detect
+/// when their cached output is stale and needs regeneration.
+///
 /// # Example
 ///
 /// ```
@@ -84,13 +90,17 @@ pub struct TileLayer {
     /// Layer order for rendering (lower = rendered first).
     /// Multiple layers can share the same order for grouped rendering.
     pub order: i32,
+    /// Generation counter. Incremented on every `paint_tile` or `erase_tile`.
+    /// Used by AutoLayers to detect staleness via `source_generation`.
+    #[serde(default)]
+    pub generation: u64,
 }
 
 /// Re-export TileGrid from tileset module for convenience.
 pub use super::tileset::TileGrid as TileGrid;
 
 impl TileLayer {
-    /// Create a new TileLayer with an empty grid and default order (0).
+    /// Create a new TileLayer with an empty grid, default order (0), and generation (0).
     pub fn new(id: TileLayerId, name: String, tileset_id: TilesetId) -> Self {
         TileLayer {
             id,
@@ -98,23 +108,31 @@ impl TileLayer {
             tileset_id,
             grid: HashMap::new(),
             order: 0,
+            generation: 0,
         }
     }
 
     /// Paint a tile at the given coordinate, overwriting any existing tile.
     ///
     /// This is an upsert operation — if a tile already exists at `coord`,
-    /// it is replaced with the new `tile_ref`.
+    /// it is replaced with the new `tile_ref`. Bumps `generation` to mark
+    /// the layer as modified (used by AutoLayers for staleness detection).
     pub fn paint_tile(&mut self, coord: TileCoord, tile_ref: TileRef) {
         self.grid.insert(coord, tile_ref);
+        self.generation += 1;
     }
 
     /// Erase a tile at the given coordinate.
     ///
     /// Returns the erased `TileRef` if a tile existed at that coordinate,
-    /// or `None` if the coordinate was already empty.
+    /// or `None` if the coordinate was already empty. Bumps `generation` to
+    /// mark the layer as modified (used by AutoLayers for staleness detection).
     pub fn erase_tile(&mut self, coord: &TileCoord) -> Option<TileRef> {
-        self.grid.remove(coord)
+        let result = self.grid.remove(coord);
+        if result.is_some() {
+            self.generation += 1;
+        }
+        result
     }
 
     /// Get a tile reference at the given coordinate.
@@ -333,5 +351,102 @@ mod tests {
         let layer: TileLayer = serde_json::from_str(json).unwrap();
         assert!(layer.is_empty());
         assert_eq!(layer.tile_count(), 0);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // TileLayer generation counter tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_tile_layer_generation_starts_at_zero() {
+        let tileset_id = TilesetId::new("ts_test".to_string());
+        let layer = TileLayer::new(
+            TileLayerId::new("layer_gen".to_string()),
+            "Gen Test".to_string(),
+            tileset_id,
+        );
+        assert_eq!(layer.generation, 0);
+    }
+
+    #[test]
+    fn test_tile_layer_generation_bumped_on_paint() {
+        let tileset_id = TilesetId::new("ts_test".to_string());
+        let mut layer = TileLayer::new(
+            TileLayerId::new("layer_gen".to_string()),
+            "Gen Test".to_string(),
+            tileset_id,
+        );
+        assert_eq!(layer.generation, 0);
+
+        layer.paint_tile(
+            TileCoord::new(0, 0),
+            TileRef { tileset_id: "ts_test".to_string(), local_index: 0 },
+        );
+        assert_eq!(layer.generation, 1);
+
+        // Paint again at same coord — still bumps
+        layer.paint_tile(
+            TileCoord::new(0, 0),
+            TileRef { tileset_id: "ts_test".to_string(), local_index: 1 },
+        );
+        assert_eq!(layer.generation, 2);
+    }
+
+    #[test]
+    fn test_tile_layer_generation_bumped_on_erase() {
+        let tileset_id = TilesetId::new("ts_test".to_string());
+        let mut layer = TileLayer::new(
+            TileLayerId::new("layer_gen".to_string()),
+            "Gen Test".to_string(),
+            tileset_id,
+        );
+        layer.paint_tile(
+            TileCoord::new(5, 5),
+            TileRef { tileset_id: "ts_test".to_string(), local_index: 0 },
+        );
+        assert_eq!(layer.generation, 1);
+
+        // Erase existing tile — bumps
+        let erased = layer.erase_tile(&TileCoord::new(5, 5));
+        assert!(erased.is_some());
+        assert_eq!(layer.generation, 2);
+
+        // Erase non-existent — no bump
+        let erased_none = layer.erase_tile(&TileCoord::new(5, 5));
+        assert!(erased_none.is_none());
+        assert_eq!(layer.generation, 2);
+    }
+
+    #[test]
+    fn test_tile_layer_generation_deserializes_default() {
+        // Deserialize a TileLayer with no generation field (old save format)
+        // Should default to 0
+        let json = r#"{
+            "id": "layer_01",
+            "name": "Test Layer",
+            "tileset_id": "ts_01",
+            "order": 0
+        }"#;
+        let layer: TileLayer = serde_json::from_str(json).unwrap();
+        assert_eq!(layer.generation, 0);
+    }
+
+    #[test]
+    fn test_tile_layer_generation_deserializes_from_json() {
+        // Verify that a TileLayer with explicit generation field deserializes correctly.
+        // Note: serde_json cannot round-trip HashMap<TileCoord, _> through JSON
+        // (JSON requires string keys), so we test only the deserialization path.
+        let json = r#"{
+            "id": "layer_gen",
+            "name": "Gen Roundtrip",
+            "tileset_id": "ts_test",
+            "order": 0,
+            "generation": 5,
+            "grid": {}
+        }"#;
+        let layer: TileLayer = serde_json::from_str(json).unwrap();
+        assert_eq!(layer.generation, 5);
+        assert_eq!(layer.name, "Gen Roundtrip");
+        assert!(layer.is_empty());
     }
 }

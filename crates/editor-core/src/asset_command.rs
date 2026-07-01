@@ -21,7 +21,8 @@
 //! | `Batch` | `Batch { reversed inverses }` |
 
 use crate::document::ComponentInstance;
-use crate::scene_asset::{LocalId, SceneAssetDocument, SceneAssetEntity};
+use crate::scene_asset::{LayerId, LocalId, SceneAssetDocument, SceneAssetEntity};
+use crate::tileset::TileGrid;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -85,6 +86,20 @@ pub enum AssetCommand {
         label: String,
         commands: Vec<AssetCommand>,
     },
+    /// Regenerate an AutoLayer's cached tile grid from its source TileLayer.
+    ///
+    /// Captures `cached` and `source_generation` for the inverse so undo
+    /// can restore the pre-regeneration state.
+    RegenerateAutoLayer {
+        /// The layer being regenerated (identifies which LevelLayer::Auto).
+        layer_id: LayerId,
+        /// Captured pre-regeneration cached grid for undo.
+        #[serde(default)]
+        old_cached: TileGrid,
+        /// Captured pre-regeneration source_generation for undo.
+        #[serde(default)]
+        old_source_generation: u64,
+    },
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -114,6 +129,12 @@ pub enum AssetCommandError {
 
     #[error("JSON error: {0}")]
     JsonError(String),
+
+    #[error("layer not found: {0}")]
+    LayerNotFound(String),
+
+    #[error("source layer not found for auto layer: {0}")]
+    SourceLayerNotFound(String),
 }
 
 impl From<serde_json::Error> for AssetCommandError {
@@ -312,6 +333,71 @@ pub fn apply(
                 type_id: type_id.clone(),
                 field_path: field_path.clone(),
                 value: old_value,
+            })
+        }
+
+        AssetCommand::RegenerateAutoLayer {
+            layer_id,
+            old_cached,
+            old_source_generation,
+        } => {
+            use crate::auto_layer::regenerate as auto_regenerate;
+            use crate::scene_asset::LevelLayer;
+            use rand::SeedableRng;
+
+            // ── ALL immutable data collection (before any mutable borrow) ──────────────
+            // Find AutoLayer index.
+            let auto_idx = doc.layers
+                .iter()
+                .position(|l| matches!(l, LevelLayer::Auto(al) if al.id.as_str() == layer_id.as_str()))
+                .ok_or_else(|| AssetCommandError::LayerNotFound(layer_id.0.clone()))?;
+
+            let (source_layer_id, pre_cached, pre_source_gen) = match &doc.layers[auto_idx] {
+                LevelLayer::Auto(al) => (al.source_layer_id.clone(), al.cached.clone(), al.source_generation),
+                _ => return Err(AssetCommandError::LayerNotFound(layer_id.0.clone())),
+            };
+
+            // Find source TileLayer and clone it so we can drop the borrow.
+            let source_clone = {
+                let source_idx = doc.layers
+                    .iter()
+                    .position(|l| matches!(l, LevelLayer::Tile(tl) if tl.id.as_str() == source_layer_id.as_str()))
+                    .ok_or_else(|| AssetCommandError::SourceLayerNotFound(source_layer_id.0.clone()))?;
+                match &doc.layers[source_idx] {
+                    LevelLayer::Tile(tl) => tl.clone(),
+                    _ => return Err(AssetCommandError::SourceLayerNotFound(source_layer_id.0.clone())),
+                }
+            }; // <-- all immutable borrows end here
+
+            // ── Mutable phase ──────────────────────────────────────────────────────────
+            let al_mut = match &mut doc.layers[auto_idx] {
+                LevelLayer::Auto(al) => al as &mut crate::auto_layer::AutoLayer,
+                _ => return Err(AssetCommandError::LayerNotFound(layer_id.0.clone())),
+            };
+
+            // Differentiate undo vs redo/forward using length comparison:
+            // - If old_cached.len() != current cached.len() → UNDO (restore saved values)
+            // - If lengths match → FORWARD or REDO (regenerate)
+            // This works because:
+            //   Forward: old_cached = {} (len 0), current = {} (len 0) → match → regenerate ✓
+            //   Undo:    old_cached = {} (len 0), current = {tile99} (len 1) → differ → restore ✓
+            //   Redo:    old_cached = {} (len 0), current = {} (len 0) after undo → match → regenerate ✓
+            if old_cached.len() != al_mut.cached.len() {
+                // UNDO: restore saved values directly, do NOT regenerate
+                al_mut.cached = old_cached.clone();
+                al_mut.source_generation = *old_source_generation;
+            } else {
+                // FORWARD or REDO: regenerate from source
+                let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+                auto_regenerate(al_mut, &source_clone, &mut rng);
+            }
+
+            // Inverse captures the pre-apply state (to restore on undo).
+            // Forward captures post-regen state (to restore on redo).
+            Ok(AssetCommand::RegenerateAutoLayer {
+                layer_id: layer_id.clone(),
+                old_cached: pre_cached,
+                old_source_generation: pre_source_gen,
             })
         }
 
@@ -688,5 +774,90 @@ mod tests {
         assert!(!log.can_undo());
         assert!(!log.can_redo());
         assert!(!log.is_dirty());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // RG2 — apply regen → inverse → cached restored to C1
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_regenerate_auto_layer_inverse_restores_cached() {
+        use crate::auto_layer::{AutoLayer, AutoLayerId, AutoRule, Pattern3x3, PatternCell};
+        use crate::scene_asset::{LayerId, LevelLayer};
+        use crate::tile_layer::TileLayer;
+        use crate::tileset::{TileCoord, TileRef, TileGrid};
+
+        let tileset_id = crate::tileset::TilesetId::new("ts_test".to_string());
+        let source_layer_id = LayerId::new("lyr_src".to_string());
+        let auto_layer_id = AutoLayerId::new("al_01".to_string());
+
+        // Source TileLayer with one tile at (0, 0), generation = 1
+        let mut source_tl = TileLayer::new(
+            crate::tile_layer::TileLayerId::new("lyr_src".to_string()),
+            "Source".to_string(),
+            tileset_id.clone(),
+        );
+        source_tl.generation = 1;
+        source_tl.paint_tile(
+            TileCoord::new(0, 0),
+            TileRef { tileset_id: "ts_test".to_string(), local_index: 0 },
+        );
+
+        // AutoLayer: initially stale (cached empty, source_gen = 0)
+        // Rule pattern: all Any (matches any neighborhood)
+        let pattern: Pattern3x3 = [
+            [PatternCell::Any, PatternCell::Any, PatternCell::Any],
+            [PatternCell::Any, PatternCell::Any, PatternCell::Any],
+            [PatternCell::Any, PatternCell::Any, PatternCell::Any],
+        ];
+        let auto_layer = AutoLayer {
+            id: auto_layer_id.clone(),
+            name: "Auto".to_string(),
+            order: 0,
+            source_layer_id: source_layer_id.clone(),
+            tileset_id: tileset_id.clone(),
+            rules: vec![AutoRule {
+                pattern,
+                output: vec![TileRef { tileset_id: "ts_test".to_string(), local_index: 99 }],
+                chance: None,
+            }],
+            cached: TileGrid::default(),
+            source_generation: 0, // stale — source is at gen 1
+        };
+
+        let mut doc = empty_doc();
+        doc.layers.push(LevelLayer::Tile(source_tl));
+        doc.layers.push(LevelLayer::Auto(auto_layer));
+
+        // C1: pre-regen cached state (should be empty)
+        let pre_cached: TileGrid = match &doc.layers[1] {
+            LevelLayer::Auto(al) => al.cached.clone(),
+            _ => panic!("expected AutoLayer"),
+        };
+        assert!(pre_cached.is_empty(), "pre-regen cached should be empty");
+
+        // Apply RegenerateAutoLayer
+        let cmd = AssetCommand::RegenerateAutoLayer {
+            layer_id: LayerId::new(auto_layer_id.0.clone()),
+            old_cached: TileGrid::default(),
+            old_source_generation: 0,
+        };
+        let inverse = apply(&mut doc, &cmd).unwrap();
+
+        // After regen: cached should no longer be empty (rule fires for source tile)
+        let post_cached: TileGrid = match &doc.layers[1] {
+            LevelLayer::Auto(al) => al.cached.clone(),
+            _ => panic!("expected AutoLayer"),
+        };
+        assert!(!post_cached.is_empty(), "post-regen cached should not be empty");
+
+        // Apply inverse: should restore cached to C1
+        apply(&mut doc, &inverse).unwrap();
+
+        let restored_cached: TileGrid = match &doc.layers[1] {
+            LevelLayer::Auto(al) => al.cached.clone(),
+            _ => panic!("expected AutoLayer"),
+        };
+        assert!(restored_cached.is_empty(), "inverse should restore cached to C1 (empty)");
     }
 }

@@ -237,6 +237,7 @@ fn s7_scene_asset_document_with_layers_roundtrip() {
             assert_eq!(layer.instances.len(), 1);
         }
         LevelLayer::Tile(_) => panic!("Expected SceneInstance layer, got Tile"),
+        LevelLayer::Auto(_) => panic!("Expected SceneInstance layer, got Auto"),
     }
 }
 

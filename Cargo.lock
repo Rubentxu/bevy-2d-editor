@@ -2377,6 +2377,7 @@ dependencies = [
  "bevy",
  "console_error_panic_hook",
  "js-sys",
+ "rand 0.9.4",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",

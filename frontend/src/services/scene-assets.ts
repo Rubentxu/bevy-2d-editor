@@ -68,13 +68,65 @@ export interface SceneAssetDocument {
   layers?: LevelLayerPayload[];
 }
 
-export interface LevelLayerPayload {
+export type LevelLayerPayload =
+  | SceneInstanceLayerPayload
+  | TileLayerPayload
+  | AutoLayerPayload;
+
+/** A placed-Scene-Instance layer inside a Level Scene Asset. */
+export interface SceneInstanceLayerPayload {
   kind: "scene_instance";
   id: string;
   name: string;
   layer_kind: SceneInstanceLayerKind;
   order: number;
   instances: SceneInstance[];
+}
+
+/** A manually-painted tile layer inside a Level Scene Asset. */
+export interface TileLayerPayload {
+  kind: "tile";
+  id: string;
+  name: string;
+  order: number;
+  tileset_id: string;
+  grid: Record<string, { tileset_id: string; local_index: number }>;
+}
+
+/** An auto-generated tile layer driven by 3x3 pattern rules. */
+export interface AutoLayerPayload {
+  kind: "auto";
+  id: string;
+  name: string;
+  order: number;
+  source_layer_id: string;
+  tileset_id: string;
+  rules: AutoRulePayload[];
+  cached: Record<string, { tileset_id: string; local_index: number }>;
+  source_generation: number;
+}
+
+/** One auto-tiling rule. */
+export interface AutoRulePayload {
+  pattern: Pattern3x3Payload;
+  output: TileRefPayload[];
+  chance?: number;
+}
+
+/** A 3x3 neighborhood pattern for auto-tiling. */
+export type Pattern3x3Payload = [
+  [PatternCell, PatternCell, PatternCell],
+  [PatternCell, PatternCell, PatternCell],
+  [PatternCell, PatternCell, PatternCell]
+];
+
+/** One cell in a 3x3 auto-tiling pattern. */
+export type PatternCell = "filled" | "empty" | "any";
+
+/** A tile reference used in auto-layer rule output. */
+export interface TileRefPayload {
+  tileset_id: string;
+  local_index: number;
 }
 
 // ── Runtime Preview Inspector types (runtime-preview-inspector) ───────────

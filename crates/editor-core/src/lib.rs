@@ -16,6 +16,7 @@ pub mod document;
 mod dynamic_scene;
 mod operation_log;
 mod persistence;
+pub mod auto_layer;
 pub mod bsn_export;
 pub mod bsn_import;
 pub mod preview_inspector;
@@ -111,6 +112,9 @@ pub use scene_asset::{
     AssetReference, ExposedProperty, LayerId, LevelLayer, LocalId, RelationshipKind, RoleWarning,
     SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata, SceneAssetRelationship,
     SceneAssetRole, SceneInstanceLayer, SceneInstanceLayerKind, validate_role,
+};
+pub use auto_layer::{
+    AutoLayer, AutoLayerId, AutoRule, Pattern3x3, PatternCell, is_auto_layer_stale, regenerate,
 };
 pub use scene_asset_catalog::{
     CatalogError, CatalogWarning, SceneAssetCatalog, SceneAssetCatalogEntry, mint_asset_id,
@@ -1088,8 +1092,8 @@ pub fn list_scene_instance_layers_wasm(asset_json: &str) -> Result<String, JsVal
                     "instances_count": scene_layer.instances.len(),
                 }));
             }
-            LevelLayer::Tile(_) => {
-                // Tile layers are handled separately in the tile layer API
+            LevelLayer::Tile(_) | LevelLayer::Auto(_) => {
+                // Tile and Auto layers are handled separately in their respective APIs
             }
         }
     }
@@ -1136,7 +1140,7 @@ pub fn create_scene_instance_layer_wasm(
         .iter()
         .filter_map(|l| match l {
             LevelLayer::SceneInstance(s) => Some(s.order),
-            LevelLayer::Tile(_) => None,
+            LevelLayer::Tile(_) | LevelLayer::Auto(_) => None,
         })
         .max()
         .map(|o| o + 1)
@@ -3174,6 +3178,246 @@ pub fn erase_tile(
     set_asset_document_wasm(&doc_json)?;
 
     Ok(JsValue::NULL)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AutoLayer WASM surface (auto-layer-generation PR2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Check if an AutoLayer's cached grid is stale — i.e., whether the source
+/// TileLayer has been modified since the cache was last built.
+///
+/// Returns `true` if stale, `false` if the cache is up-to-date.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn is_auto_layer_stale_wasm(asset_ref: &str, layer_id: &str) -> Result<bool, JsValue> {
+    use crate::scene_asset::LevelLayer;
+
+    // Load from asset_body_cache
+    let doc = with_asset_body_cache(|cache| {
+        cache.get(asset_ref).cloned()
+    }).ok_or_else(|| JsValue::from_str("Scene asset not found"))?;
+
+    // Find the AutoLayer
+    let auto_layer = doc.layers
+        .iter()
+        .find(|l| matches!(l, LevelLayer::Auto(al) if al.id.as_str() == layer_id))
+        .ok_or_else(|| JsValue::from_str("AutoLayer not found"))?;
+
+    let LevelLayer::Auto(al) = auto_layer else {
+        return Err(JsValue::from_str("Layer is not an AutoLayer"));
+    };
+
+    // Find the source TileLayer
+    let source_tl = doc.layers
+        .iter()
+        .find(|l| matches!(l, LevelLayer::Tile(tl) if tl.id.as_str() == al.source_layer_id.as_str()))
+        .ok_or_else(|| JsValue::from_str("Source TileLayer not found"))?;
+
+    let LevelLayer::Tile(tl) = source_tl else {
+        return Err(JsValue::from_str("Source layer is not a TileLayer"));
+    };
+
+    Ok(al.source_generation != tl.generation)
+}
+
+/// Regenerate an AutoLayer's cached tile grid from its source TileLayer.
+///
+/// Routes through `dispatch_asset_command` so the operation is recorded in the
+/// asset operation log for undo/redo.
+///
+/// Returns the updated SceneAssetDocument JSON on success.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn regenerate_auto_layer_wasm(
+    asset_ref: &str,
+    layer_id: &str,
+) -> Result<String, JsValue> {
+    use crate::asset_command::AssetCommand;
+    use crate::scene_asset::LevelLayer;
+
+    // Load the doc from cache to find the AutoLayer
+    let doc_for_layer = with_asset_body_cache(|cache| {
+        cache.get(asset_ref).cloned()
+    }).ok_or_else(|| JsValue::from_str("Scene asset not found"))?;
+
+    // Find AutoLayer and capture old cached/source_generation for the command
+    let (old_cached, old_source_generation) = match doc_for_layer.layers.iter().find(|l| matches!(l, LevelLayer::Auto(al) if al.id.as_str() == layer_id)) {
+        Some(LevelLayer::Auto(al)) => (al.cached.clone(), al.source_generation),
+        _ => return Err(JsValue::from_str("AutoLayer not found")),
+    };
+
+    // Build the RegenerateAutoLayer command
+    let cmd = AssetCommand::RegenerateAutoLayer {
+        layer_id: crate::scene_asset::LayerId::new(layer_id.to_string()),
+        old_cached,
+        old_source_generation,
+    };
+    let cmd_json = serde_json::to_string(&cmd)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize command: {}", e)))?;
+
+    // Route through dispatch_asset_command for operation log recording
+    dispatch_asset_command(&cmd_json)?;
+
+    // Fetch the updated doc and sync to asset_body_cache and SCENE_ASSET_DOC
+    let updated_doc = with_asset_doc(|doc_opt| {
+        doc_opt.clone()
+    }).ok_or_else(|| JsValue::from_str("No asset open — asset doc was not set"))?;
+
+    // Update asset_body_cache
+    with_asset_body_cache_mut(|cache| {
+        cache.insert(asset_ref.to_string(), updated_doc.clone());
+    });
+
+    // Sync to SCENE_ASSET_DOC via set_asset_document_wasm
+    let updated_json = serde_json::to_string(&updated_doc)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
+    set_asset_document_wasm(&updated_json)?;
+
+    Ok(updated_json)
+}
+
+/// Add an AutoRule to an AutoLayer (direct mutation, bypasses dispatch_asset_command).
+///
+/// Returns the updated SceneAssetDocument JSON.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn add_auto_rule_wasm(
+    asset_ref: &str,
+    layer_id: &str,
+    rule_json: &str,
+) -> Result<String, JsValue> {
+    use crate::auto_layer::AutoRule;
+    use crate::scene_asset::LevelLayer;
+
+    let rule: AutoRule = serde_json::from_str(rule_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid rule JSON: {}", e)))?;
+
+    let mut doc = with_asset_body_cache(|cache| {
+        cache.get(asset_ref).cloned()
+    }).ok_or_else(|| JsValue::from_str("Scene asset not found"))?;
+
+    // Find and mutate the AutoLayer
+    let layer_mut = doc.layers
+        .iter_mut()
+        .find(|l| matches!(l, LevelLayer::Auto(al) if al.id.as_str() == layer_id))
+        .ok_or_else(|| JsValue::from_str("AutoLayer not found"))?;
+
+    match layer_mut {
+        LevelLayer::Auto(al) => {
+            al.rules.push(rule);
+        }
+        _ => return Err(JsValue::from_str("Layer is not an AutoLayer")),
+    }
+
+    // Update cache
+    with_asset_body_cache_mut(|cache| {
+        cache.insert(asset_ref.to_string(), doc.clone());
+    });
+
+    // Sync to SCENE_ASSET_DOC
+    let doc_json = serde_json::to_string(&doc)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
+    set_asset_document_wasm(&doc_json)?;
+
+    Ok(doc_json)
+}
+
+/// Update an AutoRule in an AutoLayer at the given index (direct mutation).
+///
+/// Returns the updated SceneAssetDocument JSON.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn update_auto_rule_wasm(
+    asset_ref: &str,
+    layer_id: &str,
+    rule_index: usize,
+    rule_json: &str,
+) -> Result<String, JsValue> {
+    use crate::auto_layer::AutoRule;
+    use crate::scene_asset::LevelLayer;
+
+    let rule: AutoRule = serde_json::from_str(rule_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid rule JSON: {}", e)))?;
+
+    let mut doc = with_asset_body_cache(|cache| {
+        cache.get(asset_ref).cloned()
+    }).ok_or_else(|| JsValue::from_str("Scene asset not found"))?;
+
+    let layer_mut = doc.layers
+        .iter_mut()
+        .find(|l| matches!(l, LevelLayer::Auto(al) if al.id.as_str() == layer_id))
+        .ok_or_else(|| JsValue::from_str("AutoLayer not found"))?;
+
+    match layer_mut {
+        LevelLayer::Auto(al) => {
+            if rule_index >= al.rules.len() {
+                return Err(JsValue::from_str(&format!(
+                    "Rule index {} out of bounds ({} rules)",
+                    rule_index,
+                    al.rules.len()
+                )));
+            }
+            al.rules[rule_index] = rule;
+        }
+        _ => return Err(JsValue::from_str("Layer is not an AutoLayer")),
+    }
+
+    with_asset_body_cache_mut(|cache| {
+        cache.insert(asset_ref.to_string(), doc.clone());
+    });
+
+    let doc_json = serde_json::to_string(&doc)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
+    set_asset_document_wasm(&doc_json)?;
+
+    Ok(doc_json)
+}
+
+/// Remove an AutoRule from an AutoLayer at the given index (direct mutation).
+///
+/// Returns the updated SceneAssetDocument JSON.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn remove_auto_rule_wasm(
+    asset_ref: &str,
+    layer_id: &str,
+    rule_index: usize,
+) -> Result<String, JsValue> {
+    use crate::scene_asset::LevelLayer;
+
+    let mut doc = with_asset_body_cache(|cache| {
+        cache.get(asset_ref).cloned()
+    }).ok_or_else(|| JsValue::from_str("Scene asset not found"))?;
+
+    let layer_mut = doc.layers
+        .iter_mut()
+        .find(|l| matches!(l, LevelLayer::Auto(al) if al.id.as_str() == layer_id))
+        .ok_or_else(|| JsValue::from_str("AutoLayer not found"))?;
+
+    match layer_mut {
+        LevelLayer::Auto(al) => {
+            if rule_index >= al.rules.len() {
+                return Err(JsValue::from_str(&format!(
+                    "Rule index {} out of bounds ({} rules)",
+                    rule_index,
+                    al.rules.len()
+                )));
+            }
+            al.rules.remove(rule_index);
+        }
+        _ => return Err(JsValue::from_str("Layer is not an AutoLayer")),
+    }
+
+    with_asset_body_cache_mut(|cache| {
+        cache.insert(asset_ref.to_string(), doc.clone());
+    });
+
+    let doc_json = serde_json::to_string(&doc)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
+    set_asset_document_wasm(&doc_json)?;
+
+    Ok(doc_json)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
