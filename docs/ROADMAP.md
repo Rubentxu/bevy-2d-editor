@@ -52,9 +52,7 @@
 
 | Change | Branch | Status |
 |--------|--------|--------|
-| `bsn-file-export-research` | `feat/bsn-file-export-research` | ✅ Merged (v0.31.0, PR #31) |
-| `bsn-file-import-research` | `feat/bsn-file-import-research` | ✅ Merged (v0.32.0, PR #32) |
-| `level-inspector-and-override-panel` | — | 🔲 Planned |
+| — | — | — |
 
 ---
 
@@ -67,17 +65,25 @@
 - [ADR-0006: Authoring-First Roadmap after the BSN Migration](./adr/0006-authoring-first-roadmap-after-bsn-migration.md)
 - [Post-BSN Authoring Roadmap Specification](./specs/post-bsn-authoring-roadmap.md)
 
+### Completed Sequence
+
+| Order | Change | Version | Status |
+|-------|--------|---------|--------|
+| 1 | `project-asset-browser-and-scene-asset-authoring` (PR1/2/3) | v0.21.0–v0.23.0 | ✅ DONE |
+| 2 | `scene-instance-placement` (PR1/2/3) | v0.24.0–v0.26.0 | ✅ DONE |
+| 3 | `override-resync-workbench` | v0.27.0 | ✅ DONE |
+| 4 | `validation-center` | v0.28.0 | ✅ DONE |
+| 5 | `component-override-migration` | v0.28.0 (PR #26) | ✅ DONE |
+| 6 | `level-design-layers-research` | v0.28.0 (PR #27) | ✅ DONE |
+| 7 | `runtime-preview-inspector` | v0.29.0 (PR #30) | ✅ DONE |
+| + | `scene-instance-layer` | v0.29.0 (PR #29) | ✅ DONE |
+| + | `level-scene-asset` | v0.29.0 (PR #28) | ✅ DONE |
+
 ### Planned Sequence
 
 | Order | Change | Status | Why |
 |-------|--------|--------|-----|
-| 1 | `project-asset-browser-and-scene-asset-authoring` (PR1 ✅ v0.21.0; PR2 ✅ v0.22.0; PR3 ✅ v0.23.0) | ✅ DONE | Exposes existing `SceneAssetDocument` + `SceneAssetCatalog` as usable Project workflows |
-| 2 | `scene-instance-placement` (PR1 ✅ v0.24.0; PR2 ✅ v0.25.0; PR3 ✅ v0.26.0) | ✅ DONE | Lets users place Scene Assets in SceneDocuments without deep cloning |
-| 3 | `override-resync-workbench` (WASM surface + UI) | ✅ DONE (v0.27.0) | Makes `OverridePatch` status and resync reports visible/actionable |
-| 4 | `validation-center` (ValidationIssue types + WASM + UI panel) | ✅ DONE (v0.28.0) | Centralizes catalog warnings, export warnings, and per-instance override issues in one UI panel |
-| 5 | `component-override-migration` | Planned | Replaces legacy `OverridePatch` with ECS/BSN-friendly `ComponentOverride` before Level Layers |
-| 6 | `level-design-layers-research` | Planned research | Defines Scene Instance Layer, Tile Layer, IntGrid, and Auto Layer semantics before committing to a tilemap model |
-| 7 | `runtime-preview-inspector` | Planned | Shows runtime preview provenance, metrics, and editor-to-preview mapping |
+| 8 | `level-design-tools` | 🔲 Planned | Tile painting, IntGrid authoring, auto-layer generation |
 
 ### Research Gates
 
@@ -90,7 +96,7 @@
 | 2D Level Design Tools | Tiled terrain brush/automapping, LDtk IntGrid/Auto Layers/Entities, Bevy tilemap ecosystem, Aseprite metadata |
 | Runtime Preview Inspector | Defold profiler, Godot remote SceneTree, Bevy diagnostics/remote tooling, Chronos future debugging |
 
-### Deferred Until After Hito 2
+### Deferred Until After Hito 3
 
 | Candidate | Revisit when |
 |-----------|--------------|
@@ -105,13 +111,13 @@
 
 **Goal**: Enable .bsn file round-trip (export + import) and improve inspector UX for override inspection and editing.
 
-### Planned Sequence
+### Completed Sequence
 
-| Order | Change | Status | Why |
-|-------|--------|--------|-----|
-| 1 | `bsn-file-export-research` | ✅ Done (v0.31.0, PR #31) | Validates EditorCoreBsnExporter against Bevy 0.19 PR #23639 draft |
-| 2 | `bsn-file-import-research` | ✅ Done (v0.32.0, PR #32) | Parse `.bsn` text → `SceneAssetDocument` (inverse of Order 1) |
-| 3 | `level-inspector-and-override-panel` | 🔲 In Progress (feat/inspector-override, PR #33) | Inspect overrides per Scene Instance; edit component values inline |
+| Order | Change | Version | Status |
+|-------|--------|---------|--------|
+| 1 | `bsn-file-export-research` | v0.31.0 (PR #31) | ✅ DONE |
+| 2 | `bsn-file-import-research` | v0.32.0 (PR #32) | ✅ DONE |
+| 3 | `level-inspector-and-override-panel` | v0.33.0 (PR #33) | ✅ DONE |
 
 ### Research Gates
 
@@ -322,4 +328,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level
 
 ---
 
-*Last updated: v0.31.0 — 2026-06-30 (bsn-file-export-research merged; Hito 3 started)*
+*Last updated: v0.33.0 — 2026-07-01 (Hito 2 + Hito 3 completed; level-design-tools next)*
