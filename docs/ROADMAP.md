@@ -83,7 +83,8 @@
 
 | Order | Change | Status | Why |
 |-------|--------|--------|-----|
-| 8 | `level-design-tools` | ✅ DONE (v0.34.0, PR #34) | Tile painting, IntGrid authoring, auto-layer generation |
+| 8 | `level-design-tools` | ✅ DONE (v0.34.0, PR #34) | Tile painting, IntGrid authoring, tileset CRUD |
+| 9 | `auto-layer-generation` | ✅ DONE (v0.35.0, PR #36) | 3x3 pattern rule engine, RegenerateAutoLayer, AutoLayerPanel |
 
 ### Research Gates
 
@@ -328,4 +329,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level
 
 ---
 
-*Last updated: v0.33.0 — 2026-07-01 (Hito 2 + Hito 3 completed; level-design-tools next)*
+*Last updated: v0.35.0 — 2026-07-01 (Hito 2 + Hito 3 completed; auto-layer-generation merged)*
