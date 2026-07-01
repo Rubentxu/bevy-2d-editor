@@ -204,6 +204,10 @@ pub enum CommandError {
     /// Instance not found in SceneDocument.instances.
     #[error("Instance not found: {0}")]
     InstanceNotFound(StableId),
+
+    /// Generic error for tile operations and other cases.
+    #[error("{0}")]
+    Other(String),
 }
 
 impl From<serde_json::Error> for CommandError {

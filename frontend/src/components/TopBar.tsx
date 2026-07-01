@@ -16,6 +16,8 @@ interface Props {
   aiPanelOpen: boolean;
   onToggleValidationCenter: () => void;
   validationCenterOpen: boolean;
+  onToggleTileset: () => void;
+  tilesetPanelOpen: boolean;
   error: string | null;
   onDismissError: () => void;
 }
@@ -34,6 +36,8 @@ export default function TopBar({
   aiPanelOpen,
   onToggleValidationCenter,
   validationCenterOpen,
+  onToggleTileset,
+  tilesetPanelOpen,
   error,
   onDismissError,
 }: Props) {
@@ -86,6 +90,14 @@ export default function TopBar({
             className={validationCenterOpen ? "vc-btn active" : "vc-btn"}
           >
             ✅ Validation
+          </button>
+          <button
+            onClick={onToggleTileset}
+            data-testid="tileset-panel-btn"
+            title={tilesetPanelOpen ? "Close Tileset Panel" : "Open Tileset Panel"}
+            className={tilesetPanelOpen ? "tileset-btn active" : "tileset-btn"}
+          >
+            🏠 Tileset
           </button>
         </>
       )}

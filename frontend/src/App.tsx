@@ -16,9 +16,11 @@ import UnsavedChangesDialog from "./components/UnsavedChangesDialog";
 import ProjectAssetBrowser from "./components/ProjectAssetBrowser";
 import AssetAuthoringView from "./components/AssetAuthoringView";
 import AssetUnsavedChangesDialog from "./components/AssetUnsavedChangesDialog";
+import { TilesetPanel } from "./components/TilesetPanel";
 import { useScenes } from "./hooks/useScenes";
 import { useSceneAssets } from "./hooks/useSceneAssets";
 import { sceneCreate, sceneSwitch, sceneSwitchCommit, sceneDelete, sceneRename } from "./services/scenes";
+import { type TilesetMetadata } from "./services/tilesets";
 
 type EditorMode = "scene" | "asset-authoring";
 
@@ -36,6 +38,8 @@ export default function App() {
   const logState = useLogState();
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [validationCenterOpen, setValidationCenterOpen] = useState(false);
+  const [tilesetPanelOpen, setTilesetPanelOpen] = useState(false);
+  const [selectedTilesetId, setSelectedTilesetId] = useState<string | null>(null);
   const [exportRustOpen, setExportRustOpen] = useState(false);
   const [applyingIds, setApplyingIds] = useState<Set<string>>(new Set());
   const { scenes, currentId, refresh: refreshScenes } = useScenes();
@@ -88,6 +92,14 @@ export default function App() {
 
   const handleToggleValidationCenter = useCallback(() => {
     setValidationCenterOpen((prev) => !prev);
+  }, []);
+
+  const handleToggleTileset = useCallback(() => {
+    setTilesetPanelOpen((prev) => !prev);
+  }, []);
+
+  const handleSelectTileset = useCallback((tileset: TilesetMetadata) => {
+    setSelectedTilesetId(tileset.id);
   }, []);
 
   const handleSubmitAI = useCallback(async () => {
@@ -428,6 +440,8 @@ export default function App() {
         aiPanelOpen={aiPanelOpen}
         onToggleValidationCenter={handleToggleValidationCenter}
         validationCenterOpen={validationCenterOpen}
+        onToggleTileset={handleToggleTileset}
+        tilesetPanelOpen={tilesetPanelOpen}
         error={error || initError}
         onDismissError={() => setError(null)}
       />
@@ -466,6 +480,12 @@ export default function App() {
             )}
             {validationCenterOpen && (
               <ValidationCenter onClose={handleToggleValidationCenter} />
+            )}
+            {tilesetPanelOpen && (
+              <TilesetPanel
+                selectedTilesetId={selectedTilesetId}
+                onSelectTileset={handleSelectTileset}
+              />
             )}
             <HierarchyPanel
               scene={scene}

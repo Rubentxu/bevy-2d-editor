@@ -9,9 +9,9 @@
 
 use crate::command::{Command, CommandError};
 use crate::document::{ComponentInstance, Entity, SceneDocument, StableId};
+use crate::scene_asset::LevelLayer;
 use crate::scene_instance::SceneInstance;
 use crate::scene_instance_overrides::{resync, upsert_override, remove_override};
-use crate::schema::global_registry;
 
 /// Find an entity by id and return a mutable reference.
 fn find_entity_mut<'a>(

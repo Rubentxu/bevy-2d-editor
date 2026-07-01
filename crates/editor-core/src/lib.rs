@@ -27,6 +27,8 @@ pub mod scene_instance_overrides;
 pub mod instance_projection;
 mod scenes;
 pub mod schema;
+pub mod tileset;
+pub mod tile_layer;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ADR References (documentation only — no code changes here)
@@ -103,7 +105,7 @@ pub use dynamic_scene::{
     anchor_str_to_normalized_offset, export_dynamic_scene, is_known_anchor_str,
 };
 pub use operation_log::{LogEntry, OperationLog, OperationLogError};
-pub use persistence::{asset_path, validate_logical_path, AssetPathError, PROJECT_FILE, ProjectMetadata, SCENES_DIR, SCHEMAS_DIR, ASSETS_DIR};
+pub use persistence::{asset_path, validate_logical_path, AssetPathError, PROJECT_FILE, ProjectMetadata, SCENES_DIR, SCHEMAS_DIR, ASSETS_DIR, TILESETS_DIR, tileset_path};
 pub use asset_command::{AssetCommand, AssetCommandError, AssetOperationLog};
 pub use scene_asset::{
     AssetReference, ExposedProperty, LayerId, LevelLayer, LocalId, RelationshipKind, RoleWarning,
@@ -129,6 +131,11 @@ pub use scene_instance_overrides::{OverrideIssue, ResyncReport};
 pub use instance_projection::{root_local_ids, PreviewEntity, project_instances};
 pub use schema::ComponentTypeId;
 pub use scenes::{SceneInfo, SceneRegistry, SwitchResult};
+pub use tileset::{
+    AsepriteFrame, AsepriteMetadata, AsepriteSlice, AsepriteTag, TileCoord, TileGrid, TileRef,
+    TilesetAsset, TilesetId, TilesetManager, TilesetMetadata,
+};
+pub use tile_layer::{TileLayer, TileLayerId};
 /// Marker component for entities spawned from SceneDocument.
 /// These are despawned and respawned when the document is mutated
 /// (preview world rebuild strategy — matches Hito 0 decision 23).
@@ -1071,14 +1078,20 @@ pub fn list_scene_instance_layers_wasm(asset_json: &str) -> Result<String, JsVal
 
     let mut out: Vec<serde_json::Value> = Vec::with_capacity(doc.layers.len());
     for layer in &doc.layers {
-        let LevelLayer::SceneInstance(scene_layer) = layer;
-        out.push(serde_json::json!({
-            "id": scene_layer.id.as_str(),
-            "name": scene_layer.name,
-            "kind": scene_layer.kind,
-            "order": scene_layer.order,
-            "instances_count": scene_layer.instances.len(),
-        }));
+        match layer {
+            LevelLayer::SceneInstance(scene_layer) => {
+                out.push(serde_json::json!({
+                    "id": scene_layer.id.as_str(),
+                    "name": scene_layer.name,
+                    "kind": scene_layer.kind,
+                    "order": scene_layer.order,
+                    "instances_count": scene_layer.instances.len(),
+                }));
+            }
+            LevelLayer::Tile(_) => {
+                // Tile layers are handled separately in the tile layer API
+            }
+        }
     }
     serde_json::to_string(&out)
         .map_err(|e| JsValue::from_str(&format!("Failed to serialize layers: {}", e)))
@@ -1123,6 +1136,7 @@ pub fn create_scene_instance_layer_wasm(
         .iter()
         .filter_map(|l| match l {
             LevelLayer::SceneInstance(s) => Some(s.order),
+            LevelLayer::Tile(_) => None,
         })
         .max()
         .map(|o| o + 1)
@@ -2967,6 +2981,192 @@ pub async fn save_scene_asset() -> Result<String, JsValue> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Tileset Persistence (OPFS)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Save a TilesetAsset to OPFS at `tilesets/<id>.tileset.json`.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn save_tileset(tileset_json: &str) -> Result<String, JsValue> {
+    let tileset: tileset::TilesetAsset = serde_json::from_str(tileset_json)
+        .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+
+    let id = tileset.metadata.id.as_str();
+    if id.is_empty() {
+        return Err(JsValue::from_str("Tileset id cannot be empty"));
+    }
+
+    let path = persistence::tileset_path(id);
+    let json = serde_json::to_string(&tileset)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
+
+    js_save_file(&path, &json)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+
+    Ok(path)
+}
+
+/// Load a TilesetAsset from OPFS by tileset ID.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn load_tileset(id: &str) -> Result<String, JsValue> {
+    if id.is_empty() {
+        return Err(JsValue::from_str("Tileset id cannot be empty"));
+    }
+
+    let path = persistence::tileset_path(id);
+
+    let json_str = js_load_file(&path)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+
+    let tileset: tileset::TilesetAsset = serde_json::from_str(&json_str)
+        .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+
+    serde_json::to_string(&tileset)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+}
+
+/// Delete a TilesetAsset from OPFS by tileset ID.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn delete_tileset(id: &str) -> Result<(), JsValue> {
+    if id.is_empty() {
+        return Err(JsValue::from_str("Tileset id cannot be empty"));
+    }
+
+    let path = persistence::tileset_path(id);
+    js_delete_file(&path).await.map_err(|e| JsValue::from_str(&e))?;
+    Ok(())
+}
+
+/// List all tilesets in the `tilesets/` directory.
+/// Returns a JSON array of TilesetMetadata objects.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn list_tilesets() -> Result<String, JsValue> {
+    let dir = persistence::TILESETS_DIR;
+    let files = js_list_files(dir).await
+        .map_err(|e| JsValue::from_str(&e))?;
+
+    let mut tilesets: Vec<tileset::TilesetMetadata> = Vec::new();
+
+    for file in files {
+        // Only process .tileset.json files
+        if !file.ends_with(".tileset.json") {
+            continue;
+        }
+        let path = format!("{}/{}", dir, file);
+        match js_load_file(&path).await {
+            Ok(json_str) => {
+                match serde_json::from_str::<tileset::TilesetAsset>(&json_str) {
+                    Ok(tileset) => tilesets.push(tileset.metadata),
+                    Err(_) => {
+                        // Skip invalid tileset files
+                    }
+                }
+            }
+            Err(_) => {
+                // Skip files that can't be read
+            }
+        }
+    }
+
+    serde_json::to_string(&tilesets)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+}
+
+/// Paint a tile onto a TileLayer.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn paint_tile(
+    asset_ref: &str,
+    layer_id: &str,
+    x: i32,
+    y: i32,
+    tileset_id: &str,
+    local_index: u32,
+) -> Result<JsValue, JsValue> {
+    let coord = TileCoord::new(x, y);
+    let tile_ref = TileRef {
+        tileset_id: tileset_id.to_string(),
+        local_index,
+    };
+
+    // Load the SceneAssetDocument from cache
+    let mut doc_opt: Option<SceneAssetDocument> = None;
+    with_asset_body_cache(|cache| {
+        doc_opt = cache.get(asset_ref).cloned();
+    });
+
+    let mut doc = doc_opt
+        .ok_or_else(|| JsValue::from_str("Scene asset not found"))?;
+
+    // Find the TileLayer
+    let layer = doc.layers.iter_mut()
+        .find(|l| matches!(l, LevelLayer::Tile(tl) if tl.id.as_str() == layer_id))
+        .ok_or_else(|| JsValue::from_str("TileLayer not found"))?;
+
+    match layer {
+        LevelLayer::Tile(tl) => {
+            tl.paint_tile(coord.clone(), tile_ref.clone());
+        }
+        _ => return Err(JsValue::from_str("Layer is not a TileLayer")),
+    }
+
+    // Update the cache with modified document
+    // Note: does NOT call mark_dirty() — asset changes don't affect Bevy preview (lib.rs:2530)
+    with_asset_body_cache_mut(|cache| {
+        cache.insert(asset_ref.to_string(), doc);
+    });
+
+    Ok(JsValue::NULL)
+}
+
+/// Erase a tile from a TileLayer.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn erase_tile(
+    asset_ref: &str,
+    layer_id: &str,
+    x: i32,
+    y: i32,
+) -> Result<JsValue, JsValue> {
+    let coord = TileCoord::new(x, y);
+
+    // Load the SceneAssetDocument from cache
+    let mut doc_opt: Option<SceneAssetDocument> = None;
+    with_asset_body_cache(|cache| {
+        doc_opt = cache.get(asset_ref).cloned();
+    });
+
+    let mut doc = doc_opt
+        .ok_or_else(|| JsValue::from_str("Scene asset not found"))?;
+
+    // Find the TileLayer
+    let layer = doc.layers.iter_mut()
+        .find(|l| matches!(l, LevelLayer::Tile(tl) if tl.id.as_str() == layer_id))
+        .ok_or_else(|| JsValue::from_str("TileLayer not found"))?;
+
+    match layer {
+        LevelLayer::Tile(tl) => {
+            tl.erase_tile(&coord)
+                .ok_or_else(|| JsValue::from_str("No tile to erase"))?;
+        }
+        _ => return Err(JsValue::from_str("Layer is not a TileLayer")),
+    }
+
+    // Update the cache with modified document
+    // Note: does NOT call mark_dirty() — asset changes don't affect Bevy preview (lib.rs:2530)
+    with_asset_body_cache_mut(|cache| {
+        cache.insert(asset_ref.to_string(), doc);
+    });
+
+    Ok(JsValue::NULL)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Helper functions
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -3039,3 +3239,4 @@ async fn js_delete_file(path: &str) -> Result<(), String> {
     js_await(promise).await.map_err(|e| format!("{:?}", e))?;
     Ok(())
 }
+

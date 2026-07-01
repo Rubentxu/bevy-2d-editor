@@ -1,0 +1,337 @@
+//! TileLayer — a layer inside a LevelSceneAsset that stores a grid of tiles.
+//!
+//! A TileLayer belongs to exactly one LevelSceneAsset and owns its sparse grid
+//! of tiles. The layer references a Tileset for tile graphics.
+
+use super::tileset::{TileCoord, TileRef, TilesetId};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TileLayerId — opaque stable identifier
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Opaque stable identifier for a TileLayer inside a LevelSceneAsset.
+/// Transparent so it serializes as a plain string, e.g. `"tilelayer_01abc..."`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct TileLayerId(pub String);
+
+impl TileLayerId {
+    pub fn new(id: impl Into<String>) -> Self {
+        TileLayerId(id.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TileLayer
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A layer inside a LevelSceneAsset that stores a sparse grid of tiles.
+///
+/// A TileLayer is identified by a stable `TileLayerId` and references a
+/// `TilesetId` for tile graphics. The `grid` field is a sparse HashMap:
+/// only explicitly painted tiles consume memory.
+///
+/// # Layer Order
+///
+/// The `order` field controls rendering order (lower = rendered first).
+/// This allows foreground/background layering in the viewport.
+///
+/// # Example
+///
+/// ```
+/// use editor_core::tileset::{TileCoord, TileRef, TilesetId};
+/// use editor_core::tile_layer::{TileLayer, TileLayerId};
+///
+/// let tileset_id = TilesetId::new("tileset_grass_16".to_string());
+/// let mut layer = TileLayer::new(
+///     TileLayerId::new("layer_ground".to_string()),
+///     "Ground".to_string(),
+///     tileset_id,
+/// );
+///
+/// // Paint a tile at (5, 10)
+/// layer.paint_tile(
+///     TileCoord::new(5, 10),
+///     TileRef { tileset_id: "tileset_grass_16".to_string(), local_index: 0 },
+/// );
+///
+/// // Check it exists
+/// assert!(layer.get_tile(&TileCoord::new(5, 10)).is_some());
+///
+/// // Erase it
+/// let erased = layer.erase_tile(&TileCoord::new(5, 10));
+/// assert!(erased.is_some());
+/// assert!(layer.get_tile(&TileCoord::new(5, 10)).is_none());
+/// ```
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TileLayer {
+    /// Stable identifier for this layer.
+    pub id: TileLayerId,
+    /// Human-readable name shown in the layer list.
+    pub name: String,
+    /// The tileset this layer paints from.
+    pub tileset_id: TilesetId,
+    /// Sparse grid: only painted tiles are stored.
+    /// HashMap gives O(1) lookup/insert/delete.
+    #[serde(default)]
+    pub grid: TileGrid,
+    /// Layer order for rendering (lower = rendered first).
+    /// Multiple layers can share the same order for grouped rendering.
+    pub order: i32,
+}
+
+/// Re-export TileGrid from tileset module for convenience.
+pub use super::tileset::TileGrid as TileGrid;
+
+impl TileLayer {
+    /// Create a new TileLayer with an empty grid and default order (0).
+    pub fn new(id: TileLayerId, name: String, tileset_id: TilesetId) -> Self {
+        TileLayer {
+            id,
+            name,
+            tileset_id,
+            grid: HashMap::new(),
+            order: 0,
+        }
+    }
+
+    /// Paint a tile at the given coordinate, overwriting any existing tile.
+    ///
+    /// This is an upsert operation — if a tile already exists at `coord`,
+    /// it is replaced with the new `tile_ref`.
+    pub fn paint_tile(&mut self, coord: TileCoord, tile_ref: TileRef) {
+        self.grid.insert(coord, tile_ref);
+    }
+
+    /// Erase a tile at the given coordinate.
+    ///
+    /// Returns the erased `TileRef` if a tile existed at that coordinate,
+    /// or `None` if the coordinate was already empty.
+    pub fn erase_tile(&mut self, coord: &TileCoord) -> Option<TileRef> {
+        self.grid.remove(coord)
+    }
+
+    /// Get a tile reference at the given coordinate.
+    ///
+    /// Returns `Some(&TileRef)` if a tile exists at that coordinate,
+    /// or `None` if the coordinate is empty.
+    pub fn get_tile(&self, coord: &TileCoord) -> Option<&TileRef> {
+        self.grid.get(coord)
+    }
+
+    /// Number of painted tiles in this layer.
+    ///
+    /// This is NOT the grid size — it's the count of non-empty cells.
+    pub fn tile_count(&self) -> usize {
+        self.grid.len()
+    }
+
+    /// True if no tiles are painted (all cells empty).
+    pub fn is_empty(&self) -> bool {
+        self.grid.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // TileLayer paint/erase/get tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_tile_layer_paint_and_get() {
+        let tileset_id = TilesetId::new("ts_grass".to_string());
+        let mut layer = TileLayer::new(
+            TileLayerId::new("layer_1".to_string()),
+            "Grass Layer".to_string(),
+            tileset_id.clone(),
+        );
+
+        let coord = TileCoord::new(3, 7);
+        let tile_ref = TileRef {
+            tileset_id: "ts_grass".to_string(),
+            local_index: 12,
+        };
+
+        layer.paint_tile(coord.clone(), tile_ref.clone());
+        assert_eq!(layer.get_tile(&coord), Some(&tile_ref));
+    }
+
+    #[test]
+    fn test_tile_layer_erase() {
+        let tileset_id = TilesetId::new("ts_grass".to_string());
+        let mut layer = TileLayer::new(
+            TileLayerId::new("layer_1".to_string()),
+            "Grass Layer".to_string(),
+            tileset_id.clone(),
+        );
+
+        let coord = TileCoord::new(3, 7);
+        let tile_ref = TileRef {
+            tileset_id: "ts_grass".to_string(),
+            local_index: 12,
+        };
+
+        // Initially empty
+        assert!(layer.erase_tile(&coord).is_none());
+
+        // Paint then erase
+        layer.paint_tile(coord.clone(), tile_ref.clone());
+        let erased = layer.erase_tile(&coord);
+        assert_eq!(erased, Some(tile_ref));
+        assert!(layer.get_tile(&coord).is_none());
+    }
+
+    #[test]
+    fn test_tile_layer_overwrite_tile() {
+        let tileset_id = TilesetId::new("ts_grass".to_string());
+        let mut layer = TileLayer::new(
+            TileLayerId::new("layer_1".to_string()),
+            "Grass Layer".to_string(),
+            tileset_id.clone(),
+        );
+
+        let coord = TileCoord::new(0, 0);
+
+        // First tile
+        let tile_a = TileRef {
+            tileset_id: "ts_grass".to_string(),
+            local_index: 0,
+        };
+        layer.paint_tile(coord.clone(), tile_a);
+
+        // Overwrite with second tile
+        let tile_b = TileRef {
+            tileset_id: "ts_grass".to_string(),
+            local_index: 1,
+        };
+        layer.paint_tile(coord.clone(), tile_b.clone());
+
+        // Get returns second tile
+        assert_eq!(layer.get_tile(&coord), Some(&tile_b));
+
+        // Erase returns second tile (not first)
+        assert_eq!(layer.erase_tile(&coord), Some(tile_b));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // TileLayer sparse grid tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_sparse_grid_many_empty_cells() {
+        let tileset_id = TilesetId::new("ts_grass".to_string());
+        let mut layer = TileLayer::new(
+            TileLayerId::new("layer_1".to_string()),
+            "Test Layer".to_string(),
+            tileset_id,
+        );
+
+        // Paint only 3 tiles in a large grid
+        layer.paint_tile(
+            TileCoord::new(0, 0),
+            TileRef { tileset_id: "ts_grass".to_string(), local_index: 0 },
+        );
+        layer.paint_tile(
+            TileCoord::new(100, 200),
+            TileRef { tileset_id: "ts_grass".to_string(), local_index: 1 },
+        );
+        layer.paint_tile(
+            TileCoord::new(-50, -30),
+            TileRef { tileset_id: "ts_grass".to_string(), local_index: 2 },
+        );
+
+        // Layer reports 3 tiles
+        assert_eq!(layer.tile_count(), 3);
+        assert!(!layer.is_empty());
+
+        // All other coordinates are empty
+        assert!(layer.get_tile(&TileCoord::new(1, 0)).is_none());
+        assert!(layer.get_tile(&TileCoord::new(50, 50)).is_none());
+        assert!(layer.get_tile(&TileCoord::new(100, 199)).is_none());
+        assert!(layer.get_tile(&TileCoord::new(-49, -30)).is_none());
+    }
+
+    #[test]
+    fn test_tile_layer_is_empty() {
+        let tileset_id = TilesetId::new("ts_grass".to_string());
+        let layer = TileLayer::new(
+            TileLayerId::new("layer_1".to_string()),
+            "Empty Layer".to_string(),
+            tileset_id,
+        );
+
+        assert!(layer.is_empty());
+        assert_eq!(layer.tile_count(), 0);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // TileLayerId tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_tile_layer_id() {
+        let id = TileLayerId::new("layer_abc123".to_string());
+        assert_eq!(id.as_str(), "layer_abc123");
+    }
+
+    #[test]
+    fn test_tile_layer_id_serialization() {
+        let id = TileLayerId::new("layer_test".to_string());
+        let json = serde_json::to_string(&id).unwrap();
+        assert_eq!(json, r#""layer_test""#);
+        let roundtrip: TileLayerId = serde_json::from_str(&json).unwrap();
+        assert_eq!(roundtrip.as_str(), "layer_test");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // TileLayer serialization tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_tile_layer_serialization_roundtrip() {
+        let tileset_id = TilesetId::new("ts_grass".to_string());
+        let mut layer = TileLayer::new(
+            TileLayerId::new("layer_grass".to_string()),
+            "Grass Layer".to_string(),
+            tileset_id,
+        );
+        layer.order = 1;
+        layer.paint_tile(
+            TileCoord::new(5, 10),
+            TileRef { tileset_id: "ts_grass".to_string(), local_index: 7 },
+        );
+
+        let json = serde_json::to_string(&layer).unwrap();
+        let roundtrip: TileLayer = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(roundtrip.id.as_str(), "layer_grass");
+        assert_eq!(roundtrip.name, "Grass Layer");
+        assert_eq!(roundtrip.tileset_id.as_str(), "ts_grass");
+        assert_eq!(roundtrip.order, 1);
+        assert_eq!(roundtrip.tile_count(), 1);
+    }
+
+    #[test]
+    fn test_tile_layer_empty_grid_deserializes() {
+        // Deserialize a TileLayer with no grid field (old save format)
+        // Should default to empty HashMap
+        let json = r#"{
+            "id": "layer_01",
+            "name": "Test Layer",
+            "tileset_id": "ts_01",
+            "order": 0
+        }"#;
+        let layer: TileLayer = serde_json::from_str(json).unwrap();
+        assert!(layer.is_empty());
+        assert_eq!(layer.tile_count(), 0);
+    }
+}

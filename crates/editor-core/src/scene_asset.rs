@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::document::ComponentInstance;
 use crate::scene_instance::SceneInstance;
+use crate::tile_layer::TileLayer;
 
 /// Opaque stable identity of an entity *inside* a Scene Asset.
 /// Never appears as a SceneDocument StableId. Overrides target this.
@@ -234,4 +235,7 @@ pub struct SceneInstanceLayer {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum LevelLayer {
     SceneInstance(SceneInstanceLayer),
+    /// A tile layer for grid-based level painting.
+    /// Stores a sparse grid of tile references from a Tileset.
+    Tile(TileLayer),
 }

@@ -161,6 +161,28 @@ export async function initEngine(
   (window as any).export_asset_to_bsn_wasm = (assetId: string) =>
     wasm.export_asset_to_bsn_wasm(assetId);
 
+  // ── Tile Painting (level-design-tools PR2) ────────────────────────────────
+  (window as any).paint_tile = (
+    assetRef: string,
+    layerId: string,
+    x: number,
+    y: number,
+    tilesetId: string,
+    localIndex: number
+  ) => wasm.paint_tile(assetRef, layerId, x, y, tilesetId, localIndex);
+  (window as any).erase_tile = (
+    assetRef: string,
+    layerId: string,
+    x: number,
+    y: number
+  ) => wasm.erase_tile(assetRef, layerId, x, y);
+
+  // ── Tileset CRUD (level-design-tools PR1) ────────────────────────────────
+  (window as any).list_tilesets = () => wasm.list_tilesets();
+  (window as any).load_tileset = (id: string) => wasm.load_tileset(id);
+  (window as any).save_tileset = (tilesetJson: string) => wasm.save_tileset(tilesetJson);
+  (window as any).delete_tileset = (id: string) => wasm.delete_tileset(id);
+
   // ── Scene Registry (PR2 multi-scene) ──────────────────────────────────────
   (window as any).scene_create = (name: string) => wasm.scene_create(name);
   (window as any).scene_switch = (id: string) => wasm.scene_switch(id);
