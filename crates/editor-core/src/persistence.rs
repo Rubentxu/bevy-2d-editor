@@ -31,6 +31,9 @@ pub const SCHEMAS_DIR: &str = "schemas";
 /// Subdirectory containing SceneAssetDocument bodies (ADR-0008 §Decision).
 pub const ASSETS_DIR: &str = "assets";
 
+/// Subdirectory containing Tileset body files.
+pub const TILESETS_DIR: &str = "tilesets";
+
 /// Project metadata stored at OPFS root as `project.json`.
 /// Contains version, name, list of saved scenes, schemas.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -85,6 +88,12 @@ pub fn asset_path(logical_path: &str) -> String {
     format!("{}/{}.asset.json", ASSETS_DIR, logical_path)
 }
 
+/// Resolve the OPFS path for a Tileset body: `tilesets/<id>.tileset.json`.
+/// `<id>` is the TilesetId string (already opaque and escaped).
+pub fn tileset_path(id: &str) -> String {
+    format!("{}/{}.tileset.json", TILESETS_DIR, id)
+}
+
 /// Error type for asset path validation.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum AssetPathError {
@@ -92,6 +101,19 @@ pub enum AssetPathError {
     Empty,
     #[error("path traversal not allowed: {0}")]
     PathTraversal(String),
+}
+
+/// Error type for tileset persistence operations.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum TilesetPersistenceError {
+    #[error("tileset not found: {0}")]
+    NotFound(String),
+    #[error("tileset path is empty")]
+    EmptyId,
+    #[error("serialization error: {0}")]
+    Serialization(String),
+    #[error("persistence error: {0}")]
+    Persistence(String),
 }
 
 /// Validate an asset logical path.
