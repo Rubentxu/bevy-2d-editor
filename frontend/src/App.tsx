@@ -16,6 +16,7 @@ import UnsavedChangesDialog from "./components/UnsavedChangesDialog";
 import ProjectAssetBrowser from "./components/ProjectAssetBrowser";
 import AssetAuthoringView from "./components/AssetAuthoringView";
 import AssetUnsavedChangesDialog from "./components/AssetUnsavedChangesDialog";
+import TilesetPanel from "./components/TilesetPanel";
 import { useScenes } from "./hooks/useScenes";
 import { useSceneAssets } from "./hooks/useSceneAssets";
 import { sceneCreate, sceneSwitch, sceneSwitchCommit, sceneDelete, sceneRename } from "./services/scenes";
@@ -473,6 +474,9 @@ export default function App() {
             )}
             {validationCenterOpen && (
               <ValidationCenter onClose={handleToggleValidationCenter} />
+            )}
+            {tilesetPanelOpen && (
+              <TilesetPanel />
             )}
             <HierarchyPanel
               scene={scene}
