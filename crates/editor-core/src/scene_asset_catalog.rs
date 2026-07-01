@@ -271,6 +271,7 @@ fn role_key(role: &SceneAssetRole) -> &'static str {
         SceneAssetRole::Level => "level",
         SceneAssetRole::Ui => "ui",
         SceneAssetRole::Effect => "effect",
+        SceneAssetRole::Logic => "logic",
     }
 }
 

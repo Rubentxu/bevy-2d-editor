@@ -51,6 +51,7 @@ pub enum SceneAssetRole {
     Level,
     Ui,
     Effect,
+    Logic,
 }
 
 /// Editor-owned durable authoring document for a Scene Asset.
@@ -247,4 +248,38 @@ pub enum LevelLayer {
     /// `cached` tile grid. The cache is stale when the source layer's
     /// generation counter changes.
     Auto(AutoLayer),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn logic_role_serializes_as_snake_case_and_round_trips() {
+        let role = SceneAssetRole::Logic;
+        let json = serde_json::to_string(&role).unwrap();
+        assert_eq!(json, "\"logic\"");
+        let parsed: SceneAssetRole = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, SceneAssetRole::Logic);
+    }
+
+    #[test]
+    fn scene_asset_document_with_logic_role_round_trips() {
+        use crate::scene_asset::{SceneAssetDocument, SceneAssetMetadata};
+        let doc = SceneAssetDocument {
+            asset_id: "lga_jump".to_string(),
+            logical_path: "logic/jump".to_string(),
+            role: SceneAssetRole::Logic,
+            version: 1,
+            entities: vec![],
+            relationships: vec![],
+            exposed_properties: vec![],
+            metadata: SceneAssetMetadata::default(),
+            layers: vec![],
+        };
+        let json = serde_json::to_string(&doc).unwrap();
+        let parsed: SceneAssetDocument = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.role, SceneAssetRole::Logic);
+        assert_eq!(parsed.asset_id, "lga_jump");
+    }
 }
