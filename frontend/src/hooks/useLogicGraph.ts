@@ -230,17 +230,9 @@ export function useLogicGraph() {
     await refresh();
   }, [refresh]);
 
-  /**
-   * Convert current graph to React Flow format.
-   */
-  const rfNodes: RFNode[] = graph ? toRFNodes(graph) : [];
-  const rfEdges: RFEdge[] = graph ? toRFEdges(graph) : [];
-
   return {
     // State
     graph,
-    rfNodes,
-    rfEdges,
     logState,
     descriptors,
 
