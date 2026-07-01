@@ -119,6 +119,7 @@
 | 1 | `bsn-file-export-research` | v0.31.0 (PR #31) | ✅ DONE |
 | 2 | `bsn-file-import-research` | v0.32.0 (PR #32) | ✅ DONE |
 | 3 | `level-inspector-and-override-panel` | v0.33.0 (PR #33) | ✅ DONE |
+| 4 | `bsn-file-import` | v0.36.0 (PR #37) | ✅ DONE |
 
 ### Research Gates
 
@@ -329,4 +330,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level
 
 ---
 
-*Last updated: v0.35.0 — 2026-07-01 (Hito 2 + Hito 3 completed; auto-layer-generation merged)*
+*Last updated: v0.36.0 — 2026-07-01 (Hito 3 Order 4 bsn-file-import done)*
