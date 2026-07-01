@@ -72,6 +72,12 @@ impl BsnExporter for EditorCoreBsnExporter {
         &self,
         doc: &SceneAssetDocument,
     ) -> Result<String, BsnExportError> {
+        // Reject Logic role — BSN export is for scene assets only
+        if matches!(doc.role, crate::scene_asset::SceneAssetRole::Logic) {
+            return Err(BsnExportError::UnsupportedShape(
+                "logic role is not exported to .bsn".into(),
+            ));
+        }
         if doc.entities.is_empty() {
             return Err(BsnExportError::EmptyScene);
         }
@@ -431,5 +437,45 @@ mod tests {
         let children_close_idx = text[child_close_idx..].rfind("]").unwrap() + child_close_idx;
         let between = &text[child_close_idx + 1..children_close_idx];
         assert!(!between.contains(','), "between child close and Children close found: {:?}", between);
+    }
+
+    #[test]
+    fn logic_role_doc_rejected_with_unsupported_shape() {
+        // Logic role documents must be rejected before IR build
+        let entities = vec![SceneAssetEntity {
+            local_id: LocalId::new("root"),
+            local_path: "root".to_string(),
+            name: "Root".to_string(),
+            components: vec![crate::document::ComponentInstance {
+                type_id: "editor.Name".to_string(),
+                values: serde_json::json!({"name": "Root"}),
+            }],
+        }];
+        let mut doc = make_doc(entities);
+        doc.role = crate::scene_asset::SceneAssetRole::Logic;
+        let result = export_to_bsn_text(&doc);
+        assert!(matches!(
+            result,
+            Err(BsnExportError::UnsupportedShape(ref s)) if s.contains("logic")
+        ));
+    }
+
+    #[test]
+    fn actor_role_still_exports_successfully() {
+        // Regression: Actor role must still work (non_empty_doc_emits_bsn_block)
+        let entities = vec![SceneAssetEntity {
+            local_id: LocalId::new("root"),
+            local_path: "root".to_string(),
+            name: "Root".to_string(),
+            components: vec![crate::document::ComponentInstance {
+                type_id: "editor.Name".to_string(),
+                values: serde_json::json!({"name": "Root"}),
+            }],
+        }];
+        let doc = make_doc(entities);
+        let text = export_to_bsn_text(&doc).unwrap();
+        assert!(text.contains("bsn!{"));
+        assert!(text.contains("#root"));
+        assert!(text.contains("Name(\"Root\")"));
     }
 }

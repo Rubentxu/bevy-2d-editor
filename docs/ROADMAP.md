@@ -104,7 +104,7 @@
 | Collaborative editing | Project asset identity, validation, and save/load semantics are stable |
 | Plugin system | Schema packs and validation extension points have at least one built-in example |
 | Physical `.bsn` import/export | Bevy ships stable loader/write-back APIs |
-| Visual scripting/state machines | Scene Asset workflows and runtime preview inspection are mature |
+| Visual scripting/state machines | ✅ Gate passed — now active as Logic Bricks (see Post-Hito 3 section + ADR-0011) |
 
 ---
 
@@ -127,6 +127,70 @@
 |------------|------------------------------------------|
 | .bsn file import | ✅ Research done (Bevy PRs #23639/#23648 are DRAFT — implement editor-internal round-trip) |
 | Level Inspector | Unity override inspector, Godot inspector plugin patterns, override panel UX research |
+
+---
+
+## Post-Hito 3: Logic Bricks / Behavior Authoring
+
+**Goal**: Add a visual Logic Bricks system to wire common 2D gameplay (jump,
+collision response, health/damage, timers, proximity) without leaving the
+editor — **without** a Blueprint-style scripting VM. Behavior is Rust-compiled,
+trait-backed controllers evaluated by an event-driven dispatch scheduler.
+
+**Normative references**:
+
+- [ADR-0011: Logic Bricks — Compiled Rust Controllers and Dispatch Scheduler](./adr/0011-logic-bricks-compiled-rust-controllers.md)
+- [Logic Bricks Graph Editor Specification](./specs/logic-bricks-graph-editor.md)
+
+**Planning provenance**:
+
+- `sddk/logic-bricks-graph-editor/explore-report.md`
+- `sddk/logic-bricks-graph-editor/proposal.md`
+- `sddk/logic-bricks-graph-editor/spec.md`
+- `sddk/logic-bricks-graph-editor/design.md`
+
+### Binding Decisions (ADR-0011)
+
+| Decision | Resolution |
+|----------|------------|
+| Scripting model | Logic Bricks (Sensor → Controller → Actuator), not Blueprint VM |
+| Extension | Compiled `RustController` trait registry (`NodeEvaluator`); v1 = built-in only |
+| Runtime | Event/change-driven dispatch scheduler in editor-core; codegen deferred |
+| React Flow | View-only; WASM JSON is source of truth |
+| BSN | Logic does NOT project to `.bsn`; `BsnExporter` rejects `Logic`-role assets |
+| Preview state | Stateless across rebuilds (v1) |
+
+### Current Step — Docs-First (research / spec / ADR / design)
+
+| Item | Status | Artifact |
+|------|--------|----------|
+| Exploration | ✅ DONE | `sddk/logic-bricks-graph-editor/explore-report.md` |
+| Proposal | ✅ DONE | `sddk/logic-bricks-graph-editor/proposal.md` |
+| ADR-0011 | ✅ DONE | `docs/adr/0011-logic-bricks-compiled-rust-controllers.md` |
+| Design | ✅ DONE | `sddk/logic-bricks-graph-editor/design.md` |
+| Capability specs | ✅ DONE | `sddk/logic-bricks-graph-editor/spec.md` + `docs/specs/logic-bricks-graph-editor.md` |
+| CONTEXT.md terms | ✅ DONE | Logic Bricks domain language added |
+
+### Planned Implementation Sequence
+
+| Order | Change | Why this order |
+|-------|--------|----------------|
+| 1 | `logic-graph-data-model` | ✅ DONE (v0.37.0, PR #38) — `LogicGraphAsset`, `LogicNode`, `LogicEdge`, `SceneAssetRole::Logic`, `LogicInstance`. Foundation: everything depends on the data shape. |
+| 2 | `logic-registry-and-metadata` | `NodeEvaluator` trait + built-in registry keyed by `node_type_id` / `controller_id`, `logic.*` schemas, port specs. Needed before any node can do anything. |
+| 3 | `logic-graph-authoring-ui` | React Flow view-only `LogicGraphEditor.tsx`, `EditorMode="logic"`, `LogicCommand` surface, node palette. Authoring needs data model + registry. |
+| 4 | `logic-graph-validation` | Port-type compatibility, cycle/dangling-ref detection via existing `get_validation_issues_wasm`. Surfaces issues before preview. |
+| 5 | `logic-preview-dispatch-scheduler` | `project_logic_instances()`, `LogicSchedule` system set, fix `spawn_preview_entity` skip-arm (lib.rs:1666), event-driven graph evaluation with a cheap Update gate. |
+| 6 | `logic-bricks-2d-recipes` | Curated built-in `LogicGraphAsset` recipes (`platformer_jump`, `health_damage`, `proximity_trigger`) reused via `LogicInstance`. |
+| 7 | `rustcontroller-builtins` | Compiled built-in `RustController` impls for non-graph extension points. |
+| 8 | (Deferred) `logic-graph-codegen` | Optional graph → Rust source export via `code_export.rs` pattern. Not required for v1. |
+
+### Research Gates
+
+| Capability | Required research before implementation |
+|------------|------------------------------------------|
+| Logic Bricks architecture | ADR-0011 ✅ (this docs-first step) |
+| Node evaluation scheduling | Bevy ECS `Changed`/`Added`/event patterns; Chronos future debugging for evaluation traces |
+| React Flow integration | `@xyflow/react` controlled-component patterns; view-only enforcement |
 
 ---
 
@@ -307,6 +371,7 @@ Validation Center UI + WASM Surface (validation-center)                         
 | ADR-0008 | Path-based Scene Asset OPFS layout (`assets/<logical_path>.asset.json` + catalog inside `ProjectMetadata.scene_assets` with `#[serde(default)]`, body-first/catalog-second save order) | ✅ |
 | ADR-0009 | ComponentOverride as ECS/BSN-friendly replacement for OverridePatch (explicit `component_type_id`, field_path semantic) | ✅ |
 | ADR-0010 | BsnExporter trait + EditorCoreBsnExporter as working impl; BevyBsnExporter placeholder for future Bevy PR #23639 swap | ✅ |
+| ADR-0011 | Logic Bricks — compiled Rust controllers + dispatch scheduler (no scripting VM, no codegen in v1, BSN isolation) | ✅ |
 
 ---
 

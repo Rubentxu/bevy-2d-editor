@@ -31,6 +31,10 @@ frontend/.vite/
 # OpenCode internal artifacts (skill registry cache, not project content)
 .atl/
 
+# SDDK local working artifacts (ADR-0022 local-only policy)
+sddk/
+openspec/
+
 # Playwright outputs
 frontend/test-results/
 frontend/playwright-report/

@@ -30,6 +30,7 @@ mod scenes;
 pub mod schema;
 pub mod tileset;
 pub mod tile_layer;
+pub mod logic_graph;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ADR References (documentation only — no code changes here)
@@ -112,6 +113,11 @@ pub use scene_asset::{
     AssetReference, ExposedProperty, LayerId, LevelLayer, LocalId, RelationshipKind, RoleWarning,
     SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata, SceneAssetRelationship,
     SceneAssetRole, SceneInstanceLayer, SceneInstanceLayerKind, validate_role,
+};
+pub use logic_graph::{
+    count_logic_bindings, editor_logic_binding_component, find_dangling_edge_nodes,
+    find_duplicate_node_id, LogicEdge, LogicGraphAsset, LogicInstance, LogicNode,
+    LogicNodeRole, NodeId, NodeTypeId, PortId,
 };
 pub use auto_layer::{
     AutoLayer, AutoLayerId, AutoRule, Pattern3x3, PatternCell, is_auto_layer_stale, regenerate,

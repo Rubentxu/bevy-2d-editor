@@ -128,6 +128,40 @@ _Avoid_: source of truth, primary scene model
 The process of converting a `SceneAssetDocument` into raw `.bsn` text via the `BsnExporter` trait. The output is `.bsn`-native syntax (no Rust `commands.spawn_scene_list(...)` wrapper, no `bsn_list![...]` macro, no Rust tuple commas in `Children`). The `EditorCoreBsnExporter` provides the working impl; when Bevy PR #23639 lands, a `BevyBsnExporter` swap-in will use Bevy's official writer. BSN Export is output-only in Hito 3; import (`.bsn` → `SceneAssetDocument`) is deferred.
 _Avoid_: DynamicScene export (different format), `.bsn` asset import, round-trip conversion in Hito 3
 
+## Logic Bricks (Behavior Authoring)
+
+**Logic Bricks**:
+The visual behavior authoring system for the Bevy 2D Editor. Users wire common 2D gameplay (jump, collision, health, timers, proximity) as node/edge graphs without leaving the editor and without a scripting VM. Behavior is evaluated by a compiled dispatch scheduler, not a dynamic script interpreter.
+_Avoid_: Blueprint (when referring to this editor's system), visual scripting VM, event graph, scripting language
+
+**LogicGraphAsset**:
+The editor-owned reusable behavior document, symmetric to `SceneAssetDocument` but carrying `nodes: Vec<LogicNode>` and `edges: Vec<LogicEdge>` instead of entities. Stored as stable JSON. Has `SceneAssetRole::Logic`. Reuses the Scene Asset relationship idea — opaque IDs, typed edges, validation, stable JSON — but exposes explicit `LogicEdge` records for wiring. It is NOT a Bevy runtime scene and is NOT exported to `.bsn`.
+_Avoid_: behavior tree, state machine asset, script file, logic component (when you mean the reusable asset)
+
+**LogicInstance**:
+A placed use of a `LogicGraphAsset` bound to exactly one Scene Instance in v1. Mirrors `SceneInstance` but binds behavior rather than scene composition. The binding references the target Scene Instance through editor-owned Stable IDs and is non-overridable in v1. Multi-entity addressing is future work and must not be implied by the term today.
+_Avoid_: logic binding (when you mean the placed instance), behavior instance, script instance
+
+**RustController**:
+A `LogicNode` kind that references a `controller_id` resolved at runtime to a compiled `NodeEvaluator` trait impl. This is the Rust-native compiled extension point — the Unity/C#-like escape hatch — with no scripting and no user-authored Rust snippets inside graph nodes. v1: built-in controllers compiled into the editor only.
+_Avoid_: script node, code node, dynamic controller, plugin controller (until the plugin system exists)
+
+**Pattern Block**:
+A curated, versioned `LogicGraphAsset` shipped as a built-in recipe for common 2D patterns (e.g. `recipes/platformer_jump`, `recipes/health_damage`). Reused via `LogicInstance` exactly like any user-authored graph. Also called a "Recipe".
+_Avoid_: macro, template graph, preset (when you mean a shipped built-in recipe)
+
+**Logic Evaluation Schedule**:
+The event/change-driven dispatch scheduler in `editor-core` that evaluates projected `LogicInstance` graphs in preview. Sensors emit events; controllers and actuators run only when their inputs changed. It never iterates every graph every frame and executes no user text — it dispatches compiled bricks, not a VM.
+_Avoid_: logic VM, script runtime, interpreter, evaluation loop (when you mean the scheduler)
+
+**Sensor / Controller / Actuator**:
+The three primary `LogicNode` roles in a Logic Bricks graph. **Sensor** nodes produce inputs (key press, collision, timer, health change, proximity). **Controller** nodes make decisions (if, gate, flip-flop, compare, math, sequence). **Actuator** nodes produce outputs (apply impulse, set animation, emit signal, spawn, destroy). Concrete behavior is selected by a `node_type_id`; the role only describes where the node sits in the Sensor → Controller → Actuator flow.
+_Avoid_: input node / output node (when the BGE-inspired three-role taxonomy applies)
+
+**LogicGraph**:
+The node/edge graph data structure inside a `LogicGraphAsset`. Distinct from the asset (which carries metadata, version, path) — the graph is the behavioral content.
+_Avoid_: logic map, node map, circuit
+
 ## Example Dialogue
 
 Dev: "For Hito 0, the SceneDocument stays as JSON and each Entity keeps its own stable ID."
