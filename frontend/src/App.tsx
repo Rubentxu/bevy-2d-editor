@@ -36,6 +36,7 @@ export default function App() {
   const logState = useLogState();
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [validationCenterOpen, setValidationCenterOpen] = useState(false);
+  const [tilesetPanelOpen, setTilesetPanelOpen] = useState(false);
   const [exportRustOpen, setExportRustOpen] = useState(false);
   const [applyingIds, setApplyingIds] = useState<Set<string>>(new Set());
   const { scenes, currentId, refresh: refreshScenes } = useScenes();
@@ -88,6 +89,10 @@ export default function App() {
 
   const handleToggleValidationCenter = useCallback(() => {
     setValidationCenterOpen((prev) => !prev);
+  }, []);
+
+  const handleToggleTileset = useCallback(() => {
+    setTilesetPanelOpen((prev) => !prev);
   }, []);
 
   const handleSubmitAI = useCallback(async () => {
@@ -428,6 +433,8 @@ export default function App() {
         aiPanelOpen={aiPanelOpen}
         onToggleValidationCenter={handleToggleValidationCenter}
         validationCenterOpen={validationCenterOpen}
+        onToggleTileset={handleToggleTileset}
+        tilesetPanelOpen={tilesetPanelOpen}
         error={error || initError}
         onDismissError={() => setError(null)}
       />

@@ -228,12 +228,16 @@ fn s7_scene_asset_document_with_layers_roundtrip() {
 
     assert_eq!(roundtripped, doc);
     assert_eq!(roundtripped.layers.len(), 1);
-    let LevelLayer::SceneInstance(layer) = &roundtripped.layers[0];
-    assert_eq!(layer.id.as_str(), "lyr_1");
-    assert_eq!(layer.name, "Enemies");
-    assert_eq!(layer.kind, SceneInstanceLayerKind::Actors);
-    assert_eq!(layer.order, 0);
-    assert_eq!(layer.instances.len(), 1);
+    match &roundtripped.layers[0] {
+        LevelLayer::SceneInstance(layer) => {
+            assert_eq!(layer.id.as_str(), "lyr_1");
+            assert_eq!(layer.name, "Enemies");
+            assert_eq!(layer.kind, SceneInstanceLayerKind::Actors);
+            assert_eq!(layer.order, 0);
+            assert_eq!(layer.instances.len(), 1);
+        }
+        LevelLayer::Tile(_) => panic!("Expected SceneInstance layer, got Tile"),
+    }
 }
 
 /// S8: Legacy documents without `layers` deserialize cleanly (serde default).

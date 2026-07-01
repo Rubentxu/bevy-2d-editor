@@ -9,12 +9,9 @@
 
 use crate::command::{Command, CommandError};
 use crate::document::{ComponentInstance, Entity, SceneDocument, StableId};
-use crate::scene_asset::{AssetReference, LevelLayer};
+use crate::scene_asset::LevelLayer;
 use crate::scene_instance::SceneInstance;
 use crate::scene_instance_overrides::{resync, upsert_override, remove_override};
-use crate::schema::global_registry;
-use crate::tileset::{TileCoord, TileRef};
-use crate::tile_layer::TileLayerId;
 
 /// Find an entity by id and return a mutable reference.
 fn find_entity_mut<'a>(
@@ -206,38 +203,6 @@ pub fn validate(doc: &SceneDocument, cmd: &Command) -> Result<(), CommandError> 
             // Instance must exist
             if !doc.instances.contains_key(instance_id) {
                 return Err(CommandError::InstanceNotFound(instance_id.clone()));
-            }
-        }
-        Command::PaintTile { asset_ref, layer_id, .. } => {
-            // Asset must exist in cache
-            let mut doc_opt: Option<crate::scene_asset::SceneAssetDocument> = None;
-            crate::with_asset_body_cache(|cache| {
-                doc_opt = cache.get(asset_ref.as_str()).cloned();
-            });
-            if doc_opt.is_none() {
-                return Err(CommandError::Other("Scene asset not found".into()));
-            }
-            // Layer must exist and be a TileLayer
-            if let Some(doc) = doc_opt {
-                if !doc.layers.iter().any(|l| matches!(l, LevelLayer::Tile(tl) if tl.id == *layer_id)) {
-                    return Err(CommandError::Other("TileLayer not found".into()));
-                }
-            }
-        }
-        Command::EraseTile { asset_ref, layer_id, .. } => {
-            // Asset must exist in cache
-            let mut doc_opt: Option<crate::scene_asset::SceneAssetDocument> = None;
-            crate::with_asset_body_cache(|cache| {
-                doc_opt = cache.get(asset_ref.as_str()).cloned();
-            });
-            if doc_opt.is_none() {
-                return Err(CommandError::Other("Scene asset not found".into()));
-            }
-            // Layer must exist and be a TileLayer
-            if let Some(doc) = doc_opt {
-                if !doc.layers.iter().any(|l| matches!(l, LevelLayer::Tile(tl) if tl.id == *layer_id)) {
-                    return Err(CommandError::Other("TileLayer not found".into()));
-                }
             }
         }
     }
@@ -570,86 +535,6 @@ pub fn apply(doc: &mut SceneDocument, cmd: &Command) -> Result<Command, CommandE
                         field_path: field_path.clone(),
                     })
                 }
-            }
-        }
-        Command::PaintTile {
-            asset_ref,
-            layer_id,
-            coord,
-            tile_ref,
-        } => {
-            // Find the Level Scene Asset document via asset_ref (logical_path)
-            let logical_path = asset_ref.as_str();
-            let mut doc_opt: Option<crate::scene_asset::SceneAssetDocument> = None;
-            crate::with_asset_body_cache(|cache| {
-                doc_opt = cache.get(logical_path).cloned();
-            });
-
-            let mut doc = doc_opt
-                .ok_or_else(|| CommandError::Other("Scene asset not found".into()))?;
-
-            // Find the TileLayer
-            let layer = doc.layers.iter_mut()
-                .find(|l| matches!(l, LevelLayer::Tile(tl) if tl.id == *layer_id))
-                .ok_or_else(|| CommandError::Other("TileLayer not found".into()))?;
-
-            match layer {
-                LevelLayer::Tile(tl) => {
-                    tl.paint_tile(coord.clone(), tile_ref.clone());
-                }
-                _ => return Err(CommandError::Other("Layer is not a TileLayer".into())),
-            }
-
-            // Update the cache with modified document
-            crate::with_asset_body_cache_mut(|cache| {
-                cache.insert(logical_path.to_string(), doc.clone());
-            });
-
-            // Inverse: EraseTile
-            let inverse = Command::EraseTile {
-                asset_ref: asset_ref.clone(),
-                layer_id: layer_id.clone(),
-                coord: coord.clone(),
-            };
-            Ok(inverse)
-        }
-        Command::EraseTile {
-            asset_ref,
-            layer_id,
-            coord,
-        } => {
-            let logical_path = asset_ref.as_str();
-            let mut doc_opt: Option<crate::scene_asset::SceneAssetDocument> = None;
-            crate::with_asset_body_cache(|cache| {
-                doc_opt = cache.get(logical_path).cloned();
-            });
-
-            let mut doc = doc_opt
-                .ok_or_else(|| CommandError::Other("Scene asset not found".into()))?;
-
-            let layer = doc.layers.iter_mut()
-                .find(|l| matches!(l, LevelLayer::Tile(tl) if tl.id == *layer_id))
-                .ok_or_else(|| CommandError::Other("TileLayer not found".into()))?;
-
-            match layer {
-                LevelLayer::Tile(tl) => {
-                    let erased = tl.erase_tile(&coord)
-                        .ok_or_else(|| CommandError::Other("No tile to erase".into()))?;
-
-                    // Update the cache
-                    crate::with_asset_body_cache_mut(|cache| {
-                        cache.insert(logical_path.to_string(), doc.clone());
-                    });
-
-                    let inverse = Command::PaintTile {
-                        asset_ref: asset_ref.clone(),
-                        layer_id: layer_id.clone(),
-                        coord: coord.clone(),
-                        tile_ref: erased,
-                    };
-                    Ok(inverse)
-                }
-                _ => Err(CommandError::Other("Layer is not a TileLayer".into())),
             }
         }
     }
