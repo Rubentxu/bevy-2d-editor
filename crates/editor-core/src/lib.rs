@@ -3118,8 +3118,13 @@ pub fn paint_tile(
     // Update the cache with modified document
     // Note: does NOT call mark_dirty() — asset changes don't affect Bevy preview (lib.rs:2530)
     with_asset_body_cache_mut(|cache| {
-        cache.insert(asset_ref.to_string(), doc);
+        cache.insert(asset_ref.to_string(), doc.clone());
     });
+
+    // Sync to SCENE_ASSET_DOC so save_scene_asset (which reads SCENE_ASSET_DOC) persists the change
+    let doc_json = serde_json::to_string(&doc)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
+    set_asset_document_wasm(&doc_json)?;
 
     Ok(JsValue::NULL)
 }
@@ -3160,8 +3165,13 @@ pub fn erase_tile(
     // Update the cache with modified document
     // Note: does NOT call mark_dirty() — asset changes don't affect Bevy preview (lib.rs:2530)
     with_asset_body_cache_mut(|cache| {
-        cache.insert(asset_ref.to_string(), doc);
+        cache.insert(asset_ref.to_string(), doc.clone());
     });
+
+    // Sync to SCENE_ASSET_DOC so save_scene_asset (which reads SCENE_ASSET_DOC) persists the change
+    let doc_json = serde_json::to_string(&doc)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
+    set_asset_document_wasm(&doc_json)?;
 
     Ok(JsValue::NULL)
 }
