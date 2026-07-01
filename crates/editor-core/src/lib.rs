@@ -3076,6 +3076,110 @@ pub async fn list_tilesets() -> Result<String, JsValue> {
         .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
 }
 
+/// Paint a tile onto a TileLayer. Returns the inverse erase command JSON.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn paint_tile(
+    asset_ref: &str,
+    layer_id: &str,
+    x: i32,
+    y: i32,
+    tileset_id: &str,
+    local_index: u32,
+) -> Result<String, JsValue> {
+    let coord = TileCoord::new(x, y);
+    let tile_ref = TileRef {
+        tileset_id: tileset_id.to_string(),
+        local_index,
+    };
+
+    // Load the SceneAssetDocument from cache
+    let mut doc_opt: Option<SceneAssetDocument> = None;
+    with_asset_body_cache(|cache| {
+        doc_opt = cache.get(asset_ref).cloned();
+    });
+
+    let mut doc = doc_opt
+        .ok_or_else(|| JsValue::from_str("Scene asset not found"))?;
+
+    // Find the TileLayer
+    let layer = doc.layers.iter_mut()
+        .find(|l| matches!(l, LevelLayer::Tile(tl) if tl.id.as_str() == layer_id))
+        .ok_or_else(|| JsValue::from_str("TileLayer not found"))?;
+
+    match layer {
+        LevelLayer::Tile(tl) => {
+            tl.paint_tile(coord.clone(), tile_ref.clone());
+        }
+        _ => return Err(JsValue::from_str("Layer is not a TileLayer")),
+    }
+
+    // Update the cache with modified document
+    with_asset_body_cache_mut(|cache| {
+        cache.insert(asset_ref.to_string(), doc);
+    });
+
+    // Build inverse command JSON (EraseTile)
+    let inverse = Command::EraseTile {
+        asset_ref: AssetReference::new(asset_ref.to_string()),
+        layer_id: TileLayerId::new(layer_id.to_string()),
+        coord,
+    };
+
+    serde_json::to_string(&inverse)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+}
+
+/// Erase a tile from a TileLayer. Returns the inverse paint command JSON with the erased tile.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn erase_tile(
+    asset_ref: &str,
+    layer_id: &str,
+    x: i32,
+    y: i32,
+) -> Result<String, JsValue> {
+    let coord = TileCoord::new(x, y);
+
+    // Load the SceneAssetDocument from cache
+    let mut doc_opt: Option<SceneAssetDocument> = None;
+    with_asset_body_cache(|cache| {
+        doc_opt = cache.get(asset_ref).cloned();
+    });
+
+    let mut doc = doc_opt
+        .ok_or_else(|| JsValue::from_str("Scene asset not found"))?;
+
+    // Find the TileLayer
+    let layer = doc.layers.iter_mut()
+        .find(|l| matches!(l, LevelLayer::Tile(tl) if tl.id.as_str() == layer_id))
+        .ok_or_else(|| JsValue::from_str("TileLayer not found"))?;
+
+    match layer {
+        LevelLayer::Tile(tl) => {
+            let erased = tl.erase_tile(&coord)
+                .ok_or_else(|| JsValue::from_str("No tile to erase"))?;
+
+            // Update the cache
+            with_asset_body_cache_mut(|cache| {
+                cache.insert(asset_ref.to_string(), doc);
+            });
+
+            // Build inverse command JSON (PaintTile with erased tile_ref)
+            let inverse = Command::PaintTile {
+                asset_ref: AssetReference::new(asset_ref.to_string()),
+                layer_id: TileLayerId::new(layer_id.to_string()),
+                coord: coord.clone(),
+                tile_ref: erased,
+            };
+
+            serde_json::to_string(&inverse)
+                .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+        }
+        _ => Err(JsValue::from_str("Layer is not a TileLayer")),
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper functions
 // ─────────────────────────────────────────────────────────────────────────────

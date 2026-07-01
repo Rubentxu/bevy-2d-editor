@@ -120,6 +120,25 @@ pub enum Command {
         component_type_id: crate::schema::ComponentTypeId,
         field_path: Vec<String>,
     },
+    /// Paint a tile onto a TileLayer in a Level Scene Asset.
+    /// Inverse is EraseTile with the same coordinate.
+    PaintTile {
+        /// The parent Scene Asset document (Level) that owns the TileLayer.
+        asset_ref: AssetReference,
+        /// ID of the TileLayer inside the asset.
+        layer_id: crate::tile_layer::TileLayerId,
+        /// Grid coordinate to paint.
+        coord: crate::tileset::TileCoord,
+        /// The tile reference to paint.
+        tile_ref: crate::tileset::TileRef,
+    },
+    /// Erase a tile from a TileLayer in a Level Scene Asset.
+    /// Inverse is PaintTile restoring the captured tile_ref.
+    EraseTile {
+        asset_ref: AssetReference,
+        layer_id: crate::tile_layer::TileLayerId,
+        coord: crate::tileset::TileCoord,
+    },
 }
 
 /// Metadata attached to each command for future agent auditing (Hito 0 §6.4).
@@ -204,6 +223,10 @@ pub enum CommandError {
     /// Instance not found in SceneDocument.instances.
     #[error("Instance not found: {0}")]
     InstanceNotFound(StableId),
+
+    /// Generic error for tile operations and other cases.
+    #[error("{0}")]
+    Other(String),
 }
 
 impl From<serde_json::Error> for CommandError {
