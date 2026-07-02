@@ -209,15 +209,31 @@ pub fn register_logic_graph(asset: LogicGraphAsset) {
         let mut reg = cell.borrow_mut();
         if reg.is_none() {
             *reg = Some(HashMap::new());
+            // Lazy seed: populate with built-in recipes on first write access.
+            drop(reg);
+            crate::logic_recipes::seed_builtin_recipes();
+            LOGIC_GRAPH_REGISTRY.with(|cell| {
+                let mut reg = cell.borrow_mut();
+                reg.as_mut().unwrap().insert(asset.asset_id.clone(), asset);
+            });
+        } else {
+            reg.as_mut().unwrap().insert(asset.asset_id.clone(), asset);
         }
-        reg.as_mut().unwrap().insert(asset.asset_id.clone(), asset);
     });
 }
 
 /// Get a LogicGraphAsset by asset_id from the in-memory registry.
+/// Seeds built-in recipes on first read access if registry is uninitialized.
 pub fn get_logic_graph_asset(asset_id: &str) -> Option<LogicGraphAsset> {
     LOGIC_GRAPH_REGISTRY.with(|cell| {
-        cell.borrow().as_ref()?.get(asset_id).cloned()
+        let reg = cell.borrow();
+        if reg.is_none() {
+            drop(reg);
+            // Lazy seed on first read — must not hold the borrow while seeding
+            crate::logic_recipes::seed_builtin_recipes();
+            return cell.borrow().as_ref()?.get(asset_id).cloned();
+        }
+        reg.as_ref()?.get(asset_id).cloned()
     })
 }
 
