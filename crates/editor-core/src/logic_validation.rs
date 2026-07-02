@@ -379,6 +379,7 @@ mod tests {
             version: 1,
             nodes,
             edges,
+            ..Default::default()
         }
     }
 

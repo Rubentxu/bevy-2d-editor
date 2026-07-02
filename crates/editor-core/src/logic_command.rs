@@ -98,6 +98,10 @@ pub enum LogicCommandError {
 
     #[error("JSON error: {0}")]
     JsonError(String),
+
+    /// Returned when a mutation is attempted on a built-in immutable recipe.
+    #[error("built-in recipe '{0}' is immutable and cannot be modified")]
+    RecipeImmutable(String),
 }
 
 impl From<serde_json::Error> for LogicCommandError {
@@ -168,6 +172,12 @@ pub fn apply(
     doc: &mut LogicGraphAsset,
     cmd: &LogicCommand,
 ) -> Result<LogicCommand, LogicCommandError> {
+    // Immutability guard: reject any mutation on a built-in recipe.
+    // This mirrors the `is_builtin_type` + `CannotRegisterBuiltin` pattern in schema.rs.
+    if doc.builtin {
+        return Err(LogicCommandError::RecipeImmutable(doc.asset_id.clone()));
+    }
+
     match cmd {
         LogicCommand::AddNode {
             node_id,
@@ -452,8 +462,7 @@ mod tests {
             asset_id: "test_graph".to_string(),
             logical_path: "logic/test".to_string(),
             version: 1,
-            nodes: vec![],
-            edges: vec![],
+            ..Default::default()
         }
     }
 
@@ -944,5 +953,109 @@ mod tests {
         assert!(log.can_undo());
         assert!(!log.can_redo());
         assert_eq!(doc.nodes.len(), 1);
+    }
+
+    // ── RecipeImmutable guard tests ─────────────────────────────────────────
+
+    fn builtin_graph() -> LogicGraphAsset {
+        LogicGraphAsset {
+            asset_id: "lga_recipe_jump".to_string(),
+            logical_path: "recipes/platformer_jump".to_string(),
+            version: 1,
+            builtin: true,
+            nodes: vec![LogicNode {
+                node_id: NodeId::new("sensor_1"),
+                role: LogicNodeRole::Sensor,
+                node_type_id: NodeTypeId::new("sensor.key_pressed"),
+                field_values: serde_json::json!({}),
+                controller_id: None,
+            }],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn add_node_rejected_on_builtin() {
+        let mut doc = builtin_graph();
+        let cmd = LogicCommand::AddNode {
+            node_id: NodeId::new("node_new"),
+            role: LogicNodeRole::Actuator,
+            node_type_id: NodeTypeId::new("actuator.jump"),
+            field_values: serde_json::json!({}),
+            controller_id: None,
+        };
+        let result = apply(&mut doc, &cmd);
+        assert!(matches!(result, Err(LogicCommandError::RecipeImmutable(_))));
+    }
+
+    #[test]
+    fn remove_node_rejected_on_builtin() {
+        let mut doc = builtin_graph();
+        let cmd = LogicCommand::RemoveNode {
+            node_id: NodeId::new("sensor_1"),
+        };
+        let result = apply(&mut doc, &cmd);
+        assert!(matches!(result, Err(LogicCommandError::RecipeImmutable(_))));
+    }
+
+    #[test]
+    fn connect_ports_rejected_on_builtin() {
+        let mut doc = builtin_graph();
+        let cmd = LogicCommand::ConnectPorts {
+            from_node: NodeId::new("sensor_1"),
+            from_port: PortId::new("out"),
+            to_node: NodeId::new("node_new"),
+            to_port: PortId::new("in"),
+        };
+        let result = apply(&mut doc, &cmd);
+        assert!(matches!(result, Err(LogicCommandError::RecipeImmutable(_))));
+    }
+
+    #[test]
+    fn disconnect_ports_rejected_on_builtin() {
+        let mut doc = builtin_graph();
+        // No edge exists, but we should hit the builtin guard before the edge check
+        let cmd = LogicCommand::DisconnectPorts {
+            from_node: NodeId::new("sensor_1"),
+            from_port: PortId::new("out"),
+            to_node: NodeId::new("node_unknown"),
+            to_port: PortId::new("in"),
+        };
+        let result = apply(&mut doc, &cmd);
+        assert!(matches!(result, Err(LogicCommandError::RecipeImmutable(_))));
+    }
+
+    #[test]
+    fn set_node_field_rejected_on_builtin() {
+        let mut doc = builtin_graph();
+        let cmd = LogicCommand::SetNodeField {
+            node_id: NodeId::new("sensor_1"),
+            field_path: vec!["key".to_string()],
+            value: serde_json::json!("Space"),
+        };
+        let result = apply(&mut doc, &cmd);
+        assert!(matches!(result, Err(LogicCommandError::RecipeImmutable(_))));
+    }
+
+    #[test]
+    fn batch_rollback_on_builtin() {
+        let mut doc = builtin_graph();
+        let cmd = LogicCommand::Batch {
+            label: "try mutating builtin".to_string(),
+            commands: vec![
+                LogicCommand::AddNode {
+                    node_id: NodeId::new("node_new"),
+                    role: LogicNodeRole::Actuator,
+                    node_type_id: NodeTypeId::new("actuator.jump"),
+                    field_values: serde_json::json!({}),
+                    controller_id: None,
+                },
+            ],
+        };
+        let result = apply(&mut doc, &cmd);
+        assert!(matches!(result, Err(LogicCommandError::RecipeImmutable(_))));
+        // Batch is atomic — document must be unchanged
+        assert_eq!(doc.nodes.len(), 1);
+        assert_eq!(doc.nodes[0].node_id.as_str(), "sensor_1");
     }
 }
