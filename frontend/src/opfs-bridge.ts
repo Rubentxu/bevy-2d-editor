@@ -8,11 +8,7 @@
 
 const OPFS_ROOT_NAME = "bevy-2d-editor";
 
-interface OpfsResult<T = void> {
-  ok: boolean;
-  value?: T;
-  error?: string;
-}
+import type { OpfsResult } from "./types/opfs";
 
 async function getRoot(): Promise<FileSystemDirectoryHandle | null> {
   if (!navigator.storage?.getDirectory) {
