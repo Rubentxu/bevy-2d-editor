@@ -181,7 +181,7 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 | 4 | `logic-graph-validation` | ✅ DONE — Port-type compatibility, cycle/dangling-ref detection via existing `get_validation_issues_wasm`. Surfaces issues before preview. |
 | 5 | `logic-preview-dispatch-scheduler` | ✅ DONE (v0.40.1, PR #41 + fix PR #42) — `ACTUATOR_OUTPUT_BUS` + `evaluate_logic_binding` + topological sort + `apply_actuator_outputs` system + WASM exports + 11 integration tests (352 tests pass). Event-driven dispatch scheduler in Bevy Update loop. |
 | 6 | `logic-bricks-2d-recipes` | ✅ DONE (v0.41.0, PR #42+PR #43) — Built-in immutable recipes: `builtin: bool` field + `RecipeImmutable` guard at `LogicCommand::apply` chokepoint + `logic_recipes.rs` module + `platformer_jump`/`health_damage`/`proximity_trigger` JSON assets + `list_builtin_recipes_wasm` export + lazy seed into `LOGIC_GRAPH_REGISTRY`. |
-| 7 | `rustcontroller-builtins` | Compiled built-in `RustController` impls for non-graph extension points. |
+| 7 | `rustcontroller-builtins` | ✅ DONE (v0.42.0, PR #44) — 7 NodeEvaluator structs for recipe node types: KeyPressed, Gate, ApplyImpulse, Collision, Compare, ModifyHealth, Proximity, EmitSignal. Thread-local sensor state (KEYBOARD_STATE, COLLISION_STATE, PROXIMITY_STATE). Type-chain fixes for Action/Float/Bool propagation. |
 | 8 | (Deferred) `logic-graph-codegen` | Optional graph → Rust source export via `code_export.rs` pattern. Not required for v1. |
 
 ### Research Gates
