@@ -6,11 +6,14 @@
 //! All tests follow Strict TDD: RED → GREEN → TRIANGULATE → REFACTOR.
 
 use crate::logic_graph::{LogicEdge, LogicGraphAsset, LogicNode, LogicNodeRole, NodeId, NodeTypeId, PortId};
-use crate::actuator_bus::{submit_actuator_output, drain_actuator_outputs};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::OnceLock;
+
+// WASM bindings — only compiled on wasm32 target
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::JsValue;
 
 /// Typed value boundary for logic evaluator ports.
 /// NO `serde_json::Value` inside — this is the strict contract.
@@ -408,7 +411,7 @@ fn store_output_values(
 /// For now, we use a simplified mapping: actuator output value is submitted
 /// with a field name derived from the node's node_type_id (e.g., "jump" → "jump").
 /// The entity_bits are set to 0 for now (entity routing comes in PR2).
-fn submit_actuator_outputs_from_node(node: &LogicNode, outputs: &[PortValue]) {
+fn submit_actuator_outputs_from_node(_node: &LogicNode, outputs: &[PortValue]) {
     use bevy::prelude::Entity;
     use crate::actuator_bus::submit_actuator_output;
 
@@ -552,6 +555,68 @@ struct AlwaysEvaluator;
 impl NodeEvaluator for AlwaysEvaluator {
     fn evaluate(&self, _node: &LogicNode, _inputs: &[PortValue]) -> Vec<PortValue> {
         vec![PortValue::Bool(true)]
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 4: WASM exports (wasm32 only)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Register a LogicGraphAsset from JSON in the in-memory registry.
+/// Called from JS side after loading a .logic asset.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn register_logic_graph_wasm(asset_id: &str, version: u32, graph_json: &str) -> Result<(), JsValue> {
+    // Deserialize from JSON
+    let asset: LogicGraphAsset = serde_wasm_bindgen::from_str(graph_json)
+        .map_err(|e| JsValue::from_str(&format!("failed to parse graph JSON: {}", e)))?;
+
+    // Verify the asset_id matches (defensive)
+    if asset.asset_id != asset_id {
+        return Err(JsValue::from_str(&format!(
+            "asset_id mismatch: expected '{}', got '{}'",
+            asset_id, asset.asset_id
+        )));
+    }
+
+    // Version check
+    if asset.version != version {
+        return Err(JsValue::from_str(&format!(
+            "version mismatch: expected {}, got {}",
+            version, asset.version
+        )));
+    }
+
+    register_logic_graph(asset);
+    Ok(())
+}
+
+/// Evaluate a logic binding by asset_id and version.
+/// Submits ActuatorOutputs to the ACTUATOR_OUTPUT_BUS for the Bevy system to apply.
+/// Returns Ok(()) on success; missing asset is logged and returns Ok(()).
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn evaluate_logic_binding_wasm(_stable_id: u32, asset_id: &str, version: u32) -> Result<(), JsValue> {
+    // Evaluate the binding — this populates the ACTUATOR_OUTPUT_BUS via actuator nodes.
+    // The entity_bits for actuator outputs are set by the dispatch layer in logic_dispatch.rs.
+    match evaluate_logic_binding(asset_id, version) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            // AssetNotFound is logged but does not crash — iteration continues per spec
+            match &e {
+                LogicError::AssetNotFound(_) => {
+                    web_sys::console::warn_1(&JsValue::from_str(&format!(
+                        "evaluate_logic_binding_wasm: asset not found '{}'",
+                        asset_id
+                    )));
+                    Ok(()) // Per spec: iteration continues
+                }
+                _ => Err(JsValue::from_str(&format!(
+                    "evaluation error for '{}': {}",
+                    asset_id, e
+                ))),
+            }
+        }
     }
 }
 
@@ -961,5 +1026,383 @@ mod registry_tests {
         let registry = global_node_registry();
         let result = registry.get_evaluator(&NodeTypeId::new("controller.if"));
         assert!(result.is_some());
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 4 integration tests — actuator bus + graph evaluation
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod integration_tests {
+    use super::*;
+    use crate::actuator_bus::{submit_actuator_output, drain_actuator_outputs, ActuatorOutput};
+    use crate::logic_graph::{LogicEdge, LogicGraphAsset, LogicNode, LogicNodeRole, NodeId, NodeTypeId, PortId};
+
+    // §T1: ActuatorOutput serializes/deserializes correctly
+    #[test]
+    fn test_actuator_output_serde() {
+        let output = ActuatorOutput {
+            entity_bits: 42,
+            field: "translation".to_string(),
+            value: PortValue::Vec2 { x: 1.0, y: 2.0 },
+        };
+        let json = serde_json::to_string(&output).unwrap();
+        let parsed: ActuatorOutput = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.entity_bits, 42);
+        assert_eq!(parsed.field, "translation");
+        assert_eq!(parsed.value, PortValue::Vec2 { x: 1.0, y: 2.0 });
+    }
+
+    // §T2: ActuatorOutput serde roundtrip with all PortValue variants
+    #[test]
+    fn test_actuator_output_serde_all_variants() {
+        for value in [
+            PortValue::Bool(true),
+            PortValue::Float(3.14),
+            PortValue::Vec2 { x: 1.0, y: 2.0 },
+            PortValue::EntityRef("player".to_string()),
+            PortValue::Action("jump".to_string()),
+        ] {
+            let output = ActuatorOutput {
+                entity_bits: 99,
+                field: "test_field".to_string(),
+                value: value.clone(),
+            };
+            let json = serde_json::to_string(&output).unwrap();
+            let parsed: ActuatorOutput = serde_json::from_str(&json).unwrap();
+            assert_eq!(parsed.value, value);
+        }
+    }
+
+    // §T3: Bus push/drain roundtrip
+    #[test]
+    fn test_submit_and_drain() {
+        // Drain any pre-existing entries first
+        let _ = drain_actuator_outputs();
+
+        // Submit two outputs
+        let entity = bevy::prelude::Entity::from_bits(123);
+        submit_actuator_output(entity, "x", PortValue::Float(1.0));
+        submit_actuator_output(entity, "y", PortValue::Float(2.0));
+
+        // Drain and verify
+        let outputs = drain_actuator_outputs();
+        assert_eq!(outputs.len(), 2);
+        assert_eq!(outputs[0].entity_bits, 123);
+        assert_eq!(outputs[0].field, "x");
+        assert_eq!(outputs[0].value, PortValue::Float(1.0));
+        assert_eq!(outputs[1].field, "y");
+        assert_eq!(outputs[1].value, PortValue::Float(2.0));
+
+        // Bus should be empty after drain
+        let outputs = drain_actuator_outputs();
+        assert!(outputs.is_empty());
+    }
+
+    // §T4: evaluate_logic_binding with missing asset returns AssetNotFound
+    #[test]
+    fn test_evaluate_logic_binding_missing_asset() {
+        let result = evaluate_logic_binding("nonexistent.asset", 1);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, LogicError::AssetNotFound(id) if id == "nonexistent.asset"));
+    }
+
+    // §T5: Topological sort — 3-node linear chain
+    #[test]
+    fn test_topological_sort_simple() {
+        let nodes = vec![
+            LogicNode {
+                node_id: NodeId::new("sensor"),
+                role: LogicNodeRole::Sensor,
+                node_type_id: NodeTypeId::new("sensor.always"),
+                field_values: serde_json::json!({}),
+                controller_id: None,
+            },
+            LogicNode {
+                node_id: NodeId::new("controller"),
+                role: LogicNodeRole::Controller,
+                node_type_id: NodeTypeId::new("controller.if"),
+                field_values: serde_json::json!({}),
+                controller_id: None,
+            },
+            LogicNode {
+                node_id: NodeId::new("actuator"),
+                role: LogicNodeRole::Actuator,
+                node_type_id: NodeTypeId::new("actuator.translate"),
+                field_values: serde_json::json!({}),
+                controller_id: None,
+            },
+        ];
+
+        // Edges: sensor → controller → actuator (via tick port connections)
+        let edges = vec![
+            LogicEdge {
+                from_node: NodeId::new("sensor"),
+                from_port: PortId::new("tick"),
+                to_node: NodeId::new("controller"),
+                to_port: PortId::new("condition"),
+            },
+            LogicEdge {
+                from_node: NodeId::new("controller"),
+                from_port: PortId::new("done"),
+                to_node: NodeId::new("actuator"),
+                to_port: PortId::new("trigger"),
+            },
+        ];
+
+        let order = topological_sort(&nodes, &edges);
+        assert!(order.is_some());
+        let order = order.unwrap();
+        assert_eq!(order.len(), 3);
+        // sensor must come before controller
+        let sensor_idx = order.iter().position(|id| id.as_str() == "sensor").unwrap();
+        let controller_idx = order.iter().position(|id| id.as_str() == "controller").unwrap();
+        let actuator_idx = order.iter().position(|id| id.as_str() == "actuator").unwrap();
+        assert!(sensor_idx < controller_idx);
+        assert!(controller_idx < actuator_idx);
+    }
+
+    // §T6: Topological sort — diamond shape (both branches converge)
+    #[test]
+    fn test_topological_sort_diamond() {
+        let nodes = vec![
+            LogicNode {
+                node_id: NodeId::new("start"),
+                role: LogicNodeRole::Sensor,
+                node_type_id: NodeTypeId::new("sensor.always"),
+                field_values: serde_json::json!({}),
+                controller_id: None,
+            },
+            LogicNode {
+                node_id: NodeId::new("left"),
+                role: LogicNodeRole::Controller,
+                node_type_id: NodeTypeId::new("controller.if"),
+                field_values: serde_json::json!({}),
+                controller_id: None,
+            },
+            LogicNode {
+                node_id: NodeId::new("right"),
+                role: LogicNodeRole::Controller,
+                node_type_id: NodeTypeId::new("controller.and"),
+                field_values: serde_json::json!({}),
+                controller_id: None,
+            },
+            LogicNode {
+                node_id: NodeId::new("end"),
+                role: LogicNodeRole::Actuator,
+                node_type_id: NodeTypeId::new("actuator.translate"),
+                field_values: serde_json::json!({}),
+                controller_id: None,
+            },
+        ];
+
+        // Diamond edges: start → left → end, start → right → end
+        let edges = vec![
+            LogicEdge {
+                from_node: NodeId::new("start"),
+                from_port: PortId::new("tick"),
+                to_node: NodeId::new("left"),
+                to_port: PortId::new("condition"),
+            },
+            LogicEdge {
+                from_node: NodeId::new("start"),
+                from_port: PortId::new("tick"),
+                to_node: NodeId::new("right"),
+                to_port: PortId::new("a"),
+            },
+            LogicEdge {
+                from_node: NodeId::new("left"),
+                from_port: PortId::new("done"),
+                to_node: NodeId::new("end"),
+                to_port: PortId::new("trigger"),
+            },
+            LogicEdge {
+                from_node: NodeId::new("right"),
+                from_port: PortId::new("out"),
+                to_node: NodeId::new("end"),
+                to_port: PortId::new("trigger"),
+            },
+        ];
+
+        let order = topological_sort(&nodes, &edges);
+        assert!(order.is_some());
+        let order = order.unwrap();
+        assert_eq!(order.len(), 4);
+        // start must be before both left and right
+        let start_idx = order.iter().position(|id| id.as_str() == "start").unwrap();
+        let left_idx = order.iter().position(|id| id.as_str() == "left").unwrap();
+        let right_idx = order.iter().position(|id| id.as_str() == "right").unwrap();
+        let end_idx = order.iter().position(|id| id.as_str() == "end").unwrap();
+        assert!(start_idx < left_idx);
+        assert!(start_idx < right_idx);
+        assert!(left_idx < end_idx);
+        assert!(right_idx < end_idx);
+    }
+
+    // §T7: Topological sort — cycle detection returns None
+    #[test]
+    fn test_topological_sort_cycle() {
+        let nodes = vec![
+            LogicNode {
+                node_id: NodeId::new("a"),
+                role: LogicNodeRole::Controller,
+                node_type_id: NodeTypeId::new("controller.if"),
+                field_values: serde_json::json!({}),
+                controller_id: None,
+            },
+            LogicNode {
+                node_id: NodeId::new("b"),
+                role: LogicNodeRole::Controller,
+                node_type_id: NodeTypeId::new("controller.and"),
+                field_values: serde_json::json!({}),
+                controller_id: None,
+            },
+        ];
+
+        // Cycle: a → b → a
+        let edges = vec![
+            LogicEdge {
+                from_node: NodeId::new("a"),
+                from_port: PortId::new("done"),
+                to_node: NodeId::new("b"),
+                to_port: PortId::new("a"),
+            },
+            LogicEdge {
+                from_node: NodeId::new("b"),
+                from_port: PortId::new("out"),
+                to_node: NodeId::new("a"),
+                to_port: PortId::new("condition"),
+            },
+        ];
+
+        let order = topological_sort(&nodes, &edges);
+        assert!(order.is_none());
+    }
+
+    // §T8: evaluate_logic_binding — simple sensor → controller → actuator chain
+    #[test]
+    fn test_evaluate_logic_binding_simple_chain() {
+        use crate::actuator_bus::drain_actuator_outputs;
+
+        // Drain any pre-existing bus entries
+        let _ = drain_actuator_outputs();
+
+        // Build a minimal chain: sensor.always → controller.if → (no actuator registered)
+        let graph = LogicGraphAsset {
+            asset_id: "test/chain".to_string(),
+            logical_path: "test/chain".to_string(),
+            version: 1,
+            nodes: vec![
+                LogicNode {
+                    node_id: NodeId::new("sensor"),
+                    role: LogicNodeRole::Sensor,
+                    node_type_id: NodeTypeId::new("sensor.always"),
+                    field_values: serde_json::json!({}),
+                    controller_id: None,
+                },
+                LogicNode {
+                    node_id: NodeId::new("controller"),
+                    role: LogicNodeRole::Controller,
+                    node_type_id: NodeTypeId::new("controller.if"),
+                    field_values: serde_json::json!({}),
+                    controller_id: None,
+                },
+            ],
+            edges: vec![
+                LogicEdge {
+                    from_node: NodeId::new("sensor"),
+                    from_port: PortId::new("tick"),
+                    to_node: NodeId::new("controller"),
+                    to_port: PortId::new("condition"),
+                },
+            ],
+        };
+
+        register_logic_graph(graph);
+
+        let result = evaluate_logic_binding("test/chain", 1);
+        // Should succeed (actuator is not in this chain)
+        assert!(result.is_ok(), "expected ok, got {:?}", result);
+
+        // Clean up
+        let _ = drain_actuator_outputs();
+    }
+
+    // §T9: evaluate_logic_binding — version mismatch returns error
+    #[test]
+    fn test_evaluate_logic_binding_version_mismatch() {
+        let graph = LogicGraphAsset {
+            asset_id: "test/version".to_string(),
+            logical_path: "test/version".to_string(),
+            version: 5,
+            nodes: vec![
+                LogicNode {
+                    node_id: NodeId::new("sensor"),
+                    role: LogicNodeRole::Sensor,
+                    node_type_id: NodeTypeId::new("sensor.always"),
+                    field_values: serde_json::json!({}),
+                    controller_id: None,
+                },
+            ],
+            edges: vec![],
+        };
+
+        register_logic_graph(graph);
+
+        // Call with wrong version
+        let result = evaluate_logic_binding("test/version", 99);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            LogicError::VersionMismatch { asset_id, expected, actual } => {
+                assert_eq!(asset_id, "test/version");
+                assert_eq!(expected, 99);
+                assert_eq!(actual, 5);
+            }
+            e => panic!("expected VersionMismatch, got {:?}", e),
+        }
+    }
+
+    // §T10: register_logic_graph and get_logic_graph_asset roundtrip
+    #[test]
+    fn test_register_and_retrieve_graph() {
+        let graph = LogicGraphAsset {
+            asset_id: "test/retrieve".to_string(),
+            logical_path: "test/retrieve".to_string(),
+            version: 2,
+            nodes: vec![
+                LogicNode {
+                    node_id: NodeId::new("sensor"),
+                    role: LogicNodeRole::Sensor,
+                    node_type_id: NodeTypeId::new("sensor.always"),
+                    field_values: serde_json::json!({}),
+                    controller_id: None,
+                },
+            ],
+            edges: vec![],
+        };
+
+        register_logic_graph(graph.clone());
+
+        let retrieved = get_logic_graph_asset("test/retrieve");
+        assert!(retrieved.is_some());
+        let retrieved = retrieved.unwrap();
+        assert_eq!(retrieved.asset_id, "test/retrieve");
+        assert_eq!(retrieved.version, 2);
+    }
+
+    // §T11: submit and drain with entity bits preserved
+    #[test]
+    fn test_entity_bits_preserved_in_bus() {
+        let _ = drain_actuator_outputs();
+
+        let entity = bevy::prelude::Entity::from_bits(777);
+        submit_actuator_output(entity, "vx", PortValue::Float(10.0));
+
+        let outputs = drain_actuator_outputs();
+        assert_eq!(outputs.len(), 1);
+        assert_eq!(outputs[0].entity_bits, 777);
+        assert_eq!(outputs[0].field, "vx");
     }
 }
