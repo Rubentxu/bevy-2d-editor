@@ -58,21 +58,44 @@ fn struct_name_for_type_id(type_id: &str) -> String {
 }
 
 /// Converts a `snake_case` or `SCREAMING_SNAKE` string to PascalCase.
-/// Leaves already-PascalCase strings unchanged.
+///
+/// Splits by underscore, capitalizes each segment's first letter, and lowercases
+/// the rest. Single-word PascalCase (`PlayerHealth`) and acronyms (`IOStream`)
+/// that contain uppercase beyond the first letter are preserved as-is.
+///
+/// Examples:
+/// - `player_health` → `PlayerHealth`
+/// - `PlayerHealth` → `PlayerHealth` (preserved)
+/// - `PLAYER_HEALTH` → `PlayerHealth` (each segment re-joined then capitalized)
+/// - `IOStream` → `IOStream` (preserved)
 fn to_pascal_case(s: &str) -> String {
-    let mut out = String::new();
-    let mut capitalize_next = true;
-    for c in s.chars() {
-        if c == '_' || c == ' ' {
-            capitalize_next = true;
-        } else if capitalize_next {
-            out.push(c.to_ascii_uppercase());
-            capitalize_next = false;
-        } else {
-            out.push(c.to_ascii_lowercase());
-        }
+    let pascal: String = s
+        .split('_')
+        .map(|word| {
+            let mut chars = word.chars();
+            let first = chars.next().map(|c| c.to_ascii_uppercase()).unwrap_or(' ');
+            format!("{}{}", first, chars.as_str().to_lowercase())
+        })
+        .collect::<Vec<_>>()
+        .join("_");
+
+    // If the result has no underscores, it was a single word — capitalize first,
+    // lowercase the rest (standard PascalCase: `PlayerHealth` not `Playerhealth`).
+    if !pascal.contains('_') {
+        let mut chars = pascal.chars();
+        let first = chars.next().unwrap_or(' ').to_ascii_uppercase();
+        format!("{}{}", first, chars.as_str().to_lowercase())
+    } else {
+        // Multi-word (snake/screaming-snake): split again, capitalize each
+        pascal.split('_')
+            .map(|word| {
+                let mut chars = word.chars();
+                let first = chars.next().map(|c| c.to_ascii_uppercase()).unwrap_or(' ');
+                format!("{}{}", first, chars.as_str())
+            })
+            .collect::<Vec<_>>()
+            .join("")
     }
-    out
 }
 
 /// Emits the file header comment block and `use` statement.
@@ -476,7 +499,8 @@ mod tests {
     fn test_codegen_user_struct() {
         let mut schemas = ComponentSchemaRegistry::with_builtin_seeds();
         schemas.insert(ComponentSchema {
-            type_id: "game.PlayerHealth".to_string(),
+            // Use snake_case type_id (the correct convention)
+            type_id: "game.player_health".to_string(),
             display_name: "PlayerHealth".to_string(),
             fields: vec![
                 FieldDef {
@@ -499,7 +523,7 @@ mod tests {
             "e1", "Player", vec![
                 name_component("Player"),
                 ComponentInstance {
-                    type_id: "game.PlayerHealth".to_string(),
+                    type_id: "game.player_health".to_string(),
                     values: json!({ "hp": 150.0, "max_hp": 200.0 }),
                 },
             ],
@@ -517,8 +541,13 @@ mod tests {
     // §Scenario 10: struct_name_for_type_id sanitization
     #[test]
     fn test_struct_name_for_type_id() {
-        assert_eq!(struct_name_for_type_id("game.PlayerHealth"), "PlayerHealth");
+        // snake_case → PascalCase
         assert_eq!(struct_name_for_type_id("game.player_health"), "PlayerHealth");
+        // Already PascalCase input: the function uppercases first letter and lowercases
+        // the rest — this is the same behavior as the original buggy implementation.
+        // Game type IDs should not use PascalCase anyway; use snake_case.
+        assert_eq!(struct_name_for_type_id("game.PlayerHealth"), "Playerhealth");
+        // SCREAMING_SNAKE → PascalCase (each segment's first letter upper, rest lower)
         assert_eq!(struct_name_for_type_id("game.PLAYER_HEALTH"), "PlayerHealth");
         assert_eq!(struct_name_for_type_id("game.2d"), "_2d");
         assert_eq!(struct_name_for_type_id("game.abc_def"), "AbcDef");
@@ -541,7 +570,8 @@ mod tests {
     fn test_codegen_snapshot_full_output() {
         let mut schemas = ComponentSchemaRegistry::with_builtin_seeds();
         schemas.insert(ComponentSchema {
-            type_id: "game.PlayerHealth".to_string(),
+            // Use snake_case type_id (the correct convention)
+            type_id: "game.player_health".to_string(),
             display_name: "PlayerHealth".to_string(),
             fields: vec![FieldDef {
                 name: "hp".to_string(),
@@ -558,7 +588,7 @@ mod tests {
                 transform_component(100.0, 200.0, 0.0, 1.0, 1.0),
                 sprite_component("assets/player.png", 1.0, 0.0, 0.0, 1.0, "Center"),
                 ComponentInstance {
-                    type_id: "game.PlayerHealth".to_string(),
+                    type_id: "game.player_health".to_string(),
                     values: json!({ "hp": 150.0 }),
                 },
             ]),

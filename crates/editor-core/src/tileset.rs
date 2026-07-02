@@ -54,10 +54,42 @@ impl TilesetId {
 /// Uses a dedicated struct (not bare tuple) so JSON serializes as `{"x":-1,"y":5}`
 /// which is self-documenting and unambiguous, rather than `[-1, 5]` which could
 /// be confused with a generic array.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TileCoord {
     pub x: i32,
     pub y: i32,
+}
+
+impl serde::Serialize for TileCoord {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&format!("{},{}", self.x, self.y))
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for TileCoord {
+    fn deserialize<D>(deserializer: D) -> Result<TileCoord, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let parts: Vec<&str> = s.split(',').collect();
+        if parts.len() != 2 {
+            return Err(serde::de::Error::custom(format!(
+                "invalid TileCoord string: expected 'x,y', got '{}'",
+                s
+            )));
+        }
+        let x = parts[0].parse().map_err(|_| {
+            serde::de::Error::custom(format!("invalid x in TileCoord: '{}'", parts[0]))
+        })?;
+        let y = parts[1].parse().map_err(|_| {
+            serde::de::Error::custom(format!("invalid y in TileCoord: '{}'", parts[1]))
+        })?;
+        Ok(TileCoord { x, y })
+    }
 }
 
 impl TileCoord {
@@ -254,11 +286,10 @@ mod tests {
 
     #[test]
     fn test_tile_coord_serialization_roundtrip() {
-        // TileCoord uses a struct so JSON is self-documenting: {"x":-1,"y":5}
-        // NOT an ambiguous array: [-1, 5]
+        // TileCoord serializes as a string "x,y" so it can be used as HashMap key
         let coord = TileCoord::new(-1, 5);
         let json = serde_json::to_string(&coord).unwrap();
-        assert_eq!(json, r#"{"x":-1,"y":5}"#);
+        assert_eq!(json, r#""-1,5""#);
 
         let roundtrip: TileCoord = serde_json::from_str(&json).unwrap();
         assert_eq!(roundtrip, coord);
