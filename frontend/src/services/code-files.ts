@@ -4,25 +4,20 @@
  *
  * Source files are raw `.rs` text stored in OPFS `sources/` directory.
  * Owned by WASM editor-core, not a frontend-only service.
+ *
+ * Uses the canonical `OpfsResult<T>` envelope from `types/opfs.ts`
+ * (per `design.md` §Interfaces/Contracts). On-the-wire JSON from WASM
+ * always matches the broad optional-field shape; we narrow to a
+ * discriminated union at this service boundary for type safety.
  */
+
+import type { OpfsResult } from "../types/opfs";
 
 export interface SourceFile {
   id: string;
   path: string;
   name: string;
 }
-
-interface OpfsResult<T> {
-  ok: true;
-  value: T;
-}
-
-interface OpfsError {
-  ok: false;
-  error: string;
-}
-
-type OpfsResponse<T> = OpfsResult<T> | OpfsError;
 
 async function waitForEngine(): Promise<void> {
   let attempts = 0;
@@ -36,19 +31,26 @@ async function waitForEngine(): Promise<void> {
 }
 
 /**
+ * Parse a WASM response that may arrive as a string (JSON) or already-parsed object.
+ * The Rust bindings sometimes return Promise<JsValue> with the JSON-serialized string,
+ * sometimes the deserialized object directly depending on the serde path.
+ */
+function parseOpfs<T>(raw: unknown): OpfsResult<T> {
+  if (typeof raw === "string") {
+    return JSON.parse(raw) as OpfsResult<T>;
+  }
+  return raw as OpfsResult<T>;
+}
+
+/**
  * List all source files in the project's OPFS source store.
  * @returns Array of SourceFile metadata (id, path, name).
  */
 export async function listSourceFiles(): Promise<SourceFile[]> {
   await waitForEngine();
-  const result = (window as any).list_source_files();
-  if (typeof result === "string") {
-    const parsed = JSON.parse(result) as OpfsResponse<SourceFile[]>;
-    if (!parsed.ok) throw new Error(parsed.error);
-    return parsed.value;
-  }
-  if (!result.ok) throw new Error(result.error);
-  return result.value;
+  const parsed = parseOpfs<SourceFile[]>((window as any).list_source_files());
+  if (!parsed.ok) throw new Error(parsed.error);
+  return parsed.value!;
 }
 
 /**
@@ -60,11 +62,9 @@ export async function readSourceFile(
   id: string
 ): Promise<{ ok: true; value: string } | { ok: false; error: string }> {
   await waitForEngine();
-  const result = (window as any).read_source_file(id);
-  const parsed: OpfsResponse<string> =
-    typeof result === "string" ? JSON.parse(result) : result;
-  if (parsed.ok) return { ok: true, value: parsed.value };
-  return { ok: false, error: parsed.error };
+  const parsed = parseOpfs<string>((window as any).read_source_file(id));
+  if (parsed.ok) return { ok: true, value: parsed.value! };
+  return { ok: false, error: parsed.error! };
 }
 
 /**
@@ -79,11 +79,9 @@ export async function writeSourceFile(
   content: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   await waitForEngine();
-  const result = (window as any).write_source_file(id, content);
-  const parsed: OpfsResponse<null> =
-    typeof result === "string" ? JSON.parse(result) : result;
+  const parsed = parseOpfs<null>((window as any).write_source_file(id, content));
   if (parsed.ok) return { ok: true };
-  return { ok: false, error: parsed.error };
+  return { ok: false, error: parsed.error! };
 }
 
 /**
@@ -97,21 +95,20 @@ export async function createSourceFile(name: string): Promise<string> {
   await waitForEngine();
   // Derive path from name: "main.rs" -> "main", "src/lib.rs" -> "src/lib"
   const path = name.endsWith(".rs") ? name.slice(0, -3) : name;
-  const result = (window as any).create_source_file(path, name);
-  const parsed: OpfsResponse<SourceFile> =
-    typeof result === "string" ? JSON.parse(result) : result;
-  if (!parsed.ok) throw new Error(parsed.error);
-  return parsed.value.id;
+  const parsed = parseOpfs<SourceFile>(
+    (window as any).create_source_file(path, name)
+  );
+  if (!parsed.ok) throw new Error(parsed.error!);
+  return parsed.value!.id;
 }
 
 /**
  * Delete a source file by id.
  * @param id - The source file's id (which equals its path).
+ * @throws Error if the delete fails (e.g., file not found).
  */
 export async function deleteSourceFile(id: string): Promise<void> {
   await waitForEngine();
-  const result = (window as any).delete_source_file(id);
-  const parsed: OpfsResponse<null> =
-    typeof result === "string" ? JSON.parse(result) : result;
-  if (!parsed.ok) throw new Error(parsed.error);
+  const parsed = parseOpfs<null>((window as any).delete_source_file(id));
+  if (!parsed.ok) throw new Error(parsed.error!);
 }
