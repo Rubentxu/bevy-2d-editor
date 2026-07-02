@@ -38,11 +38,6 @@ pub struct SourceFile {
     pub name: String,
 }
 
-/// Resolve the OPFS path for a source file: `sources/<path>.rs`.
-pub fn source_path(path: &str) -> String {
-    format!("{}/{}.rs", SOURCES_DIR, path)
-}
-
 /// Resolve the OPFS path for a source file given its id.
 /// The id IS the OPFS path without extension, so `src/main` → `sources/src/main.rs`.
 pub fn source_path_from_id(id: &str) -> String {
@@ -57,12 +52,6 @@ mod tests {
     fn source_file_id_as_str() {
         let id = SourceFileId::new("src/lib");
         assert_eq!(id.as_str(), "src/lib");
-    }
-
-    #[test]
-    fn source_path_format() {
-        assert_eq!(source_path("src/main"), "sources/src/main.rs");
-        assert_eq!(source_path("lib"), "sources/lib.rs");
     }
 
     #[test]
