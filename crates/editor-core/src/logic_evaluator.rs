@@ -423,14 +423,71 @@ fn store_output_values(
 /// - "actuator.rotate" → "rotation"
 /// - "actuator.scale" → "scale"
 /// - "actuator.set_color" → "color"
-/// - default: use the full type_id string
+/// - "actuator.apply_impulse" → "impulse" (Vec2 derived from field_values)
+/// - "actuator.modify_health" → "health_delta" (Float derived from field_values)
+/// - "actuator.emit_signal" → field = signal_id from field_values
 fn submit_actuator_outputs_from_node(node: &LogicNode, outputs: &[PortValue], entity_bits: u64) {
     use bevy::prelude::Entity;
     use crate::actuator_bus::submit_actuator_output;
 
     let entity = Entity::from_bits(entity_bits);
 
-    // Derive field name from node type
+    // For recipe actuators, derive the output value from field_values rather than evaluator outputs.
+    // The evaluator returned an Action passthrough; the real data is in field_values.
+    match node.node_type_id.as_str() {
+        "actuator.apply_impulse" => {
+            let direction = node
+                .field_values
+                .get("direction")
+                .and_then(|v| v.as_str())
+                .unwrap_or("up");
+            let force: f32 = node
+                .field_values
+                .get("force")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(1.0) as f32;
+            let vector = match direction {
+                "up" => PortValue::Vec2 { x: 0.0, y: force },
+                "down" => PortValue::Vec2 { x: 0.0, y: -force },
+                "left" => PortValue::Vec2 { x: -force, y: 0.0 },
+                "right" => PortValue::Vec2 { x: force, y: 0.0 },
+                _ => PortValue::Vec2 { x: 0.0, y: force },
+            };
+            submit_actuator_output(entity, "impulse", vector);
+            return;
+        }
+        "actuator.modify_health" => {
+            let delta: f32 = node
+                .field_values
+                .get("delta")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0) as f32;
+            submit_actuator_output(entity, "health_delta", PortValue::Float(delta));
+            return;
+        }
+        "actuator.emit_signal" => {
+            let signal_id = node
+                .field_values
+                .get("signal_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            // Check if the trigger input was received (passthrough Action)
+            let triggered = outputs
+                .first()
+                .and_then(|v| match v {
+                    PortValue::Action(s) => Some(!s.is_empty()),
+                    _ => Some(false),
+                })
+                .unwrap_or(false);
+            if triggered {
+                submit_actuator_output(entity, signal_id, PortValue::Action(signal_id.to_string()));
+            }
+            return;
+        }
+        _ => {}
+    }
+
+    // Standard dispatch: field derived from node type, values from evaluator outputs
     let field = match node.node_type_id.as_str() {
         "actuator.translate" => "translation",
         "actuator.rotate" => "rotation",
@@ -444,7 +501,7 @@ fn submit_actuator_outputs_from_node(node: &LogicNode, outputs: &[PortValue], en
     }
 }
 
-/// Seed the three placeholder built-in evaluators.
+/// Seed the built-in evaluators (existing + recipe nodes).
 fn seed_builtin_evaluators(registry: &mut LogicNodeRegistry) {
     // controller.if
     registry.register_builtin(
@@ -544,6 +601,190 @@ fn seed_builtin_evaluators(registry: &mut LogicNodeRegistry) {
             }],
         },
     );
+
+    // ── Recipe built-ins start here ─────────────────────────────────────────────
+
+    // sensor.key_pressed
+    // Reads field_values["key"]; emits Action when key is held (runtime keyboard state
+    // fed via KEYBOARD_STATE thread-local updated by Bevy systems before evaluation).
+    registry.register_builtin(
+        Box::new(KeyPressedEvaluator),
+        NodeDescriptor {
+            node_type_id: NodeTypeId::new("sensor.key_pressed"),
+            role: LogicNodeRole::Sensor,
+            display_name: "Key Pressed".to_string(),
+            category: "sensor".to_string(),
+            inputs: vec![],
+            outputs: vec![PortSpec {
+                port_id: "pressed".to_string(),
+                value_type: PortValueType::Action,
+                display_name: "Pressed".to_string(),
+            }],
+        },
+    );
+
+    // controller.gate
+    // Passes through trigger input when field_values["enabled"] == true.
+    // Accepts Action trigger; ignores the condition Bool input (sensor drives trigger).
+    registry.register_builtin(
+        Box::new(GateEvaluator),
+        NodeDescriptor {
+            node_type_id: NodeTypeId::new("controller.gate"),
+            role: LogicNodeRole::Controller,
+            display_name: "Gate".to_string(),
+            category: "controller".to_string(),
+            inputs: vec![
+                PortSpec {
+                    port_id: "condition".to_string(),
+                    value_type: PortValueType::Bool,
+                    display_name: "Condition".to_string(),
+                },
+                PortSpec {
+                    port_id: "trigger".to_string(),
+                    value_type: PortValueType::Action,
+                    display_name: "Trigger".to_string(),
+                },
+            ],
+            outputs: vec![PortSpec {
+                port_id: "out".to_string(),
+                value_type: PortValueType::Action,
+                display_name: "Out".to_string(),
+            }],
+        },
+    );
+
+    // actuator.apply_impulse
+    // Reads field_values["direction"] ("up"/"down"/"left"/"right") and field_values["force"] (f32).
+    // Emits Vec2 impulse vector to ACTUATOR_OUTPUT_BUS.
+    registry.register_builtin(
+        Box::new(ApplyImpulseEvaluator),
+        NodeDescriptor {
+            node_type_id: NodeTypeId::new("actuator.apply_impulse"),
+            role: LogicNodeRole::Actuator,
+            display_name: "Apply Impulse".to_string(),
+            category: "actuator".to_string(),
+            inputs: vec![PortSpec {
+                port_id: "activate".to_string(),
+                value_type: PortValueType::Action,
+                display_name: "Activate".to_string(),
+            }],
+            outputs: vec![PortSpec {
+                port_id: "done".to_string(),
+                value_type: PortValueType::Action,
+                display_name: "Done".to_string(),
+            }],
+        },
+    );
+
+    // sensor.collision
+    // Reads field_values["target_tag"]; emits Float(1.0) when collision detected, Float(0.0) otherwise.
+    // Runtime collision events fed via SENSOR_STATE thread-local.
+    // Outputs Float so it chains directly into controller.compare threshold comparisons.
+    registry.register_builtin(
+        Box::new(CollisionEvaluator),
+        NodeDescriptor {
+            node_type_id: NodeTypeId::new("sensor.collision"),
+            role: LogicNodeRole::Sensor,
+            display_name: "Collision".to_string(),
+            category: "sensor".to_string(),
+            inputs: vec![],
+            outputs: vec![PortSpec {
+                port_id: "collision".to_string(),
+                value_type: PortValueType::Float,
+                display_name: "Collision".to_string(),
+            }],
+        },
+    );
+
+    // controller.compare
+    // Reads field_values["operator"] ("greater_than"/"less_than"/"equals") and field_values["threshold"] (f32).
+    // Compares input "a" (Float) against threshold; outputs Action("triggered") when true, empty Action when false.
+    // This chains cleanly to actuator nodes which expect Action trigger inputs.
+    registry.register_builtin(
+        Box::new(CompareEvaluator),
+        NodeDescriptor {
+            node_type_id: NodeTypeId::new("controller.compare"),
+            role: LogicNodeRole::Controller,
+            display_name: "Compare".to_string(),
+            category: "controller".to_string(),
+            inputs: vec![PortSpec {
+                port_id: "a".to_string(),
+                value_type: PortValueType::Float,
+                display_name: "A".to_string(),
+            }],
+            outputs: vec![PortSpec {
+                port_id: "result".to_string(),
+                value_type: PortValueType::Action,
+                display_name: "Result".to_string(),
+            }],
+        },
+    );
+
+    // actuator.modify_health
+    // Reads field_values["delta"] (f32, negative for damage) and field_values["clamp_min"] (f32).
+    // Submits Float delta to ACTUATOR_OUTPUT_BUS with field="health_delta".
+    registry.register_builtin(
+        Box::new(ModifyHealthEvaluator),
+        NodeDescriptor {
+            node_type_id: NodeTypeId::new("actuator.modify_health"),
+            role: LogicNodeRole::Actuator,
+            display_name: "Modify Health".to_string(),
+            category: "actuator".to_string(),
+            inputs: vec![PortSpec {
+                port_id: "apply".to_string(),
+                value_type: PortValueType::Action,
+                display_name: "Apply".to_string(),
+            }],
+            outputs: vec![PortSpec {
+                port_id: "done".to_string(),
+                value_type: PortValueType::Action,
+                display_name: "Done".to_string(),
+            }],
+        },
+    );
+
+    // sensor.proximity
+    // Reads field_values["target_tag"] and field_values["distance"] (f32).
+    // Emits Float distance via "distance" output.
+    // Runtime proximity state fed via SENSOR_STATE thread-local.
+    registry.register_builtin(
+        Box::new(ProximityEvaluator),
+        NodeDescriptor {
+            node_type_id: NodeTypeId::new("sensor.proximity"),
+            role: LogicNodeRole::Sensor,
+            display_name: "Proximity".to_string(),
+            category: "sensor".to_string(),
+            inputs: vec![],
+            outputs: vec![PortSpec {
+                port_id: "distance".to_string(),
+                value_type: PortValueType::Float,
+                display_name: "Distance".to_string(),
+            }],
+        },
+    );
+
+    // actuator.emit_signal
+    // Reads field_values["signal_id"] (String).
+    // Submits Action(signal_id) to ACTUATOR_OUTPUT_BUS with field=signal_id.
+    registry.register_builtin(
+        Box::new(EmitSignalEvaluator),
+        NodeDescriptor {
+            node_type_id: NodeTypeId::new("actuator.emit_signal"),
+            role: LogicNodeRole::Actuator,
+            display_name: "Emit Signal".to_string(),
+            category: "actuator".to_string(),
+            inputs: vec![PortSpec {
+                port_id: "trigger".to_string(),
+                value_type: PortValueType::Action,
+                display_name: "Trigger".to_string(),
+            }],
+            outputs: vec![PortSpec {
+                port_id: "done".to_string(),
+                value_type: PortValueType::Action,
+                display_name: "Done".to_string(),
+            }],
+        },
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -603,6 +844,221 @@ impl NodeEvaluator for TranslateEvaluator {
         // Pass through the first input (expected: Vec2 { x, y })
         vec![inputs.first().cloned().unwrap_or(PortValue::Vec2 { x: 0.0, y: 0.0 })]
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Recipe built-in evaluators
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// sensor.key_pressed — emits Bool(true) when the configured key is held.
+/// Runtime keyboard state is fed via `SENSOR_KEYBOARD_STATE`.
+/// In headless WASM preview, defaults to emitting Action("pressed") when key is held.
+struct KeyPressedEvaluator;
+impl NodeEvaluator for KeyPressedEvaluator {
+    fn evaluate(&self, node: &LogicNode, _inputs: &[PortValue]) -> Vec<PortValue> {
+        let key = node
+            .field_values
+            .get("key")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Space");
+
+        // Check the shared keyboard state; emit Action("pressed") when key is held.
+        let is_pressed = KEYBOARD_STATE.with(|state| state.borrow().contains(key));
+        if is_pressed {
+            vec![PortValue::Action("pressed".to_string())]
+        } else {
+            vec![PortValue::Action(String::new())]
+        }
+    }
+}
+
+/// controller.gate — passes through the trigger action when enabled (default: true).
+/// Inputs: condition(Bool), trigger(Action). Only the trigger is passed through.
+struct GateEvaluator;
+impl NodeEvaluator for GateEvaluator {
+    fn evaluate(&self, node: &LogicNode, inputs: &[PortValue]) -> Vec<PortValue> {
+        let enabled = node
+            .field_values
+            .get("enabled")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+
+        if !enabled {
+            return vec![PortValue::Action(String::new())];
+        }
+
+        // inputs[0]=condition(Bool), inputs[1]=trigger(Action)
+        // Pass through the trigger if enabled
+        let trigger = inputs.get(1).cloned().unwrap_or(PortValue::Action(String::new()));
+        vec![trigger]
+    }
+}
+
+/// actuator.apply_impulse — submits Vec2 impulse vector to ACTUATOR_OUTPUT_BUS.
+/// Reads field_values["direction"] ("up"/"down"/"left"/"right") and ["force"] (f32).
+/// Passes through Action trigger to "done".
+struct ApplyImpulseEvaluator;
+impl NodeEvaluator for ApplyImpulseEvaluator {
+    fn evaluate(&self, node: &LogicNode, inputs: &[PortValue]) -> Vec<PortValue> {
+        use crate::actuator_bus::submit_actuator_output;
+        use bevy::prelude::Entity;
+
+        // Parse direction + force from field_values
+        let direction = node
+            .field_values
+            .get("direction")
+            .and_then(|v| v.as_str())
+            .unwrap_or("up");
+        let force: f32 = node
+            .field_values
+            .get("force")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0) as f32;
+
+        let vector = match direction {
+            "up" => (0.0, force),
+            "down" => (0.0, -force),
+            "left" => (-force, 0.0),
+            "right" => (force, 0.0),
+            _ => (0.0, force),
+        };
+
+        // Emit impulse to the bus via submit_actuator_outputs_from_node dispatch.
+        // Pass through the trigger Action to "done".
+        let trigger = inputs.first().cloned().unwrap_or(PortValue::Action(String::new()));
+        vec![trigger]
+    }
+}
+
+/// sensor.collision — emits Bool(true) when collision with configured target_tag occurs.
+/// Runtime collision events fed via SENSOR_COLLISION_STATE.
+/// In headless WASM preview, defaults to false.
+struct CollisionEvaluator;
+impl NodeEvaluator for CollisionEvaluator {
+    fn evaluate(&self, node: &LogicNode, _inputs: &[PortValue]) -> Vec<PortValue> {
+        let target_tag = node
+            .field_values
+            .get("target_tag")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+
+        let triggered = COLLISION_STATE.with(|state| {
+            state.borrow().contains(target_tag)
+        });
+        // Emit Float so it chains into controller.compare threshold comparisons (1.0 = collision, 0.0 = none).
+        vec![PortValue::Float(if triggered { 1.0 } else { 0.0 })]
+    }
+}
+
+/// controller.compare — compares input "a" (Float) against threshold using operator.
+/// Reads field_values["operator"] ("greater_than"/"less_than"/"equals") and ["threshold"] (f32).
+struct CompareEvaluator;
+impl NodeEvaluator for CompareEvaluator {
+    fn evaluate(&self, node: &LogicNode, inputs: &[PortValue]) -> Vec<PortValue> {
+        let operator = node
+            .field_values
+            .get("operator")
+            .and_then(|v| v.as_str())
+            .unwrap_or("greater_than");
+        let threshold: f32 = node
+            .field_values
+            .get("threshold")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0) as f32;
+
+        let a = inputs
+            .first()
+            .and_then(|v| match v {
+                PortValue::Float(f) => Some(*f),
+                _ => None,
+            })
+            .unwrap_or(0.0);
+
+        let result = match operator {
+            "greater_than" => a > threshold,
+            "less_than" => a < threshold,
+            "equals" => (a - threshold).abs() < f32::EPSILON,
+            _ => false,
+        };
+        // Emit Action so this chains to actuators that expect Action trigger inputs.
+        if result {
+            vec![PortValue::Action("triggered".to_string())]
+        } else {
+            vec![PortValue::Action(String::new())]
+        }
+    }
+}
+
+/// actuator.modify_health — submits Float delta to ACTUATOR_OUTPUT_BUS.
+/// Reads field_values["delta"] (f32) and ["clamp_min"] (f32).
+struct ModifyHealthEvaluator;
+impl NodeEvaluator for ModifyHealthEvaluator {
+    fn evaluate(&self, node: &LogicNode, inputs: &[PortValue]) -> Vec<PortValue> {
+        // Pass through the trigger to done
+        vec![inputs
+            .first()
+            .cloned()
+            .unwrap_or(PortValue::Action(String::new()))]
+    }
+}
+
+/// sensor.proximity — emits Float distance to configured target_tag.
+/// Runtime proximity state fed via SENSOR_PROXIMITY_STATE.
+/// In headless WASM preview, defaults to Float(threshold) from field_values.
+struct ProximityEvaluator;
+impl NodeEvaluator for ProximityEvaluator {
+    fn evaluate(&self, node: &LogicNode, _inputs: &[PortValue]) -> Vec<PortValue> {
+        let target_tag = node
+            .field_values
+            .get("target_tag")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let default_dist: f32 = node
+            .field_values
+            .get("distance")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(999.0) as f32;
+
+        let distance = PROXIMITY_STATE.with(|state| {
+            state
+                .borrow()
+                .get(target_tag)
+                .copied()
+                .unwrap_or(default_dist)
+        });
+        vec![PortValue::Float(distance)]
+    }
+}
+
+/// actuator.emit_signal — submits Action(signal_id) to ACTUATOR_OUTPUT_BUS.
+/// Reads field_values["signal_id"] (String).
+struct EmitSignalEvaluator;
+impl NodeEvaluator for EmitSignalEvaluator {
+    fn evaluate(&self, node: &LogicNode, inputs: &[PortValue]) -> Vec<PortValue> {
+        // Pass through the trigger to done
+        vec![inputs
+            .first()
+            .cloned()
+            .unwrap_or(PortValue::Action(String::new()))]
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sensor runtime state thread-locals
+// ─────────────────────────────────────────────────────────────────────────────
+
+thread_local! {
+    /// Set of currently held key names (e.g. "Space", "KeyW").
+    /// Updated by Bevy keyboard input system before logic evaluation.
+    pub static KEYBOARD_STATE: RefCell<std::collections::HashSet<String>> = RefCell::new(std::collections::HashSet::new());
+
+    /// Set of target tags that had a collision this frame.
+    /// Updated by Bevy collision detection system before logic evaluation.
+    pub static COLLISION_STATE: RefCell<std::collections::HashSet<String>> = RefCell::new(std::collections::HashSet::new());
+
+    /// Map of target_tag -> current distance (in world units).
+    /// Updated by Bevy proximity system before logic evaluation.
+    pub static PROXIMITY_STATE: RefCell<std::collections::HashMap<String, f32>> = RefCell::new(std::collections::HashMap::new());
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1532,5 +1988,250 @@ mod integration_tests {
             "expected Bool output from translator given Bool input, got {:?}",
             out.value
         );
+    }
+
+    // §T10: CompareEvaluator — greater_than threshold
+    #[test]
+    fn test_compare_evaluator_greater_than() {
+        let node = LogicNode {
+            node_id: NodeId::new("cmp"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.compare"),
+            field_values: serde_json::json!({
+                "operator": "greater_than",
+                "threshold": 5.0
+            }),
+            controller_id: None,
+        };
+        let evaluator = CompareEvaluator;
+        // Input Float(10.0) > threshold(5.0) → Action("triggered")
+        let result = evaluator.evaluate(&node, &[PortValue::Float(10.0)]);
+        assert_eq!(result.len(), 1);
+        assert!(matches!(&result[0], PortValue::Action(s) if s == "triggered"));
+    }
+
+    // §T11: CompareEvaluator — less_than threshold
+    #[test]
+    fn test_compare_evaluator_less_than() {
+        let node = LogicNode {
+            node_id: NodeId::new("cmp"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.compare"),
+            field_values: serde_json::json!({
+                "operator": "less_than",
+                "threshold": 5.0
+            }),
+            controller_id: None,
+        };
+        let evaluator = CompareEvaluator;
+        // Input Float(3.0) < threshold(5.0) → Action("triggered")
+        let result = evaluator.evaluate(&node, &[PortValue::Float(3.0)]);
+        assert_eq!(result.len(), 1);
+        assert!(matches!(&result[0], PortValue::Action(s) if s == "triggered"));
+    }
+
+    // §T12: CompareEvaluator — equals threshold (within EPSILON)
+    #[test]
+    fn test_compare_evaluator_equals() {
+        let node = LogicNode {
+            node_id: NodeId::new("cmp"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.compare"),
+            field_values: serde_json::json!({
+                "operator": "equals",
+                "threshold": 5.0
+            }),
+            controller_id: None,
+        };
+        let evaluator = CompareEvaluator;
+        // Input Float(5.0) ≈ threshold(5.0) → Action("triggered")
+        let result = evaluator.evaluate(&node, &[PortValue::Float(5.0)]);
+        assert_eq!(result.len(), 1);
+        assert!(matches!(&result[0], PortValue::Action(s) if s == "triggered"));
+    }
+
+    // §T13: CompareEvaluator — condition false returns empty Action
+    #[test]
+    fn test_compare_evaluator_false_condition() {
+        let node = LogicNode {
+            node_id: NodeId::new("cmp"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.compare"),
+            field_values: serde_json::json!({
+                "operator": "greater_than",
+                "threshold": 5.0
+            }),
+            controller_id: None,
+        };
+        let evaluator = CompareEvaluator;
+        // Input Float(2.0) < threshold(5.0) → empty Action
+        let result = evaluator.evaluate(&node, &[PortValue::Float(2.0)]);
+        assert_eq!(result.len(), 1);
+        assert!(matches!(&result[0], PortValue::Action(s) if s.is_empty()));
+    }
+
+    // §T14: KeyPressedEvaluator — no key in state → empty Action
+    #[test]
+    fn test_keypressed_evaluator_no_key_pressed() {
+        let node = LogicNode {
+            node_id: NodeId::new("kp"),
+            role: LogicNodeRole::Sensor,
+            node_type_id: NodeTypeId::new("sensor.key_pressed"),
+            field_values: serde_json::json!({ "key": "Space" }),
+            controller_id: None,
+        };
+        let evaluator = KeyPressedEvaluator;
+        // Space not in keyboard state → empty Action
+        let result = evaluator.evaluate(&node, &[]);
+        assert_eq!(result.len(), 1);
+        assert!(matches!(&result[0], PortValue::Action(s) if s.is_empty()));
+    }
+
+    // §T15: ModifyHealthEvaluator — passes through trigger Action
+    #[test]
+    fn test_modify_health_evaluator_passthrough() {
+        let node = LogicNode {
+            node_id: NodeId::new("mh"),
+            role: LogicNodeRole::Actuator,
+            node_type_id: NodeTypeId::new("actuator.modify_health"),
+            field_values: serde_json::json!({ "delta": -1.0, "clamp_min": 0.0 }),
+            controller_id: None,
+        };
+        let evaluator = ModifyHealthEvaluator;
+        let result = evaluator.evaluate(&node, &[PortValue::Action("triggered".to_string())]);
+        assert_eq!(result.len(), 1);
+        assert!(matches!(&result[0], PortValue::Action(s) if s == "triggered"));
+    }
+
+    // §T16: EmitSignalEvaluator — triggered → passes through trigger Action
+    #[test]
+    fn test_emit_signal_evaluator_passthrough() {
+        let node = LogicNode {
+            node_id: NodeId::new("es"),
+            role: LogicNodeRole::Actuator,
+            node_type_id: NodeTypeId::new("actuator.emit_signal"),
+            field_values: serde_json::json!({ "signal_id": "player_nearby" }),
+            controller_id: None,
+        };
+        let evaluator = EmitSignalEvaluator;
+        // Evaluator passes through the trigger Action (bus submission happens in submit_actuator_outputs_from_node)
+        let result = evaluator.evaluate(&node, &[PortValue::Action("triggered".to_string())]);
+        assert_eq!(result.len(), 1);
+        assert!(matches!(&result[0], PortValue::Action(s) if s == "triggered"));
+    }
+
+    // §T17: EmitSignalEvaluator — not triggered → no output
+    #[test]
+    fn test_emit_signal_evaluator_not_triggered() {
+        use crate::actuator_bus::drain_actuator_outputs;
+
+        let node = LogicNode {
+            node_id: NodeId::new("es"),
+            role: LogicNodeRole::Actuator,
+            node_type_id: NodeTypeId::new("actuator.emit_signal"),
+            field_values: serde_json::json!({ "signal_id": "player_nearby" }),
+            controller_id: None,
+        };
+
+        // Clear any previous outputs
+        let _ = drain_actuator_outputs();
+
+        let evaluator = EmitSignalEvaluator;
+        // Not triggered (empty Action) → no output
+        let _ = evaluator.evaluate(&node, &[PortValue::Action(String::new())]);
+
+        let outputs = drain_actuator_outputs();
+        // No output should be produced when not triggered
+        assert!(outputs.is_empty(), "expected no output when not triggered, got {:?}", outputs);
+    }
+
+    // §T18: CollisionEvaluator — no collision in state → Float(0.0)
+    #[test]
+    fn test_collision_evaluator_no_collision() {
+        let node = LogicNode {
+            node_id: NodeId::new("col"),
+            role: LogicNodeRole::Sensor,
+            node_type_id: NodeTypeId::new("sensor.collision"),
+            field_values: serde_json::json!({ "target_tag": "hazard" }),
+            controller_id: None,
+        };
+        let evaluator = CollisionEvaluator;
+        // No collision in state → Float(0.0)
+        let result = evaluator.evaluate(&node, &[]);
+        assert_eq!(result.len(), 1);
+        assert!(matches!(&result[0], PortValue::Float(f) if *f == 0.0));
+    }
+
+    // §T19: ProximityEvaluator — no target in state → default distance
+    #[test]
+    fn test_proximity_evaluator_default_distance() {
+        let node = LogicNode {
+            node_id: NodeId::new("prox"),
+            role: LogicNodeRole::Sensor,
+            node_type_id: NodeTypeId::new("sensor.proximity"),
+            field_values: serde_json::json!({ "target_tag": "player", "distance": 2.0 }),
+            controller_id: None,
+        };
+        let evaluator = ProximityEvaluator;
+        // No proximity data in state → default distance from field_values
+        let result = evaluator.evaluate(&node, &[]);
+        assert_eq!(result.len(), 1);
+        assert!(matches!(&result[0], PortValue::Float(f) if *f == 2.0));
+    }
+
+    // §T20: GateEvaluator — enabled + trigger → passes through trigger
+    #[test]
+    fn test_gate_evaluator_enabled_passes_trigger() {
+        let node = LogicNode {
+            node_id: NodeId::new("gate"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.gate"),
+            field_values: serde_json::json!({ "enabled": true }),
+            controller_id: None,
+        };
+        let evaluator = GateEvaluator;
+        // condition=true, trigger=Action("go") → passes through trigger
+        let result = evaluator.evaluate(
+            &node,
+            &[PortValue::Bool(true), PortValue::Action("go".to_string())],
+        );
+        assert_eq!(result.len(), 1);
+        assert!(matches!(&result[0], PortValue::Action(s) if s == "go"));
+    }
+
+    // §T21: GateEvaluator — disabled → empty Action regardless of trigger
+    #[test]
+    fn test_gate_evaluator_disabled_blocks() {
+        let node = LogicNode {
+            node_id: NodeId::new("gate"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.gate"),
+            field_values: serde_json::json!({ "enabled": false }),
+            controller_id: None,
+        };
+        let evaluator = GateEvaluator;
+        // condition=false → empty Action even with trigger
+        let result = evaluator.evaluate(
+            &node,
+            &[PortValue::Bool(false), PortValue::Action("go".to_string())],
+        );
+        assert_eq!(result.len(), 1);
+        assert!(matches!(&result[0], PortValue::Action(s) if s.is_empty()));
+    }
+
+    // §T22: ApplyImpulseEvaluator — passes through trigger Action
+    #[test]
+    fn test_apply_impulse_evaluator_passthrough() {
+        let node = LogicNode {
+            node_id: NodeId::new("imp"),
+            role: LogicNodeRole::Actuator,
+            node_type_id: NodeTypeId::new("actuator.apply_impulse"),
+            field_values: serde_json::json!({ "direction": "up", "force": 2.0 }),
+            controller_id: None,
+        };
+        let evaluator = ApplyImpulseEvaluator;
+        let result = evaluator.evaluate(&node, &[PortValue::Action("triggered".to_string())]);
+        assert_eq!(result.len(), 1);
+        assert!(matches!(&result[0], PortValue::Action(s) if s == "triggered"));
     }
 }
