@@ -2,12 +2,18 @@
 //!
 //! Phase 1: NodeEvaluator trait + PortValue enum + metadata structs.
 //! Phase 2: LogicNodeRegistry singleton + placeholder built-in evaluators.
+//! Phase 3: Logic graph evaluation dispatch (evaluate_logic_binding).
 //! All tests follow Strict TDD: RED → GREEN → TRIANGULATE → REFACTOR.
 
-use crate::logic_graph::{LogicNode, LogicNodeRole, NodeTypeId};
+use crate::logic_graph::{LogicEdge, LogicGraphAsset, LogicNode, LogicNodeRole, NodeId, NodeTypeId, PortId};
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::OnceLock;
+
+// WASM bindings — only compiled on wasm32 target
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::JsValue;
 
 /// Typed value boundary for logic evaluator ports.
 /// NO `serde_json::Value` inside — this is the strict contract.
@@ -57,6 +63,43 @@ pub struct ParamSpec {
     pub value_type: PortValueType,
     pub default: Option<serde_json::Value>,
 }
+
+/// Errors that can occur during logic graph evaluation.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LogicError {
+    /// Graph asset not registered.
+    AssetNotFound(String),
+    /// Version mismatch between binding and asset.
+    VersionMismatch {
+        asset_id: String,
+        expected: u32,
+        actual: u32,
+    },
+    /// Cycle detected — no valid topological order exists.
+    CycleDetected,
+    /// No evaluator registered for the given node type.
+    MissingEvaluator(NodeTypeId),
+    /// Referenced port does not exist on the node.
+    InvalidPort { node_id: NodeId, port_id: PortId },
+}
+
+impl std::fmt::Display for LogicError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LogicError::AssetNotFound(id) => write!(f, "graph asset not found: '{}'", id),
+            LogicError::VersionMismatch { asset_id, expected, actual } => {
+                write!(f, "version mismatch for '{}': expected {}, got {}", asset_id, expected, actual)
+            }
+            LogicError::CycleDetected => write!(f, "cycle detected in graph: no valid execution order"),
+            LogicError::MissingEvaluator(ntid) => write!(f, "missing evaluator for node type: '{}'", ntid.as_str()),
+            LogicError::InvalidPort { node_id, port_id } => {
+                write!(f, "invalid port: '{}.{}'", node_id.as_str(), port_id.as_str())
+            }
+        }
+    }
+}
+
+impl std::error::Error for LogicError {}
 
 /// NodeEvaluator dispatch trait — ADR-0011 §D2.
 ///
@@ -144,6 +187,245 @@ pub fn global_node_registry() -> &'static LogicNodeRegistry {
     })
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 3: LogicGraphAsset registry (in-memory, WASM-side persistence deferred)
+// ─────────────────────────────────────────────────────────────────────────────
+
+thread_local! {
+    /// In-memory registry of LogicGraphAsset documents, keyed by asset_id.
+    /// Initialized lazily on first access.
+    static LOGIC_GRAPH_REGISTRY: RefCell<Option<HashMap<String, LogicGraphAsset>>> =
+        const { RefCell::new(None) };
+}
+
+/// Register a LogicGraphAsset in the in-memory registry.
+pub fn register_logic_graph(asset: LogicGraphAsset) {
+    LOGIC_GRAPH_REGISTRY.with(|cell| {
+        let mut reg = cell.borrow_mut();
+        if reg.is_none() {
+            *reg = Some(HashMap::new());
+        }
+        reg.as_mut().unwrap().insert(asset.asset_id.clone(), asset);
+    });
+}
+
+/// Get a LogicGraphAsset by asset_id from the in-memory registry.
+pub fn get_logic_graph_asset(asset_id: &str) -> Option<LogicGraphAsset> {
+    LOGIC_GRAPH_REGISTRY.with(|cell| {
+        cell.borrow().as_ref()?.get(asset_id).cloned()
+    })
+}
+
+/// Evaluate a logic binding: find graph by asset_id, run sensor→controller→actuator.
+/// Submits actuator outputs to ACTUATOR_OUTPUT_BUS.
+///
+/// # Arguments
+/// * `asset_id` - The asset identifier of the LogicGraphAsset to evaluate
+/// * `version` - Expected version (returns error if mismatched)
+///
+/// # Errors
+/// Returns `LogicError` if the asset is not found, version mismatches, or
+/// evaluation cannot proceed (cycle, missing evaluator).
+pub fn evaluate_logic_binding(asset_id: &str, version: u32, entity_bits: u64) -> Result<(), LogicError> {
+    // Step 1: Find the LogicGraphAsset by asset_id
+    let asset = get_logic_graph_asset(asset_id)
+        .ok_or_else(|| LogicError::AssetNotFound(asset_id.to_string()))?;
+
+    // Step 2: Version check
+    if asset.version != version {
+        return Err(LogicError::VersionMismatch {
+            asset_id: asset_id.to_string(),
+            expected: version,
+            actual: asset.version,
+        });
+    }
+
+    // Step 3: Build execution order via topological sort of edges
+    // Sensors run first (they have no input dependencies), then controllers, then actuators.
+    // Edges go from output port of source node to input port of target node.
+    // We do a Kahn's algorithm: nodes with all inputs satisfied can run.
+    let execution_order = topological_sort(&asset.nodes, &asset.edges)
+        .ok_or(LogicError::CycleDetected)?;
+
+    // Step 4: Run sensors first, collect their output values
+    // Step 5: Run controllers, propagating values through the graph
+    // Step 6: Run actuators, calling submit_actuator_output for each
+    evaluate_nodes_in_order(&asset, &execution_order, entity_bits)?;
+
+    Ok(())
+}
+
+/// Kahn's algorithm topological sort. Returns None if a cycle exists.
+fn topological_sort(nodes: &[LogicNode], edges: &[LogicEdge]) -> Option<Vec<NodeId>> {
+    // Build adjacency and in-degree maps
+    let mut in_degree: HashMap<NodeId, usize> = HashMap::new();
+    let mut adjacency: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
+
+    for node in nodes {
+        in_degree.insert(node.node_id.clone(), 0);
+        adjacency.entry(node.node_id.clone()).or_default();
+    }
+
+    for edge in edges {
+        *in_degree.entry(edge.to_node.clone()).or_insert(0) += 1;
+        adjacency
+            .entry(edge.from_node.clone())
+            .or_default()
+            .push(edge.to_node.clone());
+    }
+
+    // Start with nodes that have no incoming edges
+    let mut queue: Vec<NodeId> = in_degree
+        .iter()
+        .filter(|(_, deg)| **deg == 0)
+        .map(|(id, _)| id.clone())
+        .collect();
+
+    let mut result: Vec<NodeId> = Vec::new();
+
+    while let Some(node_id) = queue.pop() {
+        result.push(node_id.clone());
+        if let Some(neighbors) = adjacency.get(&node_id) {
+            for neighbor in neighbors {
+                if let Some(deg) = in_degree.get_mut(neighbor) {
+                    *deg = deg.saturating_sub(1);
+                    if *deg == 0 {
+                        queue.push(neighbor.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    // If we processed all nodes, return the order; otherwise there's a cycle
+    if result.len() == nodes.len() {
+        Some(result)
+    } else {
+        None
+    }
+}
+
+/// Evaluate all nodes in the given order (result of topological sort).
+fn evaluate_nodes_in_order(asset: &LogicGraphAsset, order: &[NodeId], entity_bits: u64) -> Result<(), LogicError> {
+    let registry = global_node_registry();
+
+    // Build a map from NodeId to LogicNode for O(1) lookup
+    let node_map: HashMap<NodeId, &LogicNode> = asset
+        .nodes
+        .iter()
+        .map(|n| (n.node_id.clone(), n))
+        .collect();
+
+    // Build a map from (NodeId, PortId) to PortValue for input resolution
+    // This is populated as nodes are evaluated
+    let mut port_values: HashMap<(NodeId, PortId), PortValue> = HashMap::new();
+
+    for node_id in order {
+        let node = node_map.get(node_id).ok_or_else(|| LogicError::InvalidPort {
+            node_id: node_id.clone(),
+            port_id: PortId::new(String::new()), // dummy; would need actual port
+        })?;
+
+        // Gather inputs for this node from port_values (set by upstream nodes)
+        let input_values = gather_input_values(node, &asset.edges, &port_values)?;
+
+        // Evaluate the node
+        let evaluator = registry.get_evaluator(&node.node_type_id);
+
+        let evaluator = evaluator.ok_or_else(|| LogicError::MissingEvaluator(node.node_type_id.clone()))?;
+
+        let outputs = evaluator.evaluate(node, &input_values);
+
+        // Store output values for downstream nodes
+        store_output_values(node, &outputs, &asset.edges, &mut port_values)?;
+
+        // If actuator, submit to the bus
+        if node.role == LogicNodeRole::Actuator {
+            submit_actuator_outputs_from_node(node, &outputs, entity_bits);
+        }
+    }
+
+    Ok(())
+}
+
+/// Gather input values for a node from edges and port_values map.
+fn gather_input_values(
+    node: &LogicNode,
+    edges: &[LogicEdge],
+    port_values: &HashMap<(NodeId, PortId), PortValue>,
+) -> Result<Vec<PortValue>, LogicError> {
+    // Find edges that target this node
+    let input_edges: Vec<&LogicEdge> = edges
+        .iter()
+        .filter(|e| &e.to_node == &node.node_id)
+        .collect();
+
+    // Collect inputs in a deterministic order based on port_id
+    let mut inputs: Vec<PortValue> = Vec::new();
+    for input_edge in input_edges {
+        if let Some(value) = port_values.get(&(input_edge.from_node.clone(), input_edge.from_port.clone())) {
+            inputs.push(value.clone());
+        } else {
+            // Missing input — use default
+            inputs.push(PortValue::Action(String::new()));
+        }
+    }
+
+    Ok(inputs)
+}
+
+/// Store output values from a node into the port_values map.
+fn store_output_values(
+    node: &LogicNode,
+    outputs: &[PortValue],
+    edges: &[LogicEdge],
+    port_values: &mut HashMap<(NodeId, PortId), PortValue>,
+) -> Result<(), LogicError> {
+    // Find edges that originate from this node
+    let output_edges: Vec<&LogicEdge> = edges
+        .iter()
+        .filter(|e| &e.from_node == &node.node_id)
+        .collect();
+
+    for (i, output_edge) in output_edges.iter().enumerate() {
+        if i < outputs.len() {
+            port_values.insert(
+                (output_edge.from_node.clone(), output_edge.from_port.clone()),
+                outputs[i].clone(),
+            );
+        }
+    }
+
+    Ok(())
+}
+
+/// Submit actuator outputs to the ACTUATOR_OUTPUT_BUS.
+/// Field name is derived from `node.node_type_id` (e.g., `"actuator.translate"`):
+/// - "actuator.translate" → "translation"
+/// - "actuator.rotate" → "rotation"
+/// - "actuator.scale" → "scale"
+/// - "actuator.set_color" → "color"
+/// - default: use the full type_id string
+fn submit_actuator_outputs_from_node(node: &LogicNode, outputs: &[PortValue], entity_bits: u64) {
+    use bevy::prelude::Entity;
+    use crate::actuator_bus::submit_actuator_output;
+
+    let entity = Entity::from_bits(entity_bits);
+
+    // Derive field name from node type
+    let field = match node.node_type_id.as_str() {
+        "actuator.translate" => "translation",
+        "actuator.rotate" => "rotation",
+        "actuator.scale" => "scale",
+        "actuator.set_color" => "color",
+        other => other,
+    };
+
+    for output in outputs.iter() {
+        submit_actuator_output(entity, field, output.clone());
+    }
+}
+
 /// Seed the three placeholder built-in evaluators.
 fn seed_builtin_evaluators(registry: &mut LogicNodeRegistry) {
     // controller.if
@@ -223,6 +505,27 @@ fn seed_builtin_evaluators(registry: &mut LogicNodeRegistry) {
             }],
         },
     );
+
+    // actuator.translate
+    registry.register_builtin(
+        Box::new(TranslateEvaluator),
+        NodeDescriptor {
+            node_type_id: NodeTypeId::new("actuator.translate"),
+            role: LogicNodeRole::Actuator,
+            display_name: "Translate".to_string(),
+            category: "actuator".to_string(),
+            inputs: vec![PortSpec {
+                port_id: "vector".to_string(),
+                value_type: PortValueType::Vec2,
+                display_name: "Vector".to_string(),
+            }],
+            outputs: vec![PortSpec {
+                port_id: "done".to_string(),
+                value_type: PortValueType::Action,
+                display_name: "Done".to_string(),
+            }],
+        },
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -272,6 +575,77 @@ struct AlwaysEvaluator;
 impl NodeEvaluator for AlwaysEvaluator {
     fn evaluate(&self, _node: &LogicNode, _inputs: &[PortValue]) -> Vec<PortValue> {
         vec![PortValue::Bool(true)]
+    }
+}
+
+/// actuator.translate — outputs the input Vec2 as the translation value.
+struct TranslateEvaluator;
+impl NodeEvaluator for TranslateEvaluator {
+    fn evaluate(&self, _node: &LogicNode, inputs: &[PortValue]) -> Vec<PortValue> {
+        // Pass through the first input (expected: Vec2 { x, y })
+        vec![inputs.first().cloned().unwrap_or(PortValue::Vec2 { x: 0.0, y: 0.0 })]
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 4: WASM exports (wasm32 only)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Register a LogicGraphAsset from JSON in the in-memory registry.
+/// Called from JS side after loading a .logic asset.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn register_logic_graph_wasm(asset_id: &str, version: u32, graph_json: &str) -> Result<(), JsValue> {
+    // Deserialize from JSON
+    let asset: LogicGraphAsset = serde_wasm_bindgen::from_str(graph_json)
+        .map_err(|e| JsValue::from_str(&format!("failed to parse graph JSON: {}", e)))?;
+
+    // Verify the asset_id matches (defensive)
+    if asset.asset_id != asset_id {
+        return Err(JsValue::from_str(&format!(
+            "asset_id mismatch: expected '{}', got '{}'",
+            asset_id, asset.asset_id
+        )));
+    }
+
+    // Version check
+    if asset.version != version {
+        return Err(JsValue::from_str(&format!(
+            "version mismatch: expected {}, got {}",
+            version, asset.version
+        )));
+    }
+
+    register_logic_graph(asset);
+    Ok(())
+}
+
+/// Evaluate a logic binding by asset_id and version.
+/// Submits ActuatorOutputs to the ACTUATOR_OUTPUT_BUS for the Bevy system to apply.
+/// Returns Ok(()) on success; missing asset is logged and returns Ok(()).
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn evaluate_logic_binding_wasm(entity_bits: u64, asset_id: &str, version: u32) -> Result<(), JsValue> {
+    // Evaluate the binding — this populates the ACTUATOR_OUTPUT_BUS via actuator nodes.
+    // The entity_bits for actuator outputs are set by the dispatch layer in logic_dispatch.rs.
+    match evaluate_logic_binding(asset_id, version, entity_bits) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            // AssetNotFound is logged but does not crash — iteration continues per spec
+            match &e {
+                LogicError::AssetNotFound(_) => {
+                    web_sys::console::warn_1(&JsValue::from_str(&format!(
+                        "evaluate_logic_binding_wasm: asset not found '{}'",
+                        asset_id
+                    )));
+                    Ok(()) // Per spec: iteration continues
+                }
+                _ => Err(JsValue::from_str(&format!(
+                    "evaluation error for '{}': {}",
+                    asset_id, e
+                ))),
+            }
+        }
     }
 }
 
@@ -681,5 +1055,383 @@ mod registry_tests {
         let registry = global_node_registry();
         let result = registry.get_evaluator(&NodeTypeId::new("controller.if"));
         assert!(result.is_some());
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 4 integration tests — actuator bus + graph evaluation
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod integration_tests {
+    use super::*;
+    use crate::actuator_bus::{submit_actuator_output, drain_actuator_outputs, ActuatorOutput};
+    use crate::logic_graph::{LogicEdge, LogicGraphAsset, LogicNode, LogicNodeRole, NodeId, NodeTypeId, PortId};
+
+    // §T1: ActuatorOutput serializes/deserializes correctly
+    #[test]
+    fn test_actuator_output_serde() {
+        let output = ActuatorOutput {
+            entity_bits: 42,
+            field: "translation".to_string(),
+            value: PortValue::Vec2 { x: 1.0, y: 2.0 },
+        };
+        let json = serde_json::to_string(&output).unwrap();
+        let parsed: ActuatorOutput = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.entity_bits, 42);
+        assert_eq!(parsed.field, "translation");
+        assert_eq!(parsed.value, PortValue::Vec2 { x: 1.0, y: 2.0 });
+    }
+
+    // §T2: ActuatorOutput serde roundtrip with all PortValue variants
+    #[test]
+    fn test_actuator_output_serde_all_variants() {
+        for value in [
+            PortValue::Bool(true),
+            PortValue::Float(3.14),
+            PortValue::Vec2 { x: 1.0, y: 2.0 },
+            PortValue::EntityRef("player".to_string()),
+            PortValue::Action("jump".to_string()),
+        ] {
+            let output = ActuatorOutput {
+                entity_bits: 99,
+                field: "test_field".to_string(),
+                value: value.clone(),
+            };
+            let json = serde_json::to_string(&output).unwrap();
+            let parsed: ActuatorOutput = serde_json::from_str(&json).unwrap();
+            assert_eq!(parsed.value, value);
+        }
+    }
+
+    // §T3: Bus push/drain roundtrip
+    #[test]
+    fn test_submit_and_drain() {
+        // Drain any pre-existing entries first
+        let _ = drain_actuator_outputs();
+
+        // Submit two outputs
+        let entity = bevy::prelude::Entity::from_bits(123);
+        submit_actuator_output(entity, "x", PortValue::Float(1.0));
+        submit_actuator_output(entity, "y", PortValue::Float(2.0));
+
+        // Drain and verify
+        let outputs = drain_actuator_outputs();
+        assert_eq!(outputs.len(), 2);
+        assert_eq!(outputs[0].entity_bits, 123);
+        assert_eq!(outputs[0].field, "x");
+        assert_eq!(outputs[0].value, PortValue::Float(1.0));
+        assert_eq!(outputs[1].field, "y");
+        assert_eq!(outputs[1].value, PortValue::Float(2.0));
+
+        // Bus should be empty after drain
+        let outputs = drain_actuator_outputs();
+        assert!(outputs.is_empty());
+    }
+
+    // §T4: evaluate_logic_binding with missing asset returns AssetNotFound
+    #[test]
+    fn test_evaluate_logic_binding_missing_asset() {
+        let result = evaluate_logic_binding("nonexistent.asset", 1, 0);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, LogicError::AssetNotFound(id) if id == "nonexistent.asset"));
+    }
+
+    // §T5: Topological sort — 3-node linear chain
+    #[test]
+    fn test_topological_sort_simple() {
+        let nodes = vec![
+            LogicNode {
+                node_id: NodeId::new("sensor"),
+                role: LogicNodeRole::Sensor,
+                node_type_id: NodeTypeId::new("sensor.always"),
+                field_values: serde_json::json!({}),
+                controller_id: None,
+            },
+            LogicNode {
+                node_id: NodeId::new("controller"),
+                role: LogicNodeRole::Controller,
+                node_type_id: NodeTypeId::new("controller.if"),
+                field_values: serde_json::json!({}),
+                controller_id: None,
+            },
+            LogicNode {
+                node_id: NodeId::new("actuator"),
+                role: LogicNodeRole::Actuator,
+                node_type_id: NodeTypeId::new("actuator.translate"),
+                field_values: serde_json::json!({}),
+                controller_id: None,
+            },
+        ];
+
+        // Edges: sensor → controller → actuator (via tick port connections)
+        let edges = vec![
+            LogicEdge {
+                from_node: NodeId::new("sensor"),
+                from_port: PortId::new("tick"),
+                to_node: NodeId::new("controller"),
+                to_port: PortId::new("condition"),
+            },
+            LogicEdge {
+                from_node: NodeId::new("controller"),
+                from_port: PortId::new("done"),
+                to_node: NodeId::new("actuator"),
+                to_port: PortId::new("trigger"),
+            },
+        ];
+
+        let order = topological_sort(&nodes, &edges);
+        assert!(order.is_some());
+        let order = order.unwrap();
+        assert_eq!(order.len(), 3);
+        // sensor must come before controller
+        let sensor_idx = order.iter().position(|id| id.as_str() == "sensor").unwrap();
+        let controller_idx = order.iter().position(|id| id.as_str() == "controller").unwrap();
+        let actuator_idx = order.iter().position(|id| id.as_str() == "actuator").unwrap();
+        assert!(sensor_idx < controller_idx);
+        assert!(controller_idx < actuator_idx);
+    }
+
+    // §T6: Topological sort — diamond shape (both branches converge)
+    #[test]
+    fn test_topological_sort_diamond() {
+        let nodes = vec![
+            LogicNode {
+                node_id: NodeId::new("start"),
+                role: LogicNodeRole::Sensor,
+                node_type_id: NodeTypeId::new("sensor.always"),
+                field_values: serde_json::json!({}),
+                controller_id: None,
+            },
+            LogicNode {
+                node_id: NodeId::new("left"),
+                role: LogicNodeRole::Controller,
+                node_type_id: NodeTypeId::new("controller.if"),
+                field_values: serde_json::json!({}),
+                controller_id: None,
+            },
+            LogicNode {
+                node_id: NodeId::new("right"),
+                role: LogicNodeRole::Controller,
+                node_type_id: NodeTypeId::new("controller.and"),
+                field_values: serde_json::json!({}),
+                controller_id: None,
+            },
+            LogicNode {
+                node_id: NodeId::new("end"),
+                role: LogicNodeRole::Actuator,
+                node_type_id: NodeTypeId::new("actuator.translate"),
+                field_values: serde_json::json!({}),
+                controller_id: None,
+            },
+        ];
+
+        // Diamond edges: start → left → end, start → right → end
+        let edges = vec![
+            LogicEdge {
+                from_node: NodeId::new("start"),
+                from_port: PortId::new("tick"),
+                to_node: NodeId::new("left"),
+                to_port: PortId::new("condition"),
+            },
+            LogicEdge {
+                from_node: NodeId::new("start"),
+                from_port: PortId::new("tick"),
+                to_node: NodeId::new("right"),
+                to_port: PortId::new("a"),
+            },
+            LogicEdge {
+                from_node: NodeId::new("left"),
+                from_port: PortId::new("done"),
+                to_node: NodeId::new("end"),
+                to_port: PortId::new("trigger"),
+            },
+            LogicEdge {
+                from_node: NodeId::new("right"),
+                from_port: PortId::new("out"),
+                to_node: NodeId::new("end"),
+                to_port: PortId::new("trigger"),
+            },
+        ];
+
+        let order = topological_sort(&nodes, &edges);
+        assert!(order.is_some());
+        let order = order.unwrap();
+        assert_eq!(order.len(), 4);
+        // start must be before both left and right
+        let start_idx = order.iter().position(|id| id.as_str() == "start").unwrap();
+        let left_idx = order.iter().position(|id| id.as_str() == "left").unwrap();
+        let right_idx = order.iter().position(|id| id.as_str() == "right").unwrap();
+        let end_idx = order.iter().position(|id| id.as_str() == "end").unwrap();
+        assert!(start_idx < left_idx);
+        assert!(start_idx < right_idx);
+        assert!(left_idx < end_idx);
+        assert!(right_idx < end_idx);
+    }
+
+    // §T7: Topological sort — cycle detection returns None
+    #[test]
+    fn test_topological_sort_cycle() {
+        let nodes = vec![
+            LogicNode {
+                node_id: NodeId::new("a"),
+                role: LogicNodeRole::Controller,
+                node_type_id: NodeTypeId::new("controller.if"),
+                field_values: serde_json::json!({}),
+                controller_id: None,
+            },
+            LogicNode {
+                node_id: NodeId::new("b"),
+                role: LogicNodeRole::Controller,
+                node_type_id: NodeTypeId::new("controller.and"),
+                field_values: serde_json::json!({}),
+                controller_id: None,
+            },
+        ];
+
+        // Cycle: a → b → a
+        let edges = vec![
+            LogicEdge {
+                from_node: NodeId::new("a"),
+                from_port: PortId::new("done"),
+                to_node: NodeId::new("b"),
+                to_port: PortId::new("a"),
+            },
+            LogicEdge {
+                from_node: NodeId::new("b"),
+                from_port: PortId::new("out"),
+                to_node: NodeId::new("a"),
+                to_port: PortId::new("condition"),
+            },
+        ];
+
+        let order = topological_sort(&nodes, &edges);
+        assert!(order.is_none());
+    }
+
+    // §T8: evaluate_logic_binding — sensor → controller chain (no actuator)
+    #[test]
+    fn test_evaluate_logic_binding_sensor_controller_chain() {
+        use crate::actuator_bus::drain_actuator_outputs;
+
+        // Drain any pre-existing bus entries
+        let _ = drain_actuator_outputs();
+
+        // Build a minimal chain: sensor.always → controller.if
+        let graph = LogicGraphAsset {
+            asset_id: "test/chain".to_string(),
+            logical_path: "test/chain".to_string(),
+            version: 1,
+            nodes: vec![
+                LogicNode {
+                    node_id: NodeId::new("sensor"),
+                    role: LogicNodeRole::Sensor,
+                    node_type_id: NodeTypeId::new("sensor.always"),
+                    field_values: serde_json::json!({}),
+                    controller_id: None,
+                },
+                LogicNode {
+                    node_id: NodeId::new("controller"),
+                    role: LogicNodeRole::Controller,
+                    node_type_id: NodeTypeId::new("controller.if"),
+                    field_values: serde_json::json!({}),
+                    controller_id: None,
+                },
+            ],
+            edges: vec![
+                LogicEdge {
+                    from_node: NodeId::new("sensor"),
+                    from_port: PortId::new("tick"),
+                    to_node: NodeId::new("controller"),
+                    to_port: PortId::new("condition"),
+                },
+            ],
+        };
+
+        register_logic_graph(graph);
+
+        let result = evaluate_logic_binding("test/chain", 1, 0);
+        // Should succeed (no actuator in this chain)
+        assert!(result.is_ok(), "expected ok, got {:?}", result);
+
+        // Clean up
+        let _ = drain_actuator_outputs();
+    }
+
+    // §T9: evaluate_logic_binding — version mismatch returns error
+    #[test]
+    fn test_evaluate_logic_binding_version_mismatch() {
+        let graph = LogicGraphAsset {
+            asset_id: "test/version".to_string(),
+            logical_path: "test/version".to_string(),
+            version: 5,
+            nodes: vec![
+                LogicNode {
+                    node_id: NodeId::new("sensor"),
+                    role: LogicNodeRole::Sensor,
+                    node_type_id: NodeTypeId::new("sensor.always"),
+                    field_values: serde_json::json!({}),
+                    controller_id: None,
+                },
+            ],
+            edges: vec![],
+        };
+
+        register_logic_graph(graph);
+
+        // Call with wrong version
+        let result = evaluate_logic_binding("test/version", 99, 0);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            LogicError::VersionMismatch { asset_id, expected, actual } => {
+                assert_eq!(asset_id, "test/version");
+                assert_eq!(expected, 99);
+                assert_eq!(actual, 5);
+            }
+            e => panic!("expected VersionMismatch, got {:?}", e),
+        }
+    }
+
+    // §T10: register_logic_graph and get_logic_graph_asset roundtrip
+    #[test]
+    fn test_register_and_retrieve_graph() {
+        let graph = LogicGraphAsset {
+            asset_id: "test/retrieve".to_string(),
+            logical_path: "test/retrieve".to_string(),
+            version: 2,
+            nodes: vec![
+                LogicNode {
+                    node_id: NodeId::new("sensor"),
+                    role: LogicNodeRole::Sensor,
+                    node_type_id: NodeTypeId::new("sensor.always"),
+                    field_values: serde_json::json!({}),
+                    controller_id: None,
+                },
+            ],
+            edges: vec![],
+        };
+
+        register_logic_graph(graph.clone());
+
+        let retrieved = get_logic_graph_asset("test/retrieve");
+        assert!(retrieved.is_some());
+        let retrieved = retrieved.unwrap();
+        assert_eq!(retrieved.asset_id, "test/retrieve");
+        assert_eq!(retrieved.version, 2);
+    }
+
+    // §T11: submit and drain with entity bits preserved
+    #[test]
+    fn test_entity_bits_preserved_in_bus() {
+        let _ = drain_actuator_outputs();
+
+        let entity = bevy::prelude::Entity::from_bits(777);
+        submit_actuator_output(entity, "vx", PortValue::Float(10.0));
+
+        let outputs = drain_actuator_outputs();
+        assert_eq!(outputs.len(), 1);
+        assert_eq!(outputs[0].entity_bits, 777);
+        assert_eq!(outputs[0].field, "vx");
     }
 }

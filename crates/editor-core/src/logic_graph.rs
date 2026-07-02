@@ -3,6 +3,7 @@
 //! Mirrors the Scene Asset document model but carries `nodes` and `edges`
 //! for a visual node/edge graph. Distinct from a Bevy runtime scene.
 
+use bevy::prelude::Component;
 use serde::{Deserialize, Serialize};
 
 use crate::document::ComponentInstance;
@@ -107,6 +108,17 @@ pub struct LogicGraphAsset {
 /// Binding payload for a LogicInstance — placed use of a LogicGraphAsset.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LogicInstance {
+    pub asset_id: String,
+    pub version: u32,
+}
+
+/// Bevy component attached to entities that have a LogicBinding.
+///
+/// This component is inserted by `spawn_preview_entity` when it encounters
+/// an `editor.LogicBinding` component. The `logic_evaluation_system`
+/// queries for this component to find all logic-bound entities and evaluate their graphs.
+#[derive(Component, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LogicBinding {
     pub asset_id: String,
     pub version: u32,
 }

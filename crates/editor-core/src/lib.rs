@@ -34,6 +34,8 @@ pub mod logic_graph;
 pub mod logic_evaluator;
 pub mod logic_validation;
 pub mod logic_command;
+pub mod logic_dispatch;
+pub mod actuator_bus;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ADR References (documentation only — no code changes here)
@@ -1359,6 +1361,8 @@ pub fn start_engine(canvas_id: &str) {
         .add_systems(Update, process_commands)
         .add_systems(Update, rebuild_preview_world.after(process_commands))
         .add_systems(Update, sync_log_state.after(rebuild_preview_world))
+        .add_systems(Update, logic_dispatch::logic_evaluation_system.after(sync_log_state))
+        .add_systems(Update, actuator_bus::apply_actuator_outputs.after(logic_dispatch::logic_evaluation_system))
         .add_systems(Last, emit_events)
         .run();
 
@@ -1674,6 +1678,7 @@ fn spawn_preview_entity(commands: &mut Commands, preview: &PreviewEntity) {
     let mut transform: Option<Transform> = None;
     let mut sprite: Option<Sprite> = None;
     let mut anchor_str: Option<String> = None;
+    let mut logic_binding: Option<crate::logic_graph::LogicBinding> = None;
 
     for component in &preview.component_values {
         match component.type_id.as_str() {
@@ -1746,6 +1751,21 @@ fn spawn_preview_entity(commands: &mut Commands, preview: &PreviewEntity) {
                     anchor_str = Some(s.to_string());
                 }
             }
+            // LogicBinding: deserialize asset_id and version for the dispatch scheduler
+            "editor.LogicBinding" => {
+                let asset_id = component
+                    .values
+                    .get("asset_id")
+                    .and_then(|v| v.as_str())
+                    .map(String::from)
+                    .unwrap_or_default();
+                let version = component
+                    .values
+                    .get("version")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as u32;
+                logic_binding = Some(crate::logic_graph::LogicBinding { asset_id, version });
+            }
             // Skip editorial-only components
             _ => {}
         }
@@ -1770,6 +1790,9 @@ fn spawn_preview_entity(commands: &mut Commands, preview: &PreviewEntity) {
         let raw_anchor = anchor_str.as_deref().unwrap_or("Center");
         let bevy_anchor = anchor_str_to_bevy_anchor(raw_anchor);
         cmd.insert(Anchor::from(bevy_anchor.0));
+    }
+    if let Some(lb) = logic_binding {
+        cmd.insert(lb);
     }
 }
 
