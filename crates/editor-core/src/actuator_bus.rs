@@ -10,13 +10,14 @@
 use bevy::prelude::*;
 use std::sync::{Mutex, OnceLock};
 use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
 
 use crate::logic_evaluator::PortValue;
 
 /// The output produced by an actuator node evaluation.
 /// Carries the entity identifier (as u64 bits), the target field name,
 /// and the typed value to write.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActuatorOutput {
     /// Bevy Entity encoded as u64 bits (from `Entity::to_bits()`).
     pub entity_bits: u64,
