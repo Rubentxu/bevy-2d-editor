@@ -1,0 +1,51 @@
+{
+  "asset_id": "lga_recipe_proximity",
+  "logical_path": "recipes/proximity_trigger",
+  "version": 1,
+  "builtin": true,
+  "nodes": [
+    {
+      "node_id": "sensor_prox",
+      "role": "sensor",
+      "node_type_id": "sensor.proximity",
+      "field_values": {
+        "target_tag": "player",
+        "distance": 2.0
+      },
+      "controller_id": null
+    },
+    {
+      "node_id": "ctrl_compare",
+      "role": "controller",
+      "node_type_id": "controller.compare",
+      "field_values": {
+        "operator": "less_than",
+        "threshold": 2.0
+      },
+      "controller_id": null
+    },
+    {
+      "node_id": "actuator_signal",
+      "role": "actuator",
+      "node_type_id": "actuator.emit_signal",
+      "field_values": {
+        "signal_id": "player_nearby"
+      },
+      "controller_id": null
+    }
+  ],
+  "edges": [
+    {
+      "from_node": "sensor_prox",
+      "from_port": "distance",
+      "to_node": "ctrl_compare",
+      "to_port": "a"
+    },
+    {
+      "from_node": "ctrl_compare",
+      "from_port": "result",
+      "to_node": "actuator_signal",
+      "to_port": "trigger"
+    }
+  ]
+}

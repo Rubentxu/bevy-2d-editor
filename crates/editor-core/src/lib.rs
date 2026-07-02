@@ -34,6 +34,7 @@ pub mod logic_graph;
 pub mod logic_evaluator;
 pub mod logic_validation;
 pub mod logic_command;
+pub mod logic_recipes;
 pub mod logic_dispatch;
 pub mod actuator_bus;
 
@@ -116,6 +117,7 @@ pub use operation_log::{LogEntry, OperationLog, OperationLogError};
 pub use persistence::{asset_path, validate_logical_path, AssetPathError, PROJECT_FILE, ProjectMetadata, SCENES_DIR, SCHEMAS_DIR, ASSETS_DIR, TILESETS_DIR, tileset_path};
 pub use asset_command::{AssetCommand, AssetCommandError, AssetOperationLog};
 pub use logic_command::{LogicCommand, LogicCommandError, LogicOperationLog};
+pub use logic_recipes::{is_builtin_recipe, list_builtin_recipes, seed_builtin_recipes};
 pub use scene_asset::{
     AssetReference, ExposedProperty, LayerId, LevelLayer, LocalId, RelationshipKind, RoleWarning,
     SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata, SceneAssetRelationship,
@@ -2742,6 +2744,15 @@ pub fn dispatch_logic_command(cmd_json: &str) -> Result<String, JsValue> {
     })?;
 
     Ok(result_json)
+}
+
+/// List all built-in immutable recipes with metadata.
+/// Returns JSON array of { asset_id, name, description, node_count }.
+#[wasm_bindgen]
+pub fn list_builtin_recipes_wasm() -> Result<JsValue, JsValue> {
+    let recipes = logic_recipes::list_builtin_recipes();
+    serde_wasm_bindgen::to_value(&recipes)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize recipes: {}", e)))
 }
 
 /// Undo the last logic command.

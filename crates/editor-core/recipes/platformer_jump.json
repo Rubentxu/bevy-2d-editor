@@ -1,0 +1,50 @@
+{
+  "asset_id": "lga_recipe_jump",
+  "logical_path": "recipes/platformer_jump",
+  "version": 1,
+  "builtin": true,
+  "nodes": [
+    {
+      "node_id": "sensor_press",
+      "role": "sensor",
+      "node_type_id": "sensor.key_pressed",
+      "field_values": {
+        "key": "Space"
+      },
+      "controller_id": null
+    },
+    {
+      "node_id": "ctrl_gate",
+      "role": "controller",
+      "node_type_id": "controller.gate",
+      "field_values": {
+        "enabled": true
+      },
+      "controller_id": null
+    },
+    {
+      "node_id": "actuator_jump",
+      "role": "actuator",
+      "node_type_id": "actuator.apply_impulse",
+      "field_values": {
+        "direction": "up",
+        "force": 1.0
+      },
+      "controller_id": null
+    }
+  ],
+  "edges": [
+    {
+      "from_node": "sensor_press",
+      "from_port": "pressed",
+      "to_node": "ctrl_gate",
+      "to_port": "trigger"
+    },
+    {
+      "from_node": "ctrl_gate",
+      "from_port": "out",
+      "to_node": "actuator_jump",
+      "to_port": "activate"
+    }
+  ]
+}

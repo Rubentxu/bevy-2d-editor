@@ -1,0 +1,51 @@
+{
+  "asset_id": "lga_recipe_health",
+  "logical_path": "recipes/health_damage",
+  "version": 1,
+  "builtin": true,
+  "nodes": [
+    {
+      "node_id": "sensor_hit",
+      "role": "sensor",
+      "node_type_id": "sensor.collision",
+      "field_values": {
+        "target_tag": "hazard"
+      },
+      "controller_id": null
+    },
+    {
+      "node_id": "ctrl_compare",
+      "role": "controller",
+      "node_type_id": "controller.compare",
+      "field_values": {
+        "operator": "greater_than",
+        "threshold": 0.0
+      },
+      "controller_id": null
+    },
+    {
+      "node_id": "actuator_damage",
+      "role": "actuator",
+      "node_type_id": "actuator.modify_health",
+      "field_values": {
+        "delta": -1.0,
+        "clamp_min": 0.0
+      },
+      "controller_id": null
+    }
+  ],
+  "edges": [
+    {
+      "from_node": "sensor_hit",
+      "from_port": "collision",
+      "to_node": "ctrl_compare",
+      "to_port": "a"
+    },
+    {
+      "from_node": "ctrl_compare",
+      "from_port": "result",
+      "to_node": "actuator_damage",
+      "to_port": "apply"
+    }
+  ]
+}
