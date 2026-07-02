@@ -264,6 +264,22 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 - ✅ Bevy 0.19 (Jun 2026) — BSN Scene Components, Resources-as-components, Parley text → enables Orders 5, 7 of Hito 4
 - ⏳ Bevy 0.20+ — TBD; track `bevy_editor_prototypes` Stage 3+ for hot reload API
 
+### Session Handover (2026-07-02)
+
+**Current state**: Hito 4 Order 1 (code-editor-foundation) — 3/4 PRs merged. PR 1 (Foundation, v0.43.0), PR 2 (Service+Hook), PR 3 (UI) all in main. PR 4 (Tests + debt cleanup) pending → v0.44.0.
+
+**Tomorrow's plan** (in priority order):
+1. **Hot-fix wasm-pack bug** in `logic_evaluator.rs:1071,1101,1074` (blocks `npm run build` full chain). Small, 1-2 commits. Branch: `fix/wasm-pack-logic-evaluator-build-error`.
+2. **PR 4 cycle** (code-editor-foundation): Rust unit tests + Playwright E2E (11 scenarios) + bundle size verification + 6 HIGH debt cleanups (M-1, M-2, overeng-W1, coupling-W1, overeng-PR2-2, overeng-PR2-5/coupling-PR2-10). Branch: `feat/code-editor-foundation-pr4-tests-cleanup`. Release v0.44.0.
+3. **Hito 4 Order 2** (`rust-source-integration` — scene↔source navigation). New SDDK cycle (explore → propose → spec → design → tasks → apply → verify → debt → archive → release). Larger scope; defer until v0.44.0 lands.
+
+**Open questions**:
+- Bundle size budget: 315 KB gzipped full app vs 200 KB gzipped for CM6-only design target. Is the budget per-component or per-total? Clarify in PR 4.
+- Pre-existing wasm-pack bug: fix as part of PR 4 prep (recommended) or separate hot-fix?
+- Hito 4 Order 2 research: needs separate research spike, or is the spec sufficient?
+
+**Detailed handoff**: see `sddk/code-editor-foundation/apply-progress.md` "Session Handover" section (gitignored, local-only).
+
 ---
 
 ## Hito 0 — Capabilities Matrix
@@ -468,4 +484,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level
 
 ---
 
-*Last updated: v0.43.0 — 2026-07-02 (Hito 4 Order 1 code-editor-foundation: PR 1 #45 Foundation + PR 2 #46 Service+Hook + PR 3 #47 UI — all 3 merged; PR 4 Tests+Cleanup pending → v0.44.0)*
+*Last updated: v0.43.0 — 2026-07-02 23:30 CEST (Hito 4 Order 1: 3/4 PRs merged; PR 4 Tests+Cleanup pending → v0.44.0; session handover notes added)*
