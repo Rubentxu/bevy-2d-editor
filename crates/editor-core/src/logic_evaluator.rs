@@ -852,7 +852,7 @@ impl NodeEvaluator for TranslateEvaluator {
 
 /// sensor.key_pressed — emits Bool(true) when the configured key is held.
 /// Runtime keyboard state is fed via `SENSOR_KEYBOARD_STATE`.
-/// In headless WASM preview, defaults to emitting true (placeholder behavior).
+/// In headless WASM preview, defaults to emitting Action("pressed") when key is held.
 struct KeyPressedEvaluator;
 impl NodeEvaluator for KeyPressedEvaluator {
     fn evaluate(&self, node: &LogicNode, _inputs: &[PortValue]) -> Vec<PortValue> {
@@ -862,13 +862,18 @@ impl NodeEvaluator for KeyPressedEvaluator {
             .and_then(|v| v.as_str())
             .unwrap_or("Space");
 
-        // Check the shared keyboard state; if no state available, emit true (placeholder).
+        // Check the shared keyboard state; emit Action("pressed") when key is held.
         let is_pressed = KEYBOARD_STATE.with(|state| state.borrow().contains(key));
-        vec![PortValue::Bool(is_pressed)]
+        if is_pressed {
+            vec![PortValue::Action("pressed".to_string())]
+        } else {
+            vec![PortValue::Action(String::new())]
+        }
     }
 }
 
 /// controller.gate — passes through the trigger action when enabled (default: true).
+/// Inputs: condition(Bool), trigger(Action). Only the trigger is passed through.
 struct GateEvaluator;
 impl NodeEvaluator for GateEvaluator {
     fn evaluate(&self, node: &LogicNode, inputs: &[PortValue]) -> Vec<PortValue> {
@@ -878,14 +883,14 @@ impl NodeEvaluator for GateEvaluator {
             .and_then(|v| v.as_bool())
             .unwrap_or(true);
 
-        if enabled {
-            vec![inputs
-                .first()
-                .cloned()
-                .unwrap_or(PortValue::Action(String::new()))]
-        } else {
-            vec![PortValue::Action(String::new())]
+        if !enabled {
+            return vec![PortValue::Action(String::new())];
         }
+
+        // inputs[0]=condition(Bool), inputs[1]=trigger(Action)
+        // Pass through the trigger if enabled
+        let trigger = inputs.get(1).cloned().unwrap_or(PortValue::Action(String::new()));
+        vec![trigger]
     }
 }
 
@@ -918,11 +923,10 @@ impl NodeEvaluator for ApplyImpulseEvaluator {
             _ => (0.0, force),
         };
 
-        // Emit impulse to the bus (entity_bits provided at call site via submit_actuator_outputs_from_node)
-        // We store the Vec2 as an output for the bus submitter to pick up.
-        // The bus field for this actuator is "impulse" (not "translation").
-        // We store it in port_values so submit_actuator_outputs_from_node can find it.
-        vec![PortValue::Action(String::new())]
+        // Emit impulse to the bus via submit_actuator_outputs_from_node dispatch.
+        // Pass through the trigger Action to "done".
+        let trigger = inputs.first().cloned().unwrap_or(PortValue::Action(String::new()));
+        vec![trigger]
     }
 }
 
@@ -1984,5 +1988,250 @@ mod integration_tests {
             "expected Bool output from translator given Bool input, got {:?}",
             out.value
         );
+    }
+
+    // §T10: CompareEvaluator — greater_than threshold
+    #[test]
+    fn test_compare_evaluator_greater_than() {
+        let node = LogicNode {
+            node_id: NodeId::new("cmp"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.compare"),
+            field_values: serde_json::json!({
+                "operator": "greater_than",
+                "threshold": 5.0
+            }),
+            controller_id: None,
+        };
+        let evaluator = CompareEvaluator;
+        // Input Float(10.0) > threshold(5.0) → Action("triggered")
+        let result = evaluator.evaluate(&node, &[PortValue::Float(10.0)]);
+        assert_eq!(result.len(), 1);
+        assert!(matches!(&result[0], PortValue::Action(s) if s == "triggered"));
+    }
+
+    // §T11: CompareEvaluator — less_than threshold
+    #[test]
+    fn test_compare_evaluator_less_than() {
+        let node = LogicNode {
+            node_id: NodeId::new("cmp"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.compare"),
+            field_values: serde_json::json!({
+                "operator": "less_than",
+                "threshold": 5.0
+            }),
+            controller_id: None,
+        };
+        let evaluator = CompareEvaluator;
+        // Input Float(3.0) < threshold(5.0) → Action("triggered")
+        let result = evaluator.evaluate(&node, &[PortValue::Float(3.0)]);
+        assert_eq!(result.len(), 1);
+        assert!(matches!(&result[0], PortValue::Action(s) if s == "triggered"));
+    }
+
+    // §T12: CompareEvaluator — equals threshold (within EPSILON)
+    #[test]
+    fn test_compare_evaluator_equals() {
+        let node = LogicNode {
+            node_id: NodeId::new("cmp"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.compare"),
+            field_values: serde_json::json!({
+                "operator": "equals",
+                "threshold": 5.0
+            }),
+            controller_id: None,
+        };
+        let evaluator = CompareEvaluator;
+        // Input Float(5.0) ≈ threshold(5.0) → Action("triggered")
+        let result = evaluator.evaluate(&node, &[PortValue::Float(5.0)]);
+        assert_eq!(result.len(), 1);
+        assert!(matches!(&result[0], PortValue::Action(s) if s == "triggered"));
+    }
+
+    // §T13: CompareEvaluator — condition false returns empty Action
+    #[test]
+    fn test_compare_evaluator_false_condition() {
+        let node = LogicNode {
+            node_id: NodeId::new("cmp"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.compare"),
+            field_values: serde_json::json!({
+                "operator": "greater_than",
+                "threshold": 5.0
+            }),
+            controller_id: None,
+        };
+        let evaluator = CompareEvaluator;
+        // Input Float(2.0) < threshold(5.0) → empty Action
+        let result = evaluator.evaluate(&node, &[PortValue::Float(2.0)]);
+        assert_eq!(result.len(), 1);
+        assert!(matches!(&result[0], PortValue::Action(s) if s.is_empty()));
+    }
+
+    // §T14: KeyPressedEvaluator — no key in state → empty Action
+    #[test]
+    fn test_keypressed_evaluator_no_key_pressed() {
+        let node = LogicNode {
+            node_id: NodeId::new("kp"),
+            role: LogicNodeRole::Sensor,
+            node_type_id: NodeTypeId::new("sensor.key_pressed"),
+            field_values: serde_json::json!({ "key": "Space" }),
+            controller_id: None,
+        };
+        let evaluator = KeyPressedEvaluator;
+        // Space not in keyboard state → empty Action
+        let result = evaluator.evaluate(&node, &[]);
+        assert_eq!(result.len(), 1);
+        assert!(matches!(&result[0], PortValue::Action(s) if s.is_empty()));
+    }
+
+    // §T15: ModifyHealthEvaluator — passes through trigger Action
+    #[test]
+    fn test_modify_health_evaluator_passthrough() {
+        let node = LogicNode {
+            node_id: NodeId::new("mh"),
+            role: LogicNodeRole::Actuator,
+            node_type_id: NodeTypeId::new("actuator.modify_health"),
+            field_values: serde_json::json!({ "delta": -1.0, "clamp_min": 0.0 }),
+            controller_id: None,
+        };
+        let evaluator = ModifyHealthEvaluator;
+        let result = evaluator.evaluate(&node, &[PortValue::Action("triggered".to_string())]);
+        assert_eq!(result.len(), 1);
+        assert!(matches!(&result[0], PortValue::Action(s) if s == "triggered"));
+    }
+
+    // §T16: EmitSignalEvaluator — triggered → passes through trigger Action
+    #[test]
+    fn test_emit_signal_evaluator_passthrough() {
+        let node = LogicNode {
+            node_id: NodeId::new("es"),
+            role: LogicNodeRole::Actuator,
+            node_type_id: NodeTypeId::new("actuator.emit_signal"),
+            field_values: serde_json::json!({ "signal_id": "player_nearby" }),
+            controller_id: None,
+        };
+        let evaluator = EmitSignalEvaluator;
+        // Evaluator passes through the trigger Action (bus submission happens in submit_actuator_outputs_from_node)
+        let result = evaluator.evaluate(&node, &[PortValue::Action("triggered".to_string())]);
+        assert_eq!(result.len(), 1);
+        assert!(matches!(&result[0], PortValue::Action(s) if s == "triggered"));
+    }
+
+    // §T17: EmitSignalEvaluator — not triggered → no output
+    #[test]
+    fn test_emit_signal_evaluator_not_triggered() {
+        use crate::actuator_bus::drain_actuator_outputs;
+
+        let node = LogicNode {
+            node_id: NodeId::new("es"),
+            role: LogicNodeRole::Actuator,
+            node_type_id: NodeTypeId::new("actuator.emit_signal"),
+            field_values: serde_json::json!({ "signal_id": "player_nearby" }),
+            controller_id: None,
+        };
+
+        // Clear any previous outputs
+        let _ = drain_actuator_outputs();
+
+        let evaluator = EmitSignalEvaluator;
+        // Not triggered (empty Action) → no output
+        let _ = evaluator.evaluate(&node, &[PortValue::Action(String::new())]);
+
+        let outputs = drain_actuator_outputs();
+        // No output should be produced when not triggered
+        assert!(outputs.is_empty(), "expected no output when not triggered, got {:?}", outputs);
+    }
+
+    // §T18: CollisionEvaluator — no collision in state → Float(0.0)
+    #[test]
+    fn test_collision_evaluator_no_collision() {
+        let node = LogicNode {
+            node_id: NodeId::new("col"),
+            role: LogicNodeRole::Sensor,
+            node_type_id: NodeTypeId::new("sensor.collision"),
+            field_values: serde_json::json!({ "target_tag": "hazard" }),
+            controller_id: None,
+        };
+        let evaluator = CollisionEvaluator;
+        // No collision in state → Float(0.0)
+        let result = evaluator.evaluate(&node, &[]);
+        assert_eq!(result.len(), 1);
+        assert!(matches!(&result[0], PortValue::Float(f) if *f == 0.0));
+    }
+
+    // §T19: ProximityEvaluator — no target in state → default distance
+    #[test]
+    fn test_proximity_evaluator_default_distance() {
+        let node = LogicNode {
+            node_id: NodeId::new("prox"),
+            role: LogicNodeRole::Sensor,
+            node_type_id: NodeTypeId::new("sensor.proximity"),
+            field_values: serde_json::json!({ "target_tag": "player", "distance": 2.0 }),
+            controller_id: None,
+        };
+        let evaluator = ProximityEvaluator;
+        // No proximity data in state → default distance from field_values
+        let result = evaluator.evaluate(&node, &[]);
+        assert_eq!(result.len(), 1);
+        assert!(matches!(&result[0], PortValue::Float(f) if *f == 2.0));
+    }
+
+    // §T20: GateEvaluator — enabled + trigger → passes through trigger
+    #[test]
+    fn test_gate_evaluator_enabled_passes_trigger() {
+        let node = LogicNode {
+            node_id: NodeId::new("gate"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.gate"),
+            field_values: serde_json::json!({ "enabled": true }),
+            controller_id: None,
+        };
+        let evaluator = GateEvaluator;
+        // condition=true, trigger=Action("go") → passes through trigger
+        let result = evaluator.evaluate(
+            &node,
+            &[PortValue::Bool(true), PortValue::Action("go".to_string())],
+        );
+        assert_eq!(result.len(), 1);
+        assert!(matches!(&result[0], PortValue::Action(s) if s == "go"));
+    }
+
+    // §T21: GateEvaluator — disabled → empty Action regardless of trigger
+    #[test]
+    fn test_gate_evaluator_disabled_blocks() {
+        let node = LogicNode {
+            node_id: NodeId::new("gate"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.gate"),
+            field_values: serde_json::json!({ "enabled": false }),
+            controller_id: None,
+        };
+        let evaluator = GateEvaluator;
+        // condition=false → empty Action even with trigger
+        let result = evaluator.evaluate(
+            &node,
+            &[PortValue::Bool(false), PortValue::Action("go".to_string())],
+        );
+        assert_eq!(result.len(), 1);
+        assert!(matches!(&result[0], PortValue::Action(s) if s.is_empty()));
+    }
+
+    // §T22: ApplyImpulseEvaluator — passes through trigger Action
+    #[test]
+    fn test_apply_impulse_evaluator_passthrough() {
+        let node = LogicNode {
+            node_id: NodeId::new("imp"),
+            role: LogicNodeRole::Actuator,
+            node_type_id: NodeTypeId::new("actuator.apply_impulse"),
+            field_values: serde_json::json!({ "direction": "up", "force": 2.0 }),
+            controller_id: None,
+        };
+        let evaluator = ApplyImpulseEvaluator;
+        let result = evaluator.evaluate(&node, &[PortValue::Action("triggered".to_string())]);
+        assert_eq!(result.len(), 1);
+        assert!(matches!(&result[0], PortValue::Action(s) if s == "triggered"));
     }
 }
