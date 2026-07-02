@@ -1362,6 +1362,7 @@ pub fn start_engine(canvas_id: &str) {
         .add_systems(Update, rebuild_preview_world.after(process_commands))
         .add_systems(Update, sync_log_state.after(rebuild_preview_world))
         .add_systems(Update, logic_dispatch::logic_evaluation_system.after(sync_log_state))
+        .add_systems(Update, actuator_bus::apply_actuator_outputs.after(logic_dispatch::logic_evaluation_system))
         .add_systems(Last, emit_events)
         .run();
 
