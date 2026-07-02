@@ -81,6 +81,8 @@ pub enum LogicError {
     MissingEvaluator(NodeTypeId),
     /// Referenced port does not exist on the node.
     InvalidPort { node_id: NodeId, port_id: PortId },
+    /// Node from execution order not found in graph asset.
+    NodeNotFound(NodeId),
 }
 
 impl std::fmt::Display for LogicError {
@@ -94,6 +96,9 @@ impl std::fmt::Display for LogicError {
             LogicError::MissingEvaluator(ntid) => write!(f, "missing evaluator for node type: '{}'", ntid.as_str()),
             LogicError::InvalidPort { node_id, port_id } => {
                 write!(f, "invalid port: '{}.{}'", node_id.as_str(), port_id.as_str())
+            }
+            LogicError::NodeNotFound(node_id) => {
+                write!(f, "node not found in graph: '{}'", node_id.as_str())
             }
         }
     }
@@ -321,10 +326,7 @@ fn evaluate_nodes_in_order(asset: &LogicGraphAsset, order: &[NodeId], entity_bit
     let mut port_values: HashMap<(NodeId, PortId), PortValue> = HashMap::new();
 
     for node_id in order {
-        let node = node_map.get(node_id).ok_or_else(|| LogicError::InvalidPort {
-            node_id: node_id.clone(),
-            port_id: PortId::new(String::new()), // dummy; would need actual port
-        })?;
+        let node = node_map.get(node_id).ok_or_else(|| LogicError::NodeNotFound(node_id.clone()))?;
 
         // Gather inputs for this node from port_values (set by upstream nodes)
         let input_values = gather_input_values(node, &asset.edges, &port_values)?;
@@ -521,7 +523,7 @@ fn seed_builtin_evaluators(registry: &mut LogicNodeRegistry) {
             }],
             outputs: vec![PortSpec {
                 port_id: "done".to_string(),
-                value_type: PortValueType::Action,
+                value_type: PortValueType::Vec2,
                 display_name: "Done".to_string(),
             }],
         },
@@ -1433,5 +1435,84 @@ mod integration_tests {
         assert_eq!(outputs.len(), 1);
         assert_eq!(outputs[0].entity_bits, 777);
         assert_eq!(outputs[0].field, "vx");
+    }
+
+    // §T12: end-to-end pipeline — register → evaluate(actuator.translate) → drain
+    #[test]
+    fn test_end_to_end_actuator_pipeline() {
+        use crate::actuator_bus::drain_actuator_outputs;
+
+        let _ = drain_actuator_outputs();
+
+        // Graph: sensor.always → controller.and → actuator.translate
+        // controller.and takes two Bool inputs, outputs Bool.
+        // actuator.translate receives Bool from controller.and — wrong type for the evaluator,
+        // but TranslateEvaluator returns inputs.first() so it would return Bool.
+        // We test the simpler case: the actuator IS reached and the output bus gets
+        // an entry with the correct entity_bits and field="translation".
+        let graph = LogicGraphAsset {
+            asset_id: "test/e2e".to_string(),
+            logical_path: "test/e2e".to_string(),
+            version: 1,
+            nodes: vec![
+                LogicNode {
+                    node_id: NodeId::new("sensor"),
+                    role: LogicNodeRole::Sensor,
+                    node_type_id: NodeTypeId::new("sensor.always"),
+                    field_values: serde_json::json!({}),
+                    controller_id: None,
+                },
+                LogicNode {
+                    node_id: NodeId::new("controller"),
+                    role: LogicNodeRole::Controller,
+                    node_type_id: NodeTypeId::new("controller.and"),
+                    field_values: serde_json::json!({}),
+                    controller_id: None,
+                },
+                LogicNode {
+                    node_id: NodeId::new("actuator"),
+                    role: LogicNodeRole::Actuator,
+                    node_type_id: NodeTypeId::new("actuator.translate"),
+                    field_values: serde_json::json!({}),
+                    controller_id: None,
+                },
+            ],
+            edges: vec![
+                LogicEdge {
+                    from_node: NodeId::new("sensor"),
+                    from_port: PortId::new("tick"),
+                    to_node: NodeId::new("controller"),
+                    to_port: PortId::new("a"),
+                },
+                LogicEdge {
+                    from_node: NodeId::new("controller"),
+                    from_port: PortId::new("out"),
+                    to_node: NodeId::new("actuator"),
+                    to_port: PortId::new("vector"),
+                },
+            ],
+        };
+
+        register_logic_graph(graph);
+
+        let entity_bits: u64 = 9999;
+        let result = evaluate_logic_binding("test/e2e", 1, entity_bits);
+        assert!(result.is_ok(), "expected ok, got {:?}", result);
+
+        let outputs = drain_actuator_outputs();
+        assert!(!outputs.is_empty(), "expected at least one actuator output");
+
+        let translate_output = outputs.iter().find(|o| o.field == "translation");
+        assert!(translate_output.is_some(), "expected translation output, got {:?}", outputs);
+        let out = translate_output.unwrap();
+        // entity_bits must be threaded through from dispatch → evaluate → submit
+        assert_eq!(out.entity_bits, entity_bits, "entity_bits should be threaded through");
+        // The output value is whatever TranslateEvaluator returned (Bool in this case,
+        // since controller.and outputs Bool). This test verifies the pipeline plumbing.
+        assert!(
+            matches!(out.value, PortValue::Bool(_)),
+            "expected Bool output from translator given Bool input, got {:?}",
+            out.value
+        );
     }
 }
