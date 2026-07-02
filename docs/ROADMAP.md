@@ -179,7 +179,7 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 | 2 | `logic-registry-and-metadata` | ✅ DONE (v0.38.0, PR #TBD) — `NodeEvaluator` trait + built-in registry keyed by `node_type_id` / `controller_id`, `logic.*` schemas, port specs. Needed before any node can do anything. |
 | 3 | `logic-graph-authoring-ui` | ✅ DONE (v0.39.0, PR #40) — React Flow view-only `LogicGraphEditor.tsx`, `EditorMode="logic"`, `LogicCommand` surface, node palette. Authoring needs data model + registry. |
 | 4 | `logic-graph-validation` | ✅ DONE — Port-type compatibility, cycle/dangling-ref detection via existing `get_validation_issues_wasm`. Surfaces issues before preview. |
-| 5 | `logic-preview-dispatch-scheduler` | `project_logic_instances()`, `LogicSchedule` system set, fix `spawn_preview_entity` skip-arm (lib.rs:1666), event-driven graph evaluation with a cheap Update gate. |
+| 5 | `logic-preview-dispatch-scheduler` | ✅ DONE (v0.40.1, PR #41 + fix PR #42) — `ACTUATOR_OUTPUT_BUS` + `evaluate_logic_binding` + topological sort + `apply_actuator_outputs` system + WASM exports + 11 integration tests (352 tests pass). Event-driven dispatch scheduler in Bevy Update loop. |
 | 6 | `logic-bricks-2d-recipes` | Curated built-in `LogicGraphAsset` recipes (`platformer_jump`, `health_damage`, `proximity_trigger`) reused via `LogicInstance`. |
 | 7 | `rustcontroller-builtins` | Compiled built-in `RustController` impls for non-graph extension points. |
 | 8 | (Deferred) `logic-graph-codegen` | Optional graph → Rust source export via `code_export.rs` pattern. Not required for v1. |
@@ -395,4 +395,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level
 
 ---
 
-*Last updated: v0.38.0 — 2026-07-01 (Hito 3 Order 2 logic-registry-and-metadata done)*
+*Last updated: v0.40.1 — 2026-07-02 (Hito 3 Order 5 logic-preview-dispatch-scheduler + fix round)*
