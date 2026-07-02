@@ -194,6 +194,54 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 
 ---
 
+## Hito 4: Code-Aware Editor & Game Loop
+
+**Goal**: Close the end-to-end loop from authoring to running game, with AI that understands Rust code + scene data + logic graphs simultaneously. The "Cursor-like IDE for Bevy games" vision needs three missing pieces: a real code editor, a build/run loop, and Rust source awareness. None of Hitos 0-3 deliver these; they are the foundation of Hito 4.
+
+**Why this is the next milestone (research 2026-07-02)**:
+- **Bevy 0.19** (June 2026) introduced `#[derive(SceneComponent)]` — Components that wrap entire scenes. This is a perfect fit for our Scene Asset model and the only Bevy 0.19 feature we have not yet targeted.
+- **Bevy Editor Prototype Stage 3** (official roadmap) calls out hot reload, "Press Run Game", and tooltips as the next critical features. We have the data model for none of them yet.
+- **Cursor's 2026 differentiation** is project-aware AI across code + non-code artifacts. Our Hito 1 AI only sees scene JSON; it cannot reason about Rust code, BSN, or Logic graphs. Hito 5 (code-aware AI) closes that gap.
+- **Asset pipeline** (textures/audio/fonts) is a precondition for runnable games. Currently missing.
+
+**Normative references** (to be created):
+- ADR-XXXX: Code editor choice (Monaco vs CodeMirror 6)
+- ADR-XXXX: WASM build strategy (in-browser rustc.wasm vs remote build)
+- ADR-XXXX: Hot reload API contract with Bevy 0.19
+
+### Planned Sequence
+
+| Order | Change | Why this order |
+|-------|--------|----------------|
+| 1 | `code-editor-foundation` | Monaco or CodeMirror 6 with Rust syntax + tabs + outline + go-to-definition. Foundation: Orders 2-5 need a working code editor. |
+| 2 | `rust-source-integration` | Source files as Project assets, `bsn!` / `#[derive(SceneComponent)]` syntax highlight, scene ↔ source navigation (click entity → open source). Needed before build/run can show code errors. |
+| 3 | `asset-pipeline` | Texture/audio/font import UI, browser-native asset ops, integration with existing Asset Catalog. Needed before Hito 5 games can run. |
+| 4 | `build-and-run-loop` | Compile Bevy project to WASM (sandboxed rustc.wasm worker or remote build), "Run Game" button, iframe preview, crash reporting. End-to-end value. |
+| 5 | `hot-reload` | Bevy 0.19 asset hot reload + Scene Asset resync. Closes the inner loop (change → see result without restart). |
+| 6 | `code-aware-ai` | LLM proxy extended to see Rust source + scene JSON + logic graphs. Proposals become multi-file Composer-style changes. Needs Orders 1-2 to feed context. |
+| 7 | `scene-component-authoring` | Bevy 0.19 `#[derive(SceneComponent)]` authoring UI: components that are scene trees. Aligns our Scene Asset model with Bevy 0.19 native shape. |
+| 8 | `animation-graph-editor` (deferred) | Visual animation blending graph (mirrors Logic Bricks shape). Bevy Editor uncategorized long-term. |
+
+### Research Gates
+
+| Capability | Required research before `sddk-propose` |
+|------------|------------------------------------------|
+| Code editor in browser | Monaco vs CodeMirror 6: bundle size, Rust syntax support, performance, customization. Lucide/Tailwind for the editor chrome. |
+| WASM build in browser | rustc.wasm (slow but offline) vs remote build server (fast but networked) vs hybrid (cached deps + remote compile). Security implications. |
+| Hot reload Bevy 0.19 | `Component::hot_reload` API, asset watcher integration, scene asset resync semantics. |
+| SceneComponent (Bevy 0.19) | Derive macro shape, how `SceneComponent` materializes to `BsnIr` and `.bsn`, authoring UX. |
+| Code-aware AI | Multi-source context window, source code chunking for `rustc --emit=metadata` indexing, token budget strategy. |
+
+### Bevy Roadmap Alignment (2026-07-02)
+
+- ✅ Bevy 0.16 (Apr 2025) — Relationships, Entity Cloning → consumed by our Scene Asset model
+- ✅ Bevy 0.17 (Aug 2025) — TBD
+- ✅ Bevy 0.18 (Jan 2026) — Cargo feature collections → enables 2D-only build
+- ✅ Bevy 0.19 (Jun 2026) — BSN Scene Components, Resources-as-components, Parley text → enables Orders 5, 7 of Hito 4
+- ⏳ Bevy 0.20+ — TBD; track `bevy_editor_prototypes` Stage 3+ for hot reload API
+
+---
+
 ## Hito 0 — Capabilities Matrix
 
 ```
