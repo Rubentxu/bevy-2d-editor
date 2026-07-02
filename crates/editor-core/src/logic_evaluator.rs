@@ -2,10 +2,13 @@
 //!
 //! Phase 1: NodeEvaluator trait + PortValue enum + metadata structs.
 //! Phase 2: LogicNodeRegistry singleton + placeholder built-in evaluators.
+//! Phase 3: Logic graph evaluation dispatch (evaluate_logic_binding).
 //! All tests follow Strict TDD: RED → GREEN → TRIANGULATE → REFACTOR.
 
-use crate::logic_graph::{LogicNode, LogicNodeRole, NodeTypeId};
+use crate::logic_graph::{LogicEdge, LogicGraphAsset, LogicNode, LogicNodeRole, NodeId, NodeTypeId, PortId};
+use crate::actuator_bus::{submit_actuator_output, drain_actuator_outputs};
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
@@ -57,6 +60,43 @@ pub struct ParamSpec {
     pub value_type: PortValueType,
     pub default: Option<serde_json::Value>,
 }
+
+/// Errors that can occur during logic graph evaluation.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LogicError {
+    /// Graph asset not registered.
+    AssetNotFound(String),
+    /// Version mismatch between binding and asset.
+    VersionMismatch {
+        asset_id: String,
+        expected: u32,
+        actual: u32,
+    },
+    /// Cycle detected — no valid topological order exists.
+    CycleDetected,
+    /// No evaluator registered for the given node type.
+    MissingEvaluator(NodeTypeId),
+    /// Referenced port does not exist on the node.
+    InvalidPort { node_id: NodeId, port_id: PortId },
+}
+
+impl std::fmt::Display for LogicError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LogicError::AssetNotFound(id) => write!(f, "graph asset not found: '{}'", id),
+            LogicError::VersionMismatch { asset_id, expected, actual } => {
+                write!(f, "version mismatch for '{}': expected {}, got {}", asset_id, expected, actual)
+            }
+            LogicError::CycleDetected => write!(f, "cycle detected in graph: no valid execution order"),
+            LogicError::MissingEvaluator(ntid) => write!(f, "missing evaluator for node type: '{}'", ntid.as_str()),
+            LogicError::InvalidPort { node_id, port_id } => {
+                write!(f, "invalid port: '{}.{}'", node_id.as_str(), port_id.as_str())
+            }
+        }
+    }
+}
+
+impl std::error::Error for LogicError {}
 
 /// NodeEvaluator dispatch trait — ADR-0011 §D2.
 ///
@@ -142,6 +182,246 @@ pub fn global_node_registry() -> &'static LogicNodeRegistry {
         seed_builtin_evaluators(&mut registry);
         registry
     })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 3: LogicGraphAsset registry (in-memory, WASM-side persistence deferred)
+// ─────────────────────────────────────────────────────────────────────────────
+
+thread_local! {
+    /// In-memory registry of LogicGraphAsset documents, keyed by asset_id.
+    /// Initialized lazily on first access.
+    static LOGIC_GRAPH_REGISTRY: RefCell<Option<HashMap<String, LogicGraphAsset>>> =
+        const { RefCell::new(None) };
+}
+
+/// Register a LogicGraphAsset in the in-memory registry.
+pub fn register_logic_graph(asset: LogicGraphAsset) {
+    LOGIC_GRAPH_REGISTRY.with(|cell| {
+        let mut reg = cell.borrow_mut();
+        if reg.is_none() {
+            *reg = Some(HashMap::new());
+        }
+        reg.as_mut().unwrap().insert(asset.asset_id.clone(), asset);
+    });
+}
+
+/// Get a LogicGraphAsset by asset_id from the in-memory registry.
+pub fn get_logic_graph_asset(asset_id: &str) -> Option<LogicGraphAsset> {
+    LOGIC_GRAPH_REGISTRY.with(|cell| {
+        cell.borrow().as_ref()?.get(asset_id).cloned()
+    })
+}
+
+/// Evaluate a logic binding: find graph by asset_id, run sensor→controller→actuator.
+/// Submits actuator outputs to ACTUATOR_OUTPUT_BUS.
+///
+/// # Arguments
+/// * `asset_id` - The asset identifier of the LogicGraphAsset to evaluate
+/// * `version` - Expected version (returns error if mismatched)
+///
+/// # Errors
+/// Returns `LogicError` if the asset is not found, version mismatches, or
+/// evaluation cannot proceed (cycle, missing evaluator).
+pub fn evaluate_logic_binding(asset_id: &str, version: u32) -> Result<(), LogicError> {
+    // Step 1: Find the LogicGraphAsset by asset_id
+    let asset = get_logic_graph_asset(asset_id)
+        .ok_or_else(|| LogicError::AssetNotFound(asset_id.to_string()))?;
+
+    // Step 2: Version check
+    if asset.version != version {
+        return Err(LogicError::VersionMismatch {
+            asset_id: asset_id.to_string(),
+            expected: version,
+            actual: asset.version,
+        });
+    }
+
+    // Step 3: Build execution order via topological sort of edges
+    // Sensors run first (they have no input dependencies), then controllers, then actuators.
+    // Edges go from output port of source node to input port of target node.
+    // We do a Kahn's algorithm: nodes with all inputs satisfied can run.
+    let execution_order = topological_sort(&asset.nodes, &asset.edges)
+        .ok_or(LogicError::CycleDetected)?;
+
+    // Step 4: Run sensors first, collect their output values
+    // Step 5: Run controllers, propagating values through the graph
+    // Step 6: Run actuators, calling submit_actuator_output for each
+    evaluate_nodes_in_order(&asset, &execution_order)?;
+
+    Ok(())
+}
+
+/// Kahn's algorithm topological sort. Returns None if a cycle exists.
+fn topological_sort(nodes: &[LogicNode], edges: &[LogicEdge]) -> Option<Vec<NodeId>> {
+    // Build adjacency and in-degree maps
+    let mut in_degree: HashMap<NodeId, usize> = HashMap::new();
+    let mut adjacency: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
+
+    for node in nodes {
+        in_degree.insert(node.node_id.clone(), 0);
+        adjacency.entry(node.node_id.clone()).or_default();
+    }
+
+    for edge in edges {
+        *in_degree.entry(edge.to_node.clone()).or_insert(0) += 1;
+        adjacency
+            .entry(edge.from_node.clone())
+            .or_default()
+            .push(edge.to_node.clone());
+    }
+
+    // Start with nodes that have no incoming edges
+    let mut queue: Vec<NodeId> = in_degree
+        .iter()
+        .filter(|(_, deg)| **deg == 0)
+        .map(|(id, _)| id.clone())
+        .collect();
+
+    let mut result: Vec<NodeId> = Vec::new();
+
+    while let Some(node_id) = queue.pop() {
+        result.push(node_id.clone());
+        if let Some(neighbors) = adjacency.get(&node_id) {
+            for neighbor in neighbors {
+                if let Some(deg) = in_degree.get_mut(neighbor) {
+                    *deg = deg.saturating_sub(1);
+                    if *deg == 0 {
+                        queue.push(neighbor.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    // If we processed all nodes, return the order; otherwise there's a cycle
+    if result.len() == nodes.len() {
+        Some(result)
+    } else {
+        None
+    }
+}
+
+/// Evaluate all nodes in the given order (result of topological sort).
+fn evaluate_nodes_in_order(asset: &LogicGraphAsset, order: &[NodeId]) -> Result<(), LogicError> {
+    let registry = global_node_registry();
+
+    // Build a map from NodeId to LogicNode for O(1) lookup
+    let node_map: HashMap<NodeId, &LogicNode> = asset
+        .nodes
+        .iter()
+        .map(|n| (n.node_id.clone(), n))
+        .collect();
+
+    // Build a map from (NodeId, PortId) to PortValue for input resolution
+    // This is populated as nodes are evaluated
+    let mut port_values: HashMap<(NodeId, PortId), PortValue> = HashMap::new();
+
+    for node_id in order {
+        let node = node_map.get(node_id).ok_or_else(|| LogicError::InvalidPort {
+            node_id: node_id.clone(),
+            port_id: PortId::new(String::new()), // dummy; would need actual port
+        })?;
+
+        // Gather inputs for this node from port_values (set by upstream nodes)
+        let input_values = gather_input_values(node, &asset.edges, &port_values)?;
+
+        // Evaluate the node
+        let evaluator = match node.role {
+            LogicNodeRole::Sensor | LogicNodeRole::Controller => {
+                registry.get_evaluator(&node.node_type_id)
+            }
+            LogicNodeRole::Actuator => {
+                // Actuators use the same evaluator dispatch
+                registry.get_evaluator(&node.node_type_id)
+            }
+        };
+
+        let evaluator = evaluator.ok_or_else(|| LogicError::MissingEvaluator(node.node_type_id.clone()))?;
+
+        let outputs = evaluator.evaluate(node, &input_values);
+
+        // Store output values for downstream nodes
+        store_output_values(node, &outputs, &asset.edges, &mut port_values)?;
+
+        // If actuator, submit to the bus
+        if node.role == LogicNodeRole::Actuator {
+            submit_actuator_outputs_from_node(node, &outputs);
+        }
+    }
+
+    Ok(())
+}
+
+/// Gather input values for a node from edges and port_values map.
+fn gather_input_values(
+    node: &LogicNode,
+    edges: &[LogicEdge],
+    port_values: &HashMap<(NodeId, PortId), PortValue>,
+) -> Result<Vec<PortValue>, LogicError> {
+    // Find edges that target this node
+    let input_edges: Vec<&LogicEdge> = edges
+        .iter()
+        .filter(|e| &e.to_node == &node.node_id)
+        .collect();
+
+    // Collect inputs in a deterministic order based on port_id
+    let mut inputs: Vec<PortValue> = Vec::new();
+    for input_edge in input_edges {
+        if let Some(value) = port_values.get(&(input_edge.from_node.clone(), input_edge.from_port.clone())) {
+            inputs.push(value.clone());
+        } else {
+            // Missing input — use default
+            inputs.push(PortValue::Action(String::new()));
+        }
+    }
+
+    Ok(inputs)
+}
+
+/// Store output values from a node into the port_values map.
+fn store_output_values(
+    node: &LogicNode,
+    outputs: &[PortValue],
+    edges: &[LogicEdge],
+    port_values: &mut HashMap<(NodeId, PortId), PortValue>,
+) -> Result<(), LogicError> {
+    // Find edges that originate from this node
+    let output_edges: Vec<&LogicEdge> = edges
+        .iter()
+        .filter(|e| &e.from_node == &node.node_id)
+        .collect();
+
+    for (i, output_edge) in output_edges.iter().enumerate() {
+        if i < outputs.len() {
+            port_values.insert(
+                (output_edge.from_node.clone(), output_edge.from_port.clone()),
+                outputs[i].clone(),
+            );
+        }
+    }
+
+    Ok(())
+}
+
+/// Submit actuator outputs to the ACTUATOR_OUTPUT_BUS.
+/// For now, we use a simplified mapping: actuator output value is submitted
+/// with a field name derived from the node's node_type_id (e.g., "jump" → "jump").
+/// The entity_bits are set to 0 for now (entity routing comes in PR2).
+fn submit_actuator_outputs_from_node(node: &LogicNode, outputs: &[PortValue]) {
+    use bevy::prelude::Entity;
+    use crate::actuator_bus::submit_actuator_output;
+
+    // For each output port, submit to the bus
+    // We use entity 0 as placeholder — actual entity routing is PR2
+    let entity = Entity::from_bits(0);
+
+    for (i, output) in outputs.iter().enumerate() {
+        // Derive field name from output index or node config
+        // This is a simplified mapping; PR2 will have richer field routing
+        let field = format!("output_{}", i);
+        submit_actuator_output(entity, &field, output.clone());
+    }
 }
 
 /// Seed the three placeholder built-in evaluators.
