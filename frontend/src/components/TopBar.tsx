@@ -1,12 +1,13 @@
 import { LogState } from "../hooks/useLogState";
 
-type EditorMode = "scene" | "asset-authoring" | "logic";
+type EditorMode = "scene" | "asset-authoring" | "logic" | "code";
 
 interface Props {
   editorMode?: EditorMode;
   onOpenAssets?: () => void;
   onBackToScene?: () => void;
   onOpenLogic?: () => void;
+  onOpenCode?: () => void;
   logState: LogState;
   onUndo: () => void;
   onRedo: () => void;
@@ -30,6 +31,7 @@ export default function TopBar({
   onOpenAssets,
   onBackToScene,
   onOpenLogic,
+  onOpenCode,
   logState,
   onUndo,
   onRedo,
@@ -62,6 +64,13 @@ export default function TopBar({
             title="Open Logic Graph Editor"
           >
             ⚡ Logic
+          </button>
+          <button
+            onClick={onOpenCode}
+            data-testid="open-code-btn"
+            title="Open Code Editor"
+          >
+            📝 Code
           </button>
           <button
             onClick={onUndo}
