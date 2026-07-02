@@ -213,7 +213,7 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 
 | Order | Change | Version | Status |
 |-------|--------|---------|--------|
-| 1 | `code-editor-foundation` | v0.43.0 (PR #TBD) | ✅ DONE |
+| 1 | `code-editor-foundation` | v0.43.0 (PR #45 + #46 + #47; v0.44.0 pending PR 4) | 🔄 IN PROGRESS (3/4 PRs merged) |
 | 2 | `rust-source-integration` | — | 🔲 Planned |
 | 3 | `asset-pipeline` | — | 🔲 Planned |
 | 4 | `build-and-run-loop` | — | 🔲 Planned |
@@ -221,6 +221,30 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 | 6 | `code-aware-ai` | — | 🔲 Planned |
 | 7 | `scene-component-authoring` | — | 🔲 Planned |
 | 8 | `animation-graph-editor` (deferred) | — | 🔲 Planned |
+
+### `code-editor-foundation` PR Sub-Sequence (4-PR stacked-to-main chain)
+
+| Sub-PR | Scope | Files | Version | PR | Status |
+|--------|-------|-------|---------|----|--------|
+| 1/4 | Foundation: Rust `source_files` module + 5 #[wasm_bindgen] exports + ADR-0012 | `crates/editor-core/src/source_files.rs`, `crates/editor-core/src/lib.rs` (+138), `docs/adr/0012-editor-choice-codemirror-6.md` (+140) | v0.43.0 | [#45](https://github.com/Rubentxu/bevy-2d-editor/pull/45) | ✅ MERGED (1 debt-fix round) |
+| 2/4 | Service + Hook layer: TS `code-files.ts` + `useCodeFiles.ts` + engine-bridge bindings + canonical `OpfsResult<T>` | `frontend/src/services/code-files.ts` (+114), `frontend/src/hooks/useCodeFiles.ts` (+187), `frontend/src/types/opfs.ts` (+17), `frontend/src/engine-bridge.ts` (+9) | v0.43.0 | [#46](https://github.com/Rubentxu/bevy-2d-editor/pull/46) | ✅ MERGED (1 debt-fix round) |
+| 3/4 | UI: CodeMirror 6 wired as `"code"` EditorMode, file list sidebar, Ctrl+S save, error toasts | `frontend/src/components/CodeEditor.tsx` (+374), `frontend/src/App.tsx` (+13), `frontend/src/components/TopBar.tsx` (+11), `frontend/package.json` (+3 deps) | v0.44.0 (with PR 4) | [#47](https://github.com/Rubentxu/bevy-2d-editor/pull/47) | ✅ MERGED (no fix cycle needed) |
+| 4/4 | Tests + debt cleanup: Playwright E2E for 11 spec scenarios, Rust unit tests, bundle size measurement, 6 HIGH debt fixes | `frontend/tests/code-editor.spec.ts`, `crates/editor-core/src/source_files.rs` unit tests, bundle measurement, 6 debt fixes | v0.44.0 | (pending) | 🔲 NEXT |
+
+### `code-editor-foundation` Carried Debt (for PR 4 cleanup)
+
+6 HIGH items scope-tagged for PR 4:
+
+| ID | Severity | Description | Effort |
+|----|----------|-------------|--------|
+| **M-1** | HIGH | `CodeEditor.tsx`: `basicSetup` 23-key enum → use `basicSetup: true` | 1 line |
+| **M-2** | HIGH | `CodeEditor.tsx`: imperative `view.dispatch` + `lastSyncedContentRef` + ref cast is redundant (uses @uiw v4.23.0 `ExternalChange.of(true)`); also a real UX bug (cursor-loss on file open) | ~25 LOC, 4 sub-bugs fixed |
+| **overeng-W1** | HIGH | `SourceFile.id == SourceFile.path` violates CONTEXT.md "Stable ID" term | Rust-side redesign (drop `id`, use `path` as natural key) |
+| **coupling-W1** | HIGH | `rename_scene_asset` / `delete_scene_asset` silently discard `js_delete_file` Result via `let _ = ...` | 2-line Rust-side fix per caller |
+| **overeng-PR2-2** | HIGH | `useCodeFiles.ts`: extract `runOp<T>(fn)` helper to collapse per-action try/catch/setError boilerplate (~40 LOC) | ~10 min, ~40 LOC reducible |
+| **overeng-PR2-5 / coupling-PR2-10** | HIGH | `code-files.ts`: add `@throws {Error}` JSDoc on `listSourceFiles`, `createSourceFile`; document 3-throws-vs-2-unions asymmetry as deliberate | 3-line doc fix |
+
+**SDDK artifacts**: 19 files in `sddk/code-editor-foundation/` (3 explore, proposal, spec, design, tasks, apply-progress, 3 archive-reports, 3 release-reports, 4 verify-reports, 4 debt-reports). All in `sddk/` (gitignored per local-only policy).
 
 ### Research Gates
 
@@ -444,4 +468,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level
 
 ---
 
-*Last updated: v0.43.0 — 2026-07-02 (Hito 4 Order 1 code-editor-foundation PR 1 — Foundation)*
+*Last updated: v0.43.0 — 2026-07-02 (Hito 4 Order 1 code-editor-foundation: PR 1 #45 Foundation + PR 2 #46 Service+Hook + PR 3 #47 UI — all 3 merged; PR 4 Tests+Cleanup pending → v0.44.0)*
