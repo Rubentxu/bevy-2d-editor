@@ -2811,8 +2811,7 @@ pub fn create_logic_graph_asset(asset_id: &str, logical_path: &str) -> Result<St
         asset_id: asset_id.to_string(),
         logical_path: logical_path.to_string(),
         version: 1,
-        nodes: Vec::new(),
-        edges: Vec::new(),
+        ..Default::default()
     };
 
     let json = serde_json::to_string(&doc)
@@ -3853,6 +3852,7 @@ mod validation_center_tests {
             version: 1,
             nodes: vec![node_sensor, node_and, node_if],
             edges: vec![edge1, edge2, edge3],
+            ..Default::default()
         };
 
         set_logic_graph_for_test(Some(asset));
@@ -3937,6 +3937,7 @@ mod validation_center_tests {
             version: 1,
             nodes: vec![node_sensor, node_and, node_if],
             edges: vec![edge1, edge2],
+            ..Default::default()
         };
 
         set_logic_graph_for_test(Some(asset));

@@ -95,10 +95,27 @@ pub struct LogicGraphAsset {
     pub asset_id: String,
     pub logical_path: String,
     pub version: u32,
+    /// True for built-in immutable recipes (e.g. `recipes/platformer_jump`).
+    /// User-authored assets always have `builtin: false` (the serde default).
+    #[serde(default)]
+    pub builtin: bool,
     #[serde(default)]
     pub nodes: Vec<LogicNode>,
     #[serde(default)]
     pub edges: Vec<LogicEdge>,
+}
+
+impl Default for LogicGraphAsset {
+    fn default() -> Self {
+        Self {
+            asset_id: String::new(),
+            logical_path: String::new(),
+            version: 0,
+            builtin: false,
+            nodes: Vec::new(),
+            edges: Vec::new(),
+        }
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -211,6 +228,7 @@ mod tests {
             version: 1,
             nodes: vec![node_a.clone(), node_b.clone()],
             edges: vec![edge.clone()],
+            ..Default::default()
         };
 
         let json = serde_json::to_string(&asset).unwrap();
@@ -233,8 +251,7 @@ mod tests {
             asset_id: "lga_empty".to_string(),
             logical_path: "logic/empty".to_string(),
             version: 1,
-            nodes: vec![],
-            edges: vec![],
+            ..Default::default()
         };
         let json = serde_json::to_string(&asset).unwrap();
         assert!(json.contains("\"nodes\":[]"));
@@ -321,7 +338,7 @@ mod tests {
             logical_path: "logic/test".to_string(),
             version: 1,
             nodes: vec![node_a, node_b],
-            edges: vec![],
+            ..Default::default()
         };
         let dups = find_duplicate_node_id(&asset);
         assert_eq!(dups.len(), 1);
@@ -349,7 +366,7 @@ mod tests {
             logical_path: "logic/test".to_string(),
             version: 1,
             nodes: vec![node_a, node_b],
-            edges: vec![],
+            ..Default::default()
         };
         let dups = find_duplicate_node_id(&asset);
         assert!(dups.is_empty());
@@ -376,6 +393,7 @@ mod tests {
             version: 1,
             nodes: vec![node_a],
             edges: vec![edge],
+            ..Default::default()
         };
         let dangling = find_dangling_edge_nodes(&asset);
         assert_eq!(dangling.len(), 1);
@@ -410,6 +428,7 @@ mod tests {
             version: 1,
             nodes: vec![node_a, node_b],
             edges: vec![edge],
+            ..Default::default()
         };
         let dangling = find_dangling_edge_nodes(&asset);
         assert!(dangling.is_empty());
@@ -455,5 +474,49 @@ mod tests {
         ];
         let count = count_logic_bindings(&components);
         assert_eq!(count, 0);
+    }
+
+    // ── builtin field tests ───────────────────────────────────────────────────
+
+    #[test]
+    fn builtin_field_defaults_to_false_when_absent() {
+        // JSON without `builtin` field should deserialize to builtin == false
+        let json = r#"{
+            "asset_id": "lga_jump",
+            "logical_path": "logic/jump",
+            "version": 1,
+            "nodes": [],
+            "edges": []
+        }"#;
+        let parsed: LogicGraphAsset = serde_json::from_str(json).unwrap();
+        assert!(!parsed.builtin);
+    }
+
+    #[test]
+    fn builtin_field_round_trips_true() {
+        let asset = LogicGraphAsset {
+            asset_id: "lga_recipe_jump".to_string(),
+            logical_path: "recipes/platformer_jump".to_string(),
+            version: 1,
+            builtin: true,
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&asset).unwrap();
+        let parsed: LogicGraphAsset = serde_json::from_str(&json).unwrap();
+        assert!(parsed.builtin);
+    }
+
+    #[test]
+    fn builtin_field_round_trips_false() {
+        let asset = LogicGraphAsset {
+            asset_id: "lga_user".to_string(),
+            logical_path: "logic/my_graph".to_string(),
+            version: 1,
+            builtin: false,
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&asset).unwrap();
+        let parsed: LogicGraphAsset = serde_json::from_str(&json).unwrap();
+        assert!(!parsed.builtin);
     }
 }

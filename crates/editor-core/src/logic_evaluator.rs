@@ -1349,6 +1349,7 @@ mod integration_tests {
                     to_port: PortId::new("condition"),
                 },
             ],
+            ..Default::default()
         };
 
         register_logic_graph(graph);
@@ -1377,7 +1378,7 @@ mod integration_tests {
                     controller_id: None,
                 },
             ],
-            edges: vec![],
+            ..Default::default()
         };
 
         register_logic_graph(graph);
@@ -1411,7 +1412,7 @@ mod integration_tests {
                     controller_id: None,
                 },
             ],
-            edges: vec![],
+            ..Default::default()
         };
 
         register_logic_graph(graph.clone());
@@ -1491,6 +1492,7 @@ mod integration_tests {
                     to_port: PortId::new("vector"),
                 },
             ],
+            ..Default::default()
         };
 
         register_logic_graph(graph);
