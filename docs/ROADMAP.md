@@ -180,7 +180,7 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 | 3 | `logic-graph-authoring-ui` | ✅ DONE (v0.39.0, PR #40) — React Flow view-only `LogicGraphEditor.tsx`, `EditorMode="logic"`, `LogicCommand` surface, node palette. Authoring needs data model + registry. |
 | 4 | `logic-graph-validation` | ✅ DONE — Port-type compatibility, cycle/dangling-ref detection via existing `get_validation_issues_wasm`. Surfaces issues before preview. |
 | 5 | `logic-preview-dispatch-scheduler` | ✅ DONE (v0.40.1, PR #41 + fix PR #42) — `ACTUATOR_OUTPUT_BUS` + `evaluate_logic_binding` + topological sort + `apply_actuator_outputs` system + WASM exports + 11 integration tests (352 tests pass). Event-driven dispatch scheduler in Bevy Update loop. |
-| 6 | `logic-bricks-2d-recipes` | Curated built-in `LogicGraphAsset` recipes (`platformer_jump`, `health_damage`, `proximity_trigger`) reused via `LogicInstance`. |
+| 6 | `logic-bricks-2d-recipes` | ✅ DONE (v0.41.0, PR #42+PR #43) — Built-in immutable recipes: `builtin: bool` field + `RecipeImmutable` guard at `LogicCommand::apply` chokepoint + `logic_recipes.rs` module + `platformer_jump`/`health_damage`/`proximity_trigger` JSON assets + `list_builtin_recipes_wasm` export + lazy seed into `LOGIC_GRAPH_REGISTRY`. |
 | 7 | `rustcontroller-builtins` | Compiled built-in `RustController` impls for non-graph extension points. |
 | 8 | (Deferred) `logic-graph-codegen` | Optional graph → Rust source export via `code_export.rs` pattern. Not required for v1. |
 
