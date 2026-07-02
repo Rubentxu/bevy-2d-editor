@@ -199,6 +199,15 @@ export async function initEngine(
   (window as any).list_scenes_extended = () => wasm.list_scenes_extended();
   (window as any).get_current_scene_id = () => wasm.get_current_scene_id();
 
+  // ── Source File CRUD (PR2 code-editor-foundation) ───────────────────────────
+  (window as any).list_source_files = () => wasm.list_source_files();
+  (window as any).read_source_file = (id: string) => wasm.read_source_file(id);
+  (window as any).write_source_file = (id: string, content: string) =>
+    wasm.write_source_file(id, content);
+  (window as any).create_source_file = (path: string, name: string) =>
+    wasm.create_source_file(path, name);
+  (window as any).delete_source_file = (id: string) => wasm.delete_source_file(id);
+
   // ── Scene Asset Browser + Authoring (PR3) ──────────────────────────────────
   (window as any).create_scene_asset = (name: string, role: string) =>
     wasm.create_scene_asset(name, role);
