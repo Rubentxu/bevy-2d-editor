@@ -3928,14 +3928,6 @@ async fn load_project_metadata() -> Result<ProjectMetadata, JsValue> {
     }
 }
 
-/// Delete a file from OPFS.
-#[cfg(target_arch = "wasm32")]
-async fn js_delete_file(path: &str) -> Result<(), String> {
-    let promise = opfs_delete_file_raw(path);
-    js_await(promise).await.map_err(|e| format!("{:?}", e))?;
-    Ok(())
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Validation Center WASM boundary tests
 // ─────────────────────────────────────────────────────────────────────────────
