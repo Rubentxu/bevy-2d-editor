@@ -37,6 +37,7 @@ pub mod logic_command;
 pub mod logic_recipes;
 pub mod logic_dispatch;
 pub mod actuator_bus;
+pub mod source_files;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ADR References (documentation only — no code changes here)
@@ -155,6 +156,7 @@ pub use scene_instance::{
 };
 pub use scene_instance_overrides::{OverrideIssue, ResyncReport};
 pub use instance_projection::{root_local_ids, PreviewEntity, project_instances};
+pub use source_files::{SourceFile, SourceFileId, SOURCES_DIR};
 pub use schema::ComponentTypeId;
 pub use scenes::{SceneInfo, SceneRegistry, SwitchResult};
 pub use tileset::{
@@ -1976,6 +1978,23 @@ async fn js_list_files(path: &str) -> Result<Vec<String>, String> {
 }
 
 #[cfg(target_arch = "wasm32")]
+async fn js_delete_file(path: &str) -> Result<(), String> {
+    let promise = opfs_delete_file_raw(path);
+    let result = js_await(promise).await.map_err(|e| format!("{:?}", e))?;
+    let val: serde_json::Value = serde_wasm_bindgen::from_value(result)
+        .map_err(|e| format!("Bad bridge response: {}", e))?;
+    if val.get("ok").and_then(|v| v.as_bool()) == Some(true) {
+        Ok(())
+    } else {
+        Err(val
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Unknown error")
+            .to_string())
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
 async fn update_project_metadata(scene_name: &str) -> Result<(), String> {
     let project = if js_exists(PROJECT_FILE).await {
         match js_load_file(PROJECT_FILE).await {
@@ -2014,6 +2033,136 @@ pub async fn list_scenes() -> Result<JsValue, JsValue> {
 #[wasm_bindgen]
 pub async fn project_exists() -> bool {
     js_exists(PROJECT_FILE).await
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Source Files WASM surface — CRUD for Rust source files in OPFS `sources/`
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// List all source files in the `sources/` directory.
+/// Returns `OpfsResult<Vec<SourceFile>>` with shape `{ok: true, value: [SourceFile, ...]}`.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn list_source_files() -> Result<JsValue, JsValue> {
+    use crate::source_files::{SourceFile, SourceFileId};
+
+    // Lazy-create sources/ directory on first list (if no files exist, dir may not exist yet)
+    let files = match js_list_files(SOURCES_DIR).await {
+        Ok(names) => names,
+        Err(_) => Vec::new(), // sources/ dir doesn't exist yet — return empty list
+    };
+
+    let sources: Vec<SourceFile> = files
+        .iter()
+        .filter(|name| name.ends_with(".rs"))
+        .filter_map(|name| {
+            // name is like "src/main.rs" → strip extension → "src/main"
+            let path = name.strip_suffix(".rs")?;
+            let file_name = std::path::Path::new(name)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(name);
+            Some(SourceFile {
+                id: SourceFileId::new(path.to_string()),
+                path: path.to_string(),
+                name: file_name.to_string(),
+            })
+        })
+        .collect();
+
+    let response = serde_json::json!({ "ok": true, "value": sources });
+    serde_wasm_bindgen::to_value(&response).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Read a source file's content by id.
+/// Returns `OpfsResult<String>` with shape `{ok: true, value: "<content>"}` on success,
+/// or `{ok: false, error: "<message>"}` on failure.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn read_source_file(id: &str) -> Result<JsValue, JsValue> {
+    let path = crate::source_files::source_path_from_id(id);
+    match js_load_file(&path).await {
+        Ok(content) => {
+            let response = serde_json::json!({ "ok": true, "value": content });
+            serde_wasm_bindgen::to_value(&response).map_err(|e| JsValue::from_str(&e.to_string()))
+        }
+        Err(e) => {
+            let response = serde_json::json!({ "ok": false, "error": e });
+            serde_wasm_bindgen::to_value(&response).map_err(|e| JsValue::from_str(&e.to_string()))
+        }
+    }
+}
+
+/// Write content to a source file by id.
+/// Creates the file if it doesn't exist, overwrites if it does.
+/// Returns `OpfsResult<()>` — empty value on success.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn write_source_file(id: &str, content: &str) -> Result<JsValue, JsValue> {
+    let path = crate::source_files::source_path_from_id(id);
+    // Lazy-create sources/ directory by creating the first file
+    // js_save_file handles the file creation within the dir
+    match js_save_file(&path, content).await {
+        Ok(()) => {
+            let response = serde_json::json!({ "ok": true });
+            serde_wasm_bindgen::to_value(&response).map_err(|e| JsValue::from_str(&e.to_string()))
+        }
+        Err(e) => {
+            let response = serde_json::json!({ "ok": false, "error": e });
+            serde_wasm_bindgen::to_value(&response).map_err(|e| JsValue::from_str(&e.to_string()))
+        }
+    }
+}
+
+/// Create a new source file with the given path and name.
+/// The `path` is the id (e.g., "src/main"), `name` is the display name (e.g., "main.rs").
+/// Returns `OpfsResult<SourceFile>` with the created file's metadata.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn create_source_file(path: &str, name: &str) -> Result<JsValue, JsValue> {
+    use crate::source_files::{SourceFile, SourceFileId};
+
+    let id = path; // id IS the path for source files
+    let full_path = crate::source_files::source_path_from_id(id);
+
+    // Check if file already exists
+    if js_exists(&full_path).await {
+        let response = serde_json::json!({ "ok": false, "error": "File already exists" });
+        return serde_wasm_bindgen::to_value(&response)
+            .map_err(|e| JsValue::from_str(&e.to_string()));
+    }
+
+    // Create empty file
+    match js_save_file(&full_path, "").await {
+        Ok(()) => {
+            let file = SourceFile {
+                id: SourceFileId::new(id.to_string()),
+                path: path.to_string(),
+                name: name.to_string(),
+            };
+            let response = serde_json::json!({ "ok": true, "value": file });
+            serde_wasm_bindgen::to_value(&response)
+                .map_err(|e| JsValue::from_str(&e.to_string()))
+        }
+        Err(e) => {
+            let response = serde_json::json!({ "ok": false, "error": e });
+            serde_wasm_bindgen::to_value(&response)
+                .map_err(|e| JsValue::from_str(&e.to_string()))
+        }
+    }
+}
+
+/// Delete a source file by id.
+/// Returns `OpfsResult<()>` — empty value on success.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn delete_source_file(id: &str) -> Result<JsValue, JsValue> {
+    let path = crate::source_files::source_path_from_id(id);
+    let response = match js_delete_file(&path).await {
+        Ok(()) => serde_json::json!({ "ok": true }),
+        Err(e) => serde_json::json!({ "ok": false, "error": e }),
+    };
+    serde_wasm_bindgen::to_value(&response).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Get the current SceneDocument as JSON. Returns null if no scene loaded.
@@ -3777,14 +3926,6 @@ async fn load_project_metadata() -> Result<ProjectMetadata, JsValue> {
     } else {
         Ok(ProjectMetadata::default())
     }
-}
-
-/// Delete a file from OPFS.
-#[cfg(target_arch = "wasm32")]
-async fn js_delete_file(path: &str) -> Result<(), String> {
-    let promise = opfs_delete_file_raw(path);
-    js_await(promise).await.map_err(|e| format!("{:?}", e))?;
-    Ok(())
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
