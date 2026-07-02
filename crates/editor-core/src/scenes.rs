@@ -446,14 +446,16 @@ mod tests {
     fn test_switch_to_dirty_source_requires_prompt() {
         let registry = SceneRegistry::new();
         registry.create("Clean").unwrap();
-        let result = registry.create("Dirty").unwrap();
-        registry.mark_current_dirty(); // mark "Dirty" dirty
+        registry.create("Dirty").unwrap();
+        // After two creates, current is still "Clean" (first scene).
+        // Mark it dirty so the next switch will be blocked.
+        registry.mark_current_dirty();
 
-        // Switch is blocked because current ("Dirty") is dirty
-        let switch_result = registry.switch("Clean").unwrap();
+        // Switch is blocked because current ("Clean") is dirty
+        let switch_result = registry.switch("Dirty").unwrap();
         assert!(!switch_result.switched);
         assert!(switch_result.dirty_prompt_required);
-        assert_eq!(switch_result.source_name, "Dirty");
+        assert_eq!(switch_result.source_name, "Clean");
     }
 
     #[test]
@@ -461,6 +463,9 @@ mod tests {
         let registry = SceneRegistry::new();
         registry.create("A").unwrap();
         registry.create("B").unwrap();
+        // After two creates, current is still "A" (first scene).
+        // Clear dirty flag so switch is allowed.
+        registry.clear_current_dirty();
 
         let result = registry.switch("B").unwrap();
         assert!(result.switched);
@@ -509,12 +514,16 @@ mod tests {
         let registry = SceneRegistry::new();
         registry.create("A").unwrap();
         registry.create("B").unwrap();
-        registry.mark_current_dirty();
+        // After two creates, current is still "A" (first scene).
+        // Switch to B so the current-is_dirty test makes sense for B.
+        registry.clear_current_dirty(); // clear A's dirty flag
+        registry.switch("B").unwrap();
+        registry.mark_current_dirty(); // mark B dirty
 
         let list = registry.list();
         assert_eq!(list.len(), 2);
         let current = list.iter().find(|s| s.is_current).unwrap();
-        assert_eq!(current.name, "B"); // last created is current
+        assert_eq!(current.name, "B"); // B is current after switch
         assert!(current.is_dirty);
     }
 
@@ -522,7 +531,8 @@ mod tests {
     fn test_mark_and_clear_dirty() {
         let registry = SceneRegistry::new();
         registry.create("Test").unwrap();
-        assert!(!registry.current().unwrap().is_dirty);
+        // New scenes are dirty by default (need first save to become clean)
+        assert!(registry.current().unwrap().is_dirty);
 
         registry.mark_current_dirty();
         assert!(registry.current().unwrap().is_dirty);

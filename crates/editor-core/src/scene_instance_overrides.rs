@@ -882,8 +882,9 @@ mod tests {
             serde_json::Value::Null,
         );
 
+        // Orphan's target_local_id matches the asset entity's local_id — exact rebind succeeds
         let orphan = component_override(
-            "old_abc",
+            "new_abc",
             "editor.Sprite2D",
             vec!["asset"],
             serde_json::Value::String("cannon.png".to_string()),
