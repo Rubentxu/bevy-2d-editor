@@ -132,8 +132,9 @@ fn orphan_entry_emits_typed_warning_with_correct_code() {
         assert_eq!(warning.code, "orphaned_index");
         assert_eq!(warning.asset_id, Some("id_orphan".to_string()));
         assert_eq!(warning.logical_path, Some("ghost/player".to_string()));
-        assert!(warning.message.contains("orphaned_index"));
+        assert!(warning.message.contains("ghost/player"));
         assert!(warning.message.contains("id_orphan"));
+        assert!(warning.message.contains("body file is missing"));
     }
 }
 

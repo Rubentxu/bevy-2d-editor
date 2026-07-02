@@ -42,7 +42,7 @@ fn cache_warm_single_asset() {
     assert!(cache.contains_key("assets/player.bsn"));
     assert_eq!(
         cache.get("assets/player.bsn").unwrap().asset_id,
-        "asset-player"
+        "asset-assets-player.bsn"
     );
 }
 

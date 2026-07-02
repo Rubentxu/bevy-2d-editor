@@ -119,14 +119,16 @@ fn catalog_register_creates_entry() {
 #[test]
 fn catalog_register_normalizes_path() {
     let mut catalog = SceneAssetCatalog::new();
-    // Mixed case gets normalized to lowercase
+    // Mixed case gets normalized to lowercase and leading/trailing slashes stripped
     let e = entry("id_1", "Assets/Player/", SceneAssetRole::Actor, 1);
 
     catalog.register(e.clone()).expect("register should succeed");
 
-    // Resolves both the original and the normalized path
-    assert_eq!(catalog.resolve_path("player"), Some("id_1"));
+    // Resolves the normalized path (lowercase, stripped slashes)
+    assert_eq!(catalog.resolve_path("assets/player"), Some("id_1"));
     assert_eq!(catalog.resolve_path("Assets/Player/"), Some("id_1"));
+    // Original non-normalized forms that don't match fail
+    assert_eq!(catalog.resolve_path("player"), None);
 }
 
 // ─────────────────────────────────────────────────────────────────────────

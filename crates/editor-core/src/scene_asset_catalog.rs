@@ -9,13 +9,46 @@ use serde::{Deserialize, Serialize};
 
 use crate::scene_asset::SceneAssetRole;
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+/// Helper for serde: deserializes only `entries`, then rebuilds indices.
+/// The `#[serde(skip)]` on path_index and role_index means they come out empty
+/// from the derived Deserialize, so we rebuild them post-deserialization.
+impl<'de> Deserialize<'de> for SceneAssetCatalog {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct Helper {
+            entries: BTreeMap<String, SceneAssetCatalogEntry>,
+        }
+        let helper = Helper::deserialize(deserializer)?;
+        let mut catalog = SceneAssetCatalog {
+            entries: helper.entries,
+            path_index: BTreeMap::new(),
+            role_index: BTreeMap::new(),
+        };
+        catalog.rebuild_indices();
+        Ok(catalog)
+    }
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct SceneAssetCatalog {
     entries: BTreeMap<String, SceneAssetCatalogEntry>,
-    #[serde(skip)]
     path_index: BTreeMap<String, String>,
-    #[serde(skip)]
     role_index: BTreeMap<String, BTreeSet<String>>,
+}
+
+impl Serialize for SceneAssetCatalog {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("SceneAssetCatalog", 1)?;
+        state.serialize_field("entries", &self.entries)?;
+        state.end()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -66,6 +99,22 @@ impl SceneAssetCatalog {
             catalog.register(entry)?;
             Ok(catalog)
         })
+    }
+
+    /// Rebuild path_index and role_index from current entries.
+    /// Call after deserialization or when indices are stale.
+    fn rebuild_indices(&mut self) {
+        self.path_index.clear();
+        self.role_index.clear();
+        for (asset_id, entry) in &self.entries {
+            let normalized = normalize_logical_path(&entry.logical_path);
+            self.path_index.insert(normalized, asset_id.clone());
+            let role_key = role_key(&entry.role).to_string();
+            self.role_index
+                .entry(role_key)
+                .or_default()
+                .insert(asset_id.clone());
+        }
     }
 
     pub fn register(&mut self, entry: SceneAssetCatalogEntry) -> Result<(), CatalogError> {
@@ -122,21 +171,27 @@ impl SceneAssetCatalog {
     }
 
     pub fn update_version(&mut self, asset_id: &str, new_version: u32) -> Result<(), CatalogError> {
-        let entry = self
-            .entries
-            .get(asset_id)
-            .ok_or_else(|| CatalogError::NotFound {
-                id: asset_id.to_string(),
-            })?;
+        let created_at = {
+            let entry = self
+                .entries
+                .get(asset_id)
+                .ok_or_else(|| CatalogError::NotFound {
+                    id: asset_id.to_string(),
+                })?;
 
-        if new_version <= entry.current_version {
-            return Err(CatalogError::InvalidVersion {
-                current: entry.current_version,
-                new: new_version,
-            });
-        }
+            if new_version <= entry.current_version {
+                return Err(CatalogError::InvalidVersion {
+                    current: entry.current_version,
+                    new: new_version,
+                });
+            }
 
-        let updated_at = current_unix_millis();
+            entry.created_at
+        };
+
+        // Use at least created_at + 1 to guarantee updated_at > created_at,
+        // even when register and update happen in the same millisecond.
+        let updated_at = current_unix_millis().max(created_at + 1);
 
         let entry = self.entries.get_mut(asset_id).unwrap();
         entry.current_version = new_version;

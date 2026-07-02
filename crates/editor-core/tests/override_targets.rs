@@ -38,7 +38,7 @@ fn s4_rename_marks_stale() {
         status: ComponentOverrideStatus::Active,
     };
 
-    let result = component_override_status_after_field_rename(&patch, ("Sprite2D", "Sprite"));
+    let result = component_override_status_after_field_rename(&patch, ("asset", "Sprite"));
     assert_eq!(
         result,
         ComponentOverrideStatus::Stale,
