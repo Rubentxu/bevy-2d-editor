@@ -19,13 +19,14 @@ import AssetUnsavedChangesDialog from "./components/AssetUnsavedChangesDialog";
 import { TilesetPanel } from "./components/TilesetPanel";
 import { AutoLayerPanel } from "./components/AutoLayerPanel";
 import LogicGraphEditor from "./components/LogicGraphEditor";
+import CodeEditor from "./components/CodeEditor";
 import { useScenes } from "./hooks/useScenes";
 import { useSceneAssets } from "./hooks/useSceneAssets";
 import { sceneCreate, sceneSwitch, sceneSwitchCommit, sceneDelete, sceneRename } from "./services/scenes";
 import { type TilesetMetadata } from "./services/tilesets";
 import { type AutoLayerPayload, type LevelLayerPayload } from "./services/scene-assets";
 
-type EditorMode = "scene" | "asset-authoring" | "logic";
+type EditorMode = "scene" | "asset-authoring" | "logic" | "code";
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -389,6 +390,11 @@ export default function App() {
     setEditorMode("logic");
   }, []);
 
+  // ── Code editor handlers ────────────────────────────────────────────────
+  const handleOpenCode = useCallback(() => {
+    setEditorMode("code");
+  }, []);
+
   // Asset command dispatch with C-2 adapter: fieldPath string → [fieldPath]
   const handleAssetCommit = useCallback(
     async (localId: string, typeId: string, fieldPath: string, value: any) => {
@@ -457,6 +463,7 @@ export default function App() {
         onOpenAssets={() => {}}
         onBackToScene={editorMode === "asset-authoring" ? handleBackToScene : undefined}
         onOpenLogic={editorMode === "scene" ? handleOpenLogic : undefined}
+        onOpenCode={editorMode === "scene" ? handleOpenCode : undefined}
         logState={editorMode === "scene" ? logState : assetLogState}
         onUndo={editorMode === "scene" ? handleUndo : handleAssetUndo}
         onRedo={editorMode === "scene" ? handleRedo : handleAssetRedo}
@@ -497,6 +504,10 @@ export default function App() {
         {editorMode === "logic" ? (
           <>
             <LogicGraphEditor editorMode={editorMode} />
+          </>
+        ) : editorMode === "code" ? (
+          <>
+            <CodeEditor />
           </>
         ) : editorMode === "scene" ? (
           <>
