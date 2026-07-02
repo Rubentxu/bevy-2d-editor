@@ -1978,6 +1978,23 @@ async fn js_list_files(path: &str) -> Result<Vec<String>, String> {
 }
 
 #[cfg(target_arch = "wasm32")]
+async fn js_delete_file(path: &str) -> Result<(), String> {
+    let promise = opfs_delete_file_raw(path);
+    let result = js_await(promise).await.map_err(|e| format!("{:?}", e))?;
+    let val: serde_json::Value = serde_wasm_bindgen::from_value(result)
+        .map_err(|e| format!("Bad bridge response: {}", e))?;
+    if val.get("ok").and_then(|v| v.as_bool()) == Some(true) {
+        Ok(())
+    } else {
+        Err(val
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Unknown error")
+            .to_string())
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
 async fn update_project_metadata(scene_name: &str) -> Result<(), String> {
     let project = if js_exists(PROJECT_FILE).await {
         match js_load_file(PROJECT_FILE).await {
@@ -2141,17 +2158,11 @@ pub async fn create_source_file(path: &str, name: &str) -> Result<JsValue, JsVal
 #[wasm_bindgen]
 pub async fn delete_source_file(id: &str) -> Result<JsValue, JsValue> {
     let path = crate::source_files::source_path_from_id(id);
-    let promise = opfs_delete_file_raw(&path);
-    match js_await(promise).await {
-        Ok(_) => {
-            let response = serde_json::json!({ "ok": true });
-            serde_wasm_bindgen::to_value(&response).map_err(|e| JsValue::from_str(&e.to_string()))
-        }
-        Err(e) => {
-            let response = serde_json::json!({ "ok": false, "error": format!("{:?}", e) });
-            serde_wasm_bindgen::to_value(&response).map_err(|e| JsValue::from_str(&e.to_string()))
-        }
-    }
+    let response = match js_delete_file(&path).await {
+        Ok(()) => serde_json::json!({ "ok": true }),
+        Err(e) => serde_json::json!({ "ok": false, "error": e }),
+    };
+    serde_wasm_bindgen::to_value(&response).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Get the current SceneDocument as JSON. Returns null if no scene loaded.
@@ -3915,14 +3926,6 @@ async fn load_project_metadata() -> Result<ProjectMetadata, JsValue> {
     } else {
         Ok(ProjectMetadata::default())
     }
-}
-
-/// Delete a file from OPFS.
-#[cfg(target_arch = "wasm32")]
-async fn js_delete_file(path: &str) -> Result<(), String> {
-    let promise = opfs_delete_file_raw(path);
-    js_await(promise).await.map_err(|e| format!("{:?}", e))?;
-    Ok(())
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
