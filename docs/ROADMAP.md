@@ -204,23 +204,23 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 - **Cursor's 2026 differentiation** is project-aware AI across code + non-code artifacts. Our Hito 1 AI only sees scene JSON; it cannot reason about Rust code, BSN, or Logic graphs. Hito 5 (code-aware AI) closes that gap.
 - **Asset pipeline** (textures/audio/fonts) is a precondition for runnable games. Currently missing.
 
-**Normative references** (to be created):
-- ADR-XXXX: Code editor choice (Monaco vs CodeMirror 6)
+**Normative references**:
+- [ADR-0012: Code editor choice (CodeMirror 6)](./adr/0012-editor-choice-codemirror-6.md)
 - ADR-XXXX: WASM build strategy (in-browser rustc.wasm vs remote build)
 - ADR-XXXX: Hot reload API contract with Bevy 0.19
 
 ### Planned Sequence
 
-| Order | Change | Why this order |
-|-------|--------|----------------|
-| 1 | `code-editor-foundation` | Monaco or CodeMirror 6 with Rust syntax + tabs + outline + go-to-definition. Foundation: Orders 2-5 need a working code editor. |
-| 2 | `rust-source-integration` | Source files as Project assets, `bsn!` / `#[derive(SceneComponent)]` syntax highlight, scene ↔ source navigation (click entity → open source). Needed before build/run can show code errors. |
-| 3 | `asset-pipeline` | Texture/audio/font import UI, browser-native asset ops, integration with existing Asset Catalog. Needed before Hito 5 games can run. |
-| 4 | `build-and-run-loop` | Compile Bevy project to WASM (sandboxed rustc.wasm worker or remote build), "Run Game" button, iframe preview, crash reporting. End-to-end value. |
-| 5 | `hot-reload` | Bevy 0.19 asset hot reload + Scene Asset resync. Closes the inner loop (change → see result without restart). |
-| 6 | `code-aware-ai` | LLM proxy extended to see Rust source + scene JSON + logic graphs. Proposals become multi-file Composer-style changes. Needs Orders 1-2 to feed context. |
-| 7 | `scene-component-authoring` | Bevy 0.19 `#[derive(SceneComponent)]` authoring UI: components that are scene trees. Aligns our Scene Asset model with Bevy 0.19 native shape. |
-| 8 | `animation-graph-editor` (deferred) | Visual animation blending graph (mirrors Logic Bricks shape). Bevy Editor uncategorized long-term. |
+| Order | Change | Version | Status |
+|-------|--------|---------|--------|
+| 1 | `code-editor-foundation` | v0.43.0 (PR #TBD) | ✅ DONE |
+| 2 | `rust-source-integration` | — | 🔲 Planned |
+| 3 | `asset-pipeline` | — | 🔲 Planned |
+| 4 | `build-and-run-loop` | — | 🔲 Planned |
+| 5 | `hot-reload` | — | 🔲 Planned |
+| 6 | `code-aware-ai` | — | 🔲 Planned |
+| 7 | `scene-component-authoring` | — | 🔲 Planned |
+| 8 | `animation-graph-editor` (deferred) | — | 🔲 Planned |
 
 ### Research Gates
 
@@ -420,6 +420,7 @@ Validation Center UI + WASM Surface (validation-center)                         
 | ADR-0009 | ComponentOverride as ECS/BSN-friendly replacement for OverridePatch (explicit `component_type_id`, field_path semantic) | ✅ |
 | ADR-0010 | BsnExporter trait + EditorCoreBsnExporter as working impl; BevyBsnExporter placeholder for future Bevy PR #23639 swap | ✅ |
 | ADR-0011 | Logic Bricks — compiled Rust controllers + dispatch scheduler (no scripting VM, no codegen in v1, BSN isolation) | ✅ |
+| ADR-0012 | Code editor choice — CodeMirror 6 via `@uiw/react-codemirror` (~130KB gzip, Vite-native, extension-API future-proofs Orders 2–6) | ✅ |
 
 ---
 
@@ -443,4 +444,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level
 
 ---
 
-*Last updated: v0.40.1 — 2026-07-02 (Hito 3 Order 5 logic-preview-dispatch-scheduler + fix round)*
+*Last updated: v0.43.0 — 2026-07-02 (Hito 4 Order 1 code-editor-foundation PR 1 — Foundation)*
