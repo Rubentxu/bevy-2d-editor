@@ -3,12 +3,12 @@
 //! Actuator nodes produce outputs (field=value pairs) that need to be applied
 //! back to Bevy entity components. This module provides:
 //! - `ActuatorOutput`: the typed output payload
-//! - `ACTUATOR_OUTPUT_BUS`: process-global OnceLock bus queue
+//! - `ACTUATOR_OUTPUT_BUS`: thread-local bus queue
 //! - `submit_actuator_output()`: called by actuator evaluators
 //! - `apply_actuator_outputs`: Bevy system that drains the bus and writes to components
 
 use bevy::prelude::*;
-use std::sync::{Mutex, OnceLock};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
@@ -28,7 +28,6 @@ pub struct ActuatorOutput {
 }
 
 /// Internal bus queue for actuator outputs.
-/// Uses a simple Vec-based ring buffer pattern; `drain` atomically takes all pending outputs.
 struct ActuatorBus {
     pending: Vec<ActuatorOutput>,
 }
@@ -38,26 +37,29 @@ impl ActuatorBus {
         Self { pending: Vec::new() }
     }
 
-    /// Submit a single output to the bus.
     fn submit(&mut self, output: ActuatorOutput) {
         self.pending.push(output);
     }
 
-    /// Atomically drain all pending outputs, leaving the bus empty.
     fn drain(&mut self) -> Vec<ActuatorOutput> {
         std::mem::take(&mut self.pending)
     }
 }
 
-/// Process-global actuator output bus — initialized on first use.
-/// Uses Mutex for interior mutability (same pattern as `std::sync::OnceLock`).
-static ACTUATOR_OUTPUT_BUS: OnceLock<Mutex<ActuatorBus>> = OnceLock::new();
-
-fn actuator_bus() -> &'static Mutex<ActuatorBus> {
-    ACTUATOR_OUTPUT_BUS.get_or_init(|| Mutex::new(ActuatorBus::new()))
+/// Thread-local actuator output bus — matches the codebase `COMMAND_BUS`/`EVENT_BUS` pattern.
+thread_local! {
+    static ACTUATOR_OUTPUT_BUS: RefCell<Option<ActuatorBus>> = const { RefCell::new(None) };
 }
 
-/// Submit an actuator output to the global bus.
+fn actuator_bus() {
+    ACTUATOR_OUTPUT_BUS.with(|b| {
+        if b.borrow().is_none() {
+            *b.borrow_mut() = Some(ActuatorBus::new());
+        }
+    });
+}
+
+/// Submit an actuator output to the thread-local bus.
 ///
 /// Called by actuator evaluators during graph evaluation to queue a component write.
 pub fn submit_actuator_output(entity: Entity, field: &str, value: PortValue) {
@@ -66,20 +68,27 @@ pub fn submit_actuator_output(entity: Entity, field: &str, value: PortValue) {
         field: field.to_string(),
         value,
     };
-    if let Ok(mut bus) = actuator_bus().lock() {
-        bus.submit(output);
-    }
+    actuator_bus();
+    ACTUATOR_OUTPUT_BUS.with(|b| {
+        if let Some(ref mut bus) = *b.borrow_mut() {
+            bus.submit(output);
+        }
+    });
 }
 
-/// Drain all pending actuator outputs from the global bus.
+/// Drain all pending actuator outputs from the thread-local bus.
 ///
 /// Returns the collected outputs and leaves the bus empty.
 /// Call this from `apply_actuator_outputs` at the start of each frame.
 pub fn drain_actuator_outputs() -> Vec<ActuatorOutput> {
-    match actuator_bus().lock() {
-        Ok(mut bus) => bus.drain(),
-        Err(_) => Vec::new(), // Poisoned — treat as empty
-    }
+    actuator_bus();
+    ACTUATOR_OUTPUT_BUS.with(|b| {
+        if let Some(ref mut bus) = *b.borrow_mut() {
+            bus.drain()
+        } else {
+            Vec::new()
+        }
+    })
 }
 
 /// Bevy system: drain the actuator output bus and write values back to entity components.
@@ -171,5 +180,50 @@ fn apply_single_output(
 
         // Unknown field — no-op (extensible without breaking)
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // §T-apply1: drain_actuator_outputs returns submitted outputs
+    #[test]
+    fn test_submit_and_drain_roundtrip() {
+        use bevy::prelude::Entity;
+        use crate::logic_evaluator::PortValue;
+
+        // Drain any pre-existing state
+        let _ = drain_actuator_outputs();
+
+        let entity = Entity::from_bits(42);
+        submit_actuator_output(entity, "translation", PortValue::Vec2 { x: 5.0, y: 7.0 });
+        submit_actuator_output(entity, "scale", PortValue::Vec2 { x: 2.0, y: 3.0 });
+
+        let outputs = drain_actuator_outputs();
+        assert_eq!(outputs.len(), 2, "should have 2 outputs");
+
+        let t = outputs.iter().find(|o| o.field == "translation").unwrap();
+        assert_eq!(t.entity_bits, 42);
+        assert!(matches!(t.value, PortValue::Vec2 { x: 5.0, y: 7.0 }));
+
+        let s = outputs.iter().find(|o| o.field == "scale").unwrap();
+        assert!(matches!(s.value, PortValue::Vec2 { x: 2.0, y: 3.0 }));
+    }
+
+    // §T-apply2: bus is empty after drain
+    #[test]
+    fn test_bus_empty_after_drain() {
+        use bevy::prelude::Entity;
+        use crate::logic_evaluator::PortValue;
+
+        let entity = Entity::from_bits(1);
+        submit_actuator_output(entity, "translation", PortValue::Vec2 { x: 1.0, y: 2.0 });
+
+        let first = drain_actuator_outputs();
+        assert_eq!(first.len(), 1);
+
+        let second = drain_actuator_outputs();
+        assert_eq!(second.len(), 0, "bus should be empty after drain");
     }
 }

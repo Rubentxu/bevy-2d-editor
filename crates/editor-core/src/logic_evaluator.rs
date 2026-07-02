@@ -226,7 +226,7 @@ pub fn get_logic_graph_asset(asset_id: &str) -> Option<LogicGraphAsset> {
 /// # Errors
 /// Returns `LogicError` if the asset is not found, version mismatches, or
 /// evaluation cannot proceed (cycle, missing evaluator).
-pub fn evaluate_logic_binding(asset_id: &str, version: u32) -> Result<(), LogicError> {
+pub fn evaluate_logic_binding(asset_id: &str, version: u32, entity_bits: u64) -> Result<(), LogicError> {
     // Step 1: Find the LogicGraphAsset by asset_id
     let asset = get_logic_graph_asset(asset_id)
         .ok_or_else(|| LogicError::AssetNotFound(asset_id.to_string()))?;
@@ -250,7 +250,7 @@ pub fn evaluate_logic_binding(asset_id: &str, version: u32) -> Result<(), LogicE
     // Step 4: Run sensors first, collect their output values
     // Step 5: Run controllers, propagating values through the graph
     // Step 6: Run actuators, calling submit_actuator_output for each
-    evaluate_nodes_in_order(&asset, &execution_order)?;
+    evaluate_nodes_in_order(&asset, &execution_order, entity_bits)?;
 
     Ok(())
 }
@@ -306,7 +306,7 @@ fn topological_sort(nodes: &[LogicNode], edges: &[LogicEdge]) -> Option<Vec<Node
 }
 
 /// Evaluate all nodes in the given order (result of topological sort).
-fn evaluate_nodes_in_order(asset: &LogicGraphAsset, order: &[NodeId]) -> Result<(), LogicError> {
+fn evaluate_nodes_in_order(asset: &LogicGraphAsset, order: &[NodeId], entity_bits: u64) -> Result<(), LogicError> {
     let registry = global_node_registry();
 
     // Build a map from NodeId to LogicNode for O(1) lookup
@@ -330,15 +330,7 @@ fn evaluate_nodes_in_order(asset: &LogicGraphAsset, order: &[NodeId]) -> Result<
         let input_values = gather_input_values(node, &asset.edges, &port_values)?;
 
         // Evaluate the node
-        let evaluator = match node.role {
-            LogicNodeRole::Sensor | LogicNodeRole::Controller => {
-                registry.get_evaluator(&node.node_type_id)
-            }
-            LogicNodeRole::Actuator => {
-                // Actuators use the same evaluator dispatch
-                registry.get_evaluator(&node.node_type_id)
-            }
-        };
+        let evaluator = registry.get_evaluator(&node.node_type_id);
 
         let evaluator = evaluator.ok_or_else(|| LogicError::MissingEvaluator(node.node_type_id.clone()))?;
 
@@ -349,7 +341,7 @@ fn evaluate_nodes_in_order(asset: &LogicGraphAsset, order: &[NodeId]) -> Result<
 
         // If actuator, submit to the bus
         if node.role == LogicNodeRole::Actuator {
-            submit_actuator_outputs_from_node(node, &outputs);
+            submit_actuator_outputs_from_node(node, &outputs, entity_bits);
         }
     }
 
@@ -408,22 +400,29 @@ fn store_output_values(
 }
 
 /// Submit actuator outputs to the ACTUATOR_OUTPUT_BUS.
-/// For now, we use a simplified mapping: actuator output value is submitted
-/// with a field name derived from the node's node_type_id (e.g., "jump" → "jump").
-/// The entity_bits are set to 0 for now (entity routing comes in PR2).
-fn submit_actuator_outputs_from_node(_node: &LogicNode, outputs: &[PortValue]) {
+/// Field name is derived from `node.node_type_id` (e.g., `"actuator.translate"`):
+/// - "actuator.translate" → "translation"
+/// - "actuator.rotate" → "rotation"
+/// - "actuator.scale" → "scale"
+/// - "actuator.set_color" → "color"
+/// - default: use the full type_id string
+fn submit_actuator_outputs_from_node(node: &LogicNode, outputs: &[PortValue], entity_bits: u64) {
     use bevy::prelude::Entity;
     use crate::actuator_bus::submit_actuator_output;
 
-    // For each output port, submit to the bus
-    // We use entity 0 as placeholder — actual entity routing is PR2
-    let entity = Entity::from_bits(0);
+    let entity = Entity::from_bits(entity_bits);
 
-    for (i, output) in outputs.iter().enumerate() {
-        // Derive field name from output index or node config
-        // This is a simplified mapping; PR2 will have richer field routing
-        let field = format!("output_{}", i);
-        submit_actuator_output(entity, &field, output.clone());
+    // Derive field name from node type
+    let field = match node.node_type_id.as_str() {
+        "actuator.translate" => "translation",
+        "actuator.rotate" => "rotation",
+        "actuator.scale" => "scale",
+        "actuator.set_color" => "color",
+        other => other,
+    };
+
+    for output in outputs.iter() {
+        submit_actuator_output(entity, field, output.clone());
     }
 }
 
@@ -506,6 +505,27 @@ fn seed_builtin_evaluators(registry: &mut LogicNodeRegistry) {
             }],
         },
     );
+
+    // actuator.translate
+    registry.register_builtin(
+        Box::new(TranslateEvaluator),
+        NodeDescriptor {
+            node_type_id: NodeTypeId::new("actuator.translate"),
+            role: LogicNodeRole::Actuator,
+            display_name: "Translate".to_string(),
+            category: "actuator".to_string(),
+            inputs: vec![PortSpec {
+                port_id: "vector".to_string(),
+                value_type: PortValueType::Vec2,
+                display_name: "Vector".to_string(),
+            }],
+            outputs: vec![PortSpec {
+                port_id: "done".to_string(),
+                value_type: PortValueType::Action,
+                display_name: "Done".to_string(),
+            }],
+        },
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -558,6 +578,15 @@ impl NodeEvaluator for AlwaysEvaluator {
     }
 }
 
+/// actuator.translate — outputs the input Vec2 as the translation value.
+struct TranslateEvaluator;
+impl NodeEvaluator for TranslateEvaluator {
+    fn evaluate(&self, _node: &LogicNode, inputs: &[PortValue]) -> Vec<PortValue> {
+        // Pass through the first input (expected: Vec2 { x, y })
+        vec![inputs.first().cloned().unwrap_or(PortValue::Vec2 { x: 0.0, y: 0.0 })]
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Phase 4: WASM exports (wasm32 only)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -596,10 +625,10 @@ pub fn register_logic_graph_wasm(asset_id: &str, version: u32, graph_json: &str)
 /// Returns Ok(()) on success; missing asset is logged and returns Ok(()).
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
-pub fn evaluate_logic_binding_wasm(_stable_id: u32, asset_id: &str, version: u32) -> Result<(), JsValue> {
+pub fn evaluate_logic_binding_wasm(entity_bits: u64, asset_id: &str, version: u32) -> Result<(), JsValue> {
     // Evaluate the binding — this populates the ACTUATOR_OUTPUT_BUS via actuator nodes.
     // The entity_bits for actuator outputs are set by the dispatch layer in logic_dispatch.rs.
-    match evaluate_logic_binding(asset_id, version) {
+    match evaluate_logic_binding(asset_id, version, entity_bits) {
         Ok(()) => Ok(()),
         Err(e) => {
             // AssetNotFound is logged but does not crash — iteration continues per spec
@@ -1103,7 +1132,7 @@ mod integration_tests {
     // §T4: evaluate_logic_binding with missing asset returns AssetNotFound
     #[test]
     fn test_evaluate_logic_binding_missing_asset() {
-        let result = evaluate_logic_binding("nonexistent.asset", 1);
+        let result = evaluate_logic_binding("nonexistent.asset", 1, 0);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(matches!(err, LogicError::AssetNotFound(id) if id == "nonexistent.asset"));
@@ -1281,15 +1310,15 @@ mod integration_tests {
         assert!(order.is_none());
     }
 
-    // §T8: evaluate_logic_binding — simple sensor → controller → actuator chain
+    // §T8: evaluate_logic_binding — sensor → controller chain (no actuator)
     #[test]
-    fn test_evaluate_logic_binding_simple_chain() {
+    fn test_evaluate_logic_binding_sensor_controller_chain() {
         use crate::actuator_bus::drain_actuator_outputs;
 
         // Drain any pre-existing bus entries
         let _ = drain_actuator_outputs();
 
-        // Build a minimal chain: sensor.always → controller.if → (no actuator registered)
+        // Build a minimal chain: sensor.always → controller.if
         let graph = LogicGraphAsset {
             asset_id: "test/chain".to_string(),
             logical_path: "test/chain".to_string(),
@@ -1322,8 +1351,8 @@ mod integration_tests {
 
         register_logic_graph(graph);
 
-        let result = evaluate_logic_binding("test/chain", 1);
-        // Should succeed (actuator is not in this chain)
+        let result = evaluate_logic_binding("test/chain", 1, 0);
+        // Should succeed (no actuator in this chain)
         assert!(result.is_ok(), "expected ok, got {:?}", result);
 
         // Clean up
@@ -1352,7 +1381,7 @@ mod integration_tests {
         register_logic_graph(graph);
 
         // Call with wrong version
-        let result = evaluate_logic_binding("test/version", 99);
+        let result = evaluate_logic_binding("test/version", 99, 0);
         assert!(result.is_err());
         match result.unwrap_err() {
             LogicError::VersionMismatch { asset_id, expected, actual } => {
