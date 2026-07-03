@@ -214,7 +214,7 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 | Order | Change | Version | Status |
 |-------|--------|---------|--------|
 | 1 | `code-editor-foundation` | v0.43.0 + v0.44.0 (PR #45 + #46 + #47 + #48) | ✅ DONE |
-| 2 | `rust-source-integration` | — | 🔲 Planned |
+| 2 | `rust-source-integration` | v0.45.0 | ✅ DONE |
 | 3 | `asset-pipeline` | — | 🔲 Planned |
 | 4 | `build-and-run-loop` | — | 🔲 Planned |
 | 5 | `hot-reload` | — | 🔲 Planned |
@@ -266,13 +266,13 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 
 ### Session Handover (2026-07-03)
 
-**Current state**: Hito 4 Order 1 (code-editor-foundation) — **4/4 PRs merged**. PR 1 (Foundation, v0.43.0, #45), PR 2 (Service+Hook, v0.43.0, #46), PR 3 (UI, v0.44.0, #47), PR 4 (Tests+Cleanup, v0.44.0, #48). Tag **v0.44.0** pushed.
+**Current state**: Hito 4 Order 2 (`rust-source-integration`) — **PR #49 merged, v0.45.0 tagged**. Full SDDK A-full cycle: explore → propose → spec → design → tasks → apply (1 correction cycle) → verify → debt-verify (5 clusters) → archive → release.
 
-**overeng-W1 deferred**: `SourceFile.id == SourceFile.path` StableId smell not fixed — rename not implemented yet. Deferred to Order 2 (`rust-source-integration`) where rename ships.
+**Debt issues to address in follow-up**:
+1. Delete `frontend/src/services/code-files.test.ts` — 128 LOC dead test-theater (vitest not installed)
+2. Delete or implement `findEntitiesByType` — unused WASM surface, 0 production callers
 
-**3 Playwright skips**: WASM programmatic dialog interception timing — not a code bug, graceful skip when WASM unstable.
-
-**Next**: Hito 4 Order 2 (`rust-source-integration` — scene↔source navigation). New SDDK cycle. Branch: `feat/rust-source-integration`.
+**Next**: Hito 4 Order 3 (`asset-pipeline`). New SDDK cycle.
 
 ---
 
@@ -478,4 +478,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level
 
 ---
 
-*Last updated: v0.44.0 — 2026-07-03 (Hito 4 Order 1 COMPLETE: 4/4 PRs merged; overeng-W1 deferred to Order 2; session handover updated)*
+*Last updated: v0.45.0 — 2026-07-03 (Hito 4 Order 2 COMPLETE: PR #49 merged; debt follow-ups flagged; session handover updated)*
