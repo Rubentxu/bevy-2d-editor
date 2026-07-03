@@ -3168,7 +3168,9 @@ pub async fn rename_scene_asset(asset_id: &str, new_path: &str) -> Result<String
         .map_err(|e| JsValue::from_str(&e))?;
 
     // Delete old body file
-    let _ = js_delete_file(&persistence::asset_path(old_path)).await;
+    js_delete_file(&persistence::asset_path(old_path))
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
 
     // Update catalog: unregister old, register new
     let new_entry = with_asset_catalog_mut(|cat| {
@@ -3261,7 +3263,9 @@ pub async fn delete_scene_asset(asset_id: &str) -> Result<(), JsValue> {
     let path = entry.logical_path.clone();
 
     // Delete body file
-    let _ = js_delete_file(&persistence::asset_path(&path)).await;
+    js_delete_file(&persistence::asset_path(&path))
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
 
     // Unregister from catalog
     with_asset_catalog_mut(|cat| {

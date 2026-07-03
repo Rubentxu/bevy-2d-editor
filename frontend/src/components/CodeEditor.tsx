@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import CodeMirror, { Extension } from "@uiw/react-codemirror";
 import { rust } from "@codemirror/lang-rust";
 import { vscodeDark } from "@uiw/codemirror-theme-vscode";
@@ -59,45 +59,14 @@ export default function CodeEditor() {
     return () => window.removeEventListener("keydown", handler);
   }, [save]);
 
-  // Imperative handle to the CodeMirror EditorView.
-  // Used to programatically set content when the selected file changes
-  // without triggering the onChange handler.
-  const editorViewRef = useRef<{ view?: import("@codemirror/view").EditorView }>(
-    {}
-  );
-
-  // Track the last content we synced FROM the hook INTO the editor.
-  // If incoming content differs from this, it is an external change (file open)
-  // and we must NOT mark dirty when CM6's onChange fires.
-  const lastSyncedContentRef = useRef<string>("");
-
-  // When the hook's content changes (file opened or saved), sync it into
-  // the editor DOM imperatively so CM6's onChange does not fire.
-  useEffect(() => {
-    const view = editorViewRef.current.view;
-    if (!view) return;
-    if (content === lastSyncedContentRef.current) return;
-
-    lastSyncedContentRef.current = content;
-    view.dispatch({
-      changes: {
-        from: 0,
-        to: view.state.doc.length,
-        insert: content,
-      },
-    });
-  }, [content]);
-
+  // onChange fires on every keystroke. Skip no-op programmatic syncs
+  // by comparing against the hook's current content.
   const handleChange = useCallback(
     (value: string) => {
-      // This fires on every keystroke in CM6. The first time we see a
-      // change that matches the hook's current content, it is a no-op from
-      // the programmatic sync above — skip it to avoid spurious dirty flag.
-      if (value === lastSyncedContentRef.current) return;
-      lastSyncedContentRef.current = value;
+      if (value === content) return;
       setContent(value);
     },
-    [setContent]
+    [setContent, content]
   );
 
   // Extensions for CodeMirror: Rust language + VS Code dark theme.
@@ -263,33 +232,8 @@ export default function CodeEditor() {
               extensions={extensions}
               theme={vscodeDark}
               onChange={handleChange}
-              ref={editorViewRef as any}
               style={{ height: "100%" }}
-              basicSetup={{
-                lineNumbers: true,
-                highlightActiveLineGutter: true,
-                highlightSpecialChars: true,
-                foldGutter: true,
-                drawSelection: true,
-                dropCursor: true,
-                allowMultipleSelections: true,
-                indentOnInput: true,
-                syntaxHighlighting: true,
-                bracketMatching: true,
-                closeBrackets: true,
-                autocompletion: true,
-                rectangularSelection: true,
-                crosshairCursor: true,
-                highlightActiveLine: true,
-                highlightSelectionMatches: true,
-                closeBracketsKeymap: true,
-                defaultKeymap: true,
-                searchKeymap: true,
-                historyKeymap: true,
-                foldKeymap: true,
-                completionKeymap: true,
-                lintKeymap: true,
-              }}
+              basicSetup={true}
             />
           </div>
         ) : (
