@@ -207,6 +207,30 @@ pub struct OperationLogState {
     pub can_redo: bool,
 }
 
+/// Play-mode state resource. Edit = editor commands + rebuild active;
+/// Playing = commands paused, logic dispatch + actuators run free.
+#[derive(Resource, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PlayMode {
+    #[default]
+    Edit,
+    Playing,
+}
+
+/// Snapshot of placed-entity Transforms captured on Play entry.
+/// Stores Bevy Entity → Transform. Entity IDs are stable within a play
+/// session (rebuild_preview_world is gated off during play, so no despawn).
+#[derive(Resource, Default)]
+pub struct TransformSnapshot {
+    pub transforms: std::collections::HashMap<bevy::prelude::Entity, Transform>,
+}
+
+/// Mouse state published for future sensors/actuators.
+#[derive(Resource, Default)]
+pub struct MouseState {
+    pub position: Vec2, // canvas pixel coords
+    pub clicked: bool,  // consumed/reset each frame
+}
+
 /// Cross-system dirty flag set by `dispatch_command` and read by
 /// `rebuild_preview_world`. Visible across the WASM→Bevy boundary
 /// because both run on the same thread (single-threaded WASM).
@@ -232,6 +256,26 @@ thread_local! {
     static LOGIC_GRAPH_DOC: RefCell<Option<LogicGraphAsset>> = const { RefCell::new(None) };
     // Logic operation log: per-graph undo/redo history.
     static LOGIC_OPERATION_LOG: RefCell<LogicOperationLog> = const { RefCell::new(LogicOperationLog::new_const()) };
+}
+
+/// Thread-local request flag set by WASM exports, consumed by a Bevy system.
+/// Follows the established DIRTY_FLAG pattern (lib.rs:213).
+thread_local! {
+    static PLAY_MODE_REQUEST: RefCell<Option<PlayModeRequest>> = const { RefCell::new(None) };
+}
+enum PlayModeRequest {
+    Enter,
+    Exit,
+}
+
+/// RunIf helper — returns true when PlayMode is Playing.
+fn in_play_mode(mode: Res<PlayMode>) -> bool {
+    *mode == PlayMode::Playing
+}
+
+/// RunIf helper — returns true when PlayMode is Edit.
+fn in_edit_mode(mode: Res<PlayMode>) -> bool {
+    *mode == PlayMode::Edit
 }
 
 /// Get an immutable borrowed reference to the SceneRegistry, initializing if needed.
@@ -1426,6 +1470,11 @@ fn setup(mut commands: Commands) {
     commands.insert_resource(SceneDocumentState::new(scene));
     // Insert OperationLogState resource (UI hooks read this)
     commands.insert_resource(OperationLogState::default());
+    // Insert PlayMode resource (defaults to Edit)
+    commands.insert_resource(PlayMode::default());
+    // Insert TransformSnapshot and MouseState
+    commands.insert_resource(TransformSnapshot::default());
+    commands.insert_resource(MouseState::default());
     mark_dirty();
 }
 

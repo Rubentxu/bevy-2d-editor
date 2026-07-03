@@ -6,6 +6,8 @@
 //! All tests follow Strict TDD: RED → GREEN → TRIANGULATE → REFACTOR.
 
 use crate::logic_graph::{LogicEdge, LogicGraphAsset, LogicNode, LogicNodeRole, NodeId, NodeTypeId, PortId};
+use bevy::input::mouse::MouseButtonInput;
+use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -1061,6 +1063,50 @@ thread_local! {
     /// Map of target_tag -> current distance (in world units).
     /// Updated by Bevy proximity system before logic evaluation.
     pub static PROXIMITY_STATE: RefCell<std::collections::HashMap<String, f32>> = RefCell::new(std::collections::HashMap::new());
+
+    /// Latest cursor position in canvas pixel coordinates.
+    /// Updated by Bevy cursor events before logic evaluation.
+    pub static MOUSE_POSITION: RefCell<(f32, f32)> = RefCell::new((0.0, 0.0));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bevy systems — update sensor runtime state
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Populates KEYBOARD_STATE from Bevy's ButtonInput<KeyCode>.
+pub fn update_keyboard_state(keys: Res<ButtonInput<KeyCode>>) {
+    KEYBOARD_STATE.with(|state| {
+        let mut held = state.borrow_mut();
+        held.clear();
+        for key in keys.get_pressed() {
+            // format!("{:?}", KeyCode::KeyW) → "KeyW" (matches KeyboardEvent.code)
+            held.insert(format!("{:?}", key));
+        }
+    });
+}
+
+/// Populates MOUSE_POSITION and MouseState from Bevy cursor events.
+pub fn update_mouse_state(
+    mut cursor_events: MessageReader<CursorMoved>,
+    mut mouse: ResMut<crate::MouseState>,
+) {
+    for cursor in cursor_events.read() {
+        mouse.position = cursor.position;
+        MOUSE_POSITION.with(|p| *p.borrow_mut() = (cursor.position.x, cursor.position.y));
+    }
+}
+
+/// Consumes MouseButtonInput events and sets the clicked flag in MouseState.
+pub fn update_mouse_click(
+    mut click_events: MessageReader<MouseButtonInput>,
+    mut mouse: ResMut<crate::MouseState>,
+) {
+    use bevy::input::ButtonState;
+    for event in click_events.read() {
+        if event.button == MouseButton::Left && event.state == ButtonState::Pressed {
+            mouse.clicked = true;
+        }
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2235,5 +2281,24 @@ mod integration_tests {
         let result = evaluator.evaluate(&node, &[PortValue::Action("triggered".to_string())]);
         assert_eq!(result.len(), 1);
         assert!(matches!(&result[0], PortValue::Action(s) if s == "triggered"));
+    }
+
+    // §T23: KeyCode Debug format must match KeyboardEvent.code conventions
+    // This locks the bridge contract between Bevy KeyCode and sensor.key_pressed.
+    #[test]
+    fn test_keycode_debug_format_matches_sensor_contract() {
+        use bevy::prelude::KeyCode;
+        // format!("{:?}", KeyCode::KeyW) must yield "KeyW" for sensor.key_pressed
+        assert_eq!(format!("{:?}", KeyCode::KeyW), "KeyW");
+        assert_eq!(format!("{:?}", KeyCode::KeyA), "KeyA");
+        assert_eq!(format!("{:?}", KeyCode::KeyS), "KeyS");
+        assert_eq!(format!("{:?}", KeyCode::KeyD), "KeyD");
+        // Space must yield "Space"
+        assert_eq!(format!("{:?}", KeyCode::Space), "Space");
+        // Arrow keys
+        assert_eq!(format!("{:?}", KeyCode::ArrowUp), "ArrowUp");
+        assert_eq!(format!("{:?}", KeyCode::ArrowDown), "ArrowDown");
+        assert_eq!(format!("{:?}", KeyCode::ArrowLeft), "ArrowLeft");
+        assert_eq!(format!("{:?}", KeyCode::ArrowRight), "ArrowRight");
     }
 }
