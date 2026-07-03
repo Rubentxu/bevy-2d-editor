@@ -27,7 +27,7 @@ import { type TilesetMetadata } from "./services/tilesets";
 import { type AutoLayerPayload, type LevelLayerPayload } from "./services/scene-assets";
 import { findSourceLocation } from "./services/code-files";
 
-type EditorMode = "scene" | "asset-authoring" | "logic" | "code";
+type EditorMode = "scene" | "asset-authoring" | "logic" | "code" | "play";
 
 export default function App() {
   const [ready, setReady] = useState(false);

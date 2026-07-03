@@ -1,6 +1,6 @@
 import { LogState } from "../hooks/useLogState";
 
-type EditorMode = "scene" | "asset-authoring" | "logic" | "code";
+type EditorMode = "scene" | "asset-authoring" | "logic" | "code" | "play";
 
 interface Props {
   editorMode?: EditorMode;
@@ -22,6 +22,7 @@ interface Props {
   tilesetPanelOpen: boolean;
   onToggleAutoLayer: () => void;
   autoLayerPanelOpen: boolean;
+  onTogglePlay?: () => void;
   error: string | null;
   onDismissError: () => void;
 }
@@ -46,10 +47,12 @@ export default function TopBar({
   tilesetPanelOpen,
   onToggleAutoLayer,
   autoLayerPanelOpen,
+  onTogglePlay,
   error,
   onDismissError,
 }: Props) {
   const isAssetAuthoring = editorMode === "asset-authoring";
+  const isPlayMode = editorMode === "play";
 
   return (
     <div className="topbar" data-testid="topbar">
@@ -72,6 +75,16 @@ export default function TopBar({
           >
             📝 Code
           </button>
+          {/* Play/Stop button — only visible in scene and play modes */}
+          {(editorMode === "scene" || isPlayMode) && onTogglePlay && (
+            <button
+              onClick={onTogglePlay}
+              data-testid={isPlayMode ? "stop-btn" : "play-btn"}
+              title={isPlayMode ? "Stop preview and return to editor" : "Start preview"}
+            >
+              {isPlayMode ? "⏹ Stop" : "▶ Play"}
+            </button>
+          )}
           <button
             onClick={onUndo}
             disabled={!logState.can_undo}

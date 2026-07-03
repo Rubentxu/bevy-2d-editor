@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 
 interface UseKeyboardShortcutsOptions {
+  enabled?: boolean;
   onUndo: () => void;
   onRedo: () => void;
   logState: {
@@ -15,8 +16,11 @@ interface UseKeyboardShortcutsOptions {
  * React hook for keyboard shortcuts (Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z / Delete / Backspace).
  * Registers a window-level keydown listener that triggers undo/redo/delete
  * with input-focus guard and Operation Log state gating.
+ * When enabled=false (e.g. in play mode), the handler exits immediately
+ * so keypresses reach the canvas/Bevy input unimpeded.
  */
 export function useKeyboardShortcuts({
+  enabled = true,
   onUndo,
   onRedo,
   logState,
@@ -24,6 +28,8 @@ export function useKeyboardShortcuts({
   onDeleteEntity,
 }: UseKeyboardShortcutsOptions) {
   useEffect(() => {
+    if (!enabled) return;
+
     function handler(e: KeyboardEvent) {
       // Skip if user is typing in an input field — always check first
       const target = e.target as HTMLElement;
@@ -57,5 +63,5 @@ export function useKeyboardShortcuts({
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onUndo, onRedo, logState.can_undo, logState.can_redo, selectedEntityId, onDeleteEntity]);
+  }, [enabled, onUndo, onRedo, logState.can_undo, logState.can_redo, selectedEntityId, onDeleteEntity]);
 }
