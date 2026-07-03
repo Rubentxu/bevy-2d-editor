@@ -15,6 +15,8 @@ interface Props {
   fieldOverrideStatus?: Record<string, ComponentOverrideStatus>;
   /** Called when user clicks revert on an overridden field. */
   onRevertField?: (fieldPath: string) => void;
+  /** Called when user clicks "Jump to Source" button. */
+  onJumpToSource?: () => void;
 }
 
 /** CSS class suffix for each override status. */
@@ -40,19 +42,32 @@ export default function ComponentCard({
   onRemove,
   fieldOverrideStatus,
   onRevertField,
+  onJumpToSource,
 }: Props) {
   return (
     <div className="component-card" data-testid={`component-${component.type_id}`}>
       <header>
         <span className="type-id">{component.type_id}</span>
-        <button
-          className="remove-btn"
-          onClick={onRemove}
-          title="Remove component"
-          data-testid={`remove-${component.type_id}`}
-        >
-          ×
-        </button>
+        <div style={{ display: "flex", gap: 4 }}>
+          {onJumpToSource && (
+            <button
+              className="jump-to-source-btn"
+              onClick={onJumpToSource}
+              title="Jump to Source"
+              data-testid={`jump-to-source-${component.type_id}`}
+            >
+              ↗
+            </button>
+          )}
+          <button
+            className="remove-btn"
+            onClick={onRemove}
+            title="Remove component"
+            data-testid={`remove-${component.type_id}`}
+          >
+            ×
+          </button>
+        </div>
       </header>
       {Object.entries(component.values).map(([field, value]) => {
         const fieldPath = field;

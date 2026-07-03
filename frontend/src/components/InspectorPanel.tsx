@@ -32,6 +32,8 @@ interface Props {
   onRemoveInstance?: (instanceId: string) => Promise<void>;
   onReplaceInstanceAsset?: (instanceId: string, newAssetId: string) => Promise<void>;
   assetEntries?: Array<{ asset_id: string; logical_path: string }>;
+  // Jump to source (rust-source-integration)
+  onJumpToSource?: (typeId: string) => void;
 }
 
 /**
@@ -103,6 +105,7 @@ export default function InspectorPanel({
   onRemoveInstance,
   onReplaceInstanceAsset,
   assetEntries = [],
+  onJumpToSource,
 }: Props) {
   const entity = scene?.entities.find((e) => e.id === selectedId) ?? null;
   const [nameDraft, setNameDraft] = useState(entity?.name ?? "");
@@ -346,6 +349,7 @@ export default function InspectorPanel({
                 onRemove={() => onRemoveComponent(entity.id, c.type_id)}
                 fieldOverrideStatus={isInstanceEntity ? componentFieldStatus : undefined}
                 onRevertField={isInstanceEntity ? (fieldPath) => handleRevertField(c.type_id, fieldPath) : undefined}
+                onJumpToSource={onJumpToSource ? () => onJumpToSource(c.type_id) : undefined}
               />
             );
           })}

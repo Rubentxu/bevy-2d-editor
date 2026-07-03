@@ -2256,6 +2256,37 @@ fn get_schema_json(type_id: &str) -> Result<String, JsValue> {
     serde_json::to_string(schema).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
+/// Get the source location for a component schema type_id.
+/// Returns JSON string of SourceLocation or "null" if not found / not set.
+#[wasm_bindgen]
+pub fn find_source_location(type_id: &str) -> Result<String, JsValue> {
+    let registry = schema::combined_registry();
+    match registry.get(type_id) {
+        Some(schema) => Ok(serde_json::to_string(&schema.source_location)
+            .unwrap_or_else(|_| "null".to_string())),
+        None => Ok("null".to_string()),
+    }
+}
+
+/// Find all entity stable IDs in the current scene that have a component of the given type.
+#[wasm_bindgen]
+pub fn find_entities_by_type(type_id: &str) -> Result<String, JsValue> {
+    let matching: Vec<String> = SCENE_DOC
+        .with(|s| {
+            let doc_ref = s.borrow();
+            match doc_ref.as_ref() {
+                Some(doc) => doc
+                    .entities
+                    .iter()
+                    .filter(|e| e.components.iter().any(|c| c.type_id == type_id))
+                    .map(|e| e.id.as_str().to_string())
+                    .collect(),
+                None => Vec::new(),
+            }
+        });
+    serde_json::to_string(&matching).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
 /// Helper: update project.json's schemas list (add or remove a type_id).
 #[cfg(target_arch = "wasm32")]
 async fn update_project_schemas(type_id: &str, add: bool) -> Result<(), String> {
