@@ -215,7 +215,7 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 |-------|--------|---------|--------|
 | 1 | `code-editor-foundation` | v0.43.0 + v0.44.0 (PR #45 + #46 + #47 + #48) | ✅ DONE |
 | 2 | `rust-source-integration` | v0.45.0 | ✅ DONE |
-| 3 | `asset-pipeline` | — | 🔲 Planned |
+| 3 | `asset-pipeline` | v0.46.0 (PR #50 + #51 + #52) | ✅ DONE |
 | 4 | `build-and-run-loop` | — | 🔲 Planned |
 | 5 | `hot-reload` | — | 🔲 Planned |
 | 6 | `code-aware-ai` | — | 🔲 Planned |
@@ -266,13 +266,19 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 
 ### Session Handover (2026-07-03)
 
-**Current state**: Hito 4 Order 2 (`rust-source-integration`) — **PR #49 merged, v0.45.0 tagged**. Full SDDK A-full cycle: explore → propose → spec → design → tasks → apply (1 correction cycle) → verify → debt-verify (5 clusters) → archive → release.
+**Current state**: Hito 4 Order 3 (`asset-pipeline`) — **PR #50 (Rust foundation) + PR #51 (compile fix) + PR #52 (TS service/hook/E2E) merged, v0.46.0 tagged**. Binary OPFS texture asset pipeline complete.
+
+**What was built (3-PR chain)**:
+- PR #50: `asset_files.rs` — `AssetFileId`, `AssetFile`, `AssetFileKind`, `is_supported_mime`, `asset_file_path_from_id`; 4 WASM exports (list/import/read/delete)
+- PR #51: Compile fix — `js_sys::Reflect::get` for Object property access, `await` in `for` loop instead of `filter_map`
+- PR #52: `asset-files.ts` service + `useAssetFiles` hook + `asset-pipeline.spec.ts` E2E tests + engine-bridge bindings
 
 **Debt issues to address in follow-up**:
 1. Delete `frontend/src/services/code-files.test.ts` — 128 LOC dead test-theater (vitest not installed)
 2. Delete or implement `findEntitiesByType` — unused WASM surface, 0 production callers
+3. ProjectAssetBrowser drag-and-drop + thumbnail grid — deferred to Order 4 (`build-and-run-loop`)
 
-**Next**: Hito 4 Order 3 (`asset-pipeline`). New SDDK cycle.
+**Next**: Hito 4 Order 4 (`build-and-run-loop`). New SDDK cycle.
 
 ---
 
