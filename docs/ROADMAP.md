@@ -216,7 +216,7 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 | 1 | `code-editor-foundation` | v0.43.0 + v0.44.0 (PR #45 + #46 + #47 + #48) | ✅ DONE |
 | 2 | `rust-source-integration` | v0.45.0 | ✅ DONE |
 | 3 | `asset-pipeline` | v0.46.0 (PR #50 + #51 + #52) | ✅ DONE |
-| 4 | `build-and-run-loop` | — | 🔲 Planned |
+| 4 | `build-and-run-loop` | v0.47.0 (PR #53) | ✅ DONE |
 | 5 | `hot-reload` | — | 🔲 Planned |
 | 6 | `code-aware-ai` | — | 🔲 Planned |
 | 7 | `scene-component-authoring` | — | 🔲 Planned |
@@ -273,12 +273,23 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 - PR #51: Compile fix — `js_sys::Reflect::get` for Object property access, `await` in `for` loop instead of `filter_map`
 - PR #52: `asset-files.ts` service + `useAssetFiles` hook + `asset-pipeline.spec.ts` E2E tests + engine-bridge bindings
 
-**Debt issues to address in follow-up**:
-1. Delete `frontend/src/services/code-files.test.ts` — 128 LOC dead test-theater (vitest not installed)
-2. Delete or implement `findEntitiesByType` — unused WASM surface, 0 production callers
-3. ProjectAssetBrowser drag-and-drop + thumbnail grid — deferred to Order 4 (`build-and-run-loop`)
+**Debt issues addressed in Order 4 cycle**:
+1. ✅ Deleted `code-files.test.ts` (vitest not installed)
+2. ✅ Deleted `findEntitiesByType` wrapper (0 callers)
 
-**Next**: Hito 4 Order 4 (`build-and-run-loop`). New SDDK cycle.
+### Session Handover (2026-07-03 — second session)
+
+**Current state**: Hito 4 Order 4 (`build-and-run-loop`) — **PR #53 merged, v0.47.0 tagged**. Enhanced Preview Mode complete.
+
+**What was built (Order 4)**:
+- PR #53: `PlayMode` resource, `update_keyboard_state` system, `process_play_mode_request` with snapshot/restore, `logic_evaluation_system` + `apply_actuator_outputs` gated to play mode, `GameOverlay` component, TopBar Play/Stop button, `EditorMode` play variant, keyboard shortcut suppression in play mode, ADR-0013
+- Debt fixes: CRIT-01+02 (dead mouse pipeline deleted), COUP-NEW-01 (logic dispatch gated to play mode), 4 integration tests in `play_mode.rs`
+
+**Debt issues to address in follow-up**:
+- OE-NEW-05: `COLLISION_STATE` and `PROXIMITY_STATE` thread-locals have the same dead-pipeline pattern as CRIT-01+02 — recommend separate `refactor/debt-cleanup-thread-locals-1` cycle
+- ProjectAssetBrowser drag-and-drop + thumbnail grid — deferred to Order 5 (`hot-reload`)
+
+**Next**: Hito 4 Order 5 (`hot-reload`). New SDDK cycle.
 
 ---
 
