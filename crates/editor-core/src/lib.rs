@@ -2034,12 +2034,13 @@ async fn js_load_binary(path: &str) -> Result<Vec<u8>, String> {
     // Binary response: {ok: true, value: Uint8Array} — must extract bytes manually
     // Cannot use serde_wasm_bindgen for Vec<u8> from Uint8Array.
     let obj = js_sys::Object::from(result);
-    if obj.get("ok").as_bool() == Some(true) {
-        let bytes: Vec<u8> = js_sys::Uint8Array::new(&obj.get("value")).to_vec();
+    if js_sys::Reflect::get(&obj, &"ok".into()).unwrap().as_bool() == Some(true) {
+        let value = js_sys::Reflect::get(&obj, &"value".into()).unwrap();
+        let bytes: Vec<u8> = js_sys::Uint8Array::new(&value).to_vec();
         Ok(bytes)
     } else {
-        Err(obj
-            .get("error")
+        Err(js_sys::Reflect::get(&obj, &"error".into())
+            .unwrap()
             .as_string()
             .unwrap_or_else(|| "Unknown error".to_string()))
     }
@@ -2239,40 +2240,30 @@ pub async fn list_asset_files() -> Result<JsValue, JsValue> {
         Err(_) => Vec::new(), // resources/ dir doesn't exist yet — return empty list
     };
 
-    let assets: Vec<AssetFile> = files
-        .iter()
-        .filter(|name| {
-            // Skip metadata sidecar files
-            !name.ends_with(".meta.json")
-        })
-        .filter_map(|name| {
-            let id = name.to_string();
-            let path = name.to_string();
-            let file_name = std::path::Path::new(name)
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or(name);
+    let mut assets: Vec<AssetFile> = Vec::new();
+    for name in files.iter().filter(|name| !name.ends_with(".meta.json")) {
+        let id = name.to_string();
+        let path = name.to_string();
+        let file_name = std::path::Path::new(name)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(name);
 
-            // Try to read metadata sidecar
-            let meta_path = format!("{}/{}.meta.json", RESOURCE_DIR, name);
-            match js_load_file(&meta_path).await {
-                Ok(meta_json) => {
-                    match serde_json::from_str::<AssetMeta>(&meta_json) {
-                        Ok(meta) => Some(AssetFile {
-                            id: AssetFileId::new(id),
-                            path,
-                            name: file_name.to_string(),
-                            kind: AssetFileKind::Texture, // Default kind; extensible later
-                            mime_type: meta.mime_type,
-                            size_bytes: meta.size_bytes,
-                        }),
-                        Err(_) => None,
-                    }
-                }
-                Err(_) => None, // No metadata file — skip this asset
+        // Try to read metadata sidecar
+        let meta_path = format!("{}/{}.meta.json", RESOURCE_DIR, name);
+        if let Ok(meta_json) = js_load_file(&meta_path).await {
+            if let Ok(meta) = serde_json::from_str::<AssetMeta>(&meta_json) {
+                assets.push(AssetFile {
+                    id: AssetFileId::new(id),
+                    path,
+                    name: file_name.to_string(),
+                    kind: AssetFileKind::Texture, // Default kind; extensible later
+                    mime_type: meta.mime_type,
+                    size_bytes: meta.size_bytes,
+                });
             }
-        })
-        .collect();
+        }
+    }
 
     let response = serde_json::json!({ "ok": true, "value": assets });
     serde_wasm_bindgen::to_value(&response).map_err(|e| JsValue::from_str(&e.to_string()))
