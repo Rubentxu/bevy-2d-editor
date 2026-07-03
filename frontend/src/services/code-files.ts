@@ -133,11 +133,3 @@ export async function findSourceLocation(typeId: string): Promise<SourceLocation
   return result === "null" ? null : JSON.parse(result);
 }
 
-/**
- * Find all entity stable IDs in the current scene that have a component of the given type.
- */
-export async function findEntitiesByType(typeId: string): Promise<string[]> {
-  await waitForEngine();
-  const result: string = (window as any).find_entities_by_type(typeId);
-  return JSON.parse(result);
-}

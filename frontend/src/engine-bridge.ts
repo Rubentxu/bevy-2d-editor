@@ -210,7 +210,7 @@ export async function initEngine(
 
   // ── Rust Source Integration (rust-source-integration) ───────────────────────
   (window as any).find_source_location = (typeId: string) => wasm.find_source_location(typeId);
-  (window as any).find_entities_by_type = (typeId: string) => wasm.find_entities_by_type(typeId);
+
 
   // ── Asset Pipeline — binary OPFS texture assets ─────────────────────────────
   (window as any).list_asset_files = () => wasm.list_asset_files();
