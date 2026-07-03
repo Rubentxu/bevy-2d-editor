@@ -122,6 +122,8 @@ export function useCodeFiles() {
       } catch (e) {
         console.error("useCodeFiles: create failed:", e);
         setError(e instanceof Error ? e.message : String(e));
+        // Note: create does NOT call refresh() on error — stale error state
+        // is preferred over flicker from a failed refresh (per refresh guard).
       }
     },
     [refresh, open]

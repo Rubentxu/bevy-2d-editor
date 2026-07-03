@@ -45,6 +45,7 @@ function parseOpfs<T>(raw: unknown): OpfsResult<T> {
 /**
  * List all source files in the project's OPFS source store.
  * @returns Array of SourceFile metadata (id, path, name).
+ * @throws Error if the WASM engine is unavailable or the operation fails.
  */
 export async function listSourceFiles(): Promise<SourceFile[]> {
   await waitForEngine();
@@ -87,9 +88,9 @@ export async function writeSourceFile(
 /**
  * Create a new source file.
  * @param name - The display name for the file (e.g., "main.rs").
- *                The file path will be derived from the name.
- * @returns The id (path) of the created file.
- * @throws Error if the file already exists or creation fails.
+ *               The file path will be derived from the name.
+ * @returns The id (path) of the created file on success.
+ * @throws Error if the WASM engine is unavailable or the file creation fails.
  */
 export async function createSourceFile(name: string): Promise<string> {
   await waitForEngine();

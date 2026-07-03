@@ -13,6 +13,8 @@ use std::sync::OnceLock;
 
 // WASM bindings — only compiled on wasm32 target
 #[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsValue;
 
 /// Typed value boundary for logic evaluator ports.
@@ -1071,7 +1073,7 @@ thread_local! {
 #[wasm_bindgen]
 pub fn register_logic_graph_wasm(asset_id: &str, version: u32, graph_json: &str) -> Result<(), JsValue> {
     // Deserialize from JSON
-    let asset: LogicGraphAsset = serde_wasm_bindgen::from_str(graph_json)
+    let asset: LogicGraphAsset = serde_json::from_str(graph_json)
         .map_err(|e| JsValue::from_str(&format!("failed to parse graph JSON: {}", e)))?;
 
     // Verify the asset_id matches (defensive)
