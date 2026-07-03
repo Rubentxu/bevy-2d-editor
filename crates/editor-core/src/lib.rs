@@ -224,13 +224,6 @@ pub struct TransformSnapshot {
     pub transforms: std::collections::HashMap<bevy::prelude::Entity, Transform>,
 }
 
-/// Mouse state published for future sensors/actuators.
-#[derive(Resource, Default)]
-pub struct MouseState {
-    pub position: Vec2, // canvas pixel coords
-    pub clicked: bool,  // consumed/reset each frame
-}
-
 /// Cross-system dirty flag set by `dispatch_command` and read by
 /// `rebuild_preview_world`. Visible across the WASM→Bevy boundary
 /// because both run on the same thread (single-threaded WASM).
@@ -1417,8 +1410,6 @@ pub fn start_engine(canvas_id: &str) {
         .add_systems(Update, sync_log_state.run_if(in_edit_mode).after(rebuild_preview_world))
         // Play-mode sensor systems — run before logic evaluation
         .add_systems(Update, logic_evaluator::update_keyboard_state.run_if(in_play_mode).before(logic_dispatch::logic_evaluation_system))
-        .add_systems(Update, logic_evaluator::update_mouse_state.run_if(in_play_mode))
-        .add_systems(Update, logic_evaluator::update_mouse_click.run_if(in_play_mode))
         // Logic dispatch runs in both modes
         .add_systems(Update, logic_dispatch::logic_evaluation_system.after(sync_log_state))
         .add_systems(Update, actuator_bus::apply_actuator_outputs.after(logic_dispatch::logic_evaluation_system))
@@ -1495,9 +1486,8 @@ fn setup(mut commands: Commands) {
     commands.insert_resource(OperationLogState::default());
     // Insert PlayMode resource (defaults to Edit)
     commands.insert_resource(PlayMode::default());
-    // Insert TransformSnapshot and MouseState
+    // Insert TransformSnapshot
     commands.insert_resource(TransformSnapshot::default());
-    commands.insert_resource(MouseState::default());
     mark_dirty();
 }
 

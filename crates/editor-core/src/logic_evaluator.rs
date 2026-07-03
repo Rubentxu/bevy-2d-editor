@@ -6,7 +6,6 @@
 //! All tests follow Strict TDD: RED → GREEN → TRIANGULATE → REFACTOR.
 
 use crate::logic_graph::{LogicEdge, LogicGraphAsset, LogicNode, LogicNodeRole, NodeId, NodeTypeId, PortId};
-use bevy::input::mouse::MouseButtonInput;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -1063,10 +1062,6 @@ thread_local! {
     /// Map of target_tag -> current distance (in world units).
     /// Updated by Bevy proximity system before logic evaluation.
     pub static PROXIMITY_STATE: RefCell<std::collections::HashMap<String, f32>> = RefCell::new(std::collections::HashMap::new());
-
-    /// Latest cursor position in canvas pixel coordinates.
-    /// Updated by Bevy cursor events before logic evaluation.
-    pub static MOUSE_POSITION: RefCell<(f32, f32)> = RefCell::new((0.0, 0.0));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1083,30 +1078,6 @@ pub fn update_keyboard_state(keys: Res<ButtonInput<KeyCode>>) {
             held.insert(format!("{:?}", key));
         }
     });
-}
-
-/// Populates MOUSE_POSITION and MouseState from Bevy cursor events.
-pub fn update_mouse_state(
-    mut cursor_events: MessageReader<CursorMoved>,
-    mut mouse: ResMut<crate::MouseState>,
-) {
-    for cursor in cursor_events.read() {
-        mouse.position = cursor.position;
-        MOUSE_POSITION.with(|p| *p.borrow_mut() = (cursor.position.x, cursor.position.y));
-    }
-}
-
-/// Consumes MouseButtonInput events and sets the clicked flag in MouseState.
-pub fn update_mouse_click(
-    mut click_events: MessageReader<MouseButtonInput>,
-    mut mouse: ResMut<crate::MouseState>,
-) {
-    use bevy::input::ButtonState;
-    for event in click_events.read() {
-        if event.button == MouseButton::Left && event.state == ButtonState::Pressed {
-            mouse.clicked = true;
-        }
-    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
