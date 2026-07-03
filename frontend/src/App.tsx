@@ -19,6 +19,7 @@ import AssetUnsavedChangesDialog from "./components/AssetUnsavedChangesDialog";
 import { TilesetPanel } from "./components/TilesetPanel";
 import { AutoLayerPanel } from "./components/AutoLayerPanel";
 import LogicGraphEditor from "./components/LogicGraphEditor";
+import GameOverlay from "./components/GameOverlay";
 import CodeEditor, { type NavigationTarget } from "./components/CodeEditor";
 import { useScenes } from "./hooks/useScenes";
 import { useSceneAssets } from "./hooks/useSceneAssets";
@@ -508,6 +509,7 @@ export default function App() {
         error={error || initError}
         onDismissError={() => setError(null)}
       />
+      {editorMode === "play" && <GameOverlay onStop={handleTogglePlay} />}
       {editorMode === "scene" && (
         <SceneTabs
           scenes={scenes}
