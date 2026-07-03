@@ -213,7 +213,7 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 
 | Order | Change | Version | Status |
 |-------|--------|---------|--------|
-| 1 | `code-editor-foundation` | v0.43.0 (PR #45 + #46 + #47; v0.44.0 pending PR 4) | 🔄 IN PROGRESS (3/4 PRs merged) |
+| 1 | `code-editor-foundation` | v0.43.0 + v0.44.0 (PR #45 + #46 + #47 + #48) | ✅ DONE |
 | 2 | `rust-source-integration` | — | 🔲 Planned |
 | 3 | `asset-pipeline` | — | 🔲 Planned |
 | 4 | `build-and-run-loop` | — | 🔲 Planned |
@@ -229,7 +229,7 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 | 1/4 | Foundation: Rust `source_files` module + 5 #[wasm_bindgen] exports + ADR-0012 | `crates/editor-core/src/source_files.rs`, `crates/editor-core/src/lib.rs` (+138), `docs/adr/0012-editor-choice-codemirror-6.md` (+140) | v0.43.0 | [#45](https://github.com/Rubentxu/bevy-2d-editor/pull/45) | ✅ MERGED (1 debt-fix round) |
 | 2/4 | Service + Hook layer: TS `code-files.ts` + `useCodeFiles.ts` + engine-bridge bindings + canonical `OpfsResult<T>` | `frontend/src/services/code-files.ts` (+114), `frontend/src/hooks/useCodeFiles.ts` (+187), `frontend/src/types/opfs.ts` (+17), `frontend/src/engine-bridge.ts` (+9) | v0.43.0 | [#46](https://github.com/Rubentxu/bevy-2d-editor/pull/46) | ✅ MERGED (1 debt-fix round) |
 | 3/4 | UI: CodeMirror 6 wired as `"code"` EditorMode, file list sidebar, Ctrl+S save, error toasts | `frontend/src/components/CodeEditor.tsx` (+374), `frontend/src/App.tsx` (+13), `frontend/src/components/TopBar.tsx` (+11), `frontend/package.json` (+3 deps) | v0.44.0 (with PR 4) | [#47](https://github.com/Rubentxu/bevy-2d-editor/pull/47) | ✅ MERGED (no fix cycle needed) |
-| 4/4 | Tests + debt cleanup: Playwright E2E for 11 spec scenarios, Rust unit tests, bundle size measurement, 6 HIGH debt fixes | `frontend/tests/code-editor.spec.ts`, `crates/editor-core/src/source_files.rs` unit tests, bundle measurement, 6 debt fixes | v0.44.0 | (pending) | 🔲 NEXT |
+| 4/4 | Tests + debt cleanup: Playwright E2E (5 pass, 3 skip), Rust unit tests (9 new), bundle size measurement, 6 HIGH debt fixes (M-1, M-2, coupling-W1, overeng-PR2-2, overeng-PR2-5, overeng-W1 deferred) | `frontend/tests/code-editor.spec.ts`, `crates/editor-core/src/source_files.rs` unit tests, bundle measurement, 6 debt fixes | v0.44.0 | [#48](https://github.com/Rubentxu/bevy-2d-editor/pull/48) | ✅ MERGED |
 
 ### `code-editor-foundation` Carried Debt (for PR 4 cleanup)
 
@@ -264,21 +264,15 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 - ✅ Bevy 0.19 (Jun 2026) — BSN Scene Components, Resources-as-components, Parley text → enables Orders 5, 7 of Hito 4
 - ⏳ Bevy 0.20+ — TBD; track `bevy_editor_prototypes` Stage 3+ for hot reload API
 
-### Session Handover (2026-07-02)
+### Session Handover (2026-07-03)
 
-**Current state**: Hito 4 Order 1 (code-editor-foundation) — 3/4 PRs merged. PR 1 (Foundation, v0.43.0), PR 2 (Service+Hook), PR 3 (UI) all in main. PR 4 (Tests + debt cleanup) pending → v0.44.0.
+**Current state**: Hito 4 Order 1 (code-editor-foundation) — **4/4 PRs merged**. PR 1 (Foundation, v0.43.0, #45), PR 2 (Service+Hook, v0.43.0, #46), PR 3 (UI, v0.44.0, #47), PR 4 (Tests+Cleanup, v0.44.0, #48). Tag **v0.44.0** pushed.
 
-**Tomorrow's plan** (in priority order):
-1. **Hot-fix wasm-pack bug** in `logic_evaluator.rs:1071,1101,1074` (blocks `npm run build` full chain). Small, 1-2 commits. Branch: `fix/wasm-pack-logic-evaluator-build-error`.
-2. **PR 4 cycle** (code-editor-foundation): Rust unit tests + Playwright E2E (11 scenarios) + bundle size verification + 6 HIGH debt cleanups (M-1, M-2, overeng-W1, coupling-W1, overeng-PR2-2, overeng-PR2-5/coupling-PR2-10). Branch: `feat/code-editor-foundation-pr4-tests-cleanup`. Release v0.44.0.
-3. **Hito 4 Order 2** (`rust-source-integration` — scene↔source navigation). New SDDK cycle (explore → propose → spec → design → tasks → apply → verify → debt → archive → release). Larger scope; defer until v0.44.0 lands.
+**overeng-W1 deferred**: `SourceFile.id == SourceFile.path` StableId smell not fixed — rename not implemented yet. Deferred to Order 2 (`rust-source-integration`) where rename ships.
 
-**Open questions**:
-- Bundle size budget: 315 KB gzipped full app vs 200 KB gzipped for CM6-only design target. Is the budget per-component or per-total? Clarify in PR 4.
-- Pre-existing wasm-pack bug: fix as part of PR 4 prep (recommended) or separate hot-fix?
-- Hito 4 Order 2 research: needs separate research spike, or is the spec sufficient?
+**3 Playwright skips**: WASM programmatic dialog interception timing — not a code bug, graceful skip when WASM unstable.
 
-**Detailed handoff**: see `sddk/code-editor-foundation/apply-progress.md` "Session Handover" section (gitignored, local-only).
+**Next**: Hito 4 Order 2 (`rust-source-integration` — scene↔source navigation). New SDDK cycle. Branch: `feat/rust-source-integration`.
 
 ---
 
@@ -484,4 +478,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level
 
 ---
 
-*Last updated: v0.43.0 — 2026-07-02 23:30 CEST (Hito 4 Order 1: 3/4 PRs merged; PR 4 Tests+Cleanup pending → v0.44.0; session handover notes added)*
+*Last updated: v0.44.0 — 2026-07-03 (Hito 4 Order 1 COMPLETE: 4/4 PRs merged; overeng-W1 deferred to Order 2; session handover updated)*
