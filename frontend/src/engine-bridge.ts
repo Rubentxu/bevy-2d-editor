@@ -212,6 +212,13 @@ export async function initEngine(
   (window as any).find_source_location = (typeId: string) => wasm.find_source_location(typeId);
   (window as any).find_entities_by_type = (typeId: string) => wasm.find_entities_by_type(typeId);
 
+  // ── Asset Pipeline — binary OPFS texture assets ─────────────────────────────
+  (window as any).list_asset_files = () => wasm.list_asset_files();
+  (window as any).import_asset_file = (name: string, mimeType: string, bytes: Uint8Array) =>
+    wasm.import_asset_file(name, mimeType, bytes);
+  (window as any).read_asset_file_bytes = (id: string) => wasm.read_asset_file_bytes(id);
+  (window as any).delete_asset_file = (id: string) => wasm.delete_asset_file(id);
+
   // ── Scene Asset Browser + Authoring (PR3) ──────────────────────────────────
   (window as any).create_scene_asset = (name: string, role: string) =>
     wasm.create_scene_asset(name, role);
