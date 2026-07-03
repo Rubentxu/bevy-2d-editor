@@ -19,12 +19,13 @@ import AssetUnsavedChangesDialog from "./components/AssetUnsavedChangesDialog";
 import { TilesetPanel } from "./components/TilesetPanel";
 import { AutoLayerPanel } from "./components/AutoLayerPanel";
 import LogicGraphEditor from "./components/LogicGraphEditor";
-import CodeEditor from "./components/CodeEditor";
+import CodeEditor, { type NavigationTarget } from "./components/CodeEditor";
 import { useScenes } from "./hooks/useScenes";
 import { useSceneAssets } from "./hooks/useSceneAssets";
 import { sceneCreate, sceneSwitch, sceneSwitchCommit, sceneDelete, sceneRename } from "./services/scenes";
 import { type TilesetMetadata } from "./services/tilesets";
 import { type AutoLayerPayload, type LevelLayerPayload } from "./services/scene-assets";
+import { findSourceLocation } from "./services/code-files";
 
 type EditorMode = "scene" | "asset-authoring" | "logic" | "code";
 
@@ -56,6 +57,10 @@ export default function App() {
   const [editorMode, setEditorMode] = useState<EditorMode>("scene");
   const [activeAssetLogicalPath, setActiveAssetLogicalPath] = useState<string | null>(null);
   const [pendingBackToScene, setPendingBackToScene] = useState(false);
+
+  // ── Cross-mode Navigation (rust-source-integration) ─────────────────────
+  // Holds the target file + line for scene → code jump-to-source navigation.
+  const [pendingNavigation, setPendingNavigation] = useState<NavigationTarget | null>(null);
 
   const {
     entries: assetEntries,
@@ -395,6 +400,16 @@ export default function App() {
     setEditorMode("code");
   }, []);
 
+  // Cross-mode jump-to-source handler (scene inspector → code editor).
+  // Resolves the type_id → source location and navigates to the file + line.
+  const handleJumpToSource = useCallback(async (typeId: string) => {
+    const loc = await findSourceLocation(typeId);
+    if (loc) {
+      setPendingNavigation({ fileId: loc.file_id, line: loc.line });
+      setEditorMode("code");
+    }
+  }, []);
+
   // Asset command dispatch with C-2 adapter: fieldPath string → [fieldPath]
   const handleAssetCommit = useCallback(
     async (localId: string, typeId: string, fieldPath: string, value: any) => {
@@ -507,7 +522,10 @@ export default function App() {
           </>
         ) : editorMode === "code" ? (
           <>
-            <CodeEditor />
+            <CodeEditor
+            navigationTarget={pendingNavigation}
+            onEditorReady={() => setPendingNavigation(null)}
+          />
           </>
         ) : editorMode === "scene" ? (
           <>
@@ -551,6 +569,7 @@ export default function App() {
               onRemoveInstance={removeInstance}
               onReplaceInstanceAsset={replaceInstanceAsset}
               assetEntries={assetEntries}
+              onJumpToSource={handleJumpToSource}
             />
           </>
         ) : (

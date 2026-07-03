@@ -25,6 +25,20 @@ impl ComponentTypeId {
     }
 }
 
+/// Source location in a Rust source file.
+/// Used for "jump to definition" navigation from component schema to source.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SourceLocation {
+    pub file_id: String,
+    pub line: u32,
+    #[serde(default = "default_source_location_column")]
+    pub column: u32,
+}
+
+fn default_source_location_column() -> u32 {
+    1
+}
+
 /// Field type enumeration for schema field definitions.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FieldType {
@@ -69,6 +83,10 @@ pub struct ComponentSchema {
     /// Whether this component exports to Bevy runtime.
     /// Editorial-only components (Visible, Locked) set this to false.
     pub exports_to_bevy: bool,
+    /// Optional source location for "jump to definition" navigation.
+    /// Points to the Rust struct definition in the editor's source files.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_location: Option<SourceLocation>,
 }
 
 /// Global registry of all component schemas.
@@ -121,6 +139,7 @@ impl ComponentSchemaRegistry {
                 constraints: vec![],
             }],
             exports_to_bevy: true,
+            source_location: None,
         });
 
         // editor.Transform2D
@@ -148,6 +167,7 @@ impl ComponentSchemaRegistry {
                 },
             ],
             exports_to_bevy: true,
+            source_location: None,
         });
 
         // editor.Sprite2D
@@ -175,6 +195,7 @@ impl ComponentSchemaRegistry {
                 },
             ],
             exports_to_bevy: true,
+            source_location: None,
         });
 
         // editor.Visible
@@ -188,6 +209,7 @@ impl ComponentSchemaRegistry {
                 constraints: vec![],
             }],
             exports_to_bevy: false,
+            source_location: None,
         });
 
         // editor.Locked
@@ -201,6 +223,7 @@ impl ComponentSchemaRegistry {
                 constraints: vec![],
             }],
             exports_to_bevy: false,
+            source_location: None,
         });
 
         // editor.LogicBinding — binds a Scene Instance to a LogicGraphAsset
@@ -222,6 +245,7 @@ impl ComponentSchemaRegistry {
                 },
             ],
             exports_to_bevy: true,
+            source_location: None,
         });
 
         registry
@@ -456,6 +480,7 @@ mod tests {
                 constraints: vec![],
             }],
             exports_to_bevy: true,
+            source_location: None,
         }
     }
 
@@ -563,5 +588,69 @@ mod tests {
         assert!(reg.get("game.X").is_none());
         // Removing non-existent returns None
         assert!(reg.remove("game.NonExistent").is_none());
+    }
+
+    // ===== SourceLocation tests =====
+
+    #[test]
+    fn test_source_location_serde_roundtrip() {
+        let loc = SourceLocation {
+            file_id: "src/components/player.rs".to_string(),
+            line: 42,
+            column: 7,
+        };
+        let json = serde_json::to_string(&loc).unwrap();
+        let roundtrip: SourceLocation = serde_json::from_str(&json).unwrap();
+        assert_eq!(roundtrip.file_id, "src/components/player.rs");
+        assert_eq!(roundtrip.line, 42);
+        assert_eq!(roundtrip.column, 7);
+    }
+
+    #[test]
+    fn test_source_location_default_column() {
+        // column should default to 1 when deserializing from JSON without column field
+        let json = r#"{"file_id": "lib.rs", "line": 10}"#;
+        let loc: SourceLocation = serde_json::from_str(json).unwrap();
+        assert_eq!(loc.column, 1);
+    }
+
+    #[test]
+    fn test_source_location_none_in_schema() {
+        // Built-in schemas have no source location
+        let registry = ComponentSchemaRegistry::with_builtin_seeds();
+        let schema = registry.get("editor.Transform2D").unwrap();
+        assert!(schema.source_location.is_none());
+    }
+
+    #[test]
+    fn test_schema_with_source_location() {
+        let schema = ComponentSchema {
+            type_id: "game.Player".to_string(),
+            display_name: "Player".to_string(),
+            fields: vec![],
+            exports_to_bevy: true,
+            source_location: Some(SourceLocation {
+                file_id: "src/ecs/components.rs".to_string(),
+                line: 10,
+                column: 1,
+            }),
+        };
+        let json = serde_json::to_string(&schema).unwrap();
+        let roundtrip: ComponentSchema = serde_json::from_str(&json).unwrap();
+        assert!(roundtrip.source_location.is_some());
+        assert_eq!(roundtrip.source_location.unwrap().file_id, "src/ecs/components.rs");
+    }
+
+    #[test]
+    fn test_schema_source_location_missing_from_json_is_none() {
+        // Existing JSON without source_location should deserialize with None
+        let json = r#"{
+            "type_id": "game.OldSchema",
+            "display_name": "Old Schema",
+            "fields": [],
+            "exports_to_bevy": true
+        }"#;
+        let schema: ComponentSchema = serde_json::from_str(json).unwrap();
+        assert!(schema.source_location.is_none());
     }
 }

@@ -208,6 +208,10 @@ export async function initEngine(
     wasm.create_source_file(path, name);
   (window as any).delete_source_file = (id: string) => wasm.delete_source_file(id);
 
+  // ── Rust Source Integration (rust-source-integration) ───────────────────────
+  (window as any).find_source_location = (typeId: string) => wasm.find_source_location(typeId);
+  (window as any).find_entities_by_type = (typeId: string) => wasm.find_entities_by_type(typeId);
+
   // ── Scene Asset Browser + Authoring (PR3) ──────────────────────────────────
   (window as any).create_scene_asset = (name: string, role: string) =>
     wasm.create_scene_asset(name, role);

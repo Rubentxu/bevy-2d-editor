@@ -19,6 +19,15 @@ export interface SourceFile {
   name: string;
 }
 
+/**
+ * Source location in a Rust source file for "jump to definition" navigation.
+ */
+export interface SourceLocation {
+  file_id: string;
+  line: number;
+  column: number;
+}
+
 async function waitForEngine(): Promise<void> {
   let attempts = 0;
   while (
@@ -112,4 +121,23 @@ export async function deleteSourceFile(id: string): Promise<void> {
   await waitForEngine();
   const parsed = parseOpfs<null>((window as any).delete_source_file(id));
   if (!parsed.ok) throw new Error(parsed.error!);
+}
+
+/**
+ * Get the source location for a component schema type_id.
+ * Returns SourceLocation or null if not found / not set.
+ */
+export async function findSourceLocation(typeId: string): Promise<SourceLocation | null> {
+  await waitForEngine();
+  const result: string = (window as any).find_source_location(typeId);
+  return result === "null" ? null : JSON.parse(result);
+}
+
+/**
+ * Find all entity stable IDs in the current scene that have a component of the given type.
+ */
+export async function findEntitiesByType(typeId: string): Promise<string[]> {
+  await waitForEngine();
+  const result: string = (window as any).find_entities_by_type(typeId);
+  return JSON.parse(result);
 }

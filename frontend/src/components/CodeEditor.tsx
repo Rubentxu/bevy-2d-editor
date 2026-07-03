@@ -1,10 +1,26 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import CodeMirror, { Extension } from "@uiw/react-codemirror";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import CodeMirror, { Extension, EditorView } from "@uiw/react-codemirror";
 import { rust } from "@codemirror/lang-rust";
 import { vscodeDark } from "@uiw/codemirror-theme-vscode";
 
 import { useCodeFiles } from "../hooks/useCodeFiles";
 import type { SourceFile } from "../services/code-files";
+
+/** Navigation target for cross-mode jump-to-source navigation. */
+export interface NavigationTarget {
+  fileId: string;
+  line: number;
+}
+
+/**
+ * Props for CodeEditor — extends the hook's state with navigation support.
+ */
+export interface CodeEditorProps {
+  /** Jump-to-source navigation target from App.tsx pendingNavigation state. */
+  navigationTarget?: NavigationTarget | null;
+  /** Called when the editor has scrolled to the navigation target. */
+  onEditorReady?: () => void;
+}
 
 /**
  * Code editor surface — Rust syntax-highlighted CodeMirror 6 backed by
@@ -16,7 +32,7 @@ import type { SourceFile } from "../services/code-files";
  * Save trigger: Ctrl+S (Windows/Linux) / Cmd+S (Mac).
  * Load/save failures surface as a dismissible error bar at the top of the editor.
  */
-export default function CodeEditor() {
+export default function CodeEditor({ navigationTarget, onEditorReady }: CodeEditorProps = {}) {
   const {
     files,
     currentId,
@@ -29,6 +45,25 @@ export default function CodeEditor() {
     setContent,
     delete: deleteFile,
   } = useCodeFiles();
+
+  // EditorView ref for programmatic scroll navigation
+  const viewRef = useRef<EditorView | null>(null);
+
+  // Scroll to target line when navigationTarget changes
+  useEffect(() => {
+    if (!navigationTarget || !viewRef.current) return;
+    if (viewRef.current.state.doc.lines < navigationTarget.line) return;
+    try {
+      const lineStart = viewRef.current.state.doc.line(navigationTarget.line).from;
+      viewRef.current.dispatch({
+        selection: { anchor: lineStart },
+        effects: EditorView.scrollIntoView(lineStart, { y: "center" }),
+      });
+      onEditorReady?.();
+    } catch {
+      // Line number out of range — ignore
+    }
+  }, [navigationTarget, onEditorReady]);
 
   // Error toast visibility
   const [errorVisible, setErrorVisible] = useState(false);
@@ -234,6 +269,9 @@ export default function CodeEditor() {
               onChange={handleChange}
               style={{ height: "100%" }}
               basicSetup={true}
+              onCreateEditor={(view) => {
+                viewRef.current = view;
+              }}
             />
           </div>
         ) : (

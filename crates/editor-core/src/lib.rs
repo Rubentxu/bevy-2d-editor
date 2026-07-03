@@ -2256,6 +2256,37 @@ fn get_schema_json(type_id: &str) -> Result<String, JsValue> {
     serde_json::to_string(schema).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
+/// Get the source location for a component schema type_id.
+/// Returns JSON string of SourceLocation or "null" if not found / not set.
+#[wasm_bindgen]
+pub fn find_source_location(type_id: &str) -> Result<String, JsValue> {
+    let registry = schema::combined_registry();
+    match registry.get(type_id) {
+        Some(schema) => Ok(serde_json::to_string(&schema.source_location)
+            .unwrap_or_else(|_| "null".to_string())),
+        None => Ok("null".to_string()),
+    }
+}
+
+/// Find all entity stable IDs in the current scene that have a component of the given type.
+#[wasm_bindgen]
+pub fn find_entities_by_type(type_id: &str) -> Result<String, JsValue> {
+    let matching: Vec<String> = SCENE_DOC
+        .with(|s| {
+            let doc_ref = s.borrow();
+            match doc_ref.as_ref() {
+                Some(doc) => doc
+                    .entities
+                    .iter()
+                    .filter(|e| e.components.iter().any(|c| c.type_id == type_id))
+                    .map(|e| e.id.as_str().to_string())
+                    .collect(),
+                None => Vec::new(),
+            }
+        });
+    serde_json::to_string(&matching).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
 /// Helper: update project.json's schemas list (add or remove a type_id).
 #[cfg(target_arch = "wasm32")]
 async fn update_project_schemas(type_id: &str, add: bool) -> Result<(), String> {
@@ -4118,6 +4149,176 @@ mod validation_center_tests {
         assert_eq!(json, "\"logic\"");
         let parsed: ValidationCategory = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed, ValidationCategory::Logic);
+    }
+}
+
+// ===== Rust-source-integration tests =====
+// Tests for find_source_location and find_entities_by_type WASM functions.
+// These require wasm32 target to compile (wasm_bindgen JsValue dependency).
+
+#[cfg(target_arch = "wasm32")]
+#[cfg(test)]
+mod rust_source_integration_tests {
+    use super::*;
+
+    /// Test helper: set SCENE_DOC for testing.
+    fn set_scene_doc_for_test(doc: Option<SceneDocument>) {
+        SCENE_DOC.with(|cell| {
+            *cell.borrow_mut() = doc;
+        });
+    }
+
+    /// Test helper: clear SCENE_DOC after each test.
+    fn clear_scene_doc() {
+        set_scene_doc_for_test(None);
+    }
+
+    // B.1: Rust unit test — find_entities_by_type
+    #[test]
+    fn find_entities_by_type_returns_matching_stable_ids() {
+        use std::collections::BTreeMap;
+        // Build a scene with entities that have components of specific type_ids
+        let doc = SceneDocument {
+            version: "0.1".to_string(),
+            scene_id: "test_scene".to_string(),
+            name: "Test Scene".to_string(),
+            entities: vec![
+                Entity {
+                    id: StableId::new("ent_player"),
+                    name: "Player".to_string(),
+                    parent: None,
+                    components: vec![
+                        ComponentInstance {
+                            type_id: "game.PlayerHealth".to_string(),
+                            values: serde_json::json!({}),
+                        },
+                        ComponentInstance {
+                            type_id: "game.Transform2D".to_string(),
+                            values: serde_json::json!({}),
+                        },
+                    ],
+                },
+                Entity {
+                    id: StableId::new("ent_enemy"),
+                    name: "Enemy".to_string(),
+                    parent: None,
+                    components: vec![
+                        ComponentInstance {
+                            type_id: "game.EnemyAI".to_string(),
+                            values: serde_json::json!({}),
+                        },
+                    ],
+                },
+                Entity {
+                    id: StableId::new("ent_ally"),
+                    name: "Ally".to_string(),
+                    parent: None,
+                    components: vec![
+                        ComponentInstance {
+                            type_id: "game.PlayerHealth".to_string(),
+                            values: serde_json::json!({}),
+                        },
+                    ],
+                },
+            ],
+            instances: BTreeMap::new(),
+        };
+
+        set_scene_doc_for_test(Some(doc));
+
+        // Call find_entities_by_type for game.PlayerHealth
+        let result = find_entities_by_type("game.PlayerHealth").unwrap();
+        let stable_ids: Vec<String> = serde_json::from_str(&result).unwrap();
+
+        // Should return ent_player and ent_ally (both have PlayerHealth component)
+        assert_eq!(stable_ids.len(), 2);
+        assert!(stable_ids.contains(&"ent_player".to_string()));
+        assert!(stable_ids.contains(&"ent_ally".to_string()));
+        assert!(!stable_ids.contains(&"ent_enemy".to_string()));
+
+        clear_scene_doc();
+    }
+
+    #[test]
+    fn find_entities_by_type_returns_empty_for_unused_type() {
+        clear_scene_doc();
+
+        let result = find_entities_by_type("game.Unused").unwrap();
+        let stable_ids: Vec<String> = serde_json::from_str(&result).unwrap();
+
+        assert!(stable_ids.is_empty());
+        clear_scene_doc();
+    }
+
+    #[test]
+    fn find_entities_by_type_returns_empty_for_empty_scene() {
+        use std::collections::BTreeMap;
+        let doc = SceneDocument {
+            version: "0.1".to_string(),
+            scene_id: "empty_scene".to_string(),
+            name: "Empty Scene".to_string(),
+            entities: vec![],
+            instances: BTreeMap::new(),
+        };
+        set_scene_doc_for_test(Some(doc));
+
+        let result = find_entities_by_type("editor.Transform2D").unwrap();
+        let stable_ids: Vec<String> = serde_json::from_str(&result).unwrap();
+
+        assert!(stable_ids.is_empty());
+        clear_scene_doc();
+    }
+
+    // B.2: Rust integration test — find_source_location
+    #[test]
+    fn find_source_location_returns_null_for_unknown_type() {
+        // Ensure game.Unknown is not in the registry
+        let result = find_source_location("game.Unknown_Type_12345").unwrap();
+        assert_eq!(result, "null");
+    }
+
+    #[test]
+    fn find_source_location_returns_null_for_type_without_source_location() {
+        // Register a schema without source_location
+        let schema = schema::ComponentSchema {
+            type_id: "game.NoSource".to_string(),
+            display_name: "NoSource".to_string(),
+            fields: vec![],
+            exports_to_bevy: true,
+            source_location: None,
+        };
+        schema::register_schema(schema).unwrap();
+
+        let result = find_source_location("game.NoSource").unwrap();
+        assert_eq!(result, "null");
+
+        let _ = schema::unregister_schema("game.NoSource");
+    }
+
+    #[test]
+    fn find_source_location_returns_json_for_type_with_source_location() {
+        // Register a schema with source_location
+        let schema = schema::ComponentSchema {
+            type_id: "game.HasSource".to_string(),
+            display_name: "HasSource".to_string(),
+            fields: vec![],
+            exports_to_bevy: true,
+            source_location: Some(schema::SourceLocation {
+                file_id: "src/ecs/components.rs".to_string(),
+                line: 42,
+                column: 7,
+            }),
+        };
+        schema::register_schema(schema).unwrap();
+
+        let result = find_source_location("game.HasSource").unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+        assert_eq!(parsed["file_id"], "src/ecs/components.rs");
+        assert_eq!(parsed["line"], 42);
+        assert_eq!(parsed["column"], 7);
+
+        let _ = schema::unregister_schema("game.HasSource");
     }
 }
 

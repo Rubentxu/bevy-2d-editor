@@ -517,6 +517,7 @@ mod tests {
                 },
             ],
             exports_to_bevy: true,
+            source_location: None,
         });
 
         let doc = make_doc(vec![entity(
@@ -580,6 +581,7 @@ mod tests {
                 constraints: vec![],
             }],
             exports_to_bevy: true,
+            source_location: None,
         });
 
         let doc = make_doc(vec![
