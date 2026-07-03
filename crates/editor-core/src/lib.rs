@@ -207,6 +207,23 @@ pub struct OperationLogState {
     pub can_redo: bool,
 }
 
+/// Play-mode state resource. Edit = editor commands + rebuild active;
+/// Playing = commands paused, logic dispatch + actuators run free.
+#[derive(Resource, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PlayMode {
+    #[default]
+    Edit,
+    Playing,
+}
+
+/// Snapshot of placed-entity Transforms captured on Play entry.
+/// Stores Bevy Entity → Transform. Entity IDs are stable within a play
+/// session (rebuild_preview_world is gated off during play, so no despawn).
+#[derive(Resource, Default)]
+pub struct TransformSnapshot {
+    pub transforms: std::collections::HashMap<bevy::prelude::Entity, Transform>,
+}
+
 /// Cross-system dirty flag set by `dispatch_command` and read by
 /// `rebuild_preview_world`. Visible across the WASM→Bevy boundary
 /// because both run on the same thread (single-threaded WASM).
@@ -232,6 +249,27 @@ thread_local! {
     static LOGIC_GRAPH_DOC: RefCell<Option<LogicGraphAsset>> = const { RefCell::new(None) };
     // Logic operation log: per-graph undo/redo history.
     static LOGIC_OPERATION_LOG: RefCell<LogicOperationLog> = const { RefCell::new(LogicOperationLog::new_const()) };
+}
+
+/// Thread-local request flag set by WASM exports, consumed by a Bevy system.
+/// Follows the established DIRTY_FLAG pattern (lib.rs:213).
+thread_local! {
+    static PLAY_MODE_REQUEST: RefCell<Option<PlayModeRequest>> = const { RefCell::new(None) };
+}
+#[derive(Clone)]
+enum PlayModeRequest {
+    Enter,
+    Exit,
+}
+
+/// RunIf helper — returns true when PlayMode is Playing.
+pub fn in_play_mode(mode: Res<PlayMode>) -> bool {
+    *mode == PlayMode::Playing
+}
+
+/// RunIf helper — returns true when PlayMode is Edit.
+fn in_edit_mode(mode: Res<PlayMode>) -> bool {
+    *mode == PlayMode::Edit
 }
 
 /// Get an immutable borrowed reference to the SceneRegistry, initializing if needed.
@@ -1364,11 +1402,17 @@ pub fn start_engine(canvas_id: &str) {
             ..default()
         }))
         .add_systems(Startup, setup)
-        .add_systems(Update, process_commands)
-        .add_systems(Update, rebuild_preview_world.after(process_commands))
-        .add_systems(Update, sync_log_state.after(rebuild_preview_world))
-        .add_systems(Update, logic_dispatch::logic_evaluation_system.after(sync_log_state))
-        .add_systems(Update, actuator_bus::apply_actuator_outputs.after(logic_dispatch::logic_evaluation_system))
+        // process_play_mode_request runs every frame to handle WASM enter/exit requests
+        .add_systems(Update, process_play_mode_request.before(process_commands))
+        // Editor-only systems gated during play mode
+        .add_systems(Update, process_commands.run_if(in_edit_mode))
+        .add_systems(Update, rebuild_preview_world.run_if(in_edit_mode).after(process_commands))
+        .add_systems(Update, sync_log_state.run_if(in_edit_mode).after(rebuild_preview_world))
+        // Play-mode sensor systems — run before logic evaluation
+        .add_systems(Update, logic_evaluator::update_keyboard_state.run_if(in_play_mode).before(logic_dispatch::logic_evaluation_system))
+        // Logic dispatch runs only in play mode
+        .add_systems(Update, logic_dispatch::logic_evaluation_system.run_if(in_play_mode).after(sync_log_state))
+        .add_systems(Update, actuator_bus::apply_actuator_outputs.run_if(in_play_mode).after(logic_dispatch::logic_evaluation_system))
         .add_systems(Last, emit_events)
         .run();
 
@@ -1393,6 +1437,20 @@ pub fn get_event_bus_ptr() -> u32 {
 #[wasm_bindgen]
 pub fn get_event_bus_len() -> u32 {
     EVENT_BUS.with(|b| b.borrow().as_ref().unwrap().len())
+}
+
+/// Enter play mode — schedules a snapshot of all entity Transforms and
+/// switches to Playing. Consumed by process_play_mode_request next frame.
+#[wasm_bindgen]
+pub fn enter_play_mode() {
+    PLAY_MODE_REQUEST.with(|r| *r.borrow_mut() = Some(PlayModeRequest::Enter));
+}
+
+/// Exit play mode — restores entity Transforms from the snapshot and
+/// switches back to Edit. Consumed by process_play_mode_request next frame.
+#[wasm_bindgen]
+pub fn exit_play_mode() {
+    PLAY_MODE_REQUEST.with(|r| *r.borrow_mut() = Some(PlayModeRequest::Exit));
 }
 
 fn setup(mut commands: Commands) {
@@ -1426,7 +1484,46 @@ fn setup(mut commands: Commands) {
     commands.insert_resource(SceneDocumentState::new(scene));
     // Insert OperationLogState resource (UI hooks read this)
     commands.insert_resource(OperationLogState::default());
+    // Insert PlayMode resource (defaults to Edit)
+    commands.insert_resource(PlayMode::default());
+    // Insert TransformSnapshot
+    commands.insert_resource(TransformSnapshot::default());
     mark_dirty();
+}
+
+/// Handles play mode enter/exit requests from WASM, snapshot/restore transforms.
+/// Runs BEFORE process_commands so Enter transitions are committed before editor
+/// commands are processed, and Exit restores before rebuild_preview_world.
+fn process_play_mode_request(
+    mut play_mode: ResMut<PlayMode>,
+    mut snapshot: ResMut<TransformSnapshot>,
+    scene_transforms: Query<(bevy::prelude::Entity, &Transform), With<SceneEntity>>,
+    mut scene_transforms_mut: Query<(bevy::prelude::Entity, &mut Transform), With<SceneEntity>>,
+) {
+    let request = PLAY_MODE_REQUEST.with(|r| (*r.borrow()).clone());
+
+    match request {
+        Some(PlayModeRequest::Enter) => {
+            // Snapshot all placed entity transforms
+            snapshot.transforms.clear();
+            for (entity, transform) in scene_transforms.iter() {
+                snapshot.transforms.insert(entity, *transform);
+            }
+            *play_mode = PlayMode::Playing;
+            PLAY_MODE_REQUEST.with(|r| *r.borrow_mut() = None);
+        }
+        Some(PlayModeRequest::Exit) => {
+            // Restore transforms from snapshot
+            for (entity, mut transform) in scene_transforms_mut.iter_mut() {
+                if let Some(saved) = snapshot.transforms.get(&entity) {
+                    *transform = *saved;
+                }
+            }
+            *play_mode = PlayMode::Edit;
+            PLAY_MODE_REQUEST.with(|r| *r.borrow_mut() = None);
+        }
+        None => {}
+    }
 }
 
 /// Respawns scene entities when the SceneDocumentState dirty flag is set.

@@ -6,6 +6,7 @@
 //! All tests follow Strict TDD: RED → GREEN → TRIANGULATE → REFACTOR.
 
 use crate::logic_graph::{LogicEdge, LogicGraphAsset, LogicNode, LogicNodeRole, NodeId, NodeTypeId, PortId};
+use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -1061,6 +1062,22 @@ thread_local! {
     /// Map of target_tag -> current distance (in world units).
     /// Updated by Bevy proximity system before logic evaluation.
     pub static PROXIMITY_STATE: RefCell<std::collections::HashMap<String, f32>> = RefCell::new(std::collections::HashMap::new());
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bevy systems — update sensor runtime state
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Populates KEYBOARD_STATE from Bevy's ButtonInput<KeyCode>.
+pub fn update_keyboard_state(keys: Res<ButtonInput<KeyCode>>) {
+    KEYBOARD_STATE.with(|state| {
+        let mut held = state.borrow_mut();
+        held.clear();
+        for key in keys.get_pressed() {
+            // format!("{:?}", KeyCode::KeyW) → "KeyW" (matches KeyboardEvent.code)
+            held.insert(format!("{:?}", key));
+        }
+    });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2235,5 +2252,24 @@ mod integration_tests {
         let result = evaluator.evaluate(&node, &[PortValue::Action("triggered".to_string())]);
         assert_eq!(result.len(), 1);
         assert!(matches!(&result[0], PortValue::Action(s) if s == "triggered"));
+    }
+
+    // §T23: KeyCode Debug format must match KeyboardEvent.code conventions
+    // This locks the bridge contract between Bevy KeyCode and sensor.key_pressed.
+    #[test]
+    fn test_keycode_debug_format_matches_sensor_contract() {
+        use bevy::prelude::KeyCode;
+        // format!("{:?}", KeyCode::KeyW) must yield "KeyW" for sensor.key_pressed
+        assert_eq!(format!("{:?}", KeyCode::KeyW), "KeyW");
+        assert_eq!(format!("{:?}", KeyCode::KeyA), "KeyA");
+        assert_eq!(format!("{:?}", KeyCode::KeyS), "KeyS");
+        assert_eq!(format!("{:?}", KeyCode::KeyD), "KeyD");
+        // Space must yield "Space"
+        assert_eq!(format!("{:?}", KeyCode::Space), "Space");
+        // Arrow keys
+        assert_eq!(format!("{:?}", KeyCode::ArrowUp), "ArrowUp");
+        assert_eq!(format!("{:?}", KeyCode::ArrowDown), "ArrowDown");
+        assert_eq!(format!("{:?}", KeyCode::ArrowLeft), "ArrowLeft");
+        assert_eq!(format!("{:?}", KeyCode::ArrowRight), "ArrowRight");
     }
 }

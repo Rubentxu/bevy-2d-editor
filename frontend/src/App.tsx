@@ -19,6 +19,7 @@ import AssetUnsavedChangesDialog from "./components/AssetUnsavedChangesDialog";
 import { TilesetPanel } from "./components/TilesetPanel";
 import { AutoLayerPanel } from "./components/AutoLayerPanel";
 import LogicGraphEditor from "./components/LogicGraphEditor";
+import GameOverlay from "./components/GameOverlay";
 import CodeEditor, { type NavigationTarget } from "./components/CodeEditor";
 import { useScenes } from "./hooks/useScenes";
 import { useSceneAssets } from "./hooks/useSceneAssets";
@@ -27,7 +28,7 @@ import { type TilesetMetadata } from "./services/tilesets";
 import { type AutoLayerPayload, type LevelLayerPayload } from "./services/scene-assets";
 import { findSourceLocation } from "./services/code-files";
 
-type EditorMode = "scene" | "asset-authoring" | "logic" | "code";
+type EditorMode = "scene" | "asset-authoring" | "logic" | "code" | "play";
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -463,7 +464,18 @@ export default function App() {
     await saveAsset();
   }, [saveAsset]);
 
+  const handleTogglePlay = useCallback(() => {
+    if (editorMode === "play") {
+      (window as any).exit_play_mode();
+      setEditorMode("scene");
+    } else {
+      (window as any).enter_play_mode();
+      setEditorMode("play");
+    }
+  }, [editorMode]);
+
   useKeyboardShortcuts({
+    enabled: editorMode !== "play",
     onUndo: editorMode === "scene" ? handleUndo : handleAssetUndo,
     onRedo: editorMode === "scene" ? handleRedo : handleAssetRedo,
     logState: editorMode === "scene" ? logState : assetLogState,
@@ -493,9 +505,11 @@ export default function App() {
         tilesetPanelOpen={tilesetPanelOpen}
         onToggleAutoLayer={handleToggleAutoLayer}
         autoLayerPanelOpen={autoLayerPanelOpen}
+        onTogglePlay={handleTogglePlay}
         error={error || initError}
         onDismissError={() => setError(null)}
       />
+      {editorMode === "play" && <GameOverlay onStop={handleTogglePlay} />}
       {editorMode === "scene" && (
         <SceneTabs
           scenes={scenes}

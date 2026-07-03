@@ -157,6 +157,10 @@ export async function initEngine(
   (window as any).get_preview_provenance_wasm = (stableId: string) =>
     wasm.get_preview_provenance_wasm(stableId);
 
+  // ── Play/Stop Mode (build-and-run-loop) ──────────────────────────────────
+  (window as any).enter_play_mode = () => wasm.enter_play_mode();
+  (window as any).exit_play_mode = () => wasm.exit_play_mode();
+
   // ── BSN file export (bsn-file-export-research) ────────────────────────────
   (window as any).export_asset_to_bsn_wasm = (assetId: string) =>
     wasm.export_asset_to_bsn_wasm(assetId);
