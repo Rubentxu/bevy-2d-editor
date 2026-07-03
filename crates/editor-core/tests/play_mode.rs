@@ -4,6 +4,7 @@
 
 use bevy::prelude::*;
 use editor_core::logic_evaluator::{update_keyboard_state, KEYBOARD_STATE};
+use editor_core::PlayMode;
 
 /// System that populates KEYBOARD_STATE and immediately asserts — runs in same
 /// test app so thread-local state is guaranteed shared.
@@ -124,5 +125,28 @@ fn test_update_keyboard_state_empty_when_no_keys_pressed() {
     KEYBOARD_STATE.with(|state| {
         let held = state.borrow();
         assert!(held.is_empty(), "expected empty, got {:?}", held);
+    });
+}
+
+// §T4: KEYBOARD_STATE not updated in edit mode (COUP-NEW-01 regression test).
+// Ensures update_keyboard_state is gated by run_if(in_play_mode).
+// In edit mode, the system must NOT call clear()/insert() — verified by checking
+// that pressing a key while in edit mode does NOT add it to KEYBOARD_STATE.
+#[test]
+fn test_keyboard_state_not_updated_in_edit_mode() {
+    let mut app = App::new();
+    app.add_systems(Update, update_keyboard_state.run_if(editor_core::in_play_mode));
+
+    // Set Edit mode and press A — system should NOT run
+    app.world_mut().insert_resource(PlayMode::Edit);
+    let mut input = ButtonInput::<KeyCode>::default();
+    input.press(KeyCode::KeyA);
+    app.world_mut().insert_resource(input);
+    app.update();
+
+    // KEYBOARD_STATE should remain empty (system never ran)
+    KEYBOARD_STATE.with(|state| {
+        let held = state.borrow();
+        assert!(held.is_empty(), "edit mode: system should not run, expected empty, got {:?}", held);
     });
 }

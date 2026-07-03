@@ -263,7 +263,7 @@ enum PlayModeRequest {
 }
 
 /// RunIf helper — returns true when PlayMode is Playing.
-fn in_play_mode(mode: Res<PlayMode>) -> bool {
+pub fn in_play_mode(mode: Res<PlayMode>) -> bool {
     *mode == PlayMode::Playing
 }
 
@@ -1410,9 +1410,9 @@ pub fn start_engine(canvas_id: &str) {
         .add_systems(Update, sync_log_state.run_if(in_edit_mode).after(rebuild_preview_world))
         // Play-mode sensor systems — run before logic evaluation
         .add_systems(Update, logic_evaluator::update_keyboard_state.run_if(in_play_mode).before(logic_dispatch::logic_evaluation_system))
-        // Logic dispatch runs in both modes
-        .add_systems(Update, logic_dispatch::logic_evaluation_system.after(sync_log_state))
-        .add_systems(Update, actuator_bus::apply_actuator_outputs.after(logic_dispatch::logic_evaluation_system))
+        // Logic dispatch runs only in play mode
+        .add_systems(Update, logic_dispatch::logic_evaluation_system.run_if(in_play_mode).after(sync_log_state))
+        .add_systems(Update, actuator_bus::apply_actuator_outputs.run_if(in_play_mode).after(logic_dispatch::logic_evaluation_system))
         .add_systems(Last, emit_events)
         .run();
 
