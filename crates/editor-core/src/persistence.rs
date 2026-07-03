@@ -34,6 +34,9 @@ pub const ASSETS_DIR: &str = "assets";
 /// Subdirectory containing Tileset body files.
 pub const TILESETS_DIR: &str = "tilesets";
 
+/// Subdirectory containing imported texture assets (binary OPFS storage).
+pub const RESOURCE_DIR: &str = "resources";
+
 /// Project metadata stored at OPFS root as `project.json`.
 /// Contains version, name, list of saved scenes, schemas.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -144,6 +147,12 @@ pub fn validate_logical_path(s: &str) -> Result<(), AssetPathError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_resource_dir_constant() {
+        // §1.1: RESOURCE_DIR must be "resources" for asset file storage
+        assert_eq!(RESOURCE_DIR, "resources");
+    }
 
     #[test]
     fn test_project_metadata_default() {

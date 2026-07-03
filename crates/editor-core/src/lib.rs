@@ -38,6 +38,7 @@ pub mod logic_recipes;
 pub mod logic_dispatch;
 pub mod actuator_bus;
 pub mod source_files;
+pub mod asset_files;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ADR References (documentation only — no code changes here)
@@ -157,6 +158,7 @@ pub use scene_instance::{
 pub use scene_instance_overrides::{OverrideIssue, ResyncReport};
 pub use instance_projection::{root_local_ids, PreviewEntity, project_instances};
 pub use source_files::{SourceFile, SourceFileId, SOURCES_DIR};
+pub use asset_files::{AssetFile, AssetFileId, AssetFileKind, RESOURCE_DIR};
 pub use schema::ComponentTypeId;
 pub use scenes::{SceneInfo, SceneRegistry, SwitchResult};
 pub use tileset::{
@@ -1905,6 +1907,14 @@ extern "C" {
     /// JS-side: `window.opfs_delete_file(path) -> Promise<{ok, error?}>`
     #[wasm_bindgen(js_namespace = window, js_name = opfs_delete_file)]
     pub fn opfs_delete_file_raw(path: &str) -> js_sys::Promise;
+
+    /// JS-side: `window.opfs_save_binary(path, Uint8Array) -> Promise<{ok, error?}>`
+    #[wasm_bindgen(js_namespace = window, js_name = opfs_save_binary)]
+    pub fn opfs_save_binary_raw(path: &str, contents: &js_sys::Uint8Array) -> js_sys::Promise;
+
+    /// JS-side: `window.opfs_load_binary(path) -> Promise<{ok, value: Uint8Array, error?}>`
+    #[wasm_bindgen(js_namespace = window, js_name = opfs_load_binary)]
+    pub fn opfs_load_binary_raw(path: &str) -> js_sys::Promise;
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -1991,6 +2001,47 @@ async fn js_delete_file(path: &str) -> Result<(), String> {
             .and_then(|v| v.as_str())
             .unwrap_or("Unknown error")
             .to_string())
+    }
+}
+
+/// Save binary bytes to OPFS at the given path.
+/// Returns `Ok(())` on success.
+#[cfg(target_arch = "wasm32")]
+async fn js_save_binary(path: &str, contents: &[u8]) -> Result<(), String> {
+    let js_bytes = js_sys::Uint8Array::new_with_length(contents.len() as u32);
+    js_bytes.copy_from(contents);
+    let promise = opfs_save_binary_raw(path, &js_bytes);
+    let result = js_await(promise).await.map_err(|e| format!("{:?}", e))?;
+    let val: serde_json::Value = serde_wasm_bindgen::from_value(result)
+        .map_err(|e| format!("Bad bridge response: {}", e))?;
+    if val.get("ok").and_then(|v| v.as_bool()) == Some(true) {
+        Ok(())
+    } else {
+        Err(val
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Unknown error")
+            .to_string())
+    }
+}
+
+/// Load binary bytes from OPFS at the given path.
+/// Returns `Ok(Vec<u8>)` on success.
+#[cfg(target_arch = "wasm32")]
+async fn js_load_binary(path: &str) -> Result<Vec<u8>, String> {
+    let promise = opfs_load_binary_raw(path);
+    let result = js_await(promise).await.map_err(|e| format!("{:?}", e))?;
+    // Binary response: {ok: true, value: Uint8Array} — must extract bytes manually
+    // Cannot use serde_wasm_bindgen for Vec<u8> from Uint8Array.
+    let obj = js_sys::Object::from(result);
+    if obj.get("ok").as_bool() == Some(true) {
+        let bytes: Vec<u8> = js_sys::Uint8Array::new(&obj.get("value")).to_vec();
+        Ok(bytes)
+    } else {
+        Err(obj
+            .get("error")
+            .as_string()
+            .unwrap_or_else(|| "Unknown error".to_string()))
     }
 }
 
@@ -2161,6 +2212,181 @@ pub async fn delete_source_file(id: &str) -> Result<JsValue, JsValue> {
     let response = match js_delete_file(&path).await {
         Ok(()) => serde_json::json!({ "ok": true }),
         Err(e) => serde_json::json!({ "ok": false, "error": e }),
+    };
+    serde_wasm_bindgen::to_value(&response).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Asset Files WASM surface — CRUD for binary texture assets in OPFS `resources/`
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Metadata sidecar for binary assets (stored as JSON next to the binary file).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct AssetMeta {
+    mime_type: String,
+    size_bytes: u64,
+}
+
+/// List all asset files in the `resources/` directory.
+/// Returns `OpfsResult<Vec<AssetFile>>` with shape `{ok: true, value: [AssetFile, ...]}`.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn list_asset_files() -> Result<JsValue, JsValue> {
+    use crate::asset_files::RESOURCE_DIR;
+
+    let files = match js_list_files(RESOURCE_DIR).await {
+        Ok(names) => names,
+        Err(_) => Vec::new(), // resources/ dir doesn't exist yet — return empty list
+    };
+
+    let assets: Vec<AssetFile> = files
+        .iter()
+        .filter(|name| {
+            // Skip metadata sidecar files
+            !name.ends_with(".meta.json")
+        })
+        .filter_map(|name| {
+            let id = name.to_string();
+            let path = name.to_string();
+            let file_name = std::path::Path::new(name)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(name);
+
+            // Try to read metadata sidecar
+            let meta_path = format!("{}/{}.meta.json", RESOURCE_DIR, name);
+            match js_load_file(&meta_path).await {
+                Ok(meta_json) => {
+                    match serde_json::from_str::<AssetMeta>(&meta_json) {
+                        Ok(meta) => Some(AssetFile {
+                            id: AssetFileId::new(id),
+                            path,
+                            name: file_name.to_string(),
+                            kind: AssetFileKind::Texture, // Default kind; extensible later
+                            mime_type: meta.mime_type,
+                            size_bytes: meta.size_bytes,
+                        }),
+                        Err(_) => None,
+                    }
+                }
+                Err(_) => None, // No metadata file — skip this asset
+            }
+        })
+        .collect();
+
+    let response = serde_json::json!({ "ok": true, "value": assets });
+    serde_wasm_bindgen::to_value(&response).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Import a new asset file: saves binary bytes to OPFS and creates metadata sidecar.
+/// Returns `OpfsResult<AssetFile>` with the created file's metadata.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn import_asset_file(
+    name: &str,
+    mime_type: &str,
+    bytes: js_sys::Uint8Array,
+) -> Result<JsValue, JsValue> {
+    use crate::asset_files::{is_supported_mime, RESOURCE_DIR};
+
+    // Validate MIME type
+    if !is_supported_mime(mime_type) {
+        let response = serde_json::json!({
+            "ok": false,
+            "error": format!("Unsupported MIME type: {}", mime_type)
+        });
+        return serde_wasm_bindgen::to_value(&response)
+            .map_err(|e| JsValue::from_str(&e.to_string()));
+    }
+
+    let id = name.to_string();
+    let file_path = format!("{}/{}", RESOURCE_DIR, name);
+    let meta_path = format!("{}/{}.meta.json", RESOURCE_DIR, name);
+
+    let size_bytes = bytes.length() as u64;
+    let contents = bytes.to_vec();
+
+    // Save binary file
+    match js_save_binary(&file_path, &contents).await {
+        Ok(()) => {
+            // Save metadata sidecar
+            let meta = AssetMeta {
+                mime_type: mime_type.to_string(),
+                size_bytes,
+            };
+            let meta_json = serde_json::to_string(&meta)
+                .map_err(|e| JsValue::from_str(&format!("Meta serialization error: {}", e)))?;
+
+            match js_save_file(&meta_path, &meta_json).await {
+                Ok(()) => {
+                    let asset = AssetFile {
+                        id: AssetFileId::new(id.clone()),
+                        path: id,
+                        name: name.to_string(),
+                        kind: AssetFileKind::Texture,
+                        mime_type: mime_type.to_string(),
+                        size_bytes,
+                    };
+                    let response = serde_json::json!({ "ok": true, "value": asset });
+                    serde_wasm_bindgen::to_value(&response)
+                        .map_err(|e| JsValue::from_str(&e.to_string()))
+                }
+                Err(e) => {
+                    // Rollback: delete the binary file on meta write failure
+                    let _ = js_delete_file(&file_path).await;
+                    let response = serde_json::json!({ "ok": false, "error": e });
+                    serde_wasm_bindgen::to_value(&response)
+                        .map_err(|e| JsValue::from_str(&e.to_string()))
+                }
+            }
+        }
+        Err(e) => {
+            let response = serde_json::json!({ "ok": false, "error": e });
+            serde_wasm_bindgen::to_value(&response)
+                .map_err(|e| JsValue::from_str(&e.to_string()))
+        }
+    }
+}
+
+/// Read binary bytes of an asset file by id.
+/// Returns `OpfsResult<Uint8Array>` with shape `{ok: true, value: Uint8Array}`.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn read_asset_file_bytes(id: &str) -> Result<JsValue, JsValue> {
+    use crate::asset_files::RESOURCE_DIR;
+
+    let path = format!("{}/{}", RESOURCE_DIR, id);
+    match js_load_binary(&path).await {
+        Ok(bytes) => {
+            let response = serde_json::json!({ "ok": true, "value": bytes });
+            serde_wasm_bindgen::to_value(&response)
+                .map_err(|e| JsValue::from_str(&e.to_string()))
+        }
+        Err(e) => {
+            let response = serde_json::json!({ "ok": false, "error": e });
+            serde_wasm_bindgen::to_value(&response)
+                .map_err(|e| JsValue::from_str(&e.to_string()))
+        }
+    }
+}
+
+/// Delete an asset file by id (both binary and metadata sidecar).
+/// Returns `OpfsResult<()>` — empty value on success.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn delete_asset_file(id: &str) -> Result<JsValue, JsValue> {
+    use crate::asset_files::RESOURCE_DIR;
+
+    let file_path = format!("{}/{}", RESOURCE_DIR, id);
+    let meta_path = format!("{}/{}.meta.json", RESOURCE_DIR, id);
+
+    // Delete both binary file and metadata sidecar
+    let file_result = js_delete_file(&file_path).await;
+    let meta_result = js_delete_file(&meta_path).await;
+
+    let response = match (file_result, meta_result) {
+        (Ok(()), Ok(())) => serde_json::json!({ "ok": true }),
+        (Err(e), _) | (_, Err(e)) => serde_json::json!({ "ok": false, "error": e }),
     };
     serde_wasm_bindgen::to_value(&response).map_err(|e| JsValue::from_str(&e.to_string()))
 }

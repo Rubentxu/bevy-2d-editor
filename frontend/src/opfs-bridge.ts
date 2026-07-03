@@ -148,3 +148,51 @@ export async function opfsDeleteFile(path: string): Promise<OpfsResult> {
     return { ok: false, error: String(e) };
   }
 }
+
+export async function opfsSaveBinary(
+  path: string,
+  contents: Uint8Array
+): Promise<OpfsResult> {
+  try {
+    if (!navigator.storage?.getDirectory) {
+      return { ok: false, error: "OPFS unavailable" };
+    }
+    const segments = path.split("/").filter((s) => s.length > 0);
+    const filename = segments.pop();
+    if (!filename) return { ok: false, error: "Invalid path" };
+    const dir = await getSubdir(segments, true);
+    if (!dir) return { ok: false, error: "OPFS unavailable" };
+    const fileHandle = await dir.getFileHandle(filename, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(new Blob([contents]));
+    await writable.close();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
+export async function opfsLoadBinary(
+  path: string
+): Promise<OpfsResult<Uint8Array>> {
+  try {
+    if (!navigator.storage?.getDirectory) {
+      return { ok: false, error: "OPFS unavailable" };
+    }
+    const segments = path.split("/").filter((s) => s.length > 0);
+    const filename = segments.pop();
+    if (!filename) return { ok: false, error: "Invalid path" };
+    const dir = await getSubdir(segments, false);
+    if (!dir) return { ok: false, error: "File not found" };
+    const fileHandle = await dir.getFileHandle(filename, { create: false });
+    const file = await fileHandle.getFile();
+    const arrayBuffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    return { ok: true, value: bytes };
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "NotFoundError") {
+      return { ok: false, error: "File not found" };
+    }
+    return { ok: false, error: String(e) };
+  }
+}
