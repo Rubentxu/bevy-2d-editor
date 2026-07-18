@@ -4232,9 +4232,10 @@ pub fn regenerate_auto_layer_wasm(
     Ok(updated_json)
 }
 
-/// Add an AutoRule to an AutoLayer (direct mutation, bypasses dispatch_asset_command).
+/// Add an AutoRule to an AutoLayer.
 ///
-/// Returns the updated SceneAssetDocument JSON.
+/// MED-8: routes through the AssetCommand surface so undo/redo captures
+/// the inverse (RemoveAutoRule at the appended index).
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn add_auto_rule_wasm(
@@ -4243,44 +4244,32 @@ pub fn add_auto_rule_wasm(
     rule_json: &str,
 ) -> Result<String, JsValue> {
     use crate::auto_layer::AutoRule;
-    use crate::scene_asset::LevelLayer;
 
     let rule: AutoRule = serde_json::from_str(rule_json)
         .map_err(|e| JsValue::from_str(&format!("Invalid rule JSON: {}", e)))?;
 
-    let mut doc = with_asset_body_cache(|cache| {
-        cache.get(asset_ref).cloned()
-    }).ok_or_else(|| JsValue::from_str("Scene asset not found"))?;
+    let mut doc = with_asset_body_cache(|cache| cache.get(asset_ref).cloned())
+        .ok_or_else(|| JsValue::from_str("Scene asset not found"))?;
 
-    // Find and mutate the AutoLayer
-    let layer_mut = doc.layers
-        .iter_mut()
-        .find(|l| matches!(l, LevelLayer::Auto(al) if al.id.as_str() == layer_id))
-        .ok_or_else(|| JsValue::from_str("AutoLayer not found"))?;
+    let cmd = AssetCommand::AddAutoRule {
+        layer_id: LayerId(layer_id.to_string()),
+        rule: rule.clone(),
+    };
+    let _inverse = asset_command::apply(&mut doc, &cmd)
+        .map_err(|e| JsValue::from_str(&format!("add_auto_rule failed: {}", e)))?;
 
-    match layer_mut {
-        LevelLayer::Auto(al) => {
-            al.rules.push(rule);
-        }
-        _ => return Err(JsValue::from_str("Layer is not an AutoLayer")),
-    }
-
-    // Update cache
     with_asset_body_cache_mut(|cache| {
         cache.insert(asset_ref.to_string(), doc.clone());
     });
-
-    // Sync to SCENE_ASSET_DOC
     let doc_json = serde_json::to_string(&doc)
         .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
     set_asset_document_wasm(&doc_json)?;
-
     Ok(doc_json)
 }
 
-/// Update an AutoRule in an AutoLayer at the given index (direct mutation).
+/// Update an AutoRule in an AutoLayer at the given index.
 ///
-/// Returns the updated SceneAssetDocument JSON.
+/// MED-8: routes through the AssetCommand surface.
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn update_auto_rule_wasm(
@@ -4290,48 +4279,34 @@ pub fn update_auto_rule_wasm(
     rule_json: &str,
 ) -> Result<String, JsValue> {
     use crate::auto_layer::AutoRule;
-    use crate::scene_asset::LevelLayer;
 
-    let rule: AutoRule = serde_json::from_str(rule_json)
+    let new_rule: AutoRule = serde_json::from_str(rule_json)
         .map_err(|e| JsValue::from_str(&format!("Invalid rule JSON: {}", e)))?;
 
-    let mut doc = with_asset_body_cache(|cache| {
-        cache.get(asset_ref).cloned()
-    }).ok_or_else(|| JsValue::from_str("Scene asset not found"))?;
+    let mut doc = with_asset_body_cache(|cache| cache.get(asset_ref).cloned())
+        .ok_or_else(|| JsValue::from_str("Scene asset not found"))?;
 
-    let layer_mut = doc.layers
-        .iter_mut()
-        .find(|l| matches!(l, LevelLayer::Auto(al) if al.id.as_str() == layer_id))
-        .ok_or_else(|| JsValue::from_str("AutoLayer not found"))?;
-
-    match layer_mut {
-        LevelLayer::Auto(al) => {
-            if rule_index >= al.rules.len() {
-                return Err(JsValue::from_str(&format!(
-                    "Rule index {} out of bounds ({} rules)",
-                    rule_index,
-                    al.rules.len()
-                )));
-            }
-            al.rules[rule_index] = rule;
-        }
-        _ => return Err(JsValue::from_str("Layer is not an AutoLayer")),
-    }
+    let cmd = AssetCommand::UpdateAutoRule {
+        layer_id: LayerId(layer_id.to_string()),
+        index: rule_index,
+        old_rule: None,
+        new_rule: new_rule.clone(),
+    };
+    let _inverse = asset_command::apply(&mut doc, &cmd)
+        .map_err(|e| JsValue::from_str(&format!("update_auto_rule failed: {}", e)))?;
 
     with_asset_body_cache_mut(|cache| {
         cache.insert(asset_ref.to_string(), doc.clone());
     });
-
     let doc_json = serde_json::to_string(&doc)
         .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
     set_asset_document_wasm(&doc_json)?;
-
     Ok(doc_json)
 }
 
-/// Remove an AutoRule from an AutoLayer at the given index (direct mutation).
+/// Remove an AutoRule from an AutoLayer at the given index.
 ///
-/// Returns the updated SceneAssetDocument JSON.
+/// MED-8: routes through the AssetCommand surface.
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn remove_auto_rule_wasm(
@@ -4339,39 +4314,23 @@ pub fn remove_auto_rule_wasm(
     layer_id: &str,
     rule_index: usize,
 ) -> Result<String, JsValue> {
-    use crate::scene_asset::LevelLayer;
+    let mut doc = with_asset_body_cache(|cache| cache.get(asset_ref).cloned())
+        .ok_or_else(|| JsValue::from_str("Scene asset not found"))?;
 
-    let mut doc = with_asset_body_cache(|cache| {
-        cache.get(asset_ref).cloned()
-    }).ok_or_else(|| JsValue::from_str("Scene asset not found"))?;
-
-    let layer_mut = doc.layers
-        .iter_mut()
-        .find(|l| matches!(l, LevelLayer::Auto(al) if al.id.as_str() == layer_id))
-        .ok_or_else(|| JsValue::from_str("AutoLayer not found"))?;
-
-    match layer_mut {
-        LevelLayer::Auto(al) => {
-            if rule_index >= al.rules.len() {
-                return Err(JsValue::from_str(&format!(
-                    "Rule index {} out of bounds ({} rules)",
-                    rule_index,
-                    al.rules.len()
-                )));
-            }
-            al.rules.remove(rule_index);
-        }
-        _ => return Err(JsValue::from_str("Layer is not an AutoLayer")),
-    }
+    let cmd = AssetCommand::RemoveAutoRule {
+        layer_id: LayerId(layer_id.to_string()),
+        index: rule_index,
+        removed_rule: None,
+    };
+    let _inverse = asset_command::apply(&mut doc, &cmd)
+        .map_err(|e| JsValue::from_str(&format!("remove_auto_rule failed: {}", e)))?;
 
     with_asset_body_cache_mut(|cache| {
         cache.insert(asset_ref.to_string(), doc.clone());
     });
-
     let doc_json = serde_json::to_string(&doc)
         .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
     set_asset_document_wasm(&doc_json)?;
-
     Ok(doc_json)
 }
 
