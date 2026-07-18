@@ -22,6 +22,7 @@ mod operation_log;
 mod persistence;
 mod scene_state;
 mod state;
+mod wasm_preview;
 pub mod auto_layer;
 pub mod bsn_export;
 pub mod bsn_import;
