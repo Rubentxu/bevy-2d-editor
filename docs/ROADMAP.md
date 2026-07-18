@@ -217,7 +217,7 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 | 2 | `rust-source-integration` | v0.45.0 | ✅ DONE |
 | 3 | `asset-pipeline` | v0.46.0 (PR #50 + #51 + #52) | ✅ DONE |
 | 4 | `build-and-run-loop` | v0.47.0 (PR #53) | ✅ DONE |
-| 5 | `hot-reload` | v0.48.0 (PRs #TBD) | 🟡 IN PROGRESS — data-only (source/asset cache invalidation); texture hot-reload deferred per ADR-0014 §Deferred |
+| 5 | `hot-reload` | v0.48.0 (PRs #56 + #57) | ✅ DONE — data-only (logic graphs + BSN scene components + source files); texture hot-reload deferred per ADR-0014 §Deferred |
 | 6 | `code-aware-ai` | — | 🔲 Planned |
 | 7 | `scene-component-authoring` | — | 🔲 Planned |
 | 8 | `animation-graph-editor` (deferred) | — | 🔲 Planned |
@@ -289,7 +289,20 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 - OE-NEW-05: `COLLISION_STATE` and `PROXIMITY_STATE` thread-locals have the same dead-pipeline pattern as CRIT-01+02 — recommend separate `refactor/debt-cleanup-thread-locals-1` cycle
 - ProjectAssetBrowser drag-and-drop + thumbnail grid — deferred to Order 5 (`hot-reload`)
 
-**Next**: Hito 4 Order 5 (`hot-reload`). New SDDK cycle.
+**Current state**: Hito 4 Order 5 (`hot-reload`) — **PRs #56 + #57 merged, v0.48.0 tagged**. Data-only hot-reload complete: logic graphs, BSN scene components, and source files reload on save without WASM recompilation. Texture hot-reload deferred per ADR-0014 (blocked on Order 3 AssetServer load path debt).
+
+**What was built (Order 5)**:
+- PR #56: `HOT_RELOAD_BUS` thread-local + `process_hot_reload_requests` Bevy system + 4 wasm_bindgen exports + `SOURCE_FILE_REGISTRY` cache + asset cache invalidation + 4 integration tests + ADR-0014
+- PR #57: `services/hot-reload.ts` typed event bus + `hooks/useHotReloadStatus.ts` React hook + save-hook emitters in code-files/asset-files + `engine-bridge.ts` wasm wrappers + `GameOverlay.tsx` status line + `TopBar.tsx` inline refresh button + 9 Playwright tests
+- Bundle size: 315.83 KB → 316.63 KB gzip (+0.80 KB, 0.25%)
+- Tests: 409 lib + 4 integration + 9 Playwright, all green
+
+**Deferred to v2 (post-Hito 4 Order 6)**:
+- Texture hot-reload via `AssetEvent::Modified` — requires closing Order 3 AssetServer load path debt
+- Subsecond-based native hot-patching — only relevant if/when remote build server ships per ADR-0013 v2
+- WASM module re-instantiation — architecturally undesirable (would reset Bevy App state)
+
+**Next**: Hito 4 Order 6 (`code-aware-ai`). New SDDK cycle.
 
 ---
 
@@ -497,4 +510,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level
 
 ---
 
-*Last updated: v0.45.0 — 2026-07-03 (Hito 4 Order 2 COMPLETE: PR #49 merged; debt follow-ups flagged; session handover updated)*
+*Last updated: v0.48.0 — 2026-07-18 (Hito 4 Order 5 COMPLETE: PRs #56 + #57 merged, data-only hot-reload shipped; Hito 4 Order 6 code-aware-ai cycle pending)*
