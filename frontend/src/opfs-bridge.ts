@@ -164,7 +164,10 @@ export async function opfsSaveBinary(
     if (!dir) return { ok: false, error: "OPFS unavailable" };
     const fileHandle = await dir.getFileHandle(filename, { create: true });
     const writable = await fileHandle.createWritable();
-    await writable.write(new Blob([contents as unknown as BlobPart]));
+    // Cast to BlobPart: contents is Uint8Array<ArrayBufferLike> which under stricter
+    // TS lib types (5.7+) is no longer assignable to BlobPart due to SharedArrayBuffer
+    // ambiguity. The runtime contract is correct — Uint8Array views are valid Blob parts.
+    await writable.write(new Blob([contents as BlobPart]));
     await writable.close();
     return { ok: true };
   } catch (e) {
