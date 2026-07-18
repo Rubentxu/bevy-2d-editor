@@ -84,11 +84,28 @@ struct Tokenizer<'a> {
     pos: usize,
     /// Position where the last identifier started (used for "Children [" lookahead)
     last_ident_start: Option<usize>,
+    /// CRIT-1 fix: track brace nesting so `}` can be tokenized as
+    /// either `BsnClose` (closing a `bsn!{` block) or `RBrace`
+    /// (closing a struct literal value). The rule: emit BsnClose
+    /// when `}` is closing a `bsn!{`-introduced block; RBrace
+    /// when closing a bare `{` struct literal.
+    ///
+    /// Implementation: we keep a stack-like depth counter that
+    /// increments on every `{` (whether bsn or struct) and
+    /// decrements on every `}`. Separately we know which opener
+    /// each `}` matches via a `Vec<bool>` where `true` means the
+    /// opener was a bsn!{ opener.
+    bsn_brace_opener_stack: Vec<bool>,
 }
 
 impl<'a> Tokenizer<'a> {
     fn new(input: &'a str) -> Self {
-        Self { input, pos: 0, last_ident_start: None }
+        Self {
+            input,
+            pos: 0,
+            last_ident_start: None,
+            bsn_brace_opener_stack: Vec::new(),
+        }
     }
 
     fn peek(&self) -> Option<char> {
@@ -111,7 +128,7 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    fn tokenize(&mut self) -> Result<Vec<Token>, BsnImportError> {
+    pub fn tokenize(&mut self) -> Result<Vec<Token>, BsnImportError> {
         let mut tokens = Vec::new();
         loop {
             self.skip_whitespace();
@@ -126,11 +143,33 @@ impl<'a> Tokenizer<'a> {
                     if self.input[start..].starts_with("bsn!{") {
                         tokens.push(Token::BsnOpen);
                         self.pos = start + 5;
+                        // CRIT-1: mark this opener as bsn!{ so the
+                        // matching `}` becomes BsnClose.
+                        self.bsn_brace_opener_stack.push(true);
                     } else {
                         return Err(self.unexpected_token("identifier starting with 'b'"));
                     }
                 }
-                Some('}') => tokens.push(Token::BsnClose),
+                Some('{') => {
+                    // CRIT-1: bare `{` is a struct literal (component
+                    // value like `Sprite { image, color }`).
+                    tokens.push(Token::LBrace);
+                    self.bsn_brace_opener_stack.push(false);
+                }
+                Some('}') => {
+                    // CRIT-1: closing brace. Pop the opener-stack to
+                    // decide whether this is a BsnClose (matches a
+                    // bsn!{) or RBrace (matches a struct literal).
+                    let is_bsn_close = self
+                        .bsn_brace_opener_stack
+                        .pop()
+                        .ok_or_else(|| BsnImportError::EmptyInput)?;
+                    if is_bsn_close {
+                        tokens.push(Token::BsnClose);
+                    } else {
+                        tokens.push(Token::RBrace);
+                    }
+                }
                 Some('[') => {
                     // "Children [" — check from the position where the last identifier started
                     let check_start = self.last_ident_start.unwrap_or(start);
@@ -146,8 +185,25 @@ impl<'a> Tokenizer<'a> {
                 Some(',') => tokens.push(Token::Comma),
                 Some('(') => tokens.push(Token::LParen),
                 Some(')') => tokens.push(Token::RParen),
-                Some('{') => tokens.push(Token::LBrace),
-                Some('}') => tokens.push(Token::RBrace),
+                Some('{') => {
+                    // CRIT-1: bare `{` is a struct literal inside bsn.
+                    tokens.push(Token::LBrace);
+                    self.bsn_brace_opener_stack.push(false);
+                }
+                Some('}') => {
+                    // CRIT-1: closing brace. The popped flag tells us
+                    // whether this matches a bsn!{ opener (BsnClose)
+                    // or a struct literal opener (RBrace).
+                    let is_bsn_close = self
+                        .bsn_brace_opener_stack
+                        .pop()
+                        .ok_or_else(|| BsnImportError::EmptyInput)?;
+                    if is_bsn_close {
+                        tokens.push(Token::BsnClose);
+                    } else {
+                        tokens.push(Token::RBrace);
+                    }
+                }
                 Some(':') => tokens.push(Token::Colon),
                 Some('#') => {
                     // Identifier after #
@@ -706,6 +762,35 @@ mod tests {
         let imported = round_trip(&doc);
         assert_eq!(imported.entities.len(), 1);
         assert_eq!(imported.entities[0].local_id.0, "player");
+    }
+
+    /// CRIT-1 regression: a struct-literal component value (e.g.
+    /// `Sprite { image: "...", color: Color::srgba(...) }`) must tokenize
+    /// correctly — the inner `}` must be `RBrace`, not `BsnClose`.
+    #[test]
+    fn struct_literal_component_tokenizes_and_parses() {
+        let text = "bsn!{\n\
+                    #player\n\
+                        editor.Sprite { image: \"x.png\", color: Color::srgba(1.0, 0.5, 0.2, 1.0) }\n\
+                    }";
+        let mut tokenizer = Tokenizer::new(text);
+        let tokens = tokenizer.tokenize().unwrap();
+        // Expect: BsnOpen, Hash("player"), Ident("editor.Sprite"), LBrace,
+        // then key/value pairs and finally RBrace (NOT BsnClose), then
+        // the outer BsnClose, then Eof.
+        // The second-to-last token must be BsnClose (outer close);
+        // Eof is always last.
+        assert!(
+            matches!(tokens.get(tokens.len().saturating_sub(2)), Some(Token::BsnClose)),
+            "outer close must be BsnClose; got {:?}",
+            tokens.get(tokens.len().saturating_sub(2))
+        );
+        // Find the inner } (before the outer one). It must be RBrace.
+        let rbrace_count = tokens
+            .iter()
+            .filter(|t| matches!(t, Token::RBrace))
+            .count();
+        assert_eq!(rbrace_count, 1, "expected 1 inner RBrace; tokens = {:?}", tokens);
     }
 
     #[test]
