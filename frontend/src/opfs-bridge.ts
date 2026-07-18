@@ -164,7 +164,7 @@ export async function opfsSaveBinary(
     if (!dir) return { ok: false, error: "OPFS unavailable" };
     const fileHandle = await dir.getFileHandle(filename, { create: true });
     const writable = await fileHandle.createWritable();
-    await writable.write(new Blob([contents]));
+    await writable.write(new Blob([contents as unknown as BlobPart]));
     await writable.close();
     return { ok: true };
   } catch (e) {

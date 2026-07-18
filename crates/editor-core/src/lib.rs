@@ -251,6 +251,24 @@ thread_local! {
     static LOGIC_OPERATION_LOG: RefCell<LogicOperationLog> = const { RefCell::new(LogicOperationLog::new_const()) };
 }
 
+/// Hot-reload request envelope — sent from TypeScript layer via WASM bridge
+/// and consumed by process_hot_reload_requests in the Update schedule.
+#[derive(Clone, Debug)]
+pub enum HotReloadRequest {
+    /// A source file (e.g. `.rs`) was saved; invalidate its cached content.
+    Source { file_id: String },
+    /// An asset file (e.g. `.bsn`) was saved or deleted; invalidate its body cache.
+    Asset { asset_id: String },
+    /// Full reload: clear source cache, asset body cache, and logic graph doc.
+    ForceReloadAll,
+}
+
+/// Thread-local hot-reload request bus — matches COMMAND_BUS/EVENT_BUS pattern.
+/// Consumed by process_hot_reload_requests each frame.
+thread_local! {
+    static HOT_RELOAD_BUS: RefCell<Vec<HotReloadRequest>> = const { RefCell::new(Vec::new()) };
+}
+
 /// Thread-local request flag set by WASM exports, consumed by a Bevy system.
 /// Follows the established DIRTY_FLAG pattern (lib.rs:213).
 thread_local! {
@@ -398,6 +416,14 @@ where
         }
         f(cache.as_mut().unwrap())
     })
+}
+
+/// Test helper: get mutable access to ASSET_BODY_CACHE.
+pub fn with_asset_body_cache_mut_for_tests<F, R>(f: F) -> R
+where
+    F: FnOnce(&mut BTreeMap<String, SceneAssetDocument>) -> R,
+{
+    with_asset_body_cache_mut(f)
 }
 
 fn mark_dirty() {
@@ -1404,6 +1430,8 @@ pub fn start_engine(canvas_id: &str) {
         .add_systems(Startup, setup)
         // process_play_mode_request runs every frame to handle WASM enter/exit requests
         .add_systems(Update, process_play_mode_request.before(process_commands))
+        // process_hot_reload_requests drains the HOT_RELOAD_BUS each frame before rebuild
+        .add_systems(Update, process_hot_reload_requests.before(rebuild_preview_world))
         // Editor-only systems gated during play mode
         .add_systems(Update, process_commands.run_if(in_edit_mode))
         .add_systems(Update, rebuild_preview_world.run_if(in_edit_mode).after(process_commands))
@@ -1451,6 +1479,87 @@ pub fn enter_play_mode() {
 #[wasm_bindgen]
 pub fn exit_play_mode() {
     PLAY_MODE_REQUEST.with(|r| *r.borrow_mut() = Some(PlayModeRequest::Exit));
+}
+
+/// Push a Source hot-reload request onto the HOT_RELOAD_BUS.
+/// wasm-bindgen wrapper — callable from TypeScript via `window.hot_reload_source_wasm`.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn hot_reload_source_wasm(file_id: &str) -> Result<(), JsValue> {
+    HOT_RELOAD_BUS.with(|bus| {
+        bus.borrow_mut().push(HotReloadRequest::Source {
+            file_id: file_id.to_string(),
+        });
+    });
+    Ok(())
+}
+
+/// Native-only helper for tests: push a Source request and return bus depth.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn hot_reload_source_wasm(file_id: &str) {
+    HOT_RELOAD_BUS.with(|bus| {
+        bus.borrow_mut().push(HotReloadRequest::Source {
+            file_id: file_id.to_string(),
+        });
+    });
+}
+
+/// Push an Asset hot-reload request onto the HOT_RELOAD_BUS.
+/// wasm-bindgen wrapper — callable from TypeScript via `window.hot_reload_asset_wasm`.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn hot_reload_asset_wasm(asset_id: &str) -> Result<(), JsValue> {
+    HOT_RELOAD_BUS.with(|bus| {
+        bus.borrow_mut().push(HotReloadRequest::Asset {
+            asset_id: asset_id.to_string(),
+        });
+    });
+    Ok(())
+}
+
+/// Native-only helper for tests: push an Asset request.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn hot_reload_asset_wasm(asset_id: &str) {
+    HOT_RELOAD_BUS.with(|bus| {
+        bus.borrow_mut().push(HotReloadRequest::Asset {
+            asset_id: asset_id.to_string(),
+        });
+    });
+}
+
+/// Push a ForceReloadAll request onto the HOT_RELOAD_BUS.
+/// wasm-bindgen wrapper — callable from TypeScript via `window.force_reload_wasm`.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn force_reload_wasm() -> Result<(), JsValue> {
+    HOT_RELOAD_BUS.with(|bus| {
+        bus.borrow_mut().push(HotReloadRequest::ForceReloadAll);
+    });
+    Ok(())
+}
+
+/// Native-only helper for tests: push a ForceReloadAll request.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn force_reload_wasm() {
+    HOT_RELOAD_BUS.with(|bus| {
+        bus.borrow_mut().push(HotReloadRequest::ForceReloadAll);
+    });
+}
+
+/// Returns the current number of entries in HOT_RELOAD_BUS.
+/// Used by integration tests to assert bus depth.
+pub fn hot_reload_bus_depth_for_tests() -> usize {
+    HOT_RELOAD_BUS.with(|bus| bus.borrow().len())
+}
+
+/// Returns the current state of DIRTY_FLAG for tests.
+pub fn is_dirty_for_tests() -> bool {
+    DIRTY_FLAG.with(|d| *d.borrow())
+}
+
+/// Clears the DIRTY_FLAG for tests (run before each test to ensure clean state).
+pub fn clear_dirty_for_tests() {
+    DIRTY_FLAG.with(|d| *d.borrow_mut() = false);
 }
 
 fn setup(mut commands: Commands) {
@@ -1523,6 +1632,63 @@ fn process_play_mode_request(
             PLAY_MODE_REQUEST.with(|r| *r.borrow_mut() = None);
         }
         None => {}
+    }
+}
+
+/// Drains the HOT_RELOAD_BUS, de-duplicates by (variant, key), and dispatches:
+/// - Asset{asset_id}  → ASSET_BODY_CACHE.remove(&asset_id) + mark_dirty()
+/// - ForceReloadAll   → clear all caches + LOGIC_GRAPH_DOC=None + mark_dirty()
+///
+/// Runs in Update before rebuild_preview_world so stale data is purged
+/// before the next preview render.
+pub fn process_hot_reload_requests() {
+    use std::collections::HashSet;
+
+    // Collect and clear bus atomically
+    let requests: Vec<HotReloadRequest> = HOT_RELOAD_BUS.with(|bus| {
+        let mut v = bus.borrow_mut();
+        std::mem::take(&mut *v)
+    });
+
+    if requests.is_empty() {
+        return;
+    }
+
+    // De-duplicate by (variant discriminant, key string)
+    // Use (u8, String) — variant index + inner identifier
+    let mut seen: HashSet<(u8, String)> = HashSet::new();
+    let deduped: Vec<HotReloadRequest> = requests
+        .into_iter()
+        .filter(|req| {
+            let key = match req {
+                HotReloadRequest::Source { file_id } => (0u8, file_id.clone()),
+                HotReloadRequest::Asset { asset_id } => (1u8, asset_id.clone()),
+                HotReloadRequest::ForceReloadAll => (2u8, String::new()),
+            };
+            seen.insert(key)
+        })
+        .collect();
+
+    for req in deduped {
+        match req {
+            HotReloadRequest::Source { file_id } => {
+                source_files::invalidate_cache(&file_id);
+            }
+            HotReloadRequest::Asset { asset_id } => {
+                with_asset_body_cache_mut(|c| {
+                    c.remove(&asset_id);
+                });
+                mark_dirty();
+            }
+            HotReloadRequest::ForceReloadAll => {
+                source_files::clear_cache();
+                with_asset_body_cache_mut(|c| {
+                    c.clear();
+                });
+                with_logic_graph_mut(|doc| *doc = None);
+                mark_dirty();
+            }
+        }
     }
 }
 

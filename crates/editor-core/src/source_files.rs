@@ -7,6 +7,41 @@
 //! The module holds an in-memory catalog of source files; OPFS holds raw `.rs` text.
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::cell::RefCell;
+
+/// Thread-local in-memory cache for source file contents.
+/// Invalidated when a hot-reload Source request is processed.
+/// Uses BTreeMap (const fn new available) to allow const initialization.
+thread_local! {
+    static SOURCE_FILE_REGISTRY: RefCell<BTreeMap<String, String>> = const { RefCell::new(BTreeMap::new()) };
+}
+
+/// Cache source file content (keyed by file_id, e.g. "a.rs").
+pub fn cache_source(file_id: &str, content: &str) {
+    SOURCE_FILE_REGISTRY.with(|r| {
+        r.borrow_mut().insert(file_id.to_string(), content.to_string());
+    });
+}
+
+/// Get cached source content, if present.
+pub fn get_cached_source(file_id: &str) -> Option<String> {
+    SOURCE_FILE_REGISTRY.with(|r| r.borrow().get(file_id).cloned())
+}
+
+/// Invalidate (remove) a single source file from the cache.
+pub fn invalidate_cache(file_id: &str) {
+    SOURCE_FILE_REGISTRY.with(|r| {
+        r.borrow_mut().remove(file_id);
+    });
+}
+
+/// Clear the entire source file cache (used by ForceReloadAll).
+pub fn clear_cache() {
+    SOURCE_FILE_REGISTRY.with(|r| {
+        r.borrow_mut().clear();
+    });
+}
 
 /// Subdirectory containing Rust source files.
 pub const SOURCES_DIR: &str = "sources";
@@ -140,5 +175,28 @@ mod tests {
         let debug = format!("{:?}", file);
         assert!(debug.contains("SourceFile"));
         assert!(debug.contains("src/main"));
+    }
+
+    // §1.3: SourceFileRegistry cache API tests
+    #[test]
+    fn invalidate_source_cache_clears_only_target() {
+        // Register two sources
+        cache_source("a.rs", "content a");
+        cache_source("b.rs", "content b");
+
+        // Verify both are cached
+        assert_eq!(get_cached_source("a.rs"), Some("content a".to_string()));
+        assert_eq!(get_cached_source("b.rs"), Some("content b".to_string()));
+
+        // Invalidate only "a.rs"
+        invalidate_cache("a.rs");
+
+        // "a.rs" should be gone, "b.rs" should survive
+        assert!(get_cached_source("a.rs").is_none(), "a.rs should be invalidated");
+        assert_eq!(
+            get_cached_source("b.rs"),
+            Some("content b".to_string()),
+            "b.rs should survive"
+        );
     }
 }
