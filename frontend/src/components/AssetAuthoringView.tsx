@@ -332,26 +332,31 @@ interface LayersPanelProps {
 }
 
 function LayersPanel({ document, onAssetJsonChanged }: LayersPanelProps) {
+  // MED-7 fix: derive `layers` directly from `document` instead of
+  // maintaining a separate copy via refresh(). This removes the
+  // dual-source-of-truth and the eventual-consistency window.
   const [layers, setLayers] = useState<SceneInstanceLayerSummary[]>([]);
   const [creatingName, setCreatingName] = useState("");
   const [creatingKind, setCreatingKind] =
     useState<SceneInstanceLayerKind>("actors");
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    setError(null);
-    try {
-      const assetJson = JSON.stringify(document);
-      const list = await listSceneInstanceLayers(assetJson);
-      setLayers(list);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }, [document]);
-
+  // Recompute layers whenever the document changes (parent owns truth).
+  // The WASM call is read-only so this is cheap for small assets.
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    let cancelled = false;
+    setError(null);
+    listSceneInstanceLayers(JSON.stringify(document))
+      .then((list) => {
+        if (!cancelled) setLayers(list);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [document]);
 
   const handleCreate = useCallback(async () => {
     const name = creatingName.trim();
@@ -365,11 +370,11 @@ function LayersPanel({ document, onAssetJsonChanged }: LayersPanelProps) {
       );
       await onAssetJsonChanged(updated);
       setCreatingName("");
-      await refresh();
+      // No explicit refresh — the parent updates document, which triggers the effect.
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [creatingName, creatingKind, document, onAssetJsonChanged, refresh]);
+  }, [creatingName, creatingKind, document, onAssetJsonChanged]);
 
   const handleDelete = useCallback(
     async (layerId: string) => {
@@ -380,12 +385,12 @@ function LayersPanel({ document, onAssetJsonChanged }: LayersPanelProps) {
           layerId
         );
         await onAssetJsonChanged(updated);
-        await refresh();
+        // No explicit refresh — same as handleCreate.
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
       }
     },
-    [document, onAssetJsonChanged, refresh]
+    [document, onAssetJsonChanged]
   );
 
   if (layers.length === 0) {
