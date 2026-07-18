@@ -103,7 +103,7 @@ pub enum AssetCommand {
     /// Paint a tile at (x, y) on a TileLayer. Captures the previous TileRef
     /// (if any) for undo via `EraseTile`.
     PaintTile {
-        layer_id: LayerId,
+        layer_id: crate::tile_layer::TileLayerId,
         x: i32,
         y: i32,
         /// Captured pre-state: the TileRef previously at this coord,
@@ -117,7 +117,7 @@ pub enum AssetCommand {
     /// Erase a tile at (x, y) on a TileLayer. Captures the erased TileRef
     /// for undo via `PaintTile`.
     EraseTile {
-        layer_id: LayerId,
+        layer_id: crate::tile_layer::TileLayerId,
         x: i32,
         y: i32,
         /// Captured pre-state: the TileRef that was erased.
@@ -128,14 +128,14 @@ pub enum AssetCommand {
     /// Add an AutoRule to an AutoLayer. Captures the pre-existing rules
     /// length for undo via `RemoveAutoRule`.
     AddAutoRule {
-        layer_id: LayerId,
+        layer_id: crate::auto_layer::AutoLayerId,
         /// The new rule.
         rule: crate::auto_layer::AutoRule,
     },
     /// Update an AutoRule in an AutoLayer at the given index. Captures
     /// pre-state (the old rule) for undo via `UpdateAutoRule`.
     UpdateAutoRule {
-        layer_id: LayerId,
+        layer_id: crate::auto_layer::AutoLayerId,
         index: usize,
         /// Captured pre-state: the rule being replaced.
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -145,7 +145,7 @@ pub enum AssetCommand {
     /// Remove an AutoRule from an AutoLayer at the given index. Captures
     /// pre-state (the removed rule) for undo via `AddAutoRule`.
     RemoveAutoRule {
-        layer_id: LayerId,
+        layer_id: crate::auto_layer::AutoLayerId,
         index: usize,
         /// Captured pre-state: the rule being removed.
         #[serde(default, skip_serializing_if = "Option::is_none")]
