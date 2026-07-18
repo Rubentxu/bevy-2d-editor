@@ -22,6 +22,8 @@ mod operation_log;
 mod persistence;
 mod scene_state;
 mod state;
+mod wasm_bsn;
+mod wasm_hot_reload;
 mod wasm_preview;
 pub mod auto_layer;
 pub mod bsn_export;
@@ -937,35 +939,6 @@ pub async fn export_asset_to_bsn_wasm(asset_id: &str) -> Result<String, JsValue>
         .map_err(|e| JsValue::from_str(&format!("BSN export error: {}", e)))
 }
 
-/// Export a `SceneAssetDocument` (as JSON) to `.bsn` text.
-///
-/// Synchronous version for cases where the caller already has the document JSON.
-#[wasm_bindgen]
-pub fn export_asset_to_bsn_wasm_from_json(asset_json: &str) -> Result<String, JsValue> {
-    let doc: SceneAssetDocument = serde_json::from_str(asset_json)
-        .map_err(|e| JsValue::from_str(&format!("Invalid asset JSON: {}", e)))?;
-    crate::bsn_export::export_to_bsn_text(&doc)
-        .map_err(|e| JsValue::from_str(&format!("BSN export error: {}", e)))
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// BSN file import WASM surface
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Parse `.bsn` text into a `SceneAssetDocument` via `BsnIr` round-trip.
-/// Returns the document JSON string on success.
-///
-/// Use this to import `.bsn` files produced by `EditorCoreBsnExporter`
-/// (the editor's own export). Import of Bevy-native `.bsn` files from other
-/// tools requires type mapping that is not yet implemented.
-#[wasm_bindgen]
-pub fn import_bsn_text_to_asset_wasm(bsn_text: &str) -> Result<String, JsValue> {
-    let ir = crate::bsn_import::parse_bsn_text(bsn_text)
-        .map_err(|e| JsValue::from_str(&format!("BSN parse error: {:?}", e)))?;
-    let doc = crate::bsn_import::scene_asset_from_bsn_ir(ir);
-    serde_json::to_string(&doc)
-        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Runtime Preview Inspector WASM surface
@@ -1266,76 +1239,6 @@ pub fn exit_play_mode() {
     PLAY_MODE_REQUEST.with(|r| *r.borrow_mut() = Some(PlayModeRequest::Exit));
 }
 
-/// Push a Source hot-reload request onto the HOT_RELOAD_BUS.
-/// wasm-bindgen wrapper — callable from TypeScript via `window.hot_reload_source_wasm`.
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen]
-pub fn hot_reload_source_wasm(file_id: &str) -> Result<(), JsValue> {
-    HOT_RELOAD_BUS.with(|bus| {
-        bus.borrow_mut().push(HotReloadRequest::Source {
-            file_id: file_id.to_string(),
-        });
-    });
-    Ok(())
-}
-
-/// Native-only helper for tests: push a Source request and return bus depth.
-#[cfg(not(target_arch = "wasm32"))]
-pub fn hot_reload_source_wasm(file_id: &str) {
-    HOT_RELOAD_BUS.with(|bus| {
-        bus.borrow_mut().push(HotReloadRequest::Source {
-            file_id: file_id.to_string(),
-        });
-    });
-}
-
-/// Push an Asset hot-reload request onto the HOT_RELOAD_BUS.
-/// wasm-bindgen wrapper — callable from TypeScript via `window.hot_reload_asset_wasm`.
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen]
-pub fn hot_reload_asset_wasm(asset_id: &str) -> Result<(), JsValue> {
-    HOT_RELOAD_BUS.with(|bus| {
-        bus.borrow_mut().push(HotReloadRequest::Asset {
-            asset_id: asset_id.to_string(),
-        });
-    });
-    Ok(())
-}
-
-/// Native-only helper for tests: push an Asset request.
-#[cfg(not(target_arch = "wasm32"))]
-pub fn hot_reload_asset_wasm(asset_id: &str) {
-    HOT_RELOAD_BUS.with(|bus| {
-        bus.borrow_mut().push(HotReloadRequest::Asset {
-            asset_id: asset_id.to_string(),
-        });
-    });
-}
-
-/// Push a ForceReloadAll request onto the HOT_RELOAD_BUS.
-/// wasm-bindgen wrapper — callable from TypeScript via `window.force_reload_wasm`.
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen]
-pub fn force_reload_wasm() -> Result<(), JsValue> {
-    HOT_RELOAD_BUS.with(|bus| {
-        bus.borrow_mut().push(HotReloadRequest::ForceReloadAll);
-    });
-    Ok(())
-}
-
-/// Native-only helper for tests: push a ForceReloadAll request.
-#[cfg(not(target_arch = "wasm32"))]
-pub fn force_reload_wasm() {
-    HOT_RELOAD_BUS.with(|bus| {
-        bus.borrow_mut().push(HotReloadRequest::ForceReloadAll);
-    });
-}
-
-/// Returns the current number of entries in HOT_RELOAD_BUS.
-/// Used by integration tests to assert bus depth.
-pub fn hot_reload_bus_depth_for_tests() -> usize {
-    HOT_RELOAD_BUS.with(|bus| bus.borrow().len())
-}
 
 /// Returns the current state of DIRTY_FLAG for tests.
 pub fn is_dirty_for_tests() -> bool {
