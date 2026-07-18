@@ -518,4 +518,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level
 
 ---
 
-*Last updated: v0.61.0 — 2026-07-18 (Hito 4 Order 5 COMPLETE: data-only hot-reload shipped; debt-cleanup cycle PRs #54-#74 merged; HIGH-1 phases 1 + 2 + 3a done (state.rs → 4 sub-modules; wasm_preview extracted); HIGH-2/9/10, CRIT-1/2, MED-7/8/12/13/15 closed; LayerId unification parts 1 + 2; AssetOperationLog wiring complete; HIGH-1 phases 3b-4 pending; Hito 4 Order 6 code-aware-ai cycle pending)
+*Last updated: v0.62.0 — 2026-07-18 (Hito 4 Order 5 COMPLETE: data-only hot-reload shipped; debt-cleanup cycle PRs #54-#75 merged; HIGH-1 phases 1+2+3a+3b done (state split + 3 wasm modules extracted); HIGH-2/9/10, CRIT-1/2, MED-7/8/12/13/15 closed; LayerId unification parts 1 + 2; AssetOperationLog wiring complete; HIGH-1 phases 3c-4 pending; Hito 4 Order 6 code-aware-ai cycle pending)
