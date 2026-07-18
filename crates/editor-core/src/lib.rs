@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use wasm_bindgen::prelude::*;
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen_futures::JsFuture;
 
 pub mod asset_command;

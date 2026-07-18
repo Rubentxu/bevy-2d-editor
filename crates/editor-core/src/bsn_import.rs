@@ -29,7 +29,7 @@
 
 use crate::document::ComponentInstance;
 use crate::scene_asset::{
-    LevelLayer, LocalId, RelationshipKind, SceneAssetDocument, SceneAssetEntity,
+    LocalId, RelationshipKind, SceneAssetDocument, SceneAssetEntity,
     SceneAssetRelationship, SceneAssetMetadata, SceneAssetRole,
 };
 use crate::bsn_ir::{BsnIr, BsnIrNode, BsnIrRelationship};

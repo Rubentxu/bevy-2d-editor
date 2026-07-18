@@ -16,7 +16,7 @@
 
 use std::fmt::Write as FmtWrite;
 
-use crate::document::{ComponentInstance, Entity, SceneDocument};
+use crate::document::{ComponentInstance, SceneDocument};
 use crate::dynamic_scene::ExportWarning;
 use crate::schema::{ComponentSchema, ComponentSchemaRegistry, FieldType};
 
