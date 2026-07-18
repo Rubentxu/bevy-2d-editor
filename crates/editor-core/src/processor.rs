@@ -337,15 +337,19 @@ pub fn apply(doc: &mut SceneDocument, cmd: &Command) -> Result<Command, CommandE
             })
         }
         Command::Batch { commands, .. } => {
+            // CRIT-2: snapshot the doc before the batch. On any command failure,
+            // restore the snapshot in O(1) instead of applying inverses in
+            // sequence. Inverse-by-inverse rollback silently discards errors
+            // via `let _ = apply(...)`, so a failing inverse would leave the
+            // doc partially mutated. Snapshot/restore guarantees the atomic
+            // contract regardless of inverse success.
+            let snapshot = doc.clone();
             let mut inverses: Vec<Command> = Vec::new();
             for (i, c) in commands.iter().enumerate() {
                 match apply(doc, c) {
                     Ok(inv) => inverses.push(inv),
                     Err(e) => {
-                        // Rollback: apply inverses in reverse
-                        for inv in inverses.iter().rev() {
-                            let _ = apply(doc, inv);
-                        }
+                        *doc = snapshot;
                         return Err(CommandError::BatchFailed {
                             index: i,
                             source: Box::new(e),
