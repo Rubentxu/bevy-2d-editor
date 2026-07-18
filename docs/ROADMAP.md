@@ -518,4 +518,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level
 
 ---
 
-*Last updated: v0.65.0 — 2026-07-18 (Hito 4 Order 5 COMPLETE: data-only hot-reload shipped; debt-cleanup cycle PRs #54-#78 merged; HIGH-1 phases 1+2+3a+3b+3c+3d done; HIGH-1 critical fix: restored missing in_edit_mode/in_play_mode + deleted duplicate wasm exports; HIGH-2/9/10, CRIT-1/2, MED-7/8/12/13/15 closed; LayerId unification parts 1 + 2; AssetOperationLog wiring complete; HIGH-1 phase 4 runtime extraction pending; Hito 4 Order 6 code-aware-ai cycle pending)
+*Last updated: v0.66.0 — 2026-07-18 (HIGH-1 phase 4 COMPLETE: Bevy runtime systems extracted to preview_runtime.rs (PR #79); lib.rs -678 LOC (-17.8%); HIGH-1 god-module total reduction -34.5% from peak 4788 LOC; Hito 4 Order 5 hot-reload remains complete from v0.48.0; HIGH-2/9/10, CRIT-1/2, MED-7/8/12/13/15 closed from v0.65.0 cycle; Hito 4 Order 6 code-aware-ai cycle pending)
