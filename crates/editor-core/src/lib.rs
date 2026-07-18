@@ -17,6 +17,7 @@ pub mod document;
 mod dynamic_scene;
 mod operation_log;
 mod persistence;
+mod state;
 pub mod auto_layer;
 pub mod bsn_export;
 pub mod bsn_import;
@@ -225,244 +226,23 @@ pub struct TransformSnapshot {
     pub transforms: std::collections::HashMap<bevy::prelude::Entity, Transform>,
 }
 
-// Cross-system dirty flag set by `dispatch_command` and read by
-// `rebuild_preview_world`. Visible across the WASM→Bevy boundary
-/// because both run on the same thread (single-threaded WASM).
-thread_local! {
-    static DIRTY_FLAG: RefCell<bool> = const { RefCell::new(false) };
-    static SCENE_REGISTRY: RefCell<Option<SceneRegistry>> = const { RefCell::new(None) };
-    // Scene Asset catalog, document, and warnings holders (ADR-0008 §Decision).
-    // Mirror of SCENE_REGISTRY/SCENE_DOC pattern for scene assets.
-    static SCENE_ASSET_CATALOG: RefCell<Option<SceneAssetCatalog>> = const { RefCell::new(None) };
-    static SCENE_ASSET_DOC: RefCell<Option<SceneAssetDocument>> = const { RefCell::new(None) };
-    static SCENE_ASSET_CATALOG_WARNINGS: RefCell<Vec<CatalogWarning>> = const { RefCell::new(Vec::new()) };
-    // Asset operation log: per-asset undo/redo history (ADR-0007).
-    // Mirror of OPERATION_LOG pattern for scene assets.
-    static ASSET_OPERATION_LOG: RefCell<AssetOperationLog> = const { RefCell::new(AssetOperationLog::new_const()) };
-    // Asset body cache: BTreeMap<asset_ref, SceneAssetDocument> for O(1) lookups
-    // during instance placement projection. No invalidation hooks yet (Task 1.5).
-    static ASSET_BODY_CACHE: RefCell<Option<BTreeMap<String, SceneAssetDocument>>> = const { RefCell::new(None) };
-    // Resync reports: accumulated during load/resync, drained by get_resync_reports().
-    static RESYNC_REPORTS: RefCell<Vec<(crate::document::StableId, ResyncReport)>> = const { RefCell::new(Vec::new()) };
-    // Validation issues: accumulated during get_validation_issues, drained after.
-    static VALIDATION_ISSUES: RefCell<Vec<ValidationIssue>> = const { RefCell::new(Vec::new()) };
-    // Logic Graph document: the active logic graph being edited.
-    static LOGIC_GRAPH_DOC: RefCell<Option<LogicGraphAsset>> = const { RefCell::new(None) };
-    // Logic operation log: per-graph undo/redo history.
-    static LOGIC_OPERATION_LOG: RefCell<LogicOperationLog> = const { RefCell::new(LogicOperationLog::new_const()) };
-}
+// HIGH-1 god-module phase 1: re-exports from state module.
+// The actual thread-local declarations + with_* helpers now live in
+// crates/editor-core/src/state.rs. Re-exported here so existing
+// callers in lib.rs continue to work without modification.
+use crate::state::{
+    HotReloadRequest, PlayModeRequest,
+    DIRTY_FLAG, SCENE_REGISTRY, SCENE_ASSET_CATALOG, SCENE_ASSET_DOC,
+    SCENE_ASSET_CATALOG_WARNINGS, ASSET_OPERATION_LOG, ASSET_BODY_CACHE,
+    RESYNC_REPORTS, VALIDATION_ISSUES, LOGIC_GRAPH_DOC, LOGIC_OPERATION_LOG,
+    HOT_RELOAD_BUS, PLAY_MODE_REQUEST,
+    with_registry, with_registry_mut, with_asset_catalog, with_asset_catalog_mut,
+    with_asset_doc, with_asset_doc_mut, get_asset_catalog_warnings,
+    clear_asset_catalog_warnings, with_asset_log, with_asset_log_mut,
+    with_asset_body_cache, with_asset_body_cache_mut, mark_dirty,
+    with_logic_graph, with_logic_graph_mut, with_logic_log, with_logic_log_mut,
+};
 
-/// Hot-reload request envelope — sent from TypeScript layer via WASM bridge
-/// and consumed by process_hot_reload_requests in the Update schedule.
-#[derive(Clone, Debug)]
-pub enum HotReloadRequest {
-    /// A source file (e.g. `.rs`) was saved; invalidate its cached content.
-    Source { file_id: String },
-    /// An asset file (e.g. `.bsn`) was saved or deleted; invalidate its body cache.
-    Asset { asset_id: String },
-    /// Full reload: clear source cache, asset body cache, and logic graph doc.
-    ForceReloadAll,
-}
-
-// Thread-local hot-reload request bus — matches COMMAND_BUS/EVENT_BUS pattern.
-// Consumed by process_hot_reload_requests each frame.
-thread_local! {
-    static HOT_RELOAD_BUS: RefCell<Vec<HotReloadRequest>> = const { RefCell::new(Vec::new()) };
-}
-
-// Thread-local request flag set by WASM exports, consumed by a Bevy system.
-// Follows the established DIRTY_FLAG pattern (lib.rs:213).
-thread_local! {
-    static PLAY_MODE_REQUEST: RefCell<Option<PlayModeRequest>> = const { RefCell::new(None) };
-}
-#[derive(Clone)]
-enum PlayModeRequest {
-    Enter,
-    Exit,
-}
-
-/// RunIf helper — returns true when PlayMode is Playing.
-pub fn in_play_mode(mode: Res<PlayMode>) -> bool {
-    *mode == PlayMode::Playing
-}
-
-/// RunIf helper — returns true when PlayMode is Edit.
-fn in_edit_mode(mode: Res<PlayMode>) -> bool {
-    *mode == PlayMode::Edit
-}
-
-/// Get an immutable borrowed reference to the SceneRegistry, initializing if needed.
-fn with_registry<F, R>(f: F) -> R
-where
-    F: FnOnce(&SceneRegistry) -> R,
-{
-    SCENE_REGISTRY.with(|cell| {
-        let mut_ref = &mut *cell.borrow_mut();
-        if mut_ref.is_none() {
-            *mut_ref = Some(SceneRegistry::default());
-        }
-        f(mut_ref.as_ref().unwrap())
-    })
-}
-
-/// Get a mutable borrowed reference to the SceneRegistry, initializing if needed.
-fn with_registry_mut<F, R>(f: F) -> R
-where
-    F: FnOnce(&mut SceneRegistry) -> R,
-{
-    SCENE_REGISTRY.with(|cell| {
-        let mut_ref = &mut *cell.borrow_mut();
-        if mut_ref.is_none() {
-            *mut_ref = Some(SceneRegistry::default());
-        }
-        f(mut_ref.as_mut().unwrap())
-    })
-}
-
-/// Get an immutable borrowed reference to the SceneAssetCatalog, initializing if needed.
-fn with_asset_catalog<F, R>(f: F) -> R
-where
-    F: FnOnce(&SceneAssetCatalog) -> R,
-{
-    SCENE_ASSET_CATALOG.with(|cell| {
-        let mut_ref = &mut *cell.borrow_mut();
-        if mut_ref.is_none() {
-            *mut_ref = Some(SceneAssetCatalog::new());
-        }
-        f(mut_ref.as_ref().unwrap())
-    })
-}
-
-/// Get a mutable borrowed reference to the SceneAssetCatalog, initializing if needed.
-fn with_asset_catalog_mut<F, R>(f: F) -> R
-where
-    F: FnOnce(&mut SceneAssetCatalog) -> R,
-{
-    SCENE_ASSET_CATALOG.with(|cell| {
-        let mut_ref = &mut *cell.borrow_mut();
-        if mut_ref.is_none() {
-            *mut_ref = Some(SceneAssetCatalog::new());
-        }
-        f(mut_ref.as_mut().unwrap())
-    })
-}
-
-/// Get an immutable borrowed reference to the active SceneAssetDocument.
-fn with_asset_doc<F, R>(f: F) -> R
-where
-    F: FnOnce(&Option<SceneAssetDocument>) -> R,
-{
-    SCENE_ASSET_DOC.with(|cell| f(&*cell.borrow()))
-}
-
-/// Get a mutable borrowed reference to the active SceneAssetDocument.
-fn with_asset_doc_mut<F, R>(f: F) -> R
-where
-    F: FnOnce(&mut Option<SceneAssetDocument>) -> R,
-{
-    SCENE_ASSET_DOC.with(|cell| f(&mut *cell.borrow_mut()))
-}
-
-/// Collect all catalog warnings accumulated during load_project.
-fn get_asset_catalog_warnings() -> Vec<CatalogWarning> {
-    SCENE_ASSET_CATALOG_WARNINGS.with(|cell| cell.borrow().clone())
-}
-
-/// Clear all accumulated catalog warnings.
-fn clear_asset_catalog_warnings() {
-    SCENE_ASSET_CATALOG_WARNINGS.with(|cell| cell.borrow_mut().clear());
-}
-
-/// Get an immutable borrowed reference to the AssetOperationLog.
-fn with_asset_log<F, R>(f: F) -> R
-where
-    F: FnOnce(&AssetOperationLog) -> R,
-{
-    ASSET_OPERATION_LOG.with(|cell| f(&*cell.borrow()))
-}
-
-/// Get a mutable borrowed reference to the AssetOperationLog.
-fn with_asset_log_mut<F, R>(f: F) -> R
-where
-    F: FnOnce(&mut AssetOperationLog) -> R,
-{
-    ASSET_OPERATION_LOG.with(|cell| f(&mut *cell.borrow_mut()))
-}
-
-/// Get an immutable borrowed reference to the ASSET_BODY_CACHE.
-fn with_asset_body_cache<F, R>(f: F) -> R
-where
-    F: FnOnce(&BTreeMap<String, SceneAssetDocument>) -> R,
-{
-    ASSET_BODY_CACHE.with(|cell| {
-        let cache = cell.borrow();
-        if cache.is_none() {
-            // Initialize empty cache on first access
-            f(&BTreeMap::new())
-        } else {
-            f(cache.as_ref().unwrap())
-        }
-    })
-}
-
-/// Get a mutable borrowed reference to the ASSET_BODY_CACHE.
-fn with_asset_body_cache_mut<F, R>(f: F) -> R
-where
-    F: FnOnce(&mut BTreeMap<String, SceneAssetDocument>) -> R,
-{
-    ASSET_BODY_CACHE.with(|cell| {
-        let mut cache = cell.borrow_mut();
-        if cache.is_none() {
-            *cache = Some(BTreeMap::new());
-        }
-        f(cache.as_mut().unwrap())
-    })
-}
-
-/// Test helper: get mutable access to ASSET_BODY_CACHE.
-pub fn with_asset_body_cache_mut_for_tests<F, R>(f: F) -> R
-where
-    F: FnOnce(&mut BTreeMap<String, SceneAssetDocument>) -> R,
-{
-    with_asset_body_cache_mut(f)
-}
-
-fn mark_dirty() {
-    DIRTY_FLAG.with(|d| *d.borrow_mut() = true);
-    with_registry_mut(|r| r.mark_current_dirty());
-}
-
-/// Get an immutable borrowed reference to the LogicGraphAsset.
-fn with_logic_graph<F, R>(f: F) -> R
-where
-    F: FnOnce(&Option<LogicGraphAsset>) -> R,
-{
-    LOGIC_GRAPH_DOC.with(|cell| f(&*cell.borrow()))
-}
-
-/// Get a mutable borrowed reference to the LogicGraphAsset.
-fn with_logic_graph_mut<F, R>(f: F) -> R
-where
-    F: FnOnce(&mut Option<LogicGraphAsset>) -> R,
-{
-    LOGIC_GRAPH_DOC.with(|cell| f(&mut *cell.borrow_mut()))
-}
-
-/// Get an immutable borrowed reference to the LogicOperationLog.
-fn with_logic_log<F, R>(f: F) -> R
-where
-    F: FnOnce(&LogicOperationLog) -> R,
-{
-    LOGIC_OPERATION_LOG.with(|cell| f(&*cell.borrow()))
-}
-
-/// Get a mutable borrowed reference to the LogicOperationLog.
-fn with_logic_log_mut<F, R>(f: F) -> R
-where
-    F: FnOnce(&mut LogicOperationLog) -> R,
-{
-    LOGIC_OPERATION_LOG.with(|cell| f(&mut *cell.borrow_mut()))
-}
 
 const CMD_MOVE_SPRITE: u16 = 1;
 const EVT_SPRITE_POSITION: u16 = 1;
