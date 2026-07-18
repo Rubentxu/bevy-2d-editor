@@ -4082,8 +4082,11 @@ pub fn paint_tile(
     };
     let inverse = asset_command::apply(&mut doc, &cmd)
         .map_err(|e| JsValue::from_str(&format!("paint_tile failed: {}", e)))?;
-    // The inverse goes into the operation log so undo restores the previous state.
-    let _ = inverse; // currently logged below; future: log for undo support
+    // Record in the asset operation log so undo restores the previous tile.
+    with_asset_log_mut(|log| {
+        log.record(&cmd, inverse.clone());
+    });
+    let _ = inverse;
 
     // Update the cache with modified document
     with_asset_body_cache_mut(|cache| {
@@ -4128,6 +4131,10 @@ pub fn erase_tile(
     };
     let inverse = asset_command::apply(&mut doc, &cmd)
         .map_err(|e| JsValue::from_str(&format!("erase_tile failed: {}", e)))?;
+    // Record in the asset operation log so undo restores the erased tile.
+    with_asset_log_mut(|log| {
+        log.record(&cmd, inverse.clone());
+    });
     let _ = inverse;
 
     // Update the cache with modified document
@@ -4263,8 +4270,12 @@ pub fn add_auto_rule_wasm(
         layer_id: AutoLayerId::from(layer_id),
         rule: rule.clone(),
     };
-    let _inverse = asset_command::apply(&mut doc, &cmd)
+    let inverse = asset_command::apply(&mut doc, &cmd)
         .map_err(|e| JsValue::from_str(&format!("add_auto_rule failed: {}", e)))?;
+    // Record in the asset operation log so undo removes the added rule.
+    with_asset_log_mut(|log| {
+        log.record(&cmd, inverse);
+    });
 
     with_asset_body_cache_mut(|cache| {
         cache.insert(asset_ref.to_string(), doc.clone());
@@ -4300,8 +4311,12 @@ pub fn update_auto_rule_wasm(
         old_rule: None,
         new_rule: new_rule.clone(),
     };
-    let _inverse = asset_command::apply(&mut doc, &cmd)
+    let inverse = asset_command::apply(&mut doc, &cmd)
         .map_err(|e| JsValue::from_str(&format!("update_auto_rule failed: {}", e)))?;
+    // Record in the asset operation log so undo restores the old rule.
+    with_asset_log_mut(|log| {
+        log.record(&cmd, inverse);
+    });
 
     with_asset_body_cache_mut(|cache| {
         cache.insert(asset_ref.to_string(), doc.clone());
@@ -4330,8 +4345,12 @@ pub fn remove_auto_rule_wasm(
         index: rule_index,
         removed_rule: None,
     };
-    let _inverse = asset_command::apply(&mut doc, &cmd)
+    let inverse = asset_command::apply(&mut doc, &cmd)
         .map_err(|e| JsValue::from_str(&format!("remove_auto_rule failed: {}", e)))?;
+    // Record in the asset operation log so undo restores the removed rule.
+    with_asset_log_mut(|log| {
+        log.record(&cmd, inverse);
+    });
 
     with_asset_body_cache_mut(|cache| {
         cache.insert(asset_ref.to_string(), doc.clone());
