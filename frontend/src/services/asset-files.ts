@@ -9,6 +9,7 @@
  */
 
 import type { OpfsResult } from "../types/opfs";
+import { emit, inFlightSaveCounter } from "./hot-reload";
 
 export type AssetFileKind = "Texture" | "Audio" | "Font";
 
@@ -65,12 +66,18 @@ export async function importAssetFile(
   bytes: Uint8Array
 ): Promise<AssetFile> {
   await waitForEngine();
-  const jsBytes = new Uint8Array(bytes);
-  const parsed = parseOpfs<AssetFile>(
-    (window as any).import_asset_file(name, mimeType, jsBytes)
-  );
-  if (!parsed.ok) throw new Error(parsed.error);
-  return parsed.value!;
+  inFlightSaveCounter.incr();
+  try {
+    const jsBytes = new Uint8Array(bytes);
+    const parsed = parseOpfs<AssetFile>(
+      (window as any).import_asset_file(name, mimeType, jsBytes)
+    );
+    if (!parsed.ok) throw new Error(parsed.error);
+    emit({ type: "hot-reload-asset", assetId: name });
+    return parsed.value!;
+  } finally {
+    inFlightSaveCounter.decr();
+  }
 }
 
 /**
@@ -95,6 +102,12 @@ export async function readAssetFileBytes(id: string): Promise<Uint8Array> {
  */
 export async function deleteAssetFile(id: string): Promise<void> {
   await waitForEngine();
-  const parsed = parseOpfs<null>((window as any).delete_asset_file(id));
-  if (!parsed.ok) throw new Error(parsed.error);
+  inFlightSaveCounter.incr();
+  try {
+    const parsed = parseOpfs<null>((window as any).delete_asset_file(id));
+    if (!parsed.ok) throw new Error(parsed.error);
+    emit({ type: "hot-reload-asset", assetId: id });
+  } finally {
+    inFlightSaveCounter.decr();
+  }
 }

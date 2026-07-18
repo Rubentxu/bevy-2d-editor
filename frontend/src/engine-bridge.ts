@@ -10,6 +10,10 @@ let lastMemSize = 0;
 let frameCallback: ((type: number, payload: DataView) => void) | null = null;
 let engineReady = false;
 
+// Hot-reload: subscribed to the TS event bus, calls Rust WASM exports
+let unsubSource: (() => void) | null = null;
+let unsubAsset: (() => void) | null = null;
+
 function refreshViews() {
   if (!wasm || !wasmMemory) return;
   const currentSize = wasmMemory.buffer.byteLength;
@@ -294,6 +298,20 @@ export async function initEngine(
     }
   }, 0);
 
+  // Step 4: Wire up hot-reload event bus → Rust WASM
+  // (imported lazily to avoid circular deps)
+  const { subscribe } = await import("./services/hot-reload");
+  unsubSource = subscribe("hot-reload-source", (event) => {
+    if (event.type === "hot-reload-source") {
+      (window as any).hot_reload_source_wasm(event.fileId);
+    }
+  });
+  unsubAsset = subscribe("hot-reload-asset", (event) => {
+    if (event.type === "hot-reload-asset") {
+      (window as any).hot_reload_asset_wasm(event.assetId);
+    }
+  });
+
   console.log("[bridge] initEngine resolved");
 }
 
@@ -412,6 +430,27 @@ export async function exportDynamicScene(
 
 export function isEngineReady() {
   return engineReady;
+}
+
+/**
+ * Trigger a source file hot-reload for a given fileId.
+ */
+export function hotReloadSource(id: string): void {
+  (window as any).hot_reload_source_wasm(id);
+}
+
+/**
+ * Trigger an asset file hot-reload for a given assetId.
+ */
+export function hotReloadAsset(id: string): void {
+  (window as any).hot_reload_asset_wasm(id);
+}
+
+/**
+ * Trigger a full reload: clear all caches and force a preview rebuild.
+ */
+export function forceReload(): void {
+  (window as any).force_reload_wasm();
 }
 
 export { EVT_SPRITE_POSITION, EVT_FPS };

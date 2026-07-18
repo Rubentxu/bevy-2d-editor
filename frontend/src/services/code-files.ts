@@ -12,6 +12,7 @@
  */
 
 import type { OpfsResult } from "../types/opfs";
+import { emit, inFlightSaveCounter } from "./hot-reload";
 
 export interface SourceFile {
   id: string;
@@ -89,9 +90,17 @@ export async function writeSourceFile(
   content: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   await waitForEngine();
-  const parsed = parseOpfs<null>((window as any).write_source_file(id, content));
-  if (parsed.ok) return { ok: true };
-  return { ok: false, error: parsed.error! };
+  inFlightSaveCounter.incr();
+  try {
+    const parsed = parseOpfs<null>((window as any).write_source_file(id, content));
+    if (parsed.ok) {
+      emit({ type: "hot-reload-source", fileId: id });
+      return { ok: true };
+    }
+    return { ok: false, error: parsed.error! };
+  } finally {
+    inFlightSaveCounter.decr();
+  }
 }
 
 /**
