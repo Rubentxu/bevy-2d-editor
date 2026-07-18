@@ -2297,13 +2297,21 @@ async fn js_load_binary(path: &str) -> Result<Vec<u8>, String> {
     // Binary response: {ok: true, value: Uint8Array} — must extract bytes manually
     // Cannot use serde_wasm_bindgen for Vec<u8> from Uint8Array.
     let obj = js_sys::Object::from(result);
-    if js_sys::Reflect::get(&obj, &"ok".into()).unwrap().as_bool() == Some(true) {
-        let value = js_sys::Reflect::get(&obj, &"value".into()).unwrap();
+    // MED-13: Reflect::get returns Result; propagate via ? instead of unwrap so
+    // a JS exception (e.g., getter throws on a malformed object) becomes an
+    // Err to the caller instead of a panic that would unwind into the WASM
+    // bridge and poison subsequent calls.
+    let ok = js_sys::Reflect::get(&obj, &"ok".into())
+        .map_err(|e| format!("Reflect::get('ok') failed: {:?}", e))?;
+    if ok.as_bool() == Some(true) {
+        let value = js_sys::Reflect::get(&obj, &"value".into())
+            .map_err(|e| format!("Reflect::get('value') failed: {:?}", e))?;
         let bytes: Vec<u8> = js_sys::Uint8Array::new(&value).to_vec();
         Ok(bytes)
     } else {
-        Err(js_sys::Reflect::get(&obj, &"error".into())
-            .unwrap()
+        let err = js_sys::Reflect::get(&obj, &"error".into())
+            .map_err(|e| format!("Reflect::get('error') failed: {:?}", e))?;
+        Err(err
             .as_string()
             .unwrap_or_else(|| "Unknown error".to_string()))
     }

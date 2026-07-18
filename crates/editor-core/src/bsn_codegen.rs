@@ -64,9 +64,9 @@ fn emit_header(out: &mut String) {
         "// ═══════════════════════════════════════════════════════════════════════════"
     )
     .unwrap();
-    writeln!(out).unwrap();
-    writeln!(out, "use bevy::prelude::*;").unwrap();
-    writeln!(out).unwrap();
+    let _ = writeln!(out);
+    let _ = writeln!(out, "use bevy::prelude::*;");
+    let _ = writeln!(out);
 }
 
 /// Emits the `spawn_<scene_name>` function wrapping `bsn_list!`.
@@ -77,11 +77,11 @@ fn emit_spawn_function(
     warnings: &mut Vec<ExportWarning>,
 ) {
     let snake = to_snake_case(scene_name);
-    writeln!(out, "pub fn spawn_{}(mut commands: Commands) {{", snake).unwrap();
-    writeln!(out, "    commands.spawn_scene_list(bsn_list![").unwrap();
+    let _ = writeln!(out, "pub fn spawn_{}(mut commands: Commands) {{", snake);
+    let _ = writeln!(out, "    commands.spawn_scene_list(bsn_list![");
     emit_bsn_list_body(out, ir, warnings);
-    writeln!(out, "    ]).unwrap();").unwrap();
-    writeln!(out, "}}").unwrap();
+    let _ = writeln!(out, "    ]);");
+    let _ = writeln!(out, "}}");
 }
 
 /// Emits the body of `bsn_list![ ... ]`.
@@ -89,7 +89,7 @@ fn emit_spawn_function(
 /// - 1+ roots → `bsn!{ ... }` blocks, comma-separated at column 0
 fn emit_bsn_list_body(out: &mut String, ir: &BsnIr, warnings: &mut Vec<ExportWarning>) {
     if ir.scene_root.components.is_empty() && ir.scene_root.children.is_empty() {
-        writeln!(out, "        // Empty scene").unwrap();
+        let _ = writeln!(out, "        // Empty scene");
         return;
     }
 
@@ -105,8 +105,8 @@ fn emit_bsn_node(
 ) {
     let indent_str = "    ".repeat(indent);
 
-    writeln!(out, "{}bsn!{{", indent_str).unwrap();
-    writeln!(out, "{}#{}", indent_str, node.identifier).unwrap();
+    let _ = writeln!(out, "{}bsn!{{", indent_str);
+    let _ = writeln!(out, "{}#{}", indent_str, node.identifier);
 
     // Emit components in alphabetical order (BTreeMap iteration is sorted)
     for (type_id, values) in &node.components {
@@ -115,15 +115,15 @@ fn emit_bsn_node(
 
     // Emit children as `Children [ ... ]`
     if !node.children.is_empty() {
-        writeln!(out, "{}Children [", indent_str).unwrap();
+        let _ = writeln!(out, "{}Children [", indent_str);
         for child in &node.children {
             emit_bsn_node(out, child, indent + 2, warnings);
-            writeln!(out, "{}    ,", indent_str).unwrap();
+            let _ = writeln!(out, "{}    ,", indent_str);
         }
-        writeln!(out, "{}]", indent_str).unwrap();
+        let _ = writeln!(out, "{}]", indent_str);
     }
 
-    writeln!(out, "{}}}", indent_str).unwrap();
+    let _ = writeln!(out, "{}}}", indent_str);
 }
 
 /// Emits a single component inside a `bsn!{ ... }` block.
@@ -145,7 +145,7 @@ fn emit_component(
         }
         "editor.Name" => {
             let name = values.get("name").and_then(|v| v.as_str()).unwrap_or("");
-            writeln!(out, "{}Name(\"{}\"),", indent_str, escape_string(name)).unwrap();
+            let _ = writeln!(out, "{}Name(\"{}\"),", indent_str, escape_string(name));
         }
         "editor.Transform2D" => {
             let tx = values
@@ -172,7 +172,7 @@ fn emit_component(
                 .and_then(|v| v.get("y"))
                 .and_then(|v| v.as_f64())
                 .unwrap_or(1.0) as f32;
-            writeln!(out, "{}Transform {{ translation: Vec2::new({}, {}), rotation: {}, scale: Vec2::new({}, {}) }},", indent_str, tx, ty, rot, sx, sy).unwrap();
+            let _ = writeln!(out, "{}Transform {{ translation: Vec2::new({}, {}), rotation: {}, scale: Vec2::new({}, {}) }},", indent_str, tx, ty, rot, sx, sy);
         }
         "editor.Sprite2D" => {
             let asset = values.get("asset").and_then(|v| v.as_str()).unwrap_or("");
@@ -217,14 +217,14 @@ fn emit_component(
             let (ax, ay) = anchor_str_to_normalized_offset(anchor_str);
             // Only emit anchor if it's not Center (0.0, 0.0)
             if ax != 0.0 || ay != 0.0 {
-                writeln!(out, "{}Anchor(Vec2::new({}, {})),", indent_str, ax, ay).unwrap();
+                let _ = writeln!(out, "{}Anchor(Vec2::new({}, {})),", indent_str, ax, ay).unwrap();
             }
         }
         t if is_user_type(t) => {
             // game.* — emit as PascalCase struct literal
             let struct_name = pascal_case_struct_name(t);
             let fields = emit_struct_fields(values, warnings);
-            writeln!(out, "{}{} {{ {} }},", indent_str, struct_name, fields).unwrap();
+            let _ = writeln!(out, "{}{} {{ {} }},", indent_str, struct_name, fields);
         }
         unknown => {
             warnings.push(ExportWarning {

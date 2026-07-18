@@ -141,22 +141,22 @@ fn emit_bsn_text(ir: &BsnIr, _warnings: &mut Vec<ExportWarning>) -> String {
 fn emit_bsn_node(out: &mut String, node: &BsnIrNode, indent: usize, warnings: &mut Vec<ExportWarning>) {
     let indent_str = "    ".repeat(indent);
 
-    writeln!(out, "{}bsn!{{", indent_str).unwrap();
-    writeln!(out, "{}#{}", indent_str, node.identifier).unwrap();
+    let _ = writeln!(out, "{}bsn!{{", indent_str);
+    let _ = writeln!(out, "{}#{}", indent_str, node.identifier);
 
     for (type_id, values) in &node.components {
         emit_component(out, type_id, values, indent + 1, warnings);
     }
 
     if !node.children.is_empty() {
-        writeln!(out, "{}Children [", indent_str).unwrap();
+        let _ = writeln!(out, "{}Children [", indent_str);
         for child in &node.children {
             emit_bsn_node(out, child, indent + 1, warnings);
         }
-        writeln!(out, "{}]", indent_str).unwrap();
+        let _ = writeln!(out, "{}]", indent_str);
     }
 
-    writeln!(out, "{}}}", indent_str).unwrap();
+    let _ = writeln!(out, "{}}}", indent_str);
 }
 
 /// Emit a single component inside a `bsn!{ ... }` block. The format here
@@ -176,7 +176,7 @@ fn emit_component(
         }
         "editor.Name" => {
             let name = values.get("name").and_then(|v| v.as_str()).unwrap_or("");
-            writeln!(out, "{}Name(\"{}\")", indent_str, escape_string(name)).unwrap();
+            let _ = writeln!(out, "{}Name(\"{}\")", indent_str, escape_string(name));
         }
         "editor.Transform2D" => {
             let tx = values
@@ -248,13 +248,13 @@ fn emit_component(
 
             let (ax, ay) = anchor_str_to_normalized_offset(anchor_str);
             if ax != 0.0 || ay != 0.0 {
-                writeln!(out, "{}Anchor(Vec2::new({}, {}))", indent_str, ax, ay).unwrap();
+                let _ = writeln!(out, "{}Anchor(Vec2::new({}, {}))", indent_str, ax, ay).unwrap();
             }
         }
         t if is_user_type(t) => {
             let struct_name = pascal_case_struct_name(t);
             let fields = emit_struct_fields(values, warnings);
-            writeln!(out, "{}{} {{ {} }}", indent_str, struct_name, fields).unwrap();
+            let _ = writeln!(out, "{}{} {{ {} }}", indent_str, struct_name, fields);
         }
         _ => {
             // Unknown type — emit a placeholder comment
