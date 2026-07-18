@@ -4,6 +4,7 @@
 //! of tiles. The layer references a Tileset for tile graphics.
 
 use super::tileset::{TileCoord, TileRef, TilesetId};
+use crate::scene_asset::LayerId;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -24,6 +25,26 @@ impl TileLayerId {
 
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+}
+
+// LAYER_ID_UNIFICATION: cross-type conversions.
+
+impl From<&str> for TileLayerId {
+    fn from(s: &str) -> Self {
+        TileLayerId(s.to_string())
+    }
+}
+
+impl From<String> for TileLayerId {
+    fn from(s: String) -> Self {
+        TileLayerId(s)
+    }
+}
+
+impl From<&LayerId> for TileLayerId {
+    fn from(l: &LayerId) -> Self {
+        TileLayerId(l.0.clone())
     }
 }
 

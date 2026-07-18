@@ -4,10 +4,10 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::auto_layer::AutoLayer;
+use crate::auto_layer::{AutoLayer, AutoLayerId};
 use crate::document::ComponentInstance;
 use crate::scene_instance::SceneInstance;
-use crate::tile_layer::TileLayer;
+use crate::tile_layer::{TileLayer, TileLayerId};
 
 /// Opaque stable identity of an entity *inside* a Scene Asset.
 /// Never appears as a SceneDocument StableId. Overrides target this.
@@ -198,6 +198,34 @@ impl LayerId {
 
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+}
+
+// LAYER_ID_UNIFICATION: cross-type conversions for ergonomic call sites.
+// All 3 ID types wrap String with identical serde representation, so
+// converting between them is purely a type-system convenience.
+
+impl From<&str> for LayerId {
+    fn from(s: &str) -> Self {
+        LayerId(s.to_string())
+    }
+}
+
+impl From<String> for LayerId {
+    fn from(s: String) -> Self {
+        LayerId(s)
+    }
+}
+
+impl From<&TileLayerId> for LayerId {
+    fn from(t: &TileLayerId) -> Self {
+        LayerId(t.0.clone())
+    }
+}
+
+impl From<&AutoLayerId> for LayerId {
+    fn from(a: &AutoLayerId) -> Self {
+        LayerId(a.0.clone())
     }
 }
 
