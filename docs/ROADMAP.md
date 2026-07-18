@@ -217,7 +217,7 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 | 2 | `rust-source-integration` | v0.45.0 | ✅ DONE |
 | 3 | `asset-pipeline` | v0.46.0 (PR #50 + #51 + #52) | ✅ DONE |
 | 4 | `build-and-run-loop` | v0.47.0 (PR #53) | ✅ DONE |
-| 5 | `hot-reload` | — | 🔲 Planned |
+| 5 | `hot-reload` | v0.48.0 (PRs #TBD) | 🟡 IN PROGRESS — data-only (source/asset cache invalidation); texture hot-reload deferred per ADR-0014 §Deferred |
 | 6 | `code-aware-ai` | — | 🔲 Planned |
 | 7 | `scene-component-authoring` | — | 🔲 Planned |
 | 8 | `animation-graph-editor` (deferred) | — | 🔲 Planned |
@@ -472,6 +472,8 @@ Validation Center UI + WASM Surface (validation-center)                         
 | ADR-0010 | BsnExporter trait + EditorCoreBsnExporter as working impl; BevyBsnExporter placeholder for future Bevy PR #23639 swap | ✅ |
 | ADR-0011 | Logic Bricks — compiled Rust controllers + dispatch scheduler (no scripting VM, no codegen in v1, BSN isolation) | ✅ |
 | ADR-0012 | Code editor choice — CodeMirror 6 via `@uiw/react-codemirror` (~130KB gzip, Vite-native, extension-API future-proofs Orders 2–6) | ✅ |
+| ADR-0013 | Build & Run Loop — Enhanced Preview Mode (play mode without in-browser rustc) | ✅ |
+| ADR-0014 | Data-Only Hot Reload — source/asset cache invalidation, no texture reload in this PR | ✅ |
 
 ---
 

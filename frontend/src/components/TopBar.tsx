@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { LogState } from "../hooks/useLogState";
+import { useHotReloadStatus } from "../hooks/useHotReloadStatus";
 
 type EditorMode = "scene" | "asset-authoring" | "logic" | "code" | "play";
 
@@ -53,6 +55,17 @@ export default function TopBar({
 }: Props) {
   const isAssetAuthoring = editorMode === "asset-authoring";
   const isPlayMode = editorMode === "play";
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const { lastReloadedAt, inFlightSaves, refresh } = useHotReloadStatus();
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   return (
     <div className="topbar" data-testid="topbar">
@@ -83,6 +96,21 @@ export default function TopBar({
               title={isPlayMode ? "Stop preview and return to editor" : "Start preview"}
             >
               {isPlayMode ? "⏹ Stop" : "▶ Play"}
+            </button>
+          )}
+          {!isAssetAuthoring && lastReloadedAt != null && (
+            <span data-testid="hot-reload-badge">
+              Hot-reload: {lastReloadedAt.toLocaleTimeString()}
+            </span>
+          )}
+          {!isAssetAuthoring && (
+            <button
+              onClick={handleRefresh}
+              disabled={inFlightSaves > 0 || isRefreshing}
+              data-testid="topbar-refresh"
+              title="Force hot-reload"
+            >
+              ↻
             </button>
           )}
           <button
