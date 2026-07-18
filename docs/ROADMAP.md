@@ -518,4 +518,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level
 
 ---
 
-*Last updated: v0.48.0 — 2026-07-18 (Hito 4 Order 5 COMPLETE: PRs #56 + #57 merged, data-only hot-reload shipped; Hito 4 Order 6 code-aware-ai cycle pending; PR #54 hot-fix merged; PR #58 debt cleanup merged)
+*Last updated: v0.49.0 — 2026-07-18 (Hito 4 Order 5 COMPLETE: PRs #56 + #57 merged, data-only hot-reload shipped; post-cycle cleanup PRs #54 + #55 + #58 merged; Hito 4 Order 6 code-aware-ai cycle pending)
