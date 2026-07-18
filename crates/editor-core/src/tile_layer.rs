@@ -94,6 +94,25 @@ pub struct TileLayer {
     /// Used by AutoLayers to detect staleness via `source_generation`.
     #[serde(default)]
     pub generation: u64,
+    /// Grid width in tiles (horizontal extent). `#[serde(default)]` so old
+    /// serialized layers without this field still parse (default: 50, the
+    /// historical UI constant). New layers set this explicitly at creation.
+    #[serde(default = "default_grid_width")]
+    pub grid_width: u32,
+    /// Grid height in tiles (vertical extent). `#[serde(default)]` so old
+    /// serialized layers without this field still parse (default: 50).
+    #[serde(default = "default_grid_height")]
+    pub grid_height: u32,
+}
+
+/// Default grid width for layers serialized before `grid_width` was added.
+fn default_grid_width() -> u32 {
+    50
+}
+
+/// Default grid height for layers serialized before `grid_height` was added.
+fn default_grid_height() -> u32 {
+    50
 }
 
 /// Re-export TileGrid from tileset module for convenience.
@@ -109,6 +128,28 @@ impl TileLayer {
             grid: HashMap::new(),
             order: 0,
             generation: 0,
+            grid_width: default_grid_width(),
+            grid_height: default_grid_height(),
+        }
+    }
+
+    /// Create a new TileLayer with explicit grid dimensions.
+    pub fn with_dimensions(
+        id: TileLayerId,
+        name: String,
+        tileset_id: TilesetId,
+        grid_width: u32,
+        grid_height: u32,
+    ) -> Self {
+        TileLayer {
+            id,
+            name,
+            tileset_id,
+            grid: HashMap::new(),
+            order: 0,
+            generation: 0,
+            grid_width,
+            grid_height,
         }
     }
 
