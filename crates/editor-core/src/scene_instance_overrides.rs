@@ -436,6 +436,12 @@ fn apply_patch_to_resolved_entity(
     }
 }
 
+/// Compute the read-only effective value of a `SceneInstance`: the
+/// merge of asset defaults with the instance's active component
+/// overrides. The `mint` callback supplies a fresh `StableId` for
+/// each entity that doesn't have one. Returns `ResolvedScene`
+/// (the merged document) or `OverrideError::EmptyAsset` if the asset
+/// has no entities.
 pub fn effective_values(
     asset: &SceneAssetDocument,
     instance: &SceneInstance,

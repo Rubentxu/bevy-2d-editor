@@ -6,12 +6,17 @@ use std::collections::BTreeMap;
 
 use crate::scene_asset::{LocalId, RelationshipKind, SceneAssetDocument};
 
+/// A relationship edge in the BSN IR graph: identifies a target node
+/// and the kind of edge (e.g., "child", "reference").
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BsnIrRelationship {
     pub kind: String,
     pub target_identifier: String,
 }
 
+/// One node in the BSN IR tree: a stable identifier, a flat map of
+/// component type_id → component values, child nodes (nested), and
+/// outgoing relationship edges.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BsnIrNode {
     pub identifier: String,
@@ -20,6 +25,7 @@ pub struct BsnIrNode {
     pub relationships: Vec<BsnIrRelationship>,
 }
 
+/// The kind of mutation a `BsnPatch` represents on the target node.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BsnPatchOp {
@@ -30,6 +36,8 @@ pub enum BsnPatchOp {
     Custom(String),
 }
 
+/// A pending mutation against a BSN IR node. Identified by the target
+/// node's identifier; carries the operation and the new value.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BsnPatch {
     pub target_identifier: String,
