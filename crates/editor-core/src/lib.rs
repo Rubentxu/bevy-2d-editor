@@ -1042,7 +1042,6 @@ fn serialize_logic_code(code: &LogicValidationIssueCode) -> String {
         LogicValidationIssueCode::InvalidPortType => "invalid-port-type".to_string(),
         LogicValidationIssueCode::Cycle => "cycle".to_string(),
         LogicValidationIssueCode::DanglingControllerRef => "dangling-controller-ref".to_string(),
-        LogicValidationIssueCode::MissingBinding => "missing-binding".to_string(),
     }
 }
 
