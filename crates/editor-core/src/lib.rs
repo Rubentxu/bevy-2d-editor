@@ -4073,7 +4073,7 @@ pub fn paint_tile(
 
     // Apply PaintTile through the command surface (captures inverse)
     let cmd = AssetCommand::PaintTile {
-        layer_id: LayerId(layer_id.to_string()),
+        layer_id: TileLayerId(layer_id.to_string()),
         x,
         y,
         old_tile: None,
@@ -4121,7 +4121,7 @@ pub fn erase_tile(
 
     // Apply EraseTile through the command surface (captures inverse)
     let cmd = AssetCommand::EraseTile {
-        layer_id: LayerId(layer_id.to_string()),
+        layer_id: TileLayerId(layer_id.to_string()),
         x,
         y,
         erased_tile: None,
@@ -4260,7 +4260,7 @@ pub fn add_auto_rule_wasm(
         .ok_or_else(|| JsValue::from_str("Scene asset not found"))?;
 
     let cmd = AssetCommand::AddAutoRule {
-        layer_id: LayerId(layer_id.to_string()),
+        layer_id: AutoLayerId(layer_id.to_string()),
         rule: rule.clone(),
     };
     let _inverse = asset_command::apply(&mut doc, &cmd)
@@ -4295,7 +4295,7 @@ pub fn update_auto_rule_wasm(
         .ok_or_else(|| JsValue::from_str("Scene asset not found"))?;
 
     let cmd = AssetCommand::UpdateAutoRule {
-        layer_id: LayerId(layer_id.to_string()),
+        layer_id: AutoLayerId(layer_id.to_string()),
         index: rule_index,
         old_rule: None,
         new_rule: new_rule.clone(),
@@ -4326,7 +4326,7 @@ pub fn remove_auto_rule_wasm(
         .ok_or_else(|| JsValue::from_str("Scene asset not found"))?;
 
     let cmd = AssetCommand::RemoveAutoRule {
-        layer_id: LayerId(layer_id.to_string()),
+        layer_id: AutoLayerId(layer_id.to_string()),
         index: rule_index,
         removed_rule: None,
     };
