@@ -45,14 +45,18 @@ pub fn is_builtin_recipe(asset_id: &str) -> bool {
 
 /// Seed all built-in recipes into the LOGIC_GRAPH_REGISTRY.
 /// Called lazily on first access from both `register_logic_graph` and `get_logic_graph_asset`.
-/// Uses an internal static to prevent nested seeding (avoids RefCell borrow conflicts).
+/// Uses a thread-local guard to prevent nested seeding (avoids RefCell borrow conflicts)
+/// without coordinating across threads — each thread-local registry seeds itself independently.
 pub fn seed_builtin_recipes() {
-    // Guard against nested calls (can happen when get_logic_graph_asset calls seed
-    // while already holding a RefCell borrow).
-    if SEEDING.load(std::sync::atomic::Ordering::Relaxed) {
+    // Guard against nested calls on this thread only. `register_logic_graph` calls
+    // `seed_builtin_recipes` recursively when initializing the registry; without a
+    // guard that recursion would be infinite. Crucially, the guard is thread-local
+    // (not a global atomic) so that parallel tests on different threads do not race
+    // on a shared "is seeding in progress" flag.
+    if SEEDING_LOCAL.with(|s| s.get()) {
         return;
     }
-    SEEDING.store(true, std::sync::atomic::Ordering::Relaxed);
+    SEEDING_LOCAL.with(|s| s.set(true));
 
     let recipes: Vec<LogicGraphAsset> = RECIPE_JSON_LIST
         .iter()
@@ -63,10 +67,18 @@ pub fn seed_builtin_recipes() {
         register_logic_graph(recipe);
     }
 
-    SEEDING.store(false, std::sync::atomic::Ordering::Relaxed);
+    SEEDING_LOCAL.with(|s| s.set(false));
 }
 
-static SEEDING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+// Thread-local re-entrancy guard. Was previously a global `AtomicBool`, which
+// caused test flakes when multiple test threads raced on the shared flag: thread
+// A would set it true mid-seed, thread B's first call to `seed_builtin_recipes`
+// would see the flag set and bail without populating thread B's own thread-local
+// registry, leading to `get_logic_graph_asset` returning `None` for recipes that
+// should always be present after seeding.
+thread_local! {
+    static SEEDING_LOCAL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Private recipe data
