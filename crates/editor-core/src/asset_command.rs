@@ -457,7 +457,7 @@ pub fn apply(
             // captures the previous TileRef (if any) for restoration.
             let coord = TileCoord::new(*x, *y);
             let layer_id_str = layer_id.as_str().to_string();
-            let tile_layer_id = crate::tile_layer::TileLayerId(layer_id_str.clone());
+            let tile_layer_id = crate::scene_asset::LayerId(layer_id_str.clone());
             let layer = doc
                 .layers
                 .iter_mut()
@@ -493,7 +493,7 @@ pub fn apply(
             // HIGH-10: route tile erase through the command surface.
             let coord = TileCoord::new(*x, *y);
             let layer_id_str = layer_id.as_str().to_string();
-            let tile_layer_id = crate::tile_layer::TileLayerId(layer_id_str.clone());
+            let tile_layer_id = crate::scene_asset::LayerId(layer_id_str.clone());
             let layer = doc
                 .layers
                 .iter_mut()
@@ -525,7 +525,7 @@ pub fn apply(
         AssetCommand::AddAutoRule { layer_id, rule } => {
             // MED-8: route through command surface for undo/redo.
             let layer_id_str = layer_id.as_str().to_string();
-            let auto_layer_id = crate::auto_layer::AutoLayerId(layer_id_str.clone());
+            let auto_layer_id = crate::scene_asset::LayerId(layer_id_str.clone());
             let layer = doc
                 .layers
                 .iter_mut()
@@ -551,7 +551,7 @@ pub fn apply(
             new_rule,
         } => {
             let layer_id_str = layer_id.as_str().to_string();
-            let auto_layer_id = crate::auto_layer::AutoLayerId(layer_id_str.clone());
+            let auto_layer_id = crate::scene_asset::LayerId(layer_id_str.clone());
             let layer = doc
                 .layers
                 .iter_mut()
@@ -584,7 +584,7 @@ pub fn apply(
             removed_rule,
         } => {
             let layer_id_str = layer_id.as_str().to_string();
-            let auto_layer_id = crate::auto_layer::AutoLayerId(layer_id_str.clone());
+            let auto_layer_id = crate::scene_asset::LayerId(layer_id_str.clone());
             let layer = doc
                 .layers
                 .iter_mut()
