@@ -749,38 +749,20 @@ pub async fn export_asset_to_bsn_wasm(asset_id: &str) -> Result<String, JsValue>
 // ─────────────────────────────────────────────────────────────────────────────
 // Runtime Preview Inspector WASM surface
 // ─────────────────────────────────────────────────────────────────────────────
-
-/// Live preview metrics (fps, frame time in ms, total rebuild count).
-/// Read-only; updated by the Bevy `emit_events` and `rebuild_preview_world`
-/// systems.
-#[wasm_bindgen]
-pub fn get_preview_metrics_wasm() -> Result<String, JsValue> {
-    let m = crate::preview_inspector::get_metrics();
-    serde_json::to_string(&m)
-        .map_err(|e| JsValue::from_str(&format!("Failed to serialize metrics: {}", e)))
-}
-
-/// Live preview mapping list. Each entry is editor-owned (`StableId`,
-/// `LocalId`, `AssetReference`); no Bevy Entity IDs leak to JS.
-#[wasm_bindgen]
-pub fn get_preview_mapping_wasm() -> Result<String, JsValue> {
-    let m = crate::preview_inspector::get_mapping();
-    serde_json::to_string(&m)
-        .map_err(|e| JsValue::from_str(&format!("Failed to serialize mapping: {}", e)))
-}
-
-/// Per-instance provenance detail. Returns `null` if the `stable_id` is not
-/// currently projected.
-#[wasm_bindgen]
-pub fn get_preview_provenance_wasm(stable_id: &str) -> JsValue {
-    match crate::preview_inspector::get_provenance(stable_id) {
-        Some(p) => match serde_json::to_string(&p) {
-            Ok(json) => JsValue::from_str(&json),
-            Err(_) => JsValue::NULL,
-        },
-        None => JsValue::NULL,
-    }
-}
+//
+// HIGH-1 phase 3a moved get_preview_metrics_wasm, get_preview_mapping_wasm,
+// and get_preview_provenance_wasm to crates/editor-core/src/wasm_preview.rs.
+// Only get_preview_provenance_wasm remains here for backward compat (delete
+// in a follow-up if it can be removed without breaking other consumers).
+//
+// NOTE: HIGH-1 phase 4 found two bugs in the previous phase 3a/3b/3d extractions:
+//   1. in_edit_mode / in_play_mode RunIf helpers were silently dropped
+//      during phase 1's state.rs extraction. The host build didn't catch
+//      this because start_engine is cfg(target_arch = "wasm32")-gated.
+//   2. Three of the moved functions (get_preview_metrics_wasm,
+//      get_preview_mapping_wasm, get_preview_provenance_wasm) were NOT
+//      deleted from lib.rs, causing duplicate-symbol errors when
+//      building for wasm32. This commit fixes both classes of bug.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Scene Instance Layer WASM surface
@@ -948,6 +930,16 @@ pub fn is_dirty_for_tests() -> bool {
 /// Clears the DIRTY_FLAG for tests (run before each test to ensure clean state).
 pub fn clear_dirty_for_tests() {
     DIRTY_FLAG.with(|d| *d.borrow_mut() = false);
+}
+
+/// RunIf helper — returns true when PlayMode is Playing.
+pub fn in_play_mode(mode: Res<PlayMode>) -> bool {
+    *mode == PlayMode::Playing
+}
+
+/// RunIf helper — returns true when PlayMode is Edit.
+fn in_edit_mode(mode: Res<PlayMode>) -> bool {
+    *mode == PlayMode::Edit
 }
 
 fn setup(mut commands: Commands) {
