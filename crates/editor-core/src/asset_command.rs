@@ -22,7 +22,7 @@
 
 use crate::document::ComponentInstance;
 use crate::scene_asset::{LayerId, LocalId, SceneAssetDocument, SceneAssetEntity};
-use crate::tileset::TileGrid;
+use crate::tileset::{TileCoord, TileGrid, TileRef};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -100,6 +100,31 @@ pub enum AssetCommand {
         #[serde(default)]
         old_source_generation: u64,
     },
+    /// Paint a tile at (x, y) on a TileLayer. Captures the previous TileRef
+    /// (if any) for undo via `EraseTile`.
+    PaintTile {
+        layer_id: LayerId,
+        x: i32,
+        y: i32,
+        /// Captured pre-state: the TileRef previously at this coord,
+        /// or None if the coord was empty. The processor populates this
+        /// if the caller leaves it as None.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        old_tile: Option<TileRef>,
+        tileset_id: String,
+        local_index: u32,
+    },
+    /// Erase a tile at (x, y) on a TileLayer. Captures the erased TileRef
+    /// for undo via `PaintTile`.
+    EraseTile {
+        layer_id: LayerId,
+        x: i32,
+        y: i32,
+        /// Captured pre-state: the TileRef that was erased.
+        /// The processor populates this if the caller leaves it as None.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        erased_tile: Option<TileRef>,
+    },
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -132,6 +157,9 @@ pub enum AssetCommandError {
 
     #[error("layer not found: {0}")]
     LayerNotFound(String),
+
+    #[error("no tile at ({x}, {y}) on layer {layer_id}")]
+    TileNotFound { layer_id: String, x: i32, y: i32 },
 
     #[error("source layer not found for auto layer: {0}")]
     SourceLayerNotFound(String),
@@ -202,6 +230,7 @@ pub fn apply(
     doc: &mut SceneAssetDocument,
     cmd: &AssetCommand,
 ) -> Result<AssetCommand, AssetCommandError> {
+    use crate::scene_asset::LevelLayer;
     match cmd {
         AssetCommand::AddEntity {
             local_id,
@@ -387,6 +416,83 @@ pub fn apply(
                 layer_id: layer_id.clone(),
                 old_cached: pre_cached,
                 old_source_generation: pre_source_gen,
+            })
+        }
+
+        AssetCommand::PaintTile {
+            layer_id,
+            x,
+            y,
+            old_tile,
+            tileset_id,
+            local_index,
+        } => {
+            // HIGH-10: route tile paint through the command surface so undo/redo
+            // captures the previous TileRef (if any) for restoration.
+            let coord = TileCoord::new(*x, *y);
+            let layer_id_str = layer_id.as_str().to_string();
+            let tile_layer_id = crate::tile_layer::TileLayerId(layer_id_str.clone());
+            let layer = doc
+                .layers
+                .iter_mut()
+                .find(|l| matches!(l, LevelLayer::Tile(tl) if tl.id == tile_layer_id))
+                .ok_or_else(|| AssetCommandError::LayerNotFound(layer_id_str.clone()))?;
+            let tl = match layer {
+                LevelLayer::Tile(tl) => tl,
+                _ => return Err(AssetCommandError::LayerNotFound(layer_id_str)),
+            };
+            let captured_old = tl
+                .get_tile(&coord)
+                .cloned()
+                .or_else(|| old_tile.clone());
+            let tile_ref = TileRef {
+                tileset_id: tileset_id.clone(),
+                local_index: *local_index,
+            };
+            tl.paint_tile(coord, tile_ref);
+            Ok(AssetCommand::EraseTile {
+                layer_id: layer_id.clone(),
+                x: *x,
+                y: *y,
+                erased_tile: captured_old,
+            })
+        }
+
+        AssetCommand::EraseTile {
+            layer_id,
+            x,
+            y,
+            erased_tile,
+        } => {
+            // HIGH-10: route tile erase through the command surface.
+            let coord = TileCoord::new(*x, *y);
+            let layer_id_str = layer_id.as_str().to_string();
+            let tile_layer_id = crate::tile_layer::TileLayerId(layer_id_str.clone());
+            let layer = doc
+                .layers
+                .iter_mut()
+                .find(|l| matches!(l, LevelLayer::Tile(tl) if tl.id == tile_layer_id))
+                .ok_or_else(|| AssetCommandError::LayerNotFound(layer_id_str.clone()))?;
+            let tl = match layer {
+                LevelLayer::Tile(tl) => tl,
+                _ => return Err(AssetCommandError::LayerNotFound(layer_id_str)),
+            };
+            let captured = tl.erase_tile(&coord).or_else(|| erased_tile.clone());
+            if captured.is_none() {
+                return Err(AssetCommandError::TileNotFound {
+                    layer_id: layer_id_str,
+                    x: *x,
+                    y: *y,
+                });
+            }
+            let captured_tile = captured.unwrap();
+            Ok(AssetCommand::PaintTile {
+                layer_id: layer_id.clone(),
+                x: *x,
+                y: *y,
+                old_tile: None,
+                tileset_id: captured_tile.tileset_id,
+                local_index: captured_tile.local_index,
             })
         }
 

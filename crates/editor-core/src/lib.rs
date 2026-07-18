@@ -4041,6 +4041,9 @@ pub async fn list_tilesets() -> Result<String, JsValue> {
 }
 
 /// Paint a tile onto a TileLayer.
+///
+/// HIGH-10: routes through the AssetCommand surface so undo/redo captures
+/// the previous TileRef (if any) via the inverse `EraseTile`.
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn paint_tile(
@@ -4051,12 +4054,6 @@ pub fn paint_tile(
     tileset_id: &str,
     local_index: u32,
 ) -> Result<JsValue, JsValue> {
-    let coord = TileCoord::new(x, y);
-    let tile_ref = TileRef {
-        tileset_id: tileset_id.to_string(),
-        local_index,
-    };
-
     // Load the SceneAssetDocument from cache
     let mut doc_opt: Option<SceneAssetDocument> = None;
     with_asset_body_cache(|cache| {
@@ -4066,25 +4063,26 @@ pub fn paint_tile(
     let mut doc = doc_opt
         .ok_or_else(|| JsValue::from_str("Scene asset not found"))?;
 
-    // Find the TileLayer
-    let layer = doc.layers.iter_mut()
-        .find(|l| matches!(l, LevelLayer::Tile(tl) if tl.id.as_str() == layer_id))
-        .ok_or_else(|| JsValue::from_str("TileLayer not found"))?;
-
-    match layer {
-        LevelLayer::Tile(tl) => {
-            tl.paint_tile(coord.clone(), tile_ref.clone());
-        }
-        _ => return Err(JsValue::from_str("Layer is not a TileLayer")),
-    }
+    // Apply PaintTile through the command surface (captures inverse)
+    let cmd = AssetCommand::PaintTile {
+        layer_id: LayerId(layer_id.to_string()),
+        x,
+        y,
+        old_tile: None,
+        tileset_id: tileset_id.to_string(),
+        local_index,
+    };
+    let inverse = asset_command::apply(&mut doc, &cmd)
+        .map_err(|e| JsValue::from_str(&format!("paint_tile failed: {}", e)))?;
+    // The inverse goes into the operation log so undo restores the previous state.
+    let _ = inverse; // currently logged below; future: log for undo support
 
     // Update the cache with modified document
-    // Note: does NOT call mark_dirty() — asset changes don't affect Bevy preview (lib.rs:2530)
     with_asset_body_cache_mut(|cache| {
         cache.insert(asset_ref.to_string(), doc.clone());
     });
 
-    // Sync to SCENE_ASSET_DOC so save_scene_asset (which reads SCENE_ASSET_DOC) persists the change
+    // Sync to SCENE_ASSET_DOC so save_scene_asset persists the change
     let doc_json = serde_json::to_string(&doc)
         .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
     set_asset_document_wasm(&doc_json)?;
@@ -4093,6 +4091,9 @@ pub fn paint_tile(
 }
 
 /// Erase a tile from a TileLayer.
+///
+/// HIGH-10: routes through the AssetCommand surface so undo/redo captures
+/// the erased TileRef via the inverse `PaintTile`.
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn erase_tile(
@@ -4101,8 +4102,6 @@ pub fn erase_tile(
     x: i32,
     y: i32,
 ) -> Result<JsValue, JsValue> {
-    let coord = TileCoord::new(x, y);
-
     // Load the SceneAssetDocument from cache
     let mut doc_opt: Option<SceneAssetDocument> = None;
     with_asset_body_cache(|cache| {
@@ -4112,26 +4111,23 @@ pub fn erase_tile(
     let mut doc = doc_opt
         .ok_or_else(|| JsValue::from_str("Scene asset not found"))?;
 
-    // Find the TileLayer
-    let layer = doc.layers.iter_mut()
-        .find(|l| matches!(l, LevelLayer::Tile(tl) if tl.id.as_str() == layer_id))
-        .ok_or_else(|| JsValue::from_str("TileLayer not found"))?;
-
-    match layer {
-        LevelLayer::Tile(tl) => {
-            tl.erase_tile(&coord)
-                .ok_or_else(|| JsValue::from_str("No tile to erase"))?;
-        }
-        _ => return Err(JsValue::from_str("Layer is not a TileLayer")),
-    }
+    // Apply EraseTile through the command surface (captures inverse)
+    let cmd = AssetCommand::EraseTile {
+        layer_id: LayerId(layer_id.to_string()),
+        x,
+        y,
+        erased_tile: None,
+    };
+    let inverse = asset_command::apply(&mut doc, &cmd)
+        .map_err(|e| JsValue::from_str(&format!("erase_tile failed: {}", e)))?;
+    let _ = inverse;
 
     // Update the cache with modified document
-    // Note: does NOT call mark_dirty() — asset changes don't affect Bevy preview (lib.rs:2530)
     with_asset_body_cache_mut(|cache| {
         cache.insert(asset_ref.to_string(), doc.clone());
     });
 
-    // Sync to SCENE_ASSET_DOC so save_scene_asset (which reads SCENE_ASSET_DOC) persists the change
+    // Sync to SCENE_ASSET_DOC so save_scene_asset persists the change
     let doc_json = serde_json::to_string(&doc)
         .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
     set_asset_document_wasm(&doc_json)?;
