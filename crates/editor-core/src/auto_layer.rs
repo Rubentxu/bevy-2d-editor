@@ -5,12 +5,12 @@
 //! a 3x3 neighborhood for each cell, and rules are evaluated in declaration
 //! order (first match wins).
 
+use crate::scene_asset::LayerId;
 use crate::tileset::{TileCoord, TileGrid, TileRef, TilesetId};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use super::tile_layer::TileLayer;
-use super::scene_asset::LayerId;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PatternCell — building block of AutoLayer rules
@@ -85,6 +85,26 @@ impl AutoLayerId {
 
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+}
+
+// LAYER_ID_UNIFICATION: cross-type conversions.
+
+impl From<&str> for AutoLayerId {
+    fn from(s: &str) -> Self {
+        AutoLayerId(s.to_string())
+    }
+}
+
+impl From<String> for AutoLayerId {
+    fn from(s: String) -> Self {
+        AutoLayerId(s)
+    }
+}
+
+impl From<&LayerId> for AutoLayerId {
+    fn from(l: &LayerId) -> Self {
+        AutoLayerId(l.0.clone())
     }
 }
 
