@@ -304,6 +304,14 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 
 **Next**: Hito 4 Order 6 (`code-aware-ai`). New SDDK cycle.
 
+### Post-Order 4 Hot-fixes
+
+| PR | Description | Status |
+|----|-------------|--------|
+| #54 | `fix(build): cast Uint8Array to BlobPart in opfsSaveBinary (TS5.7 lib types)`. Unblocks `npm run build` (full chain) which was failing at tsc stage due to `Uint8Array<ArrayBufferLike>` no longer being assignable to `BlobPart` under TS lib 5.7+ (SharedArrayBuffer buffer-property ambiguity). Single-site `as BlobPart` cast in `frontend/src/opfs-bridge.ts:167` (+4/-1). | ✅ MERGED |
+
+**Note on diagnosis**: The session handover from 2026-07-02 attributed the build failure to `crates/editor-core/src/logic_evaluator.rs:1071, 1101, 1074`, but reproduction showed the actual error was a TypeScript-stage failure unrelated to Rust/wasm-pack. Always re-validate memory hints against the current repo state before acting on them.
+
 ---
 
 ## Hito 0 — Capabilities Matrix
@@ -510,4 +518,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level
 
 ---
 
-*Last updated: v0.48.0 — 2026-07-18 (Hito 4 Order 5 COMPLETE: PRs #56 + #57 merged, data-only hot-reload shipped; Hito 4 Order 6 code-aware-ai cycle pending)*
+*Last updated: v0.48.0 — 2026-07-18 (Hito 4 Order 5 COMPLETE: PRs #56 + #57 merged, data-only hot-reload shipped; Hito 4 Order 6 code-aware-ai cycle pending; PR #54 hot-fix merged; PR #58 debt cleanup merged)
