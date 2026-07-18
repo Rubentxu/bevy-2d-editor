@@ -902,33 +902,11 @@ impl NodeEvaluator for GateEvaluator {
 /// actuator.apply_impulse — submits Vec2 impulse vector to ACTUATOR_OUTPUT_BUS.
 /// Reads field_values["direction"] ("up"/"down"/"left"/"right") and ["force"] (f32).
 /// Passes through Action trigger to "done".
+/// The actual impulse vector is computed by `submit_actuator_outputs_from_node`
+/// from the same field_values, so the evaluator only forwards the trigger.
 struct ApplyImpulseEvaluator;
 impl NodeEvaluator for ApplyImpulseEvaluator {
-    fn evaluate(&self, node: &LogicNode, inputs: &[PortValue]) -> Vec<PortValue> {
-        use crate::actuator_bus::submit_actuator_output;
-        use bevy::prelude::Entity;
-
-        // Parse direction + force from field_values
-        let direction = node
-            .field_values
-            .get("direction")
-            .and_then(|v| v.as_str())
-            .unwrap_or("up");
-        let force: f32 = node
-            .field_values
-            .get("force")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(1.0) as f32;
-
-        let vector = match direction {
-            "up" => (0.0, force),
-            "down" => (0.0, -force),
-            "left" => (-force, 0.0),
-            "right" => (force, 0.0),
-            _ => (0.0, force),
-        };
-
-        // Emit impulse to the bus via submit_actuator_outputs_from_node dispatch.
+    fn evaluate(&self, _node: &LogicNode, inputs: &[PortValue]) -> Vec<PortValue> {
         // Pass through the trigger Action to "done".
         let trigger = inputs.first().cloned().unwrap_or(PortValue::Action(String::new()));
         vec![trigger]

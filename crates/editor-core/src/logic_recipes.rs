@@ -3,7 +3,7 @@
 //! Ships three immutable `LogicGraphAsset` recipes embedded via `include_str!`.
 //! Recipes are seeded into `LOGIC_GRAPH_REGISTRY` on first access (lazy seed).
 
-use crate::logic_graph::{LogicGraphAsset, LogicNode, LogicNodeRole, NodeTypeId, PortId, NodeId};
+use crate::logic_graph::{LogicGraphAsset, LogicNode};
 use crate::logic_evaluator::register_logic_graph;
 
 /// Metadata for a built-in recipe, used by `list_builtin_recipes`.

@@ -156,7 +156,7 @@ pub fn regenerate(layer: &mut AutoLayer, source: &TileLayer, rng: &mut impl Rng)
             if matches_pattern(&neighborhood, &rule.pattern) {
                 // Evaluate chance
                 let fire = match rule.chance {
-                    Some(p) => rng.gen_range(0.0..1.0) < p,
+                    Some(p) => rng.random_range(0.0..1.0) < p,
                     None => true,
                 };
 

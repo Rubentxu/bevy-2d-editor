@@ -34,8 +34,6 @@ pub enum LogicValidationIssueCode {
     Cycle,
     /// A rust-controller node references a controller_id not in the registry.
     DanglingControllerRef,
-    /// The active graph has no corresponding LogicInstance binding.
-    MissingBinding,
 }
 
 /// A single validation issue found in a LogicGraphAsset.
@@ -66,10 +64,10 @@ pub struct LogicValidationIssue {
 /// - **InvalidPortType**: port-type compatibility via `NodeDescriptor` port specs
 /// - **Cycle**: DFS over edges with visited + recursion-stack
 /// - **DanglingControllerRef**: `rust-controller` nodes with `controller_id` absent from registry
-/// - **MissingBinding**: active-graph scope only (placeholder — see inline SCOPE NOTE)
 ///
-/// SCOPE NOTE: active-graph only. The `MissingBinding` check is a v1 placeholder
-/// that checks whether the global registry has any descriptors at all.
+/// SCOPE NOTE: active-graph only — validates the single active graph reachable
+/// through `with_logic_graph`. Cross-document enumeration of every `LogicGraphAsset`
+/// is deferred.
 pub fn validate_logic_graph(
     asset: &LogicGraphAsset,
     registry: &LogicNodeRegistry,
@@ -106,20 +104,6 @@ pub fn validate_logic_graph(
 
     // 5. Dangling controller references
     issues.extend(validate_controller_refs(asset, registry));
-
-    // 6. Missing binding (active-graph scope — v1 placeholder)
-    // SCOPE NOTE: active-graph only — checks whether registry has any descriptors.
-    // A real missing-binding check would enumerate LogicInstances in the project
-    // and verify the active graph's asset_id appears in at least one binding.
-    if registry.all_descriptors().is_empty() && !asset.nodes.is_empty() {
-        issues.push(LogicValidationIssue {
-            code: LogicValidationIssueCode::MissingBinding,
-            asset_id: asset.asset_id.clone(),
-            message: "active graph has nodes but the node registry is empty — graph may not be bound"
-                .to_string(),
-            affected_node_ids: Vec::new(),
-        });
-    }
 
     issues
 }
@@ -393,7 +377,6 @@ mod tests {
             LogicValidationIssueCode::InvalidPortType,
             LogicValidationIssueCode::Cycle,
             LogicValidationIssueCode::DanglingControllerRef,
-            LogicValidationIssueCode::MissingBinding,
         ] {
             let json = serde_json::to_string(&code).unwrap();
             let parsed: LogicValidationIssueCode = serde_json::from_str(&json).unwrap();
@@ -422,10 +405,6 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&LogicValidationIssueCode::DanglingControllerRef).unwrap(),
             "\"dangling-controller-ref\""
-        );
-        assert_eq!(
-            serde_json::to_string(&LogicValidationIssueCode::MissingBinding).unwrap(),
-            "\"missing-binding\""
         );
     }
 
@@ -731,13 +710,7 @@ mod tests {
             to_node: NodeId::new("node_b"),
             to_port: PortId::new("a"),
         };
-        let edge_ba = LogicEdge {
-            from_node: NodeId::new("node_b"),
-            from_port: PortId::new("out"),
-            to_node: NodeId::new("node_b"), // self on node_b - wait, this is wrong
-            to_port: PortId::new("a"),
-        };
-        // Fix: acyclic chain
+        // Acyclic chain A → B → C
         let node_c = LogicNode {
             node_id: NodeId::new("node_c"),
             role: LogicNodeRole::Controller,

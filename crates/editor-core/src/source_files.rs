@@ -10,9 +10,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::cell::RefCell;
 
-/// Thread-local in-memory cache for source file contents.
-/// Invalidated when a hot-reload Source request is processed.
-/// Uses BTreeMap (const fn new available) to allow const initialization.
+// Thread-local in-memory cache for source file contents.
+// Invalidated when a hot-reload Source request is processed.
+// Uses BTreeMap (const fn new available) to allow const initialization.
 thread_local! {
     static SOURCE_FILE_REGISTRY: RefCell<BTreeMap<String, String>> = const { RefCell::new(BTreeMap::new()) };
 }

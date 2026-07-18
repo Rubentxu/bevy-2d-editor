@@ -16,7 +16,7 @@
 
 use std::fmt::Write as FmtWrite;
 
-use crate::document::{ComponentInstance, Entity, SceneDocument};
+use crate::document::{ComponentInstance, SceneDocument};
 use crate::dynamic_scene::ExportWarning;
 use crate::schema::{ComponentSchema, ComponentSchemaRegistry, FieldType};
 
@@ -190,7 +190,12 @@ fn emit_spawn_scene(out: &mut String, scene: &SceneDocument, schemas: &Component
                     let rot = t.get("rotation").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
                     let sx = t.get("scale").and_then(|v| v.get("x")).and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
                     let sy = t.get("scale").and_then(|v| v.get("y")).and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
-                    writeln!(out, "    commands.entity(id).insert(Transform::from_translation(Vec3::new({}, {}, 0.0)).with_rotation(Quat::from_rotation_z({})).with_scale(Vec3::new({}, {}, 1.0)));", tx, ty, rot, sx, sy).unwrap();
+                    writeln!(
+                        out,
+                        "    commands.entity(id).insert(Transform::from_translation(Vec3::new({}, {}, 0.0)).with_rotation(Quat::from_rotation_z({})).with_scale(Vec3::new({}, {}, 1.0)));",
+                        tx, ty, rot, sx, sy
+                    )
+                    .unwrap();
                 }
                 "editor.Sprite2D" => {
                     let color_val = component.values.get("color");

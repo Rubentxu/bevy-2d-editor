@@ -46,7 +46,7 @@ impl ActuatorBus {
     }
 }
 
-/// Thread-local actuator output bus — matches the codebase `COMMAND_BUS`/`EVENT_BUS` pattern.
+// Thread-local actuator output bus — matches the codebase `COMMAND_BUS`/`EVENT_BUS` pattern.
 thread_local! {
     static ACTUATOR_OUTPUT_BUS: RefCell<Option<ActuatorBus>> = const { RefCell::new(None) };
 }

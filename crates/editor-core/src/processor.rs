@@ -9,7 +9,6 @@
 
 use crate::command::{Command, CommandError};
 use crate::document::{ComponentInstance, Entity, SceneDocument, StableId};
-use crate::scene_asset::LevelLayer;
 use crate::scene_instance::SceneInstance;
 use crate::scene_instance_overrides::{resync, upsert_override, remove_override};
 

@@ -209,7 +209,7 @@ impl SceneRegistry {
 
         // Now acquire mutable access to perform the rename
         let mut entries = self.entries.lock().unwrap();
-        let mut entry = entries
+        let entry = entries
             .get_mut(id)
             .ok_or_else(|| SceneRegistryError::new("NOT_FOUND", &format!("Scene '{}' not found", id)))?;
 
