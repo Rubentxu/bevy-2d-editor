@@ -91,6 +91,12 @@ export interface TileLayerPayload {
   order: number;
   tileset_id: string;
   grid: Record<string, { tileset_id: string; local_index: number }>;
+  /** Width of the tile grid in cells. Optional for backwards compat with
+   * layers serialized before the field existed; defaults to 50. */
+  grid_width?: number;
+  /** Height of the tile grid in cells. Optional for backwards compat;
+   * defaults to 50. */
+  grid_height?: number;
 }
 
 /** An auto-generated tile layer driven by 3x3 pattern rules. */

@@ -3,10 +3,12 @@ import { listTilesets, createTileset, deleteTileset, paintTile, eraseTile, type 
 import { type SceneAssetDocument, type TileLayerPayload } from '../services/scene-assets';
 import { TileCanvas } from './TileCanvas';
 
-// Default canvas height in tile rows. The Rust TileLayer uses a sparse grid
-// without fixed dimensions; this constant sets the visible paint surface
-// height until a proper grid_width/grid_height schema field ships.
-const DEFAULT_CANVAS_GRID_HEIGHT = 50;
+// Default grid dimensions for the paint surface, used as a fallback when
+// a TileLayer payload doesn't include grid_width/grid_height (legacy
+// layers serialized before the fields existed, or layers created via
+// the Rust `TileLayer::new()` constructor).
+const DEFAULT_GRID_WIDTH = 50;
+const DEFAULT_GRID_HEIGHT = 50;
 
 interface TilesetPanelProps {
   onSelectTileset: (tileset: TilesetMetadata) => void;
@@ -175,13 +177,8 @@ export const TilesetPanel: React.FC<TilesetPanelProps> = ({
             tileWidth={selectedTileset!.tile_width}
             tileHeight={selectedTileset!.tile_height}
             columns={selectedTileset!.columns}
-            gridWidth={selectedTileset!.columns}
-            // Default 50 rows of canvas height. The Rust TileLayer data model
-            // uses a sparse grid (HashMap) without fixed dimensions; adding
-            // grid_width/grid_height to the schema is a separate cycle. Until
-            // then, this constant sets the visible canvas height for the paint
-            // surface. Wires together with the erase_tile wiring (HD-N3 fix).
-            gridHeight={DEFAULT_CANVAS_GRID_HEIGHT}
+            gridWidth={selectedTileLayer!.grid_width ?? DEFAULT_GRID_WIDTH}
+            gridHeight={selectedTileLayer!.grid_height ?? DEFAULT_GRID_HEIGHT}
             mode={paintMode}
             selectedTile={
               selectedTileIndex !== null
