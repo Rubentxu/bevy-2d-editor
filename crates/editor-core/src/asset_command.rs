@@ -125,6 +125,32 @@ pub enum AssetCommand {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         erased_tile: Option<TileRef>,
     },
+    /// Add an AutoRule to an AutoLayer. Captures the pre-existing rules
+    /// length for undo via `RemoveAutoRule`.
+    AddAutoRule {
+        layer_id: LayerId,
+        /// The new rule.
+        rule: crate::auto_layer::AutoRule,
+    },
+    /// Update an AutoRule in an AutoLayer at the given index. Captures
+    /// pre-state (the old rule) for undo via `UpdateAutoRule`.
+    UpdateAutoRule {
+        layer_id: LayerId,
+        index: usize,
+        /// Captured pre-state: the rule being replaced.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        old_rule: Option<crate::auto_layer::AutoRule>,
+        new_rule: crate::auto_layer::AutoRule,
+    },
+    /// Remove an AutoRule from an AutoLayer at the given index. Captures
+    /// pre-state (the removed rule) for undo via `AddAutoRule`.
+    RemoveAutoRule {
+        layer_id: LayerId,
+        index: usize,
+        /// Captured pre-state: the rule being removed.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        removed_rule: Option<crate::auto_layer::AutoRule>,
+    },
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -493,6 +519,93 @@ pub fn apply(
                 old_tile: None,
                 tileset_id: captured_tile.tileset_id,
                 local_index: captured_tile.local_index,
+            })
+        }
+
+        AssetCommand::AddAutoRule { layer_id, rule } => {
+            // MED-8: route through command surface for undo/redo.
+            let layer_id_str = layer_id.as_str().to_string();
+            let auto_layer_id = crate::auto_layer::AutoLayerId(layer_id_str.clone());
+            let layer = doc
+                .layers
+                .iter_mut()
+                .find(|l| matches!(l, LevelLayer::Auto(al) if al.id == auto_layer_id))
+                .ok_or_else(|| AssetCommandError::LayerNotFound(layer_id_str.clone()))?;
+            let al = match layer {
+                LevelLayer::Auto(al) => al,
+                _ => return Err(AssetCommandError::LayerNotFound(layer_id_str)),
+            };
+            al.rules.push(rule.clone());
+            // Inverse is RemoveAutoRule at the original index (= old length).
+            Ok(AssetCommand::RemoveAutoRule {
+                layer_id: layer_id.clone(),
+                index: al.rules.len() - 1,
+                removed_rule: Some(rule.clone()),
+            })
+        }
+
+        AssetCommand::UpdateAutoRule {
+            layer_id,
+            index,
+            old_rule,
+            new_rule,
+        } => {
+            let layer_id_str = layer_id.as_str().to_string();
+            let auto_layer_id = crate::auto_layer::AutoLayerId(layer_id_str.clone());
+            let layer = doc
+                .layers
+                .iter_mut()
+                .find(|l| matches!(l, LevelLayer::Auto(al) if al.id == auto_layer_id))
+                .ok_or_else(|| AssetCommandError::LayerNotFound(layer_id_str.clone()))?;
+            let al = match layer {
+                LevelLayer::Auto(al) => al,
+                _ => return Err(AssetCommandError::LayerNotFound(layer_id_str)),
+            };
+            if *index >= al.rules.len() {
+                return Err(AssetCommandError::TileNotFound {
+                    layer_id: layer_id_str,
+                    x: -1,
+                    y: *index as i32,
+                });
+            }
+            let captured = old_rule.clone().unwrap_or_else(|| al.rules[*index].clone());
+            al.rules[*index] = new_rule.clone();
+            Ok(AssetCommand::UpdateAutoRule {
+                layer_id: layer_id.clone(),
+                index: *index,
+                old_rule: Some(captured),
+                new_rule: new_rule.clone(),
+            })
+        }
+
+        AssetCommand::RemoveAutoRule {
+            layer_id,
+            index,
+            removed_rule,
+        } => {
+            let layer_id_str = layer_id.as_str().to_string();
+            let auto_layer_id = crate::auto_layer::AutoLayerId(layer_id_str.clone());
+            let layer = doc
+                .layers
+                .iter_mut()
+                .find(|l| matches!(l, LevelLayer::Auto(al) if al.id == auto_layer_id))
+                .ok_or_else(|| AssetCommandError::LayerNotFound(layer_id_str.clone()))?;
+            let al = match layer {
+                LevelLayer::Auto(al) => al,
+                _ => return Err(AssetCommandError::LayerNotFound(layer_id_str)),
+            };
+            if *index >= al.rules.len() {
+                return Err(AssetCommandError::TileNotFound {
+                    layer_id: layer_id_str,
+                    x: -1,
+                    y: *index as i32,
+                });
+            }
+            let captured = removed_rule.clone().unwrap_or_else(|| al.rules[*index].clone());
+            al.rules.remove(*index);
+            Ok(AssetCommand::AddAutoRule {
+                layer_id: layer_id.clone(),
+                rule: captured,
             })
         }
 
