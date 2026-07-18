@@ -34,8 +34,9 @@ pub const ASSETS_DIR: &str = "assets";
 /// Subdirectory containing Tileset body files.
 pub const TILESETS_DIR: &str = "tilesets";
 
-/// Subdirectory containing imported texture assets (binary OPFS storage).
-pub const RESOURCE_DIR: &str = "resources";
+// RESOURCE_DIR is defined in `asset_files.rs` (the canonical location used by
+// the asset pipeline). The duplicate here was unused; left only the active
+// constant above.
 
 /// Project metadata stored at OPFS root as `project.json`.
 /// Contains version, name, list of saved scenes, schemas.
@@ -106,19 +107,6 @@ pub enum AssetPathError {
     PathTraversal(String),
 }
 
-/// Error type for tileset persistence operations.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum TilesetPersistenceError {
-    #[error("tileset not found: {0}")]
-    NotFound(String),
-    #[error("tileset path is empty")]
-    EmptyId,
-    #[error("serialization error: {0}")]
-    Serialization(String),
-    #[error("persistence error: {0}")]
-    Persistence(String),
-}
-
 /// Validate an asset logical path.
 ///
 /// Returns `Ok(())` if the path is valid, or an `AssetPathError` if not.
@@ -147,10 +135,12 @@ pub fn validate_logical_path(s: &str) -> Result<(), AssetPathError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::asset_files::RESOURCE_DIR;
 
     #[test]
     fn test_resource_dir_constant() {
         // §1.1: RESOURCE_DIR must be "resources" for asset file storage
+        // (canonical definition now lives in asset_files.rs)
         assert_eq!(RESOURCE_DIR, "resources");
     }
 

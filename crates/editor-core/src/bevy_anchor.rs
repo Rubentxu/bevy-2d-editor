@@ -18,11 +18,3 @@ pub fn anchor_str_to_bevy_anchor(s: &str) -> Anchor {
     let (x, y) = crate::dynamic_scene::anchor_str_to_normalized_offset(s);
     Anchor(Vec2::new(x, y))
 }
-
-/// Returns true if the string is one of the 9 known anchor names.
-///
-/// Re-exported here for convenience; the canonical implementation is in
-/// `crate::dynamic_scene::is_known_anchor_str`.
-pub fn is_known_anchor_str(s: &str) -> bool {
-    crate::dynamic_scene::is_known_anchor_str(s)
-}

@@ -158,17 +158,6 @@ fn find_entity_mut<'a>(
         .ok_or_else(|| AssetCommandError::EntityNotFound(local_id.to_string()))
 }
 
-/// Find an entity by LocalId (immutable).
-fn find_entity<'a>(
-    doc: &'a SceneAssetDocument,
-    local_id: &str,
-) -> Result<&'a SceneAssetEntity, AssetCommandError> {
-    doc.entities
-        .iter()
-        .find(|e| e.local_id.as_str() == local_id)
-        .ok_or_else(|| AssetCommandError::EntityNotFound(local_id.to_string()))
-}
-
 /// Set a field at a `Vec<String>` path within a JSON object. Returns the old value.
 ///
 /// Path navigation: split on segments, navigate to parent, set leaf.
