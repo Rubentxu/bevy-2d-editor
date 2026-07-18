@@ -1,0 +1,719 @@
+//! Bevy runtime systems and `start_engine` entry point.
+//!
+//! HIGH-1 god-module phase 4: extracted from `lib.rs` to keep the crate root
+//! focused on public API + module wiring. Contains:
+//!
+//! - `start_engine` — the WASM entry point that builds and runs the Bevy `App`
+//! - `setup` — `Startup` system that initializes default resources
+//! - `process_play_mode_request` — handles Enter/Exit Play transitions
+//! - `process_hot_reload_requests` — drains the hot-reload bus each frame
+//! - `rebuild_preview_world` — respawns scene entities when DIRTY_FLAG is set
+//! - `process_commands` — drains the command bus and applies the legacy
+//!   sprite-move command (kept for backward compatibility with the JS host)
+//! - `sync_log_state` — mirrors thread-local `OPERATION_LOG` into the
+//!   `OperationLogState` resource for UI hooks
+//! - `emit_events` — publishes Sprite position + FPS on the event bus
+//! - `in_play_mode` / `in_edit_mode` — `RunIf` helpers gating systems
+//!
+//! Plus the `spawn_entity` and `spawn_preview_entity` helpers used by
+//! `rebuild_preview_world`.
+
+use bevy::prelude::*;
+use wasm_bindgen::prelude::*;
+
+use crate::actuator_bus;
+use crate::bevy_anchor::anchor_str_to_bevy_anchor;
+use crate::document::{Entity, SceneDocument, StableId};
+use crate::dynamic_scene::is_known_anchor_str;
+use crate::instance_projection::{project_instances, PreviewEntity};
+use crate::logic_dispatch;
+use crate::logic_evaluator;
+use crate::state::{
+    mark_dirty, with_asset_body_cache_mut, with_logic_graph_mut, DIRTY_FLAG, HOT_RELOAD_BUS,
+    PLAY_MODE_REQUEST, HotReloadRequest, PlayModeRequest,
+};
+use crate::{source_files, OperationLogState, PlayMode, SceneDocumentState, SceneEntity, SceneInstanceChild, TransformSnapshot, BevyEntity, OPERATION_LOG};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bus / event constants and default scene payload
+// ─────────────────────────────────────────────────────────────────────────────
+
+pub(crate) const CMD_MOVE_SPRITE: u16 = 1;
+pub(crate) const EVT_SPRITE_POSITION: u16 = 1;
+pub(crate) const EVT_FPS: u16 = 2;
+
+const DEFAULT_SCENE_JSON: &str = r#"{
+  "scene_id": "default",
+  "version": 1,
+  "name": "Default Scene",
+  "entities": [],
+  "instances": {}
+}"#;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WASM binding for JS-side frame-end notification (kept here because emit_events
+// is the only caller and lives in this module).
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[wasm_bindgen]
+unsafe extern "C" {
+    #[wasm_bindgen(js_namespace = window, js_name = onFrameEnd)]
+    fn on_frame_end();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RunIf helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// RunIf helper — returns true when PlayMode is Playing.
+pub fn in_play_mode(mode: Res<PlayMode>) -> bool {
+    *mode == PlayMode::Playing
+}
+
+/// RunIf helper — returns true when PlayMode is Edit.
+fn in_edit_mode(mode: Res<PlayMode>) -> bool {
+    *mode == PlayMode::Edit
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// start_engine — WASM entry point
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Entry point invoked from JS after the WASM module finishes loading.
+/// Builds the Bevy `App`, wires the plugin stack and all update systems,
+/// then calls `.run()` which blocks until the canvas is closed.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn start_engine(canvas_id: &str) {
+    let canvas_selector = format!("#{}", canvas_id);
+    web_sys::console::log_1(
+        &format!(
+            "[editor-core] Starting Bevy with canvas: {}",
+            canvas_selector
+        )
+        .into(),
+    );
+
+    App::new()
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                canvas: Some(canvas_selector),
+                fit_canvas_to_parent: true,
+                ..default()
+            }),
+            ..default()
+        }))
+        .add_systems(Startup, setup)
+        // process_play_mode_request runs every frame to handle WASM enter/exit requests
+        .add_systems(Update, process_play_mode_request.before(process_commands))
+        // process_hot_reload_requests drains the HOT_RELOAD_BUS each frame before rebuild
+        .add_systems(Update, process_hot_reload_requests.before(rebuild_preview_world))
+        // Editor-only systems gated during play mode
+        .add_systems(Update, process_commands.run_if(in_edit_mode))
+        .add_systems(Update, rebuild_preview_world.run_if(in_edit_mode).after(process_commands))
+        .add_systems(Update, sync_log_state.run_if(in_edit_mode).after(rebuild_preview_world))
+        // Play-mode sensor systems — run before logic evaluation
+        .add_systems(Update, logic_evaluator::update_keyboard_state.run_if(in_play_mode).before(logic_dispatch::logic_evaluation_system))
+        // Logic dispatch runs only in play mode
+        .add_systems(Update, logic_dispatch::logic_evaluation_system.run_if(in_play_mode).after(sync_log_state))
+        .add_systems(Update, actuator_bus::apply_actuator_outputs.run_if(in_play_mode).after(logic_dispatch::logic_evaluation_system))
+        .add_systems(Last, emit_events)
+        .run();
+
+    web_sys::console::log_1(&"[editor-core] Bevy app.run() returned".into());
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Setup
+// ─────────────────────────────────────────────────────────────────────────────
+
+fn setup(mut commands: Commands) {
+    commands.spawn(Camera2d);
+
+    // Try to load scene from thread-local SCENE_DOC, otherwise use default
+    let doc = crate::SCENE_DOC.with(|s| s.borrow().clone());
+    let scene = match doc {
+        Some(doc) => doc,
+        None => match serde_json::from_str(DEFAULT_SCENE_JSON) {
+            Ok(doc) => doc,
+            Err(e) => {
+                #[cfg(target_arch = "wasm32")]
+                web_sys::console::error_1(
+                    &format!("[editor-core] Failed to parse default scene: {}", e).into(),
+                );
+                #[cfg(not(target_arch = "wasm32"))]
+                eprintln!("[editor-core] Failed to parse default scene: {}", e);
+                return;
+            }
+        },
+    };
+
+    // Insert SceneDocumentState resource
+    commands.insert_resource(SceneDocumentState::new(scene));
+    // Insert OperationLogState resource (UI hooks read this)
+    commands.insert_resource(OperationLogState::default());
+    // Insert PlayMode resource (defaults to Edit)
+    commands.insert_resource(PlayMode::default());
+    // Insert TransformSnapshot
+    commands.insert_resource(TransformSnapshot::default());
+    mark_dirty();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// process_play_mode_request
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Handles play mode enter/exit requests from WASM, snapshot/restore transforms.
+/// Runs BEFORE process_commands so Enter transitions are committed before editor
+/// commands are processed, and Exit restores before rebuild_preview_world.
+fn process_play_mode_request(
+    mut play_mode: ResMut<PlayMode>,
+    mut snapshot: ResMut<TransformSnapshot>,
+    scene_transforms: Query<(bevy::prelude::Entity, &Transform), With<SceneEntity>>,
+    mut scene_transforms_mut: Query<(bevy::prelude::Entity, &mut Transform), With<SceneEntity>>,
+) {
+    let request = PLAY_MODE_REQUEST.with(|r| (*r.borrow()).clone());
+
+    match request {
+        Some(PlayModeRequest::Enter) => {
+            // Snapshot all placed entity transforms
+            snapshot.transforms.clear();
+            for (entity, transform) in scene_transforms.iter() {
+                snapshot.transforms.insert(entity, *transform);
+            }
+            *play_mode = PlayMode::Playing;
+            PLAY_MODE_REQUEST.with(|r| *r.borrow_mut() = None);
+        }
+        Some(PlayModeRequest::Exit) => {
+            // Restore transforms from snapshot
+            for (entity, mut transform) in scene_transforms_mut.iter_mut() {
+                if let Some(saved) = snapshot.transforms.get(&entity) {
+                    *transform = *saved;
+                }
+            }
+            *play_mode = PlayMode::Edit;
+            PLAY_MODE_REQUEST.with(|r| *r.borrow_mut() = None);
+        }
+        None => {}
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// process_hot_reload_requests
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Drains the HOT_RELOAD_BUS, de-duplicates by (variant, key), and dispatches:
+/// - Asset{asset_id}  → ASSET_BODY_CACHE.remove(&asset_id) + mark_dirty()
+/// - ForceReloadAll   → clear all caches + LOGIC_GRAPH_DOC=None + mark_dirty()
+///
+/// Runs in Update before rebuild_preview_world so stale data is purged
+/// before the next preview render.
+pub fn process_hot_reload_requests() {
+    use std::collections::HashSet;
+
+    // Collect and clear bus atomically
+    let requests: Vec<HotReloadRequest> = HOT_RELOAD_BUS.with(|bus| {
+        let mut v = bus.borrow_mut();
+        std::mem::take(&mut *v)
+    });
+
+    if requests.is_empty() {
+        return;
+    }
+
+    // De-duplicate by (variant discriminant, key string)
+    let mut seen: HashSet<(u8, String)> = HashSet::new();
+    let deduped: Vec<HotReloadRequest> = requests
+        .into_iter()
+        .filter(|req| {
+            let key = match req {
+                HotReloadRequest::Source { file_id } => (0u8, file_id.clone()),
+                HotReloadRequest::Asset { asset_id } => (1u8, asset_id.clone()),
+                HotReloadRequest::ForceReloadAll => (2u8, String::new()),
+            };
+            seen.insert(key)
+        })
+        .collect();
+
+    for req in deduped {
+        match req {
+            HotReloadRequest::Source { file_id } => {
+                source_files::invalidate_cache(&file_id);
+            }
+            HotReloadRequest::Asset { asset_id } => {
+                with_asset_body_cache_mut(|c| {
+                    c.remove(&asset_id);
+                });
+                mark_dirty();
+            }
+            HotReloadRequest::ForceReloadAll => {
+                source_files::clear_cache();
+                with_asset_body_cache_mut(|c| {
+                    c.clear();
+                });
+                with_logic_graph_mut(|doc| *doc = None);
+                mark_dirty();
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// rebuild_preview_world + helpers (push_preview_inspector_state, spawn_*)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Respawns scene entities when the SceneDocumentState dirty flag is set.
+/// Triggered by `dispatch_command` setting DIRTY_FLAG via mark_dirty().
+///
+/// Design decision 3: Syncs SceneDocumentState.document from SCENE_DOC on every
+/// dirty tick. This fixes both multi-scene switching AND pre-existing preview
+/// staleness where entity edits never reached the canvas.
+///
+/// Design decision 7: Also projects Scene Instances via `project_instances`
+/// and spawns them with `SceneEntity` + `SceneInstanceChild` tags.
+fn rebuild_preview_world(
+    mut commands: Commands,
+    mut state: ResMut<SceneDocumentState>,
+    scene_entities: Query<BevyEntity, With<SceneEntity>>,
+) {
+    // Check both the resource dirty flag and the cross-thread flag
+    let external_dirty = DIRTY_FLAG.with(|d| *d.borrow());
+    if !state.dirty && !external_dirty {
+        return;
+    }
+
+    // Sync document from SCENE_DOC thread_local (value-swap source)
+    // This ensures the preview reflects the currently active scene after a switch
+    let current_doc = crate::SCENE_DOC.with(|s| s.borrow().clone());
+    if let Some(doc) = current_doc {
+        state.document = doc;
+    }
+
+    // Despawn existing scene entities (Camera2d survives)
+    for entity in scene_entities.iter() {
+        commands.entity(entity).despawn();
+    }
+
+    // Spawn authored entities from the document
+    for entity in state.document.entities.iter() {
+        spawn_entity(&mut commands, entity);
+    }
+
+    // Project and spawn Scene Instances
+    let resolver = |asset_ref: &crate::scene_asset::AssetReference| -> Option<crate::scene_asset::SceneAssetDocument> {
+        crate::state::with_asset_body_cache(|cache| cache.get(asset_ref.as_str()).cloned())
+    };
+    let projected = project_instances(&state.document, &resolver);
+
+    for preview in &projected {
+        spawn_preview_entity(&mut commands, preview);
+    }
+
+    // runtime-preview-inspector: push mapping + provenance + bump rebuild_count
+    push_preview_inspector_state(&state.document, &projected);
+
+    state.dirty = false;
+    DIRTY_FLAG.with(|d| *d.borrow_mut() = false);
+}
+
+/// Update the runtime preview inspector thread-locals after a rebuild.
+/// `projected` is the list returned by `project_instances` for the same doc.
+fn push_preview_inspector_state(
+    doc: &SceneDocument,
+    projected: &[PreviewEntity],
+) {
+    use std::collections::BTreeMap;
+    use crate::preview_inspector::{
+        PreviewMappingEntry, PreviewProvenance, set_mapping, set_provenance,
+    };
+
+    let mut mapping: Vec<PreviewMappingEntry> = Vec::new();
+    let mut provenance: BTreeMap<StableId, PreviewProvenance> = BTreeMap::new();
+
+    // Build per-instance mapping/provenance from doc.instances + projected.
+    for instance in doc.instances.values() {
+        let projected_for_instance: Vec<&PreviewEntity> = projected
+            .iter()
+            .filter(|p| p.stable_id == instance.instance_id)
+            .collect();
+        if projected_for_instance.is_empty() {
+            continue;
+        }
+        // For the listing we keep one entry per (instance, root local_id) pair.
+        // We expose the asset_ref of the instance plus the local_id of the
+        // first projected root for context.
+        for preview in projected_for_instance {
+            mapping.push(PreviewMappingEntry {
+                stable_id: preview.stable_id.clone(),
+                local_id: preview.local_id.clone(),
+                asset_ref: instance.asset_ref.clone(),
+                component_count: preview.component_values.len(),
+            });
+            provenance.insert(
+                preview.stable_id.clone(),
+                PreviewProvenance {
+                    stable_id: preview.stable_id.clone(),
+                    local_id: preview.local_id.clone(),
+                    asset_ref: instance.asset_ref.clone(),
+                    components: preview
+                        .component_values
+                        .iter()
+                        .map(|c| c.type_id.clone())
+                        .collect(),
+                    is_from_instance: true,
+                },
+            );
+        }
+    }
+
+    set_mapping(mapping);
+    set_provenance(provenance);
+    crate::preview_inspector::increment_rebuild_count();
+}
+
+fn spawn_entity(commands: &mut Commands, entity: &Entity) {
+    use bevy::prelude::Name as BevyName;
+    use bevy::sprite::Anchor;
+
+    let mut name: Option<BevyName> = None;
+    let mut transform: Option<Transform> = None;
+    let mut sprite: Option<Sprite> = None;
+    let mut anchor_str: Option<String> = None;
+
+    for component in &entity.components {
+        match component.type_id.as_str() {
+            "editor.Name" => {
+                if let Some(name_val) = component.values.get("name") {
+                    if let Some(name_str) = name_val.as_str() {
+                        name = Some(BevyName::new(name_str.to_string()));
+                    }
+                }
+            }
+            "editor.Transform2D" => {
+                let translation = component
+                    .values
+                    .get("translation")
+                    .and_then(|v| v.get("x").zip(v.get("y")))
+                    .map(|(x, y)| {
+                        Vec3::new(
+                            x.as_f64().unwrap_or(0.0) as f32,
+                            y.as_f64().unwrap_or(0.0) as f32,
+                            0.0,
+                        )
+                    })
+                    .unwrap_or(Vec3::ZERO);
+
+                let rotation = component
+                    .values
+                    .get("rotation")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0) as f32;
+
+                let scale = component
+                    .values
+                    .get("scale")
+                    .and_then(|v| v.get("x").zip(v.get("y")))
+                    .map(|(x, y)| {
+                        Vec3::new(
+                            x.as_f64().unwrap_or(1.0) as f32,
+                            y.as_f64().unwrap_or(1.0) as f32,
+                            1.0,
+                        )
+                    })
+                    .unwrap_or(Vec3::new(1.0, 1.0, 1.0));
+
+                transform = Some(
+                    Transform::from_translation(translation)
+                        .with_rotation(Quat::from_rotation_z(rotation))
+                        .with_scale(scale),
+                );
+            }
+            "editor.Sprite2D" => {
+                let color = component
+                    .values
+                    .get("color")
+                    .and_then(|v| {
+                        let r = v.get("r").and_then(|x| x.as_f64()).unwrap_or(1.0) as f32;
+                        let g = v.get("g").and_then(|x| x.as_f64()).unwrap_or(1.0) as f32;
+                        let b = v.get("b").and_then(|x| x.as_f64()).unwrap_or(1.0) as f32;
+                        let a = v.get("a").and_then(|x| x.as_f64()).unwrap_or(1.0) as f32;
+                        Some(Color::srgba(r, g, b, a))
+                    })
+                    .unwrap_or(Color::WHITE);
+
+                sprite = Some(Sprite {
+                    color,
+                    custom_size: Some(Vec2::splat(100.0)),
+                    ..default()
+                });
+
+                // Read anchor string. Missing → silent Center default.
+                // We track the raw string so we can warn on invalid values after the
+                // mapping; the Bevy Anchor Component itself is inserted after Sprite
+                // (so it overrides the `#[require(Anchor)]` auto-insert).
+                if let Some(s) = component.values.get("anchor").and_then(|v| v.as_str()) {
+                    anchor_str = Some(s.to_string());
+                }
+            }
+            // Skip editorial-only components: editor.Visible, editor.Locked
+            _ => {}
+        }
+    }
+
+    // Build and spawn the entity
+    let mut cmd = commands.spawn_empty();
+    cmd.insert(SceneEntity);
+
+    if let Some(n) = name {
+        cmd.insert(n);
+    }
+    if let Some(t) = transform {
+        cmd.insert(t);
+    }
+    if let Some(s) = sprite {
+        // Insert Sprite first — Bevy's `#[require(Anchor)]` auto-inserts
+        // `Anchor::default()` (= Anchor::CENTER) at this point.
+        cmd.insert(s);
+
+        // Insert our Anchor AFTER Sprite so it overrides the auto-required default.
+        let raw_anchor = anchor_str.as_deref().unwrap_or("Center");
+        if !is_known_anchor_str(raw_anchor) {
+            // Use web-sys console.warn directly so the message reaches the browser
+            // devtools / Playwright console listeners (Bevy's warn! goes to the
+            // logger plugin, which is not configured to forward to the browser
+            // console in this WASM build).
+            #[cfg(target_arch = "wasm32")]
+            {
+                let msg = format!(
+                    "[editor-core] Sprite2D anchor '{}' on entity {} is not recognized; using Center",
+                    raw_anchor, entity.id
+                );
+                web_sys::console::warn_1(&JsValue::from_str(&msg));
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                eprintln!(
+                    "[editor-core] Sprite2D anchor '{}' on entity {} is not recognized; using Center",
+                    raw_anchor, entity.id
+                );
+            }
+        }
+        let bevy_anchor = anchor_str_to_bevy_anchor(raw_anchor);
+        cmd.insert(Anchor::from(bevy_anchor.0));
+    }
+}
+
+/// Spawn a projected entity from a Scene Instance.
+///
+/// This is similar to `spawn_entity` but uses the `PreviewEntity` structure
+/// which carries the stable_id from the instance's id_map and the local_id
+/// from the source asset. The entity is tagged with `SceneInstanceChild`
+/// so it can be identified and despawned separately from authored entities.
+fn spawn_preview_entity(commands: &mut Commands, preview: &PreviewEntity) {
+    use bevy::prelude::Name as BevyName;
+    use bevy::sprite::Anchor;
+
+    let mut name: Option<BevyName> = None;
+    let mut transform: Option<Transform> = None;
+    let mut sprite: Option<Sprite> = None;
+    let mut anchor_str: Option<String> = None;
+    let mut logic_binding: Option<crate::logic_graph::LogicBinding> = None;
+
+    for component in &preview.component_values {
+        match component.type_id.as_str() {
+            "editor.Name" => {
+                if let Some(name_val) = component.values.get("name") {
+                    if let Some(name_str) = name_val.as_str() {
+                        name = Some(BevyName::new(name_str.to_string()));
+                    }
+                }
+            }
+            "editor.Transform2D" => {
+                let translation = component
+                    .values
+                    .get("translation")
+                    .and_then(|v| v.get("x").zip(v.get("y")))
+                    .map(|(x, y)| {
+                        Vec3::new(
+                            x.as_f64().unwrap_or(0.0) as f32,
+                            y.as_f64().unwrap_or(0.0) as f32,
+                            0.0,
+                        )
+                    })
+                    .unwrap_or(Vec3::ZERO);
+
+                let rotation = component
+                    .values
+                    .get("rotation")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0) as f32;
+
+                let scale = component
+                    .values
+                    .get("scale")
+                    .and_then(|v| v.get("x").zip(v.get("y")))
+                    .map(|(x, y)| {
+                        Vec3::new(
+                            x.as_f64().unwrap_or(1.0) as f32,
+                            y.as_f64().unwrap_or(1.0) as f32,
+                            1.0,
+                        )
+                    })
+                    .unwrap_or(Vec3::new(1.0, 1.0, 1.0));
+
+                transform = Some(
+                    Transform::from_translation(translation)
+                        .with_rotation(Quat::from_rotation_z(rotation))
+                        .with_scale(scale),
+                );
+            }
+            "editor.Sprite2D" => {
+                let color = component
+                    .values
+                    .get("color")
+                    .and_then(|v| {
+                        let r = v.get("r").and_then(|x| x.as_f64()).unwrap_or(1.0) as f32;
+                        let g = v.get("g").and_then(|x| x.as_f64()).unwrap_or(1.0) as f32;
+                        let b = v.get("b").and_then(|x| x.as_f64()).unwrap_or(1.0) as f32;
+                        let a = v.get("a").and_then(|x| x.as_f64()).unwrap_or(1.0) as f32;
+                        Some(Color::srgba(r, g, b, a))
+                    })
+                    .unwrap_or(Color::WHITE);
+
+                sprite = Some(Sprite {
+                    color,
+                    custom_size: Some(Vec2::splat(100.0)),
+                    ..default()
+                });
+
+                if let Some(s) = component.values.get("anchor").and_then(|v| v.as_str()) {
+                    anchor_str = Some(s.to_string());
+                }
+            }
+            // LogicBinding: deserialize asset_id and version for the dispatch scheduler
+            "editor.LogicBinding" => {
+                let asset_id = component
+                    .values
+                    .get("asset_id")
+                    .and_then(|v| v.as_str())
+                    .map(String::from)
+                    .unwrap_or_default();
+                let version = component
+                    .values
+                    .get("version")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as u32;
+                logic_binding = Some(crate::logic_graph::LogicBinding { asset_id, version });
+            }
+            // Skip editorial-only components
+            _ => {}
+        }
+    }
+
+    // Build and spawn the entity with SceneInstanceChild tag
+    let mut cmd = commands.spawn_empty();
+    cmd.insert(SceneEntity);
+    cmd.insert(SceneInstanceChild {
+        instance_id: preview.stable_id.clone(),
+        local_id: preview.local_id.clone(),
+    });
+
+    if let Some(n) = name {
+        cmd.insert(n);
+    }
+    if let Some(t) = transform {
+        cmd.insert(t);
+    }
+    if let Some(s) = sprite {
+        cmd.insert(s);
+        let raw_anchor = anchor_str.as_deref().unwrap_or("Center");
+        let bevy_anchor = anchor_str_to_bevy_anchor(raw_anchor);
+        cmd.insert(Anchor::from(bevy_anchor.0));
+    }
+    if let Some(lb) = logic_binding {
+        cmd.insert(lb);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// process_commands
+// ─────────────────────────────────────────────────────────────────────────────
+
+fn process_commands(mut sprites: Query<&mut Transform, With<Sprite>>) {
+    let cmds = crate::COMMAND_BUS.with(|b| {
+        b.borrow_mut()
+            .as_mut()
+            .map(|bus| bus.drain())
+            .unwrap_or_default()
+    });
+
+    if let Ok(mut transform) = sprites.single_mut() {
+        for (cmd_type, payload) in cmds {
+            if cmd_type == CMD_MOVE_SPRITE && payload.len() >= 8 {
+                let x = f32::from_le_bytes(payload[0..4].try_into().unwrap());
+                let y = f32::from_le_bytes(payload[4..8].try_into().unwrap());
+                transform.translation.x = x;
+                transform.translation.y = y;
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// emit_events
+// ─────────────────────────────────────────────────────────────────────────────
+
+fn emit_events(
+    sprites: Query<&Transform, With<Sprite>>,
+    time: Res<Time>,
+    mut fps_accum: Local<f32>,
+    mut frame_count: Local<u32>,
+) {
+    crate::EVENT_BUS.with(|b| {
+        if let Some(bus) = b.borrow_mut().as_mut() {
+            bus.reset();
+
+            if let Ok(transform) = sprites.single() {
+                let mut payload = [0u8; 8];
+                payload[0..4].copy_from_slice(&transform.translation.x.to_le_bytes());
+                payload[4..8].copy_from_slice(&transform.translation.y.to_le_bytes());
+                bus.write(EVT_SPRITE_POSITION, &payload);
+            }
+
+            *fps_accum += time.delta_secs();
+            *frame_count += 1;
+            if *fps_accum >= 0.5 {
+                let fps = *frame_count as f32 / *fps_accum;
+                let mut payload = [0u8; 4];
+                payload.copy_from_slice(&fps.to_le_bytes());
+                bus.write(EVT_FPS, &payload);
+                // runtime-preview-inspector: snapshot live metrics for the JS inspector.
+                let frame_time_ms = (*fps_accum * 1000.0) / (*frame_count as f32).max(1.0);
+                crate::preview_inspector::set_metrics(crate::preview_inspector::PreviewMetrics {
+                    fps,
+                    frame_time_ms,
+                    rebuild_count: crate::preview_inspector::get_metrics().rebuild_count,
+                });
+                *fps_accum = 0.0;
+                *frame_count = 0;
+            }
+        }
+    });
+
+    on_frame_end();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// sync_log_state
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Sync the OperationLogState Resource from the thread_local! OperationLog.
+/// UI hooks (future change) read this resource to enable/disable undo/redo buttons.
+fn sync_log_state(mut log_state: ResMut<OperationLogState>) {
+    OPERATION_LOG.with(|l| {
+        let log = l.borrow();
+        log_state.size = log.get_log_size();
+        log_state.can_undo = log.can_undo();
+        log_state.can_redo = log.can_redo();
+    });
+}
