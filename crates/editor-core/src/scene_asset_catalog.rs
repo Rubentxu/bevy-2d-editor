@@ -51,6 +51,11 @@ impl Serialize for SceneAssetCatalog {
     }
 }
 
+/// One entry in the SceneAssetCatalog: metadata for a single scene asset.
+///
+/// Contains the stable `asset_id`, the user-facing `logical_path`,
+/// the asset's role, current schema version, optional tags, and the
+/// `created_at` / `updated_at` Unix timestamps (milliseconds).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SceneAssetCatalogEntry {
     pub asset_id: String,
@@ -62,6 +67,7 @@ pub struct SceneAssetCatalogEntry {
     pub updated_at: u64,
 }
 
+/// Errors produced by SceneAssetCatalog operations (insert, remove, update).
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum CatalogError {
     #[error("duplicate asset_id '{id}'")]
@@ -76,6 +82,9 @@ pub enum CatalogError {
     InvalidVersion { current: u32, new: u32 },
 }
 
+/// A non-fatal warning emitted by SceneAssetCatalog operations
+/// (e.g., orphaned entries, path mismatches). Surfaced to the UI via
+/// `get_asset_catalog_warnings`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CatalogWarning {
     pub code: String,
@@ -284,10 +293,16 @@ impl SceneAssetCatalog {
 // Public free functions
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Generate a fresh, unique asset_id. Combines the current Unix
+/// timestamp (millis) with 8 hex chars of randomness so collisions
+/// across rapid successive calls are extremely unlikely.
 pub fn mint_asset_id() -> String {
     format!("id_{}_{}", current_unix_millis(), random_hex_8())
 }
 
+/// Normalize a user-supplied logical path: trim, lowercase, replace
+/// backslashes with forward slashes, collapse repeated slashes, and
+/// strip leading/trailing slashes.
 pub fn normalize_logical_path(path: &str) -> String {
     let s = path.trim();
     let s = s.to_lowercase();
@@ -297,6 +312,8 @@ pub fn normalize_logical_path(path: &str) -> String {
     s
 }
 
+/// Validate that `path` is acceptable as a Scene Asset logical path:
+/// non-empty after trim and contains no illegal characters.
 pub fn validate_logical_path(path: &str) -> Result<(), CatalogError> {
     if path.trim().is_empty() {
         return Err(CatalogError::InvalidPath {
