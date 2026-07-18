@@ -4,13 +4,67 @@
 //! Each command captures pre-state explicitly so inverse generation is mechanical.
 //! Validation runs before mutation; failed commands leave the document unchanged.
 //!
-//! Batches apply atomically: on any failure inside a batch, previously applied
-//! commands are rolled back in reverse order.
+//! Batches apply atomically: on any failure inside a batch, the document is
+//! restored from a pre-batch snapshot (CRIT-2 fix).
+//!
+//! HD-1 context: Some commands need access to external state (asset catalog,
+//! asset body cache) for resync. This is provided via `ProcessorContext`,
+//! which callers can construct from the live globals via
+//! `ProcessorContext::from_globals()` or build explicitly for tests.
 
 use crate::command::{Command, CommandError};
 use crate::document::{ComponentInstance, Entity, SceneDocument, StableId};
+use crate::scene_asset::SceneAssetDocument;
 use crate::scene_instance::SceneInstance;
 use crate::scene_instance_overrides::{resync, upsert_override, remove_override};
+
+/// Context passed to commands that need to resolve external resources
+/// (HD-1 cleanup). Construct via `from_globals()` for production code,
+/// or build directly in tests to avoid touching the global thread-locals.
+///
+/// All fields are optional: when `None`, commands that need the resource
+/// silently no-op the resync step (preserving legacy behavior). Future
+/// versions will require Some(...) for the affected commands.
+#[derive(Debug, Default, Clone)]
+pub struct ProcessorContext {
+    /// Resolved asset body for the current ReplaceInstanceAsset target,
+    /// or None if not applicable / not pre-fetched.
+    pub asset_body: Option<SceneAssetDocument>,
+}
+
+impl ProcessorContext {
+    /// Build a context from the live global thread-locals. Used by
+    /// production callers (dispatch_command, tests that go through
+    /// the full surface).
+    pub fn from_globals(asset_ref: &str) -> Self {
+        // Resolve path → asset_id (clone to detach lifetime).
+        let asset_id = crate::with_asset_catalog(|cat| cat.resolve_path(asset_ref).map(|s| s.to_string()));
+        // Resolve asset_id → catalog entry.
+        let entry = asset_id.and_then(|id| crate::with_asset_catalog(|cat| cat.get(&id).cloned()));
+        // Resolve entry.logical_path → body cache entry.
+        let asset_body = entry.and_then(|e| {
+            crate::with_asset_body_cache(|cache| cache.get(&e.logical_path).cloned())
+        });
+        ProcessorContext { asset_body }
+    }
+
+/// Empty context for tests / callers that don't need external resources.
+pub fn empty() -> Self {
+    ProcessorContext::default()
+}
+}
+
+/// Extract the asset_ref (if any) from a command. Used by `apply` to
+/// pre-resolve the ProcessorContext for commands that need asset body
+/// access (currently only ReplaceInstanceAsset). Returns an empty string
+/// for commands that don't need resolution.
+fn asset_ref_of<'a>(cmd: &'a Command) -> &'a str {
+    match cmd {
+        Command::ReplaceInstanceAsset { new_asset_ref, .. } => new_asset_ref.as_str(),
+        Command::PlaceInstance { asset_ref, .. } => asset_ref.as_str(),
+        _ => "",
+    }
+}
 
 /// Find an entity by id and return a mutable reference.
 fn find_entity_mut<'a>(
@@ -211,7 +265,22 @@ pub fn validate(doc: &SceneDocument, cmd: &Command) -> Result<(), CommandError> 
 /// Apply a command to the document, returning the inverse command.
 ///
 /// Validation runs first; if it fails, the document is unchanged.
+///
+/// Uses `ProcessorContext::from_globals(&cmd.asset_ref_if_any())` to resolve
+/// external state. If a custom context is needed (e.g., for tests), use
+/// `apply_with_context`.
 pub fn apply(doc: &mut SceneDocument, cmd: &Command) -> Result<Command, CommandError> {
+    let ctx = ProcessorContext::from_globals(asset_ref_of(cmd));
+    apply_with_context(doc, cmd, &ctx)
+}
+
+/// Like `apply` but uses an explicit `ProcessorContext`. Tests use this to
+/// inject mock asset bodies without touching the global thread-locals.
+pub fn apply_with_context(
+    doc: &mut SceneDocument,
+    cmd: &Command,
+    ctx: &ProcessorContext,
+) -> Result<Command, CommandError> {
     // Validate before mutating
     validate(doc, cmd)?;
 
@@ -425,16 +494,11 @@ pub fn apply(doc: &mut SceneDocument, cmd: &Command) -> Result<Command, CommandE
             instance.asset_version_seen = *new_asset_version;
 
             // S17: Run resync to reclassify overrides according to new asset schema
-            // Look up the new asset in catalog and cache, then call resync
-            let asset_id = crate::with_asset_catalog(|cat| cat.resolve_path(new_asset_ref.as_str()).map(|s| s.to_string()));
-            if let Some(asset_id) = asset_id {
-                if let Some(entry) = crate::with_asset_catalog(|cat| cat.get(&asset_id).cloned()) {
-                    if let Some(asset) =
-                        crate::with_asset_body_cache(|cache| cache.get(&entry.logical_path).cloned())
-                    {
-                        let _report = resync(&asset, instance, *new_asset_version);
-                    }
-                }
+            // HD-1: read asset body from ProcessorContext instead of the global
+            // catalog/cache. The context was pre-resolved by `apply` via
+            // `ProcessorContext::from_globals(new_asset_ref)`.
+            if let Some(asset) = ctx.asset_body.as_ref() {
+                let _report = resync(asset, instance, *new_asset_version);
             }
 
             // Inverse is ReplaceInstanceAsset restoring captured old state
