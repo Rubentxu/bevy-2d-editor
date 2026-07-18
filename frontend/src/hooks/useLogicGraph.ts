@@ -175,7 +175,9 @@ export function useLogicGraph() {
    * Currently not persisted — placeholder for OPFS integration.
    */
   const open = useCallback(async (assetId: string) => {
-    // TODO: Wire to OPFS persistence when implemented
+    // OPFS-backed open() pending. See ROADMAP §Hito 4 Order 5 deferral list:
+    // logic-graph OPFS persistence is post-Order-5 work (data-only hot-reload
+    // doesn't ship .logic persistence; that needs a dedicated cycle).
     console.warn("useLogicGraph: open() is a placeholder — using create instead");
     await create(assetId, `logic/${assetId}`);
   }, []);

@@ -1,7 +1,9 @@
 //! Logic Evaluator — dispatch trait and typed port boundary.
 //!
 //! Phase 1: NodeEvaluator trait + PortValue enum + metadata structs.
-//! Phase 2: LogicNodeRegistry singleton + placeholder built-in evaluators.
+//! Phase 2: LogicNodeRegistry singleton + built-in evaluators (If, And, Always,
+//!          Translate, ApplyImpulse, Compare, ModifyHealth, KeyPressed,
+//!          Gate, Collision, Proximity, EmitSignal, ModifyTimer).
 //! Phase 3: Logic graph evaluation dispatch (evaluate_logic_binding).
 //! All tests follow Strict TDD: RED → GREEN → TRIANGULATE → REFACTOR.
 

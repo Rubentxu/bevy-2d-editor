@@ -3501,10 +3501,12 @@ pub fn create_logic_graph_asset(asset_id: &str, logical_path: &str) -> Result<St
 }
 
 /// List all logic graph assets (placeholder — returns empty for now).
-/// TODO: Wire to OPFS persistence.
+/// Tracked for OPFS persistence wiring (post-Hito 4 Order 5; Hito 4 Order 5
+/// shipped data-only hot-reload but did NOT introduce OPFS persistence for
+/// logic graphs themselves — that requires a separate cycle).
 #[wasm_bindgen]
 pub fn list_logic_graph_assets() -> Result<String, JsValue> {
-    // Placeholder: return empty list until OPFS persistence is wired
+    // Placeholder: returns empty until OPFS persistence is wired (see docstring above).
     serde_json::to_string(&Vec::<LogicGraphAsset>::new())
         .map_err(|e| JsValue::from_str(&format!("Failed to serialize: {}", e)))
 }

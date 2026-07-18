@@ -363,21 +363,17 @@ export default function InspectorPanel({
               + New Schema
             </button>
           </div>
-          {/* Phase 6.6: Resync warning banner */}
+          {/* Phase 6.6: Resync warning banner.
+              The button previously opened a dedicated Override/Resync Workbench
+              which was never implemented. Per-field revert (via ComponentCard's
+              revert button) is the current resolution path. Tracked as future
+              enhancement for a full workbench UX. */}
           {isInstanceEntity && showResyncWarning && (
             <div className="resync-warning-banner" data-testid="resync-warning-banner">
               <span className="resync-warning-icon">⚠️</span>
               <span className="resync-warning-text">
-                {totalProblemCount} override{totalProblemCount !== 1 ? "s" : ""} need review
+                {totalProblemCount} override{totalProblemCount !== 1 ? "s" : ""} need review (use per-field revert)
               </span>
-              <button
-                type="button"
-                className="open-workbench-btn"
-                onClick={() => alert("TODO: Open Override/Resync Workbench")}
-                data-testid="open-workbench-btn"
-              >
-                Open Workbench
-              </button>
             </div>
           )}
           {/* Component Override Summary (override-resync-workbench) */}
