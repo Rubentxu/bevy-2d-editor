@@ -225,8 +225,8 @@ pub struct TransformSnapshot {
     pub transforms: std::collections::HashMap<bevy::prelude::Entity, Transform>,
 }
 
-/// Cross-system dirty flag set by `dispatch_command` and read by
-/// `rebuild_preview_world`. Visible across the WASM→Bevy boundary
+// Cross-system dirty flag set by `dispatch_command` and read by
+// `rebuild_preview_world`. Visible across the WASM→Bevy boundary
 /// because both run on the same thread (single-threaded WASM).
 thread_local! {
     static DIRTY_FLAG: RefCell<bool> = const { RefCell::new(false) };
@@ -264,14 +264,14 @@ pub enum HotReloadRequest {
     ForceReloadAll,
 }
 
-/// Thread-local hot-reload request bus — matches COMMAND_BUS/EVENT_BUS pattern.
-/// Consumed by process_hot_reload_requests each frame.
+// Thread-local hot-reload request bus — matches COMMAND_BUS/EVENT_BUS pattern.
+// Consumed by process_hot_reload_requests each frame.
 thread_local! {
     static HOT_RELOAD_BUS: RefCell<Vec<HotReloadRequest>> = const { RefCell::new(Vec::new()) };
 }
 
-/// Thread-local request flag set by WASM exports, consumed by a Bevy system.
-/// Follows the established DIRTY_FLAG pattern (lib.rs:213).
+// Thread-local request flag set by WASM exports, consumed by a Bevy system.
+// Follows the established DIRTY_FLAG pattern (lib.rs:213).
 thread_local! {
     static PLAY_MODE_REQUEST: RefCell<Option<PlayModeRequest>> = const { RefCell::new(None) };
 }
