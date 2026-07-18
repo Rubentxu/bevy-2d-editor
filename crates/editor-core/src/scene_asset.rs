@@ -201,9 +201,12 @@ impl LayerId {
     }
 }
 
-// LAYER_ID_UNIFICATION: cross-type conversions for ergonomic call sites.
-// All 3 ID types wrap String with identical serde representation, so
-// converting between them is purely a type-system convenience.
+// LAYER_ID_UNIFICATION: cross-type conversions are no longer needed since
+// `TileLayerId` and `AutoLayerId` are type aliases for `LayerId` (full
+// unification — see tile_layer.rs and auto_layer.rs).
+//
+// Conversions from `&str` and `String` are still useful for ergonomic call
+// sites (`LayerId::from("lyr_01")`).
 
 impl From<&str> for LayerId {
     fn from(s: &str) -> Self {
@@ -214,18 +217,6 @@ impl From<&str> for LayerId {
 impl From<String> for LayerId {
     fn from(s: String) -> Self {
         LayerId(s)
-    }
-}
-
-impl From<&TileLayerId> for LayerId {
-    fn from(t: &TileLayerId) -> Self {
-        LayerId(t.0.clone())
-    }
-}
-
-impl From<&AutoLayerId> for LayerId {
-    fn from(a: &AutoLayerId) -> Self {
-        LayerId(a.0.clone())
     }
 }
 

@@ -70,43 +70,14 @@ pub struct AutoRule {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AutoLayerId — opaque identifier for an AutoLayer
+// AutoLayerId — alias for LayerId (LAYER_ID_UNIFICATION full)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Opaque stable identifier for an AutoLayer inside a LevelSceneAsset.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct AutoLayerId(pub String);
-
-impl AutoLayerId {
-    pub fn new(id: impl Into<String>) -> Self {
-        AutoLayerId(id.into())
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-// LAYER_ID_UNIFICATION: cross-type conversions.
-
-impl From<&str> for AutoLayerId {
-    fn from(s: &str) -> Self {
-        AutoLayerId(s.to_string())
-    }
-}
-
-impl From<String> for AutoLayerId {
-    fn from(s: String) -> Self {
-        AutoLayerId(s)
-    }
-}
-
-impl From<&LayerId> for AutoLayerId {
-    fn from(l: &LayerId) -> Self {
-        AutoLayerId(l.0.clone())
-    }
-}
+///
+/// LAYER_ID_UNIFICATION full: `AutoLayerId` is now a type alias for `LayerId`.
+/// See `TileLayerId` for the rationale.
+pub type AutoLayerId = LayerId;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AutoLayer — a generated tile layer driven by pattern rules

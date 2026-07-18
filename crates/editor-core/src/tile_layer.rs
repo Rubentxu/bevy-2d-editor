@@ -9,44 +9,17 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TileLayerId — opaque stable identifier
+// TileLayerId — alias for LayerId (LAYER_ID_UNIFICATION full)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Opaque stable identifier for a TileLayer inside a LevelSceneAsset.
-/// Transparent so it serializes as a plain string, e.g. `"tilelayer_01abc..."`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct TileLayerId(pub String);
-
-impl TileLayerId {
-    pub fn new(id: impl Into<String>) -> Self {
-        TileLayerId(id.into())
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-// LAYER_ID_UNIFICATION: cross-type conversions.
-
-impl From<&str> for TileLayerId {
-    fn from(s: &str) -> Self {
-        TileLayerId(s.to_string())
-    }
-}
-
-impl From<String> for TileLayerId {
-    fn from(s: String) -> Self {
-        TileLayerId(s)
-    }
-}
-
-impl From<&LayerId> for TileLayerId {
-    fn from(l: &LayerId) -> Self {
-        TileLayerId(l.0.clone())
-    }
-}
+///
+/// LAYER_ID_UNIFICATION full: `TileLayerId` is now a type alias for `LayerId`.
+/// All three layer-id types (`LayerId`, `TileLayerId`, `AutoLayerId`) wrap the
+/// same `String` and serialize identically (`#[serde(transparent)]`). Keeping
+/// the type alias preserves source compatibility with all call sites that name
+/// `TileLayerId` explicitly (auto_layer rules, paint/erase commands, tests).
+pub type TileLayerId = LayerId;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TileLayer
@@ -370,6 +343,47 @@ mod tests {
         assert_eq!(json, r#""layer_test""#);
         let roundtrip: TileLayerId = serde_json::from_str(&json).unwrap();
         assert_eq!(roundtrip.as_str(), "layer_test");
+    }
+
+    #[test]
+    fn test_layerid_full_unification_preserves_api() {
+        // LAYER_ID_UNIFICATION full: TileLayerId is now a type alias of LayerId.
+        // These tests lock down the API surface that every call site relies on:
+        // - construction via ::new(s), From<&str>, From<String>
+        // - .as_str() accessor
+        // - serde::transparent representation (plain string)
+        // - equality + hashing across the alias boundary
+        use crate::scene_asset::LayerId;
+        use std::collections::HashSet;
+
+        // All three constructor styles must work on the alias.
+        let a = TileLayerId::new("lyr_01");
+        let b: TileLayerId = LayerId::from("lyr_01");
+        let c: TileLayerId = String::from("lyr_01").into();
+        let d: TileLayerId = "lyr_01".into();
+
+        assert_eq!(a, b);
+        assert_eq!(b, c);
+        assert_eq!(c, d);
+
+        // Accessor preserved.
+        assert_eq!(a.as_str(), "lyr_01");
+
+        // Serde representation is a plain string (no discriminant added).
+        let json = serde_json::to_string(&a).unwrap();
+        assert_eq!(json, r#""lyr_01""#);
+        let back: TileLayerId = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, a);
+
+        // Hashable — usable in collections (regression for HashMap<LayerId>).
+        let mut set: HashSet<TileLayerId> = HashSet::new();
+        set.insert(a.clone());
+        assert!(set.contains(&b));
+
+        // Type alias means TileLayerId == LayerId at the type level.
+        // (Both deserialize from the same JSON shape; no manual conversion needed.)
+        let from_layer: LayerId = serde_json::from_str(r#""lyr_01""#).unwrap();
+        assert_eq!(from_layer, a);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
