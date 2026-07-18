@@ -1,7 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { listTilesets, createTileset, deleteTileset, paintTile, type TilesetMetadata } from '../services/tilesets';
+import { listTilesets, createTileset, deleteTileset, paintTile, eraseTile, type TilesetMetadata } from '../services/tilesets';
 import { type SceneAssetDocument, type TileLayerPayload } from '../services/scene-assets';
 import { TileCanvas } from './TileCanvas';
+
+// Default canvas height in tile rows. The Rust TileLayer uses a sparse grid
+// without fixed dimensions; this constant sets the visible paint surface
+// height until a proper grid_width/grid_height schema field ships.
+const DEFAULT_CANVAS_GRID_HEIGHT = 50;
 
 interface TilesetPanelProps {
   onSelectTileset: (tileset: TilesetMetadata) => void;
@@ -68,12 +73,13 @@ export const TilesetPanel: React.FC<TilesetPanelProps> = ({
 
   const handlePaint = useCallback(
     async (x: number, y: number) => {
-      if (!activeAssetLogicalPath || !selectedTileLayerId || !selectedTilesetId || selectedTileIndex === null) return;
+      if (!activeAssetLogicalPath || !selectedTileLayerId || !selectedTilesetId) return;
       try {
-        if (paintMode === 'paint') {
+        if (paintMode === 'paint' && selectedTileIndex !== null) {
           await paintTile(activeAssetLogicalPath, selectedTileLayerId, x, y, selectedTilesetId, selectedTileIndex);
+        } else if (paintMode === 'erase') {
+          await eraseTile(activeAssetLogicalPath, selectedTileLayerId, x, y);
         }
-        // erase mode: future work — needs erase_tile WASM binding wired here
       } catch (e) {
         console.error('Paint failed:', e);
       }
@@ -170,7 +176,12 @@ export const TilesetPanel: React.FC<TilesetPanelProps> = ({
             tileHeight={selectedTileset!.tile_height}
             columns={selectedTileset!.columns}
             gridWidth={selectedTileset!.columns}
-            gridHeight={50}
+            // Default 50 rows of canvas height. The Rust TileLayer data model
+            // uses a sparse grid (HashMap) without fixed dimensions; adding
+            // grid_width/grid_height to the schema is a separate cycle. Until
+            // then, this constant sets the visible canvas height for the paint
+            // surface. Wires together with the erase_tile wiring (HD-N3 fix).
+            gridHeight={DEFAULT_CANVAS_GRID_HEIGHT}
             mode={paintMode}
             selectedTile={
               selectedTileIndex !== null

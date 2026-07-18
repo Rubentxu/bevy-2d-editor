@@ -788,8 +788,14 @@ export async function fetchAssetForInstance(
   );
   if (!entry) return null;
   await openSceneAsset(entry.asset_id);
-  const assetJson = await getAssetDocumentJson();
-  return typeof assetJson === "string" ? JSON.parse(assetJson) : assetJson;
+  try {
+    const assetJson = await getAssetDocumentJson();
+    return typeof assetJson === "string" ? JSON.parse(assetJson) : assetJson;
+  } finally {
+    // Always close the scene asset handle — even if getAssetDocumentJson throws —
+    // to avoid leaking the open resource (COUP-R5-01).
+    closeSceneAsset();
+  }
 }
 
 

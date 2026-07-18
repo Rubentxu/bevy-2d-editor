@@ -138,46 +138,10 @@ export default function InspectorPanel({
       setFieldOverrideIndex([]);
       return;
     }
-    // Load override issues by finding the instance's asset
-    // We need the asset document — load via open_scene_asset then validate
-    (async () => {
-      try {
-        const asset = await fetchAssetForInstance(instance);
-        if (!asset) {
-          setOverrideIssues([]);
-          setResolvedEntity(null);
-          setFieldOverrideIndex([]);
-          return;
-        }
-
-        // Load effective values (Phase 6.2)
-        try {
-          const resolved = await effectiveValues(instance, asset);
-          // Find the resolved entity matching this entity's local_id
-          const localId = parsed?.local_id;
-          const matching = localId ? resolved.entities[localId] : null;
-          setResolvedEntity(matching ?? null);
-        } catch {
-          setResolvedEntity(null);
-        }
-
-        // Load field override index (Phase 6.3)
-        try {
-          const index = await overrideFieldStatus(instance);
-          setFieldOverrideIndex(index);
-        } catch {
-          setFieldOverrideIndex([]);
-        }
-
-        // Validate overrides
-        const issues = await validateOverrides(instance, asset);
-        setOverrideIssues(issues);
-      } catch {
-        setOverrideIssues([]);
-        setResolvedEntity(null);
-        setFieldOverrideIndex([]);
-      }
-    })();
+    // Delegate the 4-step pipeline (asset → effective values → override index →
+    // validate) to refreshInstanceState so handleRevertField stays in sync
+    // (W-N3 useEffect dup, COUP-R5-02).
+    refreshInstanceState(instance, parsed.local_id);
 
     // Load resync reports
     (async () => {
@@ -193,6 +157,49 @@ export default function InspectorPanel({
 
   /** Whether the selected entity belongs to a Scene Instance. */
   const isInstanceEntity = !!(entity && parseInstanceChild(entity.id) !== null);
+
+  /**
+   * 4-step pipeline: load asset → resolve effective values → fetch override index.
+   * Used by both the initial-load useEffect and handleRevertField to keep them
+   * in sync. Extracted from duplication (W-N3 useEffect dup, COUP-R5-02).
+   *
+   * All callers pass `instance` and `localId`; the helper handles the
+   * fetchAssetForInstance + null-check + per-call setState cascade.
+   */
+  const refreshInstanceState = async (instance: SceneInstance, localId: string) => {
+    const asset = await fetchAssetForInstance(instance);
+    if (!asset) {
+      setOverrideIssues([]);
+      setResolvedEntity(null);
+      setFieldOverrideIndex([]);
+      return;
+    }
+
+    // Load effective values (Phase 6.2)
+    try {
+      const resolved = await effectiveValues(instance, asset);
+      const matching = resolved.entities[localId];
+      setResolvedEntity(matching ?? null);
+    } catch {
+      setResolvedEntity(null);
+    }
+
+    // Load field override index (Phase 6.3)
+    try {
+      const index = await overrideFieldStatus(instance);
+      setFieldOverrideIndex(index);
+    } catch {
+      setFieldOverrideIndex([]);
+    }
+
+    // Validate overrides
+    try {
+      const issues = await validateOverrides(instance, asset);
+      setOverrideIssues(issues);
+    } catch {
+      setOverrideIssues([]);
+    }
+  };
 
   useEffect(() => {
     setNameDraft(entity?.name ?? "");
@@ -266,15 +273,8 @@ export default function InspectorPanel({
     if (!localId) return;
     try {
       await revertOverride(selectedInstance.instance_id, localId, typeId, [fieldPath]);
-      // Re-poll effective values and field override status
-      const asset = await fetchAssetForInstance(selectedInstance);
-      if (asset) {
-        const resolved = await effectiveValues(selectedInstance, asset);
-        const matching = resolved.entities[localId];
-        setResolvedEntity(matching ?? null);
-        const index = await overrideFieldStatus(selectedInstance);
-        setFieldOverrideIndex(index);
-      }
+      // Re-use the same 4-step pipeline as the initial-load useEffect (W-N3 dup fix).
+      await refreshInstanceState(selectedInstance, localId);
     } catch (e) {
       console.error("Revert override failed:", e);
     }
@@ -363,21 +363,17 @@ export default function InspectorPanel({
               + New Schema
             </button>
           </div>
-          {/* Phase 6.6: Resync warning banner */}
+          {/* Phase 6.6: Resync warning banner.
+              The button previously opened a dedicated Override/Resync Workbench
+              which was never implemented. Per-field revert (via ComponentCard's
+              revert button) is the current resolution path. Tracked as future
+              enhancement for a full workbench UX. */}
           {isInstanceEntity && showResyncWarning && (
             <div className="resync-warning-banner" data-testid="resync-warning-banner">
               <span className="resync-warning-icon">⚠️</span>
               <span className="resync-warning-text">
-                {totalProblemCount} override{totalProblemCount !== 1 ? "s" : ""} need review
+                {totalProblemCount} override{totalProblemCount !== 1 ? "s" : ""} need review (use per-field revert)
               </span>
-              <button
-                type="button"
-                className="open-workbench-btn"
-                onClick={() => alert("TODO: Open Override/Resync Workbench")}
-                data-testid="open-workbench-btn"
-              >
-                Open Workbench
-              </button>
             </div>
           )}
           {/* Component Override Summary (override-resync-workbench) */}

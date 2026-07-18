@@ -1,7 +1,9 @@
 //! Logic Evaluator — dispatch trait and typed port boundary.
 //!
 //! Phase 1: NodeEvaluator trait + PortValue enum + metadata structs.
-//! Phase 2: LogicNodeRegistry singleton + placeholder built-in evaluators.
+//! Phase 2: LogicNodeRegistry singleton + built-in evaluators (If, And, Always,
+//!          Translate, ApplyImpulse, Compare, ModifyHealth, KeyPressed,
+//!          Gate, Collision, Proximity, EmitSignal, ModifyTimer).
 //! Phase 3: Logic graph evaluation dispatch (evaluate_logic_binding).
 //! All tests follow Strict TDD: RED → GREEN → TRIANGULATE → REFACTOR.
 
@@ -933,23 +935,17 @@ impl NodeEvaluator for ApplyImpulseEvaluator {
     }
 }
 
-/// sensor.collision — emits Bool(true) when collision with configured target_tag occurs.
-/// Runtime collision events fed via SENSOR_COLLISION_STATE.
-/// In headless WASM preview, defaults to false.
+/// sensor.collision — emits Float(1.0) when collision with configured target_tag occurs.
+/// In headless WASM preview, always defaults to 0.0 (no collision).
+/// Runtime collision detection requires a real Bevy collision event source;
+/// the COLLISION_STATE thread-local was deleted (OE-NEW-05) since no Bevy system
+/// was ever populating it.
 struct CollisionEvaluator;
 impl NodeEvaluator for CollisionEvaluator {
-    fn evaluate(&self, node: &LogicNode, _inputs: &[PortValue]) -> Vec<PortValue> {
-        let target_tag = node
-            .field_values
-            .get("target_tag")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-
-        let triggered = COLLISION_STATE.with(|state| {
-            state.borrow().contains(target_tag)
-        });
+    fn evaluate(&self, _node: &LogicNode, _inputs: &[PortValue]) -> Vec<PortValue> {
         // Emit Float so it chains into controller.compare threshold comparisons (1.0 = collision, 0.0 = none).
-        vec![PortValue::Float(if triggered { 1.0 } else { 0.0 })]
+        // Headless preview default: no collision.
+        vec![PortValue::Float(0.0)]
     }
 }
 
@@ -1006,30 +1002,19 @@ impl NodeEvaluator for ModifyHealthEvaluator {
 }
 
 /// sensor.proximity — emits Float distance to configured target_tag.
-/// Runtime proximity state fed via SENSOR_PROXIMITY_STATE.
-/// In headless WASM preview, defaults to Float(threshold) from field_values.
+/// In headless WASM preview, defaults to Float(distance) from field_values (or 999.0).
+/// Runtime proximity detection requires a real Bevy proximity event source;
+/// the PROXIMITY_STATE thread-local was deleted (OE-NEW-05) since no Bevy system
+/// was ever populating it.
 struct ProximityEvaluator;
 impl NodeEvaluator for ProximityEvaluator {
     fn evaluate(&self, node: &LogicNode, _inputs: &[PortValue]) -> Vec<PortValue> {
-        let target_tag = node
-            .field_values
-            .get("target_tag")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
         let default_dist: f32 = node
             .field_values
             .get("distance")
             .and_then(|v| v.as_f64())
             .unwrap_or(999.0) as f32;
-
-        let distance = PROXIMITY_STATE.with(|state| {
-            state
-                .borrow()
-                .get(target_tag)
-                .copied()
-                .unwrap_or(default_dist)
-        });
-        vec![PortValue::Float(distance)]
+        vec![PortValue::Float(default_dist)]
     }
 }
 
@@ -1055,13 +1040,13 @@ thread_local! {
     /// Updated by Bevy keyboard input system before logic evaluation.
     pub static KEYBOARD_STATE: RefCell<std::collections::HashSet<String>> = RefCell::new(std::collections::HashSet::new());
 
-    /// Set of target tags that had a collision this frame.
-    /// Updated by Bevy collision detection system before logic evaluation.
-    pub static COLLISION_STATE: RefCell<std::collections::HashSet<String>> = RefCell::new(std::collections::HashSet::new());
-
-    /// Map of target_tag -> current distance (in world units).
-    /// Updated by Bevy proximity system before logic evaluation.
-    pub static PROXIMITY_STATE: RefCell<std::collections::HashMap<String, f32>> = RefCell::new(std::collections::HashMap::new());
+    // COLLISION_STATE and PROXIMITY_STATE thread-locals were removed in OE-NEW-05
+    // (2026-07-18) — same dead-pipeline pattern as the deleted mouse pipeline
+    // (CRIT-01+02, commit 80f7a60). No Bevy system was populating them, and the
+    // CollisionEvaluator / ProximityEvaluator already documented headless-default
+    // fallback behavior. If a future Bevy collision/proximity integration ships,
+    // re-introduce them via a real `update_collision_state` / `update_proximity_state`
+    // Bevy system (not a thread-local-only stub).
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
