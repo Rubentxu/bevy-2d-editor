@@ -28,6 +28,11 @@ export interface AIAssistantState {
   loading: boolean;
   proposals: Proposal[];
   error: string | null;
+  // Hito 4 Order 6: per-source context stats (for ContextDebugSection).
+  // Empty until the first submit() completes.
+  contextStats: import("../types/ai").PerSourceStats[];
+  // Hito 4 Order 6: total chars used in the last context assembly.
+  contextUsedChars: number;
 }
 
 interface UseAIAssistantOptions {
@@ -48,6 +53,9 @@ export function useAIAssistant({ onApplied }: UseAIAssistantOptions = {}) {
   const [loading, setLoading] = useState(false);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // Hito 4 Order 6: context debug view state.
+  const [contextStats, setContextStats] = useState<import("../types/ai").PerSourceStats[]>([]);
+  const [contextUsedChars, setContextUsedChars] = useState(0);
 
   // Hito 4 Order 6 (T2.5): source-files context invalidation.
   // When a source file is saved, code-files.ts emits a hot-reload-source
@@ -176,6 +184,21 @@ export function useAIAssistant({ onApplied }: UseAIAssistantOptions = {}) {
         });
 
         setProposals((prev) => [...prev, ...newProposals]);
+        // Hito 4 Order 6: persist context stats for the debug view.
+        if (extraContext) {
+          const stats = (
+            await import("../services/ai-context")
+          ).assembleMultiSourceContext(
+            sceneSnapshot,
+            schemas,
+            extraContext.source_files ?? [],
+            extraContext.logic_graphs ?? [],
+            extraContext.scene_assets ?? { catalog: [], selected_body: null },
+            extraContext.selected_entity ?? null,
+          ).stats;
+          setContextStats(stats);
+          setContextUsedChars(stats.reduce((sum, s) => sum + s.included_chars, 0));
+        }
         setPrompt("");
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -235,6 +258,8 @@ export function useAIAssistant({ onApplied }: UseAIAssistantOptions = {}) {
     loading,
     proposals,
     error,
+    contextStats,
+    contextUsedChars,
     submit,
     applyProposal,
     discardProposal,

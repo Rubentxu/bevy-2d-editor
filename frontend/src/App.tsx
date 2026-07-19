@@ -103,6 +103,8 @@ export default function App() {
     loading: aiLoading,
     proposals,
     error: aiError,
+    contextStats,
+    contextUsedChars,
     submit,
     applyProposal,
     discardProposal,
@@ -545,13 +547,22 @@ export default function App() {
           <>
             {aiPanelOpen && (
               <AIAssistantPanel
-                aiState={{ prompt, loading: aiLoading, proposals, error: aiError }}
+                aiState={{
+                  prompt,
+                  loading: aiLoading,
+                  proposals,
+                  error: aiError,
+                  contextStats,
+                  contextUsedChars,
+                }}
                 onToggle={handleToggleAI}
                 onPromptChange={setPrompt}
                 onSubmit={handleSubmitAI}
                 onApply={handleApplyProposal}
                 onDiscard={discardProposal}
                 applyingIds={applyingIds}
+                contextStats={contextStats}
+                contextUsedChars={contextUsedChars}
               />
             )}
             {validationCenterOpen && (

@@ -179,3 +179,21 @@ Domain Expert: "Exactly. Scene Asset keeps us aligned with Bevy's BSN roadmap, w
 Dev: "Then when we need runtime integration, we generate a DynamicScene Export instead of treating Bevy serialization as the source of truth."
 
 Domain Expert: "Right. The Bevy 2D Editor owns the editing model; Bevy consumes an export."
+
+## Hito 4 Order 6 Additions (code-aware-ai)
+
+**Multi-Source AI Context**:
+The AI proxy receives a `MultiSourceContext` (Hito 4 Order 6) containing: scene snapshot, combined schemas, source files (Rust + toml), logic graphs, scene asset catalog + selected body, and selected entity. Each source has a `Priority` (higher = included first under budget). The `ContextBuilder` orchestrator fills a shared `TokenBudget` (default 10k tokens = 40k chars) greedily.
+_Avoid_: "AI context" (use "multi-source context" for clarity), "the prompt's context"
+
+**Source File**:
+A `.rs` or `.toml` file in the project's source tree, identified by a stable `SourceFile.id` (equals its project-relative path). In v1 the AI sees full text; v2 may add chunking based on token budget.
+_Avoid_: "source code", "Rust file" (a source file can be `.toml` too)
+
+**Code-Aware AI**:
+The Hito 4 Order 6 feature that lets the AI see source files, logic graphs, and scene assets alongside the scene snapshot. AI commands are extended with `CreateSourceFile` and `WriteSourceFile`. Per design decision D2, AI is forbidden from deleting or renaming source files in v1 (enforced by `FORBIDDEN_AI_COMMANDS` server-side).
+_Avoid_: "Cursor-like AI" (that's the v2 vision), "code completion" (we mean file-level edits)
+
+**Context Debug Section**:
+A collapsible UI section in the AI Assistant Panel showing per-source token counts and a per-source toggle to include/exclude. Hidden by default; opens on click.
+_Avoid_: "context panel" (we already have the AI panel)
