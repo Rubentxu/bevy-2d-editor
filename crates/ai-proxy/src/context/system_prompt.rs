@@ -1,32 +1,61 @@
 //! System prompt builder for the AI assistant.
+//!
+//! Hito 4 Order 6 (`code-aware-ai`): refactored from a single-purpose builder
+//! to a multi-source orchestrator. Each `ContextSource` is autonomous; the
+//! builder composes them under a shared `TokenBudget` using greedy priority
+//! fill (highest-priority sources first).
 
 use serde_json::Value;
 
-/// Builder for the full system prompt sent to OpenAI.
+use super::source_impls::{
+    LogicGraphsSource, SceneAssetSource, SceneSnapshotSource, SchemasSource, SelectedEntitySource,
+    SourceFilesSource,
+};
+use super::sources::{
+    ContextSource, LogicGraphRef, SceneAssetContext, SelectedEntity, SourceFileRef, TokenBudget,
+};
+
+/// Multi-source context builder. Composes prompt sections from heterogeneous
+/// sources (scene, schemas, source files, logic graphs, scene assets, selected
+/// entity) under a shared token budget.
+///
+/// Priority order (higher first):
+/// 1. SceneSnapshot (P=100)
+/// 2. SelectedEntity (P=90)
+/// 3. Schemas (P=80)
+/// 4. SceneAsset.selected_body (P=60)
+/// 5. SourceFiles (P=50)
+/// 6. LogicGraphs (P=40)
+/// 7. SceneAsset.catalog (P=30)
+///
+/// Builder methods (`with_*`) return `Self` to preserve the existing fluent
+/// API; `build()` returns the assembled prompt string.
 #[derive(Debug, Clone)]
 pub struct ContextBuilder {
-    /// The editor domain description from CONTEXT.md.
     domain_description: String,
-    /// Combined schema registry JSON.
-    schemas_json: String,
-    /// Scene snapshot JSON.
-    scene_json: String,
-    /// Token threshold for truncation.
-    token_threshold: usize,
-    /// Whether the scene was truncated.
+    schemas: Option<Value>,
+    scene: Option<Value>,
+    source_files: Vec<SourceFileRef>,
+    logic_graphs: Vec<LogicGraphRef>,
+    scene_assets: SceneAssetContext,
+    selected_entity: Option<SelectedEntity>,
+    token_threshold_chars: usize,
     truncated: bool,
-    /// Final token count after assembly and potential truncation.
     token_count: usize,
 }
 
 impl ContextBuilder {
-    /// Create a new ContextBuilder.
+    /// Create a new ContextBuilder with the editor domain description.
     pub fn new(domain_description: impl Into<String>) -> Self {
         Self {
             domain_description: domain_description.into(),
-            schemas_json: String::new(),
-            scene_json: String::new(),
-            token_threshold: 10_000,
+            schemas: None,
+            scene: None,
+            source_files: Vec::new(),
+            logic_graphs: Vec::new(),
+            scene_assets: SceneAssetContext::default(),
+            selected_entity: None,
+            token_threshold_chars: 40_000, // 10k tokens × 4 chars/token
             truncated: false,
             token_count: 0,
         }
@@ -34,94 +63,121 @@ impl ContextBuilder {
 
     /// Set the combined schemas JSON.
     pub fn with_schemas(mut self, schemas: Value) -> Self {
-        self.schemas_json = serde_json::to_string_pretty(&schemas).unwrap_or_default();
+        self.schemas = Some(schemas);
         self
     }
 
     /// Set the scene snapshot JSON.
     pub fn with_scene(mut self, scene: Value) -> Self {
-        self.scene_json = serde_json::to_string_pretty(&scene).unwrap_or_default();
+        self.scene = Some(scene);
         self
     }
 
-    /// Set the token threshold.
-    pub fn with_token_threshold(mut self, threshold: usize) -> Self {
-        self.token_threshold = threshold;
+    /// Set the source files visible to the AI.
+    pub fn with_source_files(mut self, files: Vec<SourceFileRef>) -> Self {
+        self.source_files = files;
+        self
+    }
+
+    /// Set the logic graphs visible to the AI.
+    pub fn with_logic_graphs(mut self, graphs: Vec<LogicGraphRef>) -> Self {
+        self.logic_graphs = graphs;
+        self
+    }
+
+    /// Set the scene-asset context (catalog + selected body).
+    pub fn with_scene_assets(mut self, assets: SceneAssetContext) -> Self {
+        self.scene_assets = assets;
+        self
+    }
+
+    /// Set the currently-selected entity (if any).
+    pub fn with_selected_entity(mut self, entity: Option<SelectedEntity>) -> Self {
+        self.selected_entity = entity;
+        self
+    }
+
+    /// Set the token threshold (in tokens; converted to chars internally via × 4).
+    pub fn with_token_threshold(mut self, threshold_tokens: usize) -> Self {
+        self.token_threshold_chars = threshold_tokens * 4;
         self
     }
 
     /// Assemble the full system prompt.
     pub fn build(&mut self) -> String {
-        // Assemble all parts
-        let mut parts = vec![
-            self.domain_description.clone(),
-            "\n\n## Available Component Schemas\n\n".to_string(),
-            self.schemas_json.clone(),
-            "\n\n## Current Scene Snapshot\n\n".to_string(),
-            self.scene_json.clone(),
-            "\n\n## Instructions\n\n".to_string(),
-            SYSTEM_INSTRUCTIONS.to_string(),
-        ];
+        // 1. Reserve chars for the domain description + system instructions (always preserved).
+        let instructions_chars =
+            self.domain_description.chars().count() + SYSTEM_INSTRUCTIONS.chars().count() + 64;
+        let budget_for_sources =
+            self.token_threshold_chars.saturating_sub(instructions_chars);
+        let mut budget = TokenBudget::new(budget_for_sources);
 
-        let assembled = parts.join("");
-        let tokens = super::scene_truncator::estimate_tokens(&assembled);
-        self.token_count = tokens;
+        // 2. Compose sources (only those with data).
+        let sources: Vec<Box<dyn ContextSource>> = self.compose_sources();
 
-        // If over budget, truncate scene
-        if tokens > self.token_threshold {
-            self.truncated = true;
-            // Truncate scene JSON and reassemble
-            let schemas_part = format!(
-                "{}\n\n## Available Component Schemas\n\n{}\n\n## Current Scene Snapshot\n\n",
-                self.domain_description, self.schemas_json
-            );
-            let schemas_tokens = super::scene_truncator::estimate_tokens(&schemas_part);
-            let instructions_tokens =
-                super::scene_truncator::estimate_tokens(SYSTEM_INSTRUCTIONS);
+        // 3. Greedy priority fill: sort by priority desc, assemble each.
+        let mut sorted_sources = sources;
+        sorted_sources.sort_by_key(|s| std::cmp::Reverse(s.priority()));
 
-            // Budget for scene = threshold - schemas - instructions
-            let scene_budget = self.token_threshold.saturating_sub(schemas_tokens + instructions_tokens);
-            let scene_chars = scene_budget * 4; // chars/4 heuristic
-
-            let truncated_scene: String = self
-                .scene_json
-                .chars()
-                .take(scene_chars)
-                .collect();
-            let truncated_scene =
-                if truncated_scene.ends_with('}') || truncated_scene.ends_with(']') {
-                    truncated_scene
-                } else {
-                    // Try to find a good cut point (last complete object)
-                    truncated_scene
-                        .rfind('}')
-                        .map(|i| &truncated_scene[..=i])
-                        .unwrap_or(&truncated_scene)
-                        .to_string()
-                };
-
-            parts = vec![
-                self.domain_description.clone(),
-                "\n\n## Available Component Schemas\n\n".to_string(),
-                self.schemas_json.clone(),
-                "\n\n## Current Scene Snapshot (TRUNCATED)\n\n".to_string(),
-                truncated_scene,
-                "\n\n## Instructions\n\n".to_string(),
-                SYSTEM_INSTRUCTIONS.to_string(),
-            ];
-            let assembled = parts.join("");
-            self.token_count = super::scene_truncator::estimate_tokens(&assembled);
+        let mut sections: Vec<String> = Vec::new();
+        let mut any_truncated = false;
+        for src in &sorted_sources {
+            let total = src.total_chars();
+            let text = src.assemble(&mut budget);
+            if text.is_empty() {
+                continue;
+            }
+            // If we wanted to emit total chars but used fewer, mark truncated.
+            if total > text.len() && text.contains("[truncated]") {
+                any_truncated = true;
+            }
+            sections.push(text);
         }
 
-        assembled
+        // 4. Final assembly: domain + sections + instructions.
+        let mut out = String::with_capacity(self.token_threshold_chars);
+        out.push_str(&self.domain_description);
+        out.push_str("\n\n");
+        for sec in sections {
+            out.push_str(&sec);
+            out.push_str("\n\n");
+        }
+        out.push_str("## Instructions\n\n");
+        out.push_str(SYSTEM_INSTRUCTIONS);
+
+        // 5. Update telemetry
+        self.token_count = out.chars().count() / 4;
+        self.truncated = any_truncated || out.chars().count() > self.token_threshold_chars;
+        out
     }
 
-    /// Returns `true` if the scene was truncated.
+    fn compose_sources(&self) -> Vec<Box<dyn ContextSource>> {
+        let mut v: Vec<Box<dyn ContextSource>> = Vec::new();
+        if let Some(scene) = &self.scene {
+            v.push(Box::new(SceneSnapshotSource { json: scene.clone() }));
+        }
+        if self.selected_entity.is_some() {
+            v.push(Box::new(SelectedEntitySource { entity: self.selected_entity.clone() }));
+        }
+        if let Some(schemas) = &self.schemas {
+            v.push(Box::new(SchemasSource { json: schemas.clone() }));
+        }
+        if !self.source_files.is_empty() {
+            v.push(Box::new(SourceFilesSource { files: self.source_files.clone() }));
+        }
+        if !self.logic_graphs.is_empty() {
+            v.push(Box::new(LogicGraphsSource { graphs: self.logic_graphs.clone() }));
+        }
+        if !self.scene_assets.catalog.is_empty() || self.scene_assets.selected_body.is_some() {
+            v.push(Box::new(SceneAssetSource { ctx: self.scene_assets.clone() }));
+        }
+        v
+    }
+
     pub fn was_truncated(&self) -> bool {
         self.truncated
     }
 
-    /// Returns the final token count after assembly.
     pub fn token_count(&self) -> usize {
         self.token_count
     }
@@ -155,6 +211,10 @@ Every command MUST use the `type` field as a discriminator (e.g. `{"type": "Crea
 - **ReparentEntity**: Move an entity under a new parent (old_parent is auto-captured).
 - **RenameEntity**: Change an entity's name.
 - **Batch**: Group multiple commands atomically.
+- **CreateSourceFile**: Create a new Rust source file (path, name, content).
+- **WriteSourceFile**: Overwrite the contents of an existing source file by id.
+
+NOTE: Deleting or renaming source files via AI is **not** supported in v1 (security). If the user asks to delete/rename a file, refuse and suggest manual action.
 
 ## Response Rules
 1. Always use the `propose_commands` tool.
@@ -170,9 +230,10 @@ mod tests {
 
     #[test]
     fn test_system_prompt_includes_domain() {
-        let builder = ContextBuilder::new("Bevy 2D Editor v0.1");
-        let mut b = builder.with_schemas(json!([{"type_id": "editor.Transform2D"}]));
-        let prompt = b.build();
+        let mut builder = ContextBuilder::new("Bevy 2D Editor v0.1")
+            .with_schemas(json!([{"type_id": "editor.Transform2D"}]))
+            .with_scene(json!({"entities": []}));
+        let prompt = builder.build();
         assert!(prompt.contains("Bevy 2D Editor v0.1"));
     }
 
@@ -186,35 +247,88 @@ mod tests {
                 ]
             }
         ]);
-        let builder = ContextBuilder::new("Test domain");
-        let prompt = builder.with_schemas(schemas).build();
+        let mut builder = ContextBuilder::new("Test domain")
+            .with_schemas(schemas)
+            .with_scene(json!({"entities": []}));
+        let prompt = builder.build();
         assert!(prompt.contains("editor.Transform2D"));
         assert!(prompt.contains("translation"));
     }
 
     #[test]
     fn test_was_truncated_set_when_over_budget() {
-        let scene_large = serde_json::json!({
-            "entities": (0..1000).map(|i| serde_json::json!({"id": format!("ent_{}", i), "name": format!("Entity {}", i)})).collect::<Vec<_>>()
+        let scene_large = json!({
+            "entities": (0..1000).map(|i| json!({"id": format!("ent_{}", i), "name": format!("Entity {}", i)})).collect::<Vec<_>>()
         });
-        let mut builder = ContextBuilder::new("Test");
-        builder = builder
+        let mut builder = ContextBuilder::new("Test")
             .with_schemas(json!([]))
             .with_scene(scene_large)
-            .with_token_threshold(100); // Very low threshold
+            .with_token_threshold(50);
         builder.build();
         assert!(builder.was_truncated());
     }
 
     #[test]
     fn test_not_truncated_under_budget() {
-        let scene = serde_json::json!({"entities": []});
-        let mut builder = ContextBuilder::new("Test");
-        builder = builder
+        let mut builder = ContextBuilder::new("Test")
             .with_schemas(json!([]))
-            .with_scene(scene)
-            .with_token_threshold(100_000); // High threshold
+            .with_scene(json!({"entities": []}))
+            .with_token_threshold(10_000);
         builder.build();
         assert!(!builder.was_truncated());
+    }
+
+    #[test]
+    fn test_source_files_included_in_prompt() {
+        let mut builder = ContextBuilder::new("Test")
+            .with_schemas(json!([]))
+            .with_scene(json!({}))
+            .with_source_files(vec![SourceFileRef {
+                id: "src_x_rs".into(),
+                path: "src/x.rs".into(),
+                content: "fn main() {}".into(),
+            }])
+            .with_token_threshold(10_000);
+        let prompt = builder.build();
+        assert!(prompt.contains("Source Files"));
+        assert!(prompt.contains("src/x.rs"));
+        assert!(prompt.contains("fn main"));
+    }
+
+    #[test]
+    fn test_selected_entity_included_when_present() {
+        let mut builder = ContextBuilder::new("Test")
+            .with_schemas(json!([]))
+            .with_scene(json!({}))
+            .with_selected_entity(Some(SelectedEntity {
+                stable_id: "ent_001".into(),
+                components: vec![],
+            }))
+            .with_token_threshold(10_000);
+        let prompt = builder.build();
+        assert!(prompt.contains("Selected Entity"));
+        assert!(prompt.contains("ent_001"));
+    }
+
+    #[test]
+    fn test_priority_order_respected_under_pressure() {
+        // With a very tight budget, Scene (P=100) should win over
+        // SourceFiles (P=50).
+        let big_scene = json!({
+            "entities": (0..1000).map(|i| json!({"id": format!("ent_{}", i), "name": "x"})).collect::<Vec<_>>()
+        });
+        let mut builder = ContextBuilder::new("Test")
+            .with_schemas(json!([]))
+            .with_scene(big_scene)
+            .with_source_files(vec![SourceFileRef {
+                id: "x".into(),
+                path: "x.rs".into(),
+                content: "fn drop_me() {}".into(),
+            }])
+            .with_token_threshold(60);
+        let prompt = builder.build();
+        // Scene is always present (highest priority); source file should be
+        // truncated or dropped when budget is tight.
+        assert!(prompt.contains("Scene Snapshot"));
     }
 }

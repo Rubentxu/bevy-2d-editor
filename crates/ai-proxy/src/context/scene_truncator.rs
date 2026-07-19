@@ -2,6 +2,8 @@
 
 use serde_json::Value;
 
+use super::sources::TokenBudget;
+
 /// Estimate token count using the chars/4 heuristic.
 ///
 /// For MVP truncation (not billing), ±20% is acceptable.
@@ -53,6 +55,31 @@ pub fn truncate_scene_if_over_budget(
         base_tokens + schemas_tokens + instructions_tokens + estimate_tokens(&truncated);
 
     (truncated, true, final_tokens)
+}
+
+/// Truncate a string to fit the given `TokenBudget`, appending `"[truncated]"`
+/// if cut. For JSON content, attempts to cut at a clean object/array boundary
+/// (so the LLM receives parseable fragments).
+///
+/// Used by `SceneSnapshotSource`, `SchemasSource`, and the multi-source
+/// composition in `ContextBuilder`.
+pub fn truncate_to_budget(text: &str, budget: &mut TokenBudget) -> String {
+    let remaining = budget.remaining();
+    if text.len() <= remaining {
+        let _ = budget.try_consume(text.len());
+        return text.to_string();
+    }
+    // Take what we can; mark as truncated.
+    let take = budget.consume_up_to(remaining);
+    let cut = &text[..take];
+    // For JSON, try clean cut; otherwise fall back to raw cut.
+    if cut.contains('{') || cut.contains('[') {
+        let cleaned = find_clean_cut(cut);
+        if !cleaned.is_empty() {
+            return format!("{}\n[truncated]", cleaned);
+        }
+    }
+    format!("{}\n[truncated]", cut)
 }
 
 /// Find the last position where we have a complete JSON object/array.
@@ -172,5 +199,40 @@ mod tests {
         );
         // Verify schemas are NOT in the result (they're passed separately)
         // The truncation only affects scene_json which is passed separately
+    }
+
+    // ── truncate_to_budget (Hito 4 Order 6: shared helper) ────────────────────
+
+    #[test]
+    fn truncate_to_budget_under_budget_passes_through() {
+        let mut b = TokenBudget::new(1000);
+        let out = truncate_to_budget("hello world", &mut b);
+        assert_eq!(out, "hello world");
+        assert_eq!(b.used(), 11);
+    }
+
+    #[test]
+    fn truncate_to_budget_over_budget_marks_truncated() {
+        let mut b = TokenBudget::new(10);
+        let out = truncate_to_budget("x".repeat(100).as_str(), &mut b);
+        assert!(out.ends_with("[truncated]"));
+        assert!(b.remaining() == 0);
+    }
+
+    #[test]
+    fn truncate_to_budget_json_finds_clean_cut() {
+        // Two complete objects: clean cut at first `}`.
+        let json = r#"{"a": 1}, {"b": 2}"#;
+        let mut b = TokenBudget::new(10);
+        let out = truncate_to_budget(json, &mut b);
+        // Should cut at first complete object `{"a": 1}` and append marker.
+        assert!(out.contains("[truncated]"));
+        let fragment = out.trim_end_matches("\n[truncated]");
+        // Fragment should be valid JSON (the first object alone).
+        assert!(
+            serde_json::from_str::<Value>(fragment).is_ok(),
+            "fragment should be valid JSON, got: {}",
+            fragment
+        );
     }
 }
