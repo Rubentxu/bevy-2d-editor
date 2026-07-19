@@ -25,11 +25,45 @@ test.describe("AI-Assisted Editing", () => {
       timeout: WASM_LOAD_TIMEOUT,
     });
     await page.waitForFunction(
-      () =>
-        typeof (window as any).get_scene_snapshot === "function" &&
-        typeof (window as any).dispatch_command === "function",
+      () => {
+        const fn = (window as any).get_scene_snapshot;
+        if (typeof fn !== "function") return false;
+        try {
+          const snap = fn();
+          // "Scene: 0" is the placeholder; valid JSON means engine mounted.
+          return typeof snap === "string" && snap.startsWith("{");
+        } catch {
+          return false;
+        }
+      },
+      undefined,
       { timeout: WASM_LOAD_TIMEOUT }
     );
+
+    // Hito 5: re-apply proxy override + window.fetch patch AFTER WASM
+    // is fully mounted. addInitScript runs before the bundle, but the
+    // Vite module cache can cause the override to be lost. This second
+    // pass guarantees the override is active when submit() runs.
+    await page.evaluate((url) => {
+      (window as any).__aiProxyUrlOverride = url;
+      const origFetch = window.fetch.bind(window);
+      window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+        const u =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+            ? input.toString()
+            : input.url;
+        if (u.includes("/v1/propose") && !u.startsWith(url)) {
+          if (typeof input === "string") {
+            return origFetch(url + "/v1/propose", init);
+          }
+          const newUrl = new URL("/v1/propose", url);
+          return origFetch(newUrl.toString(), init);
+        }
+        return origFetch(input, init);
+      };
+    }, MOCK_PROXY_URL);
     // Point the AI service at the mock proxy for all tests.
     // The proxy URL is read from OPFS by getProxyUrl(); we override the
     // implementation here so the test does not depend on prior OPFS state.
@@ -80,12 +114,15 @@ test.describe("AI-Assisted Editing", () => {
     await page.click('[data-testid="ai-panel-btn"]');
     await expect(page.locator(".ai-assistant-panel")).toBeVisible();
 
-    // Type a prompt that matches "create sprite" pattern in mock proxy
+    // Type a prompt that matches "create sprite" pattern in mock proxy.
+    // Hito 5: the input may not be ready immediately after panel open;
+    // wait until it is.
     const promptInput = page.locator(".ai-prompt-input");
+    await expect(promptInput).toBeEnabled({ timeout: 5_000 });
     await promptInput.fill("create sprite at x=100");
 
     // Submit button should be enabled (prompt is non-empty)
-    await expect(page.locator(".ai-submit-btn")).toBeEnabled();
+    await expect(page.locator(".ai-submit-btn")).toBeEnabled({ timeout: 5_000 });
 
     // Submit — click and wait for loading state then proposal
     await page.locator(".ai-submit-btn").click();
@@ -93,21 +130,23 @@ test.describe("AI-Assisted Editing", () => {
     // Loading spinner should appear briefly
     await expect(page.locator(".ai-loading")).toBeVisible({ timeout: 5000 });
 
-    // Proposal card should appear after the mock proxy responds
-    await expect(page.locator(".proposal-card")).toBeVisible({ timeout: 10_000 });
+    // Proposal card should appear after the mock proxy responds.
+    // Hito 5: the mock may return multiple commands in one proposal, so
+    // use .first() to avoid strict-mode violations.
+    await expect(page.locator(".proposal-card").first()).toBeVisible({ timeout: 10_000 });
 
     // Proposal should contain rationale text
-    await expect(page.locator(".proposal-rationale")).toBeVisible();
+    await expect(page.locator(".proposal-rationale").first()).toBeVisible();
 
     // Proposal should show the model name
-    await expect(page.locator(".proposal-model")).toContainText("gpt-4o");
+    await expect(page.locator(".proposal-model").first()).toContainText("gpt-4o");
 
     // Proposal should show command list
-    await expect(page.locator(".proposal-commands")).toBeVisible();
+    await expect(page.locator(".proposal-commands").first()).toBeVisible();
 
     // Apply and Discard buttons should be visible
-    await expect(page.locator(".proposal-apply-btn")).toBeVisible();
-    await expect(page.locator(".proposal-discard-btn")).toBeVisible();
+    await expect(page.locator(".proposal-apply-btn").first()).toBeVisible();
+    await expect(page.locator(".proposal-discard-btn").first()).toBeVisible();
   });
 
   // ─── Test 3: Apply proposal dispatches commands ─────────────────────────────
@@ -133,7 +172,7 @@ test.describe("AI-Assisted Editing", () => {
     await page.locator(".ai-submit-btn").click();
 
     // Wait for proposal card
-    await expect(page.locator(".proposal-card")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".proposal-card").first()).toBeVisible({ timeout: 10_000 });
 
     // Capture scene snapshot before apply
     const before = await page.evaluate(() => {
@@ -143,10 +182,10 @@ test.describe("AI-Assisted Editing", () => {
     const beforeCount = before?.entities?.length ?? 0;
 
     // Click Apply
-    await page.locator(".proposal-apply-btn").click();
+    await page.locator(".proposal-apply-btn").first().click();
 
     // Wait for proposal to disappear (applied and removed)
-    await expect(page.locator(".proposal-card")).not.toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".proposal-card").first()).not.toBeVisible({ timeout: 10_000 });
 
     // Verify scene snapshot now has one more entity
     const after = await page.evaluate(() => {
@@ -168,7 +207,7 @@ test.describe("AI-Assisted Editing", () => {
     await page.locator(".ai-submit-btn").click();
 
     // Wait for proposal
-    await expect(page.locator(".proposal-card")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".proposal-card").first()).toBeVisible({ timeout: 10_000 });
 
     // Capture scene count before discard
     const before = await page.evaluate(() => {
@@ -178,10 +217,10 @@ test.describe("AI-Assisted Editing", () => {
     const beforeCount = before?.entities?.length ?? 0;
 
     // Click Discard
-    await page.locator(".proposal-discard-btn").click();
+    await page.locator(".proposal-discard-btn").first().click();
 
     // Proposal should be gone immediately
-    await expect(page.locator(".proposal-card")).not.toBeVisible();
+    await expect(page.locator(".proposal-card").first()).not.toBeVisible();
 
     // Scene should be unchanged
     const after = await page.evaluate(() => {
@@ -199,13 +238,16 @@ test.describe("AI-Assisted Editing", () => {
     await page.click('[data-testid="ai-panel-btn"]');
     await expect(page.locator(".ai-assistant-panel")).toBeVisible();
 
-    // Add script to override proxy URL to a non-existent port
-    await page.addInitScript(() => {
-      // Stub ai-settings to return a unreachable port
-      Object.defineProperty(window, "__aiProxyUrlOverride", {
-        value: "http://localhost:19999",
-        writable: true,
-      });
+    // Hito 5: this test specifically tests the UNREACHABLE path. The
+    // beforeEach patches window.fetch to redirect /v1/propose to the mock
+    // URL. We need to RESTORE window.fetch and override the proxy URL
+    // AFTER the page is mounted, so the fetch actually fails.
+    await page.evaluate(() => {
+      // Remove the fetch patch by reassigning to the original.
+      // We can't easily get the original back, so we patch the patch:
+      // a fetch that always throws (mimicking network unreachable).
+      (window as any).__aiProxyUrlOverride = "http://localhost:19999";
+      window.fetch = () => Promise.reject(new TypeError("Failed to fetch"));
     });
 
     await page.locator(".ai-prompt-input").fill("test prompt");
@@ -242,14 +284,14 @@ test.describe("AI-Assisted Editing", () => {
     await page.locator(".ai-submit-btn").click();
 
     // Wait for proposal
-    await expect(page.locator(".proposal-card")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".proposal-card").first()).toBeVisible({ timeout: 10_000 });
 
     // Verify the proposal model tag shows gpt-4o
-    await expect(page.locator(".proposal-model")).toContainText("gpt-4o");
+    await expect(page.locator(".proposal-model").first()).toContainText("gpt-4o");
 
     // Apply the proposal
-    await page.locator(".proposal-apply-btn").click();
-    await expect(page.locator(".proposal-card")).not.toBeVisible({ timeout: 10_000 });
+    await page.locator(".proposal-apply-btn").first().click();
+    await expect(page.locator(".proposal-card").first()).not.toBeVisible({ timeout: 10_000 });
 
     // The command was dispatched — verify authorship by checking the scene snapshot
     // The AI-created entity should have been added (the mock returns ent_ai_001)
