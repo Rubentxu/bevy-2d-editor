@@ -55,3 +55,6 @@ coverage/
 
 # Cargo lockfile is committed (per Rust workspace convention)
 # !Cargo.lock
+# Rust test artifacts
+**/test-results/
+**/.vite/

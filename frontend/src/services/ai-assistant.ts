@@ -73,7 +73,21 @@ export interface ProposeRequest {
   prompt: string;
   scene_snapshot: unknown;
   schemas: unknown[];
+  // Hito 4 Order 6: multi-source context (code-aware-ai). All optional,
+  // defaulting to empty when omitted (proxy treats them as #[serde(default)]).
+  source_files?: SourceFileRef[];
+  logic_graphs?: LogicGraphRef[];
+  scene_assets?: SceneAssetContext;
+  selected_entity?: SelectedEntity | null;
 }
+
+// Re-export types from `types/ai.ts` so existing consumers don't break.
+import type {
+  SourceFileRef,
+  LogicGraphRef,
+  SceneAssetContext,
+  SelectedEntity,
+} from "../types/ai";
 
 /** Response from POST /v1/propose */
 export interface ProposeResponse {
@@ -120,35 +134,54 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 /**
  * Send a propose request to the AI-assisted editing proxy.
  *
+ * Hito 4 Order 6 (`code-aware-ai`): now accepts an optional `MultiSourceContext`
+ * that includes source files, logic graphs, scene assets, and selected entity.
+ * Pre-Order-6 callers that pass only `sceneSnapshot` + `schemas` continue to
+ * work (the new fields are optional in the request body).
+ *
  * @param prompt         Natural-language instruction from the user
  * @param sceneSnapshot  Current SceneDocument snapshot (as returned by get_scene_snapshot)
  * @param schemas        Combined component schemas (as returned by get_combined_schemas_json, parsed)
  * @param proxyUrl       Full URL of the proxy (e.g. http://localhost:11435).
  *                       Pass undefined to use the OPFS-stored setting.
  * @param timeoutMs      Request timeout in ms (default 30_000)
+ * @param extraContext   Optional multi-source context (Hito 4 Order 6)
  */
 export async function fetchPropose(
   prompt: string,
   sceneSnapshot: unknown,
   schemas: unknown[],
   proxyUrl?: string,
-  timeoutMs = DEFAULT_TIMEOUT_MS
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  extraContext?: {
+    source_files?: SourceFileRef[];
+    logic_graphs?: LogicGraphRef[];
+    scene_assets?: SceneAssetContext;
+    selected_entity?: SelectedEntity | null;
+  }
 ): Promise<ProposeResponse> {
-  const baseUrl = proxyUrl ?? (await import("./ai-settings").then((m) => m.getProxyUrl()));
+  const baseUrl = proxyUrl
+    ?? (typeof window !== "undefined" && (window as any).__aiProxyUrlOverride)
+    ?? (await import("./ai-settings").then((m) => m.getProxyUrl()));
   const url = `${baseUrl}/v1/propose`;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
+    const body: ProposeRequest = {
+      prompt,
+      scene_snapshot: sceneSnapshot,
+      schemas,
+      source_files: extraContext?.source_files ?? [],
+      logic_graphs: extraContext?.logic_graphs ?? [],
+      scene_assets: extraContext?.scene_assets ?? { catalog: [], selected_body: null },
+      selected_entity: extraContext?.selected_entity ?? null,
+    };
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt,
-        scene_snapshot: sceneSnapshot,
-        schemas,
-      } satisfies ProposeRequest),
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
 

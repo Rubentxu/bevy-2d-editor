@@ -15,7 +15,7 @@ export default defineConfig({
     {
       command: "node tests/fixtures/mock-ai-proxy.mjs",
       url: "http://localhost:11436/health",
-      reuseExistingServer: false,
+      reuseExistingServer: true,
       timeout: 10_000,
       stdout: "ignore",
       stderr: "pipe",
