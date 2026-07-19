@@ -10,6 +10,10 @@ use std::sync::Arc;
 use tower::ServiceExt;
 
 use ai_proxy::context::SchemaFetcher;
+use ai_proxy::context::sources::{
+    CatalogEntry, ComponentRef, LogicGraphRef, NodeRef, SceneAssetContext, SelectedEntity,
+    SourceFileRef,
+};
 use ai_proxy::handlers::propose::{AppState, ProposeRequest};
 use ai_proxy::openai::OpenAIClient;
 
@@ -138,6 +142,10 @@ fn test_propose_request_missing_prompt() {
         prompt: None,
         scene_snapshot: Some(serde_json::json!({})),
         schemas: Some(serde_json::json!([])),
+        source_files: vec![],
+        logic_graphs: vec![],
+        scene_assets: SceneAssetContext::default(),
+        selected_entity: None,
     };
     let err = req.validate().unwrap_err();
     assert!(err.to_string().contains("prompt"));
@@ -149,6 +157,10 @@ fn test_propose_request_missing_scene() {
         prompt: Some("test".to_string()),
         scene_snapshot: None,
         schemas: Some(serde_json::json!([])),
+        source_files: vec![],
+        logic_graphs: vec![],
+        scene_assets: SceneAssetContext::default(),
+        selected_entity: None,
     };
     let err = req.validate().unwrap_err();
     assert!(err.to_string().contains("scene_snapshot"));
@@ -160,6 +172,10 @@ fn test_propose_request_missing_schemas() {
         prompt: Some("test".to_string()),
         scene_snapshot: Some(serde_json::json!({})),
         schemas: None,
+        source_files: vec![],
+        logic_graphs: vec![],
+        scene_assets: SceneAssetContext::default(),
+        selected_entity: None,
     };
     let err = req.validate().unwrap_err();
     assert!(err.to_string().contains("schemas"));
@@ -171,8 +187,102 @@ fn test_propose_request_valid() {
         prompt: Some("test".to_string()),
         scene_snapshot: Some(serde_json::json!({})),
         schemas: Some(serde_json::json!([])),
+        source_files: vec![],
+        logic_graphs: vec![],
+        scene_assets: SceneAssetContext::default(),
+        selected_entity: None,
     };
     assert!(req.validate().is_ok());
+}
+
+#[test]
+fn test_propose_request_with_all_context_sources_validates() {
+    // Hito 4 Order 6: 5-field request with all sources populated.
+    let req = ProposeRequest {
+        prompt: Some("add a Sprite entity for the player struct".to_string()),
+        scene_snapshot: Some(serde_json::json!({"entities": []})),
+        schemas: Some(serde_json::json!([{"type_id": "editor.Sprite2D"}])),
+        source_files: vec![SourceFileRef {
+            id: "src_player_rs".to_string(),
+            path: "src/player.rs".to_string(),
+            content: "struct Player { name: String }".to_string(),
+        }],
+        logic_graphs: vec![LogicGraphRef {
+            asset_id: "graph_main".to_string(),
+            nodes: vec![NodeRef {
+                id: "n1".to_string(),
+                r#type: "Input".to_string(),
+                position: serde_json::json!({"x": 0, "y": 0}),
+            }],
+            edges: vec![],
+        }],
+        scene_assets: SceneAssetContext {
+            catalog: vec![CatalogEntry {
+                id: "level1".to_string(),
+                name: "level1".to_string(),
+                role: "level".to_string(),
+            }],
+            selected_body: Some("{}".to_string()),
+        },
+        selected_entity: Some(SelectedEntity {
+            stable_id: "ent_player".to_string(),
+            components: vec![ComponentRef {
+                type_id: "editor.Transform2D".to_string(),
+                values: serde_json::json!({"translation": {"x": 0, "y": 0}}),
+            }],
+        }),
+    };
+    assert!(req.validate().is_ok());
+}
+
+#[test]
+fn test_propose_request_with_empty_new_fields_works() {
+    // Backward compat: 3-field request (no new fields) still validates.
+    let req = ProposeRequest {
+        prompt: Some("test".to_string()),
+        scene_snapshot: Some(serde_json::json!({})),
+        schemas: Some(serde_json::json!([])),
+        source_files: vec![],
+        logic_graphs: vec![],
+        scene_assets: SceneAssetContext::default(),
+        selected_entity: None,
+    };
+    assert!(req.validate().is_ok());
+}
+
+#[test]
+fn test_context_builder_with_all_sources_produces_prompt() {
+    // Hito 4 Order 6: end-to-end context assembly with all 6 sources.
+    use ai_proxy::context::ContextBuilder;
+    let prompt = ContextBuilder::new("Test domain")
+        .with_schemas(serde_json::json!([{"type_id": "editor.Sprite2D"}]))
+        .with_scene(serde_json::json!({"entities": []}))
+        .with_source_files(vec![SourceFileRef {
+            id: "src_x".to_string(),
+            path: "src/x.rs".to_string(),
+            content: "fn x() {}".to_string(),
+        }])
+        .with_logic_graphs(vec![])
+        .with_scene_assets(SceneAssetContext {
+            catalog: vec![CatalogEntry {
+                id: "a1".to_string(),
+                name: "level1".to_string(),
+                role: "level".to_string(),
+            }],
+            selected_body: None,
+        })
+        .with_selected_entity(Some(SelectedEntity {
+            stable_id: "ent_001".to_string(),
+            components: vec![],
+        }))
+        .with_token_threshold(10_000)
+        .build();
+    assert!(prompt.contains("Test domain"));
+    assert!(prompt.contains("Source Files"));
+    assert!(prompt.contains("Scene Assets"));
+    assert!(prompt.contains("Selected Entity"));
+    assert!(prompt.contains("Scene Snapshot"));
+    assert!(prompt.contains("Available Component Schemas"));
 }
 
 // ---------------------------------------------------------------------------

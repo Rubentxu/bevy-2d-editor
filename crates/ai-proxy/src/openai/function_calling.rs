@@ -134,6 +134,25 @@ pub fn propose_commands_schema() -> Value {
                                         }
                                     },
                                     "required": ["type", "label", "commands"]
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "type": { "type": "string", "const": "CreateSourceFile" },
+                                        "path": { "type": "string", "description": "Project-relative path e.g. 'src/player.rs'" },
+                                        "name": { "type": "string", "description": "File name e.g. 'player.rs'" },
+                                        "content": { "type": "string", "description": "Full file body" }
+                                    },
+                                    "required": ["type", "path", "name", "content"]
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "type": { "type": "string", "const": "WriteSourceFile" },
+                                        "id": { "type": "string", "description": "Existing source-file id (from create_source_file response)" },
+                                        "content": { "type": "string", "description": "New full file body" }
+                                    },
+                                    "required": ["type", "id", "content"]
                                 }
                             ]
                         }
@@ -193,6 +212,38 @@ pub fn parse_tool_calls(
         .collect()
 }
 
+/// Commands that AI is forbidden to emit. Per design decision D2, AI must
+/// not be able to delete or rename source files in v1. The frontend applies
+/// this check before dispatching commands; this function is exported for
+/// the proxy to validate OpenAI responses server-side.
+pub const FORBIDDEN_AI_COMMANDS: &[&str] = &["DeleteSourceFile", "RenameSourceFile"];
+
+/// Filter out any commands that the AI is not allowed to emit.
+/// Returns `(envelopes, rejected_names)` where `rejected_names` is a list
+/// of command type names that were dropped (for warning / telemetry).
+pub fn filter_forbidden_commands(
+    envelopes: Vec<CommandEnvelope>,
+) -> (Vec<CommandEnvelope>, Vec<String>) {
+    let mut rejected: Vec<String> = Vec::new();
+    let kept: Vec<CommandEnvelope> = envelopes
+        .into_iter()
+        .filter(|env| {
+            let type_name = env
+                .command
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if FORBIDDEN_AI_COMMANDS.contains(&type_name) {
+                rejected.push(type_name.to_string());
+                false
+            } else {
+                true
+            }
+        })
+        .collect();
+    (kept, rejected)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -229,5 +280,50 @@ mod tests {
         let schema_str = serde_json::to_string(&schema).unwrap();
         assert!(schema_str.contains("propose_commands"));
         assert!(schema_str.contains("CreateEntity"));
+    }
+
+    #[test]
+    fn test_propose_commands_schema_includes_source_file_commands() {
+        let schema = propose_commands_schema();
+        let schema_str = serde_json::to_string(&schema).unwrap();
+        // Hito 4 Order 6: source file commands added.
+        assert!(schema_str.contains("CreateSourceFile"));
+        assert!(schema_str.contains("WriteSourceFile"));
+    }
+
+    #[test]
+    fn test_filter_forbidden_commands_drops_delete_source_file() {
+        let envelopes = vec![
+            CommandEnvelope {
+                command: serde_json::json!({"type": "CreateEntity", "id": "ent_ai_x", "name": "X"}),
+                metadata: CommandMetadata::default(),
+            },
+            CommandEnvelope {
+                command: serde_json::json!({"type": "DeleteSourceFile", "id": "src_x"}),
+                metadata: CommandMetadata::default(),
+            },
+            CommandEnvelope {
+                command: serde_json::json!({"type": "RenameSourceFile", "id": "src_x", "new_name": "y.rs"}),
+                metadata: CommandMetadata::default(),
+            },
+            CommandEnvelope {
+                command: serde_json::json!({"type": "WriteSourceFile", "id": "src_x", "content": "fn main() {}"}),
+                metadata: CommandMetadata::default(),
+            },
+        ];
+        let (kept, rejected) = filter_forbidden_commands(envelopes);
+        assert_eq!(kept.len(), 2, "should keep 2 (CreateEntity + WriteSourceFile)");
+        assert_eq!(rejected.len(), 2, "should reject 2 forbidden");
+        assert!(rejected.contains(&"DeleteSourceFile".to_string()));
+        assert!(rejected.contains(&"RenameSourceFile".to_string()));
+    }
+
+    #[test]
+    fn test_forbidden_ai_commands_constant() {
+        // Per D2: only Create/Write allowed; Delete/Rename forbidden.
+        assert!(FORBIDDEN_AI_COMMANDS.contains(&"DeleteSourceFile"));
+        assert!(FORBIDDEN_AI_COMMANDS.contains(&"RenameSourceFile"));
+        assert!(!FORBIDDEN_AI_COMMANDS.contains(&"CreateSourceFile"));
+        assert!(!FORBIDDEN_AI_COMMANDS.contains(&"WriteSourceFile"));
     }
 }

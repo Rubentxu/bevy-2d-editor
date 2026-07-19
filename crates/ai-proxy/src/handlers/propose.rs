@@ -10,6 +10,9 @@ use serde_json::Value;
 use std::sync::Arc;
 use tracing::{info, warn};
 
+use crate::context::sources::{
+    LogicGraphRef, SceneAssetContext, SelectedEntity, SourceFileRef,
+};
 use crate::context::{ContextBuilder, SchemaFetcher};
 use crate::error::AppError;
 use crate::openai::OpenAIClient;
@@ -22,6 +25,11 @@ pub struct AppState {
 }
 
 /// Incoming request to the `/v1/propose` endpoint.
+///
+/// Hito 4 Order 6 (`code-aware-ai`): the four new fields
+/// (`source_files`, `logic_graphs`, `scene_assets`, `selected_entity`) are
+/// all `#[serde(default)]` to preserve backward compatibility with v0.69.0
+/// clients that only send `prompt` + `scene_snapshot` + `schemas`.
 #[derive(Debug, Deserialize)]
 pub struct ProposeRequest {
     /// Natural language prompt from the user.
@@ -30,6 +38,21 @@ pub struct ProposeRequest {
     pub scene_snapshot: Option<Value>,
     /// Combined component schema registry from the editor.
     pub schemas: Option<Value>,
+
+    // ── Hito 4 Order 6 additions (code-aware-ai) ─────────────────────────
+    /// Source files visible to the AI (Rust + toml). Each carries full text.
+    #[serde(default)]
+    pub source_files: Vec<SourceFileRef>,
+    /// Logic graphs currently in scope (current scene only by default).
+    #[serde(default)]
+    pub logic_graphs: Vec<LogicGraphRef>,
+    /// Scene asset context: catalog + (optionally) the currently-selected
+    /// asset's full body.
+    #[serde(default)]
+    pub scene_assets: SceneAssetContext,
+    /// Currently-selected entity in the inspector (if any).
+    #[serde(default)]
+    pub selected_entity: Option<SelectedEntity>,
 }
 
 impl ProposeRequest {
@@ -47,6 +70,24 @@ impl ProposeRequest {
             return Err(AppError::BadRequest(
                 "missing required field: 'schemas'".to_string(),
             ));
+        }
+        // Validate SourceFileRef shape
+        for (i, sf) in self.source_files.iter().enumerate() {
+            if sf.id.is_empty() {
+                return Err(AppError::BadRequest(format!(
+                    "source_files[{}]: 'id' is required and must be non-empty",
+                    i
+                )));
+            }
+        }
+        // Validate SelectedEntity has at least one component if present
+        if let Some(sel) = &self.selected_entity {
+            if sel.stable_id.is_empty() {
+                return Err(AppError::BadRequest(
+                    "selected_entity: 'stable_id' is required and must be non-empty"
+                        .to_string(),
+                ));
+            }
         }
         Ok(())
     }
@@ -77,12 +118,15 @@ pub async fn propose_handler(
     let schemas = SchemaFetcher::fetch(schemas)
         .map_err(|e| AppError::BadRequest(format!("invalid schemas: {}", e)))?;
 
-    // Build system prompt
-    let mut ctx = ContextBuilder::new(EDITOR_DOMAIN);
-    ctx = ctx
-        .with_schemas(schemas)
-        .with_scene(scene_snapshot)
-        .with_token_threshold(state.token_threshold);
+    // Build system prompt (Hito 4 Order 6: pass multi-source context)
+    let mut ctx = ContextBuilder::new(EDITOR_DOMAIN)
+        .with_schemas(schemas.clone())
+        .with_scene(scene_snapshot.clone())
+        .with_token_threshold(state.token_threshold)
+        .with_source_files(req.source_files.clone())
+        .with_logic_graphs(req.logic_graphs.clone())
+        .with_scene_assets(req.scene_assets.clone())
+        .with_selected_entity(req.selected_entity.clone());
 
     let system_prompt = ctx.build();
     let was_truncated = ctx.was_truncated();
@@ -198,6 +242,13 @@ The immutable identifier for an Entity. Always has prefix `ent_` or `ent_ai_` fo
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::context::sources::SourceFileRef;
+
+    fn empty_sources() -> Vec<SourceFileRef> { vec![] }
+    fn empty_graphs() -> Vec<crate::context::sources::LogicGraphRef> { vec![] }
+    fn empty_assets() -> crate::context::sources::SceneAssetContext {
+        crate::context::sources::SceneAssetContext::default()
+    }
 
     #[test]
     fn test_propose_request_missing_prompt() {
@@ -205,6 +256,10 @@ mod tests {
             prompt: None,
             scene_snapshot: Some(serde_json::json!({})),
             schemas: Some(serde_json::json!([])),
+            source_files: empty_sources(),
+            logic_graphs: empty_graphs(),
+            scene_assets: empty_assets(),
+            selected_entity: None,
         };
         let err = req.validate().unwrap_err();
         assert!(err.to_string().contains("prompt"));
@@ -216,6 +271,10 @@ mod tests {
             prompt: Some("test".to_string()),
             scene_snapshot: None,
             schemas: Some(serde_json::json!([])),
+            source_files: empty_sources(),
+            logic_graphs: empty_graphs(),
+            scene_assets: empty_assets(),
+            selected_entity: None,
         };
         let err = req.validate().unwrap_err();
         assert!(err.to_string().contains("scene_snapshot"));
@@ -227,6 +286,10 @@ mod tests {
             prompt: Some("test".to_string()),
             scene_snapshot: Some(serde_json::json!({})),
             schemas: None,
+            source_files: empty_sources(),
+            logic_graphs: empty_graphs(),
+            scene_assets: empty_assets(),
+            selected_entity: None,
         };
         let err = req.validate().unwrap_err();
         assert!(err.to_string().contains("schemas"));
@@ -238,7 +301,49 @@ mod tests {
             prompt: Some("test".to_string()),
             scene_snapshot: Some(serde_json::json!({})),
             schemas: Some(serde_json::json!([])),
+            source_files: empty_sources(),
+            logic_graphs: empty_graphs(),
+            scene_assets: empty_assets(),
+            selected_entity: None,
         };
         assert!(req.validate().is_ok());
+    }
+
+    #[test]
+    fn test_propose_request_with_source_files_valid() {
+        // Hito 4 Order 6: source_files is optional but if present must have non-empty ids.
+        let req = ProposeRequest {
+            prompt: Some("test".to_string()),
+            scene_snapshot: Some(serde_json::json!({})),
+            schemas: Some(serde_json::json!([])),
+            source_files: vec![SourceFileRef {
+                id: "src_player_rs".to_string(),
+                path: "src/player.rs".to_string(),
+                content: "fn update() {}".to_string(),
+            }],
+            logic_graphs: empty_graphs(),
+            scene_assets: empty_assets(),
+            selected_entity: None,
+        };
+        assert!(req.validate().is_ok());
+    }
+
+    #[test]
+    fn test_propose_request_rejects_empty_source_file_id() {
+        let req = ProposeRequest {
+            prompt: Some("test".to_string()),
+            scene_snapshot: Some(serde_json::json!({})),
+            schemas: Some(serde_json::json!([])),
+            source_files: vec![SourceFileRef {
+                id: String::new(),
+                path: "src/x.rs".to_string(),
+                content: String::new(),
+            }],
+            logic_graphs: empty_graphs(),
+            scene_assets: empty_assets(),
+            selected_entity: None,
+        };
+        let err = req.validate().unwrap_err();
+        assert!(err.to_string().contains("source_files"));
     }
 }
