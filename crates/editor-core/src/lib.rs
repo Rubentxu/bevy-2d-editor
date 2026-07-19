@@ -391,6 +391,30 @@ pub fn load_scene_json(json: &str) -> Result<(), JsValue> {
     Ok(())
 }
 
+/// Load a scene by name from OPFS and set it as the active SceneDocument.
+///
+/// Mirrors `save_scene(name)`: round-trip pair for OPFS persistence.
+/// Returns the loaded SceneDocument JSON string so callers can re-parse
+/// it without an extra read. Returns Err if the file does not exist or
+/// cannot be parsed.
+///
+/// Used by tests via the engine-bridge (`window.load_scene`).
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn load_scene_by_name(name: &str) -> Result<String, JsValue> {
+    let path = persistence::scene_path(name);
+    let json = js_load_file(&path)
+        .await
+        .map_err(|e| JsValue::from_str(&format!("Failed to load scene '{}': {}", name, e)))?;
+    let doc: SceneDocument = serde_json::from_str(&json)
+        .map_err(|e| JsValue::from_str(&format!("Failed to parse scene JSON: {}", e)))?;
+    SCENE_DOC.with(|s| *s.borrow_mut() = Some(doc));
+    web_sys::console::log_1(
+        &format!("[editor-core] Scene '{}' loaded from {}", name, path).into(),
+    );
+    Ok(json)
+}
+
 /// Apply a typed command to the SceneDocument, mutating it and producing
 /// an inverse command for undo. Returns the inverse as JSON.
 ///
