@@ -15,6 +15,24 @@ pub struct BsnIrRelationship {
 }
 
 /// One node in the BSN IR tree: a stable identifier, a flat map of
+/// Hito 4 Order 7 (`scene-component-authoring`): discriminator for a BSN node.
+///
+/// `Plain` is the default (a regular entity with components). `SceneComponent`
+/// indicates the node is the materialized instance of a `SceneComponent`
+/// schema (Bevy 0.19 `#[derive(SceneComponent)]`); `type_id` is the
+/// schema's `type_id` (e.g. `game.Enemy`).
+///
+/// When emitting, the codegen produces `@type_id { ... }` for `SceneComponent`
+/// and plain `identifier { ... }` for `Plain`. When importing, the
+/// `bsn!`-style `@` prefix is parsed into this variant.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NodeKind {
+    #[default]
+    Plain,
+    SceneComponent(String),
+}
+
 /// component type_id → component values, child nodes (nested), and
 /// outgoing relationship edges.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -23,6 +41,22 @@ pub struct BsnIrNode {
     pub components: BTreeMap<String, serde_json::Value>,
     pub children: Vec<BsnIrNode>,
     pub relationships: Vec<BsnIrRelationship>,
+    /// Hito 4 Order 7: discriminator. `Plain` (default) for regular entities,
+    /// `SceneComponent(type_id)` for materialized SceneComponent instances.
+    #[serde(default)]
+    pub kind: NodeKind,
+}
+
+impl Default for BsnIrNode {
+    fn default() -> Self {
+        Self {
+            identifier: String::new(),
+            components: BTreeMap::new(),
+            children: Vec::new(),
+            relationships: Vec::new(),
+            kind: NodeKind::default(),
+        }
+    }
 }
 
 /// The kind of mutation a `BsnPatch` represents on the target node.
@@ -108,7 +142,8 @@ pub fn bsn_ir_from_scene_asset(doc: &SceneAssetDocument) -> BsnIr {
                     components: comps,
                     children: Vec::new(),
                     relationships: Vec::new(),
-                }
+                ..Default::default()
+        }
             })
             .collect();
 
@@ -117,6 +152,7 @@ pub fn bsn_ir_from_scene_asset(doc: &SceneAssetDocument) -> BsnIr {
             components,
             children,
             relationships,
+        ..Default::default()
         }
     } else {
         BsnIrNode {
@@ -124,6 +160,7 @@ pub fn bsn_ir_from_scene_asset(doc: &SceneAssetDocument) -> BsnIr {
             components: BTreeMap::new(),
             children: Vec::new(),
             relationships: Vec::new(),
+        ..Default::default()
         }
     };
 

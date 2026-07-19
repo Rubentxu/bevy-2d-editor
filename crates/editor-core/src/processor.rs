@@ -212,6 +212,21 @@ pub fn validate(doc: &SceneDocument, cmd: &Command) -> Result<(), CommandError> 
         Command::RenameEntity { entity_id, .. } => {
             find_entity(doc, entity_id)?;
         }
+        Command::CreateSceneComponent { .. } => {
+            return Err(crate::command::CommandError::Unsupported(
+                "CreateSceneComponent must be applied via command_scene_component::apply_create".to_string()
+            ));
+        }
+        Command::UpdateSceneComponentFields { .. } => {
+            return Err(crate::command::CommandError::Unsupported(
+                "UpdateSceneComponentFields must be applied via command_scene_component::apply_update".to_string()
+            ));
+        }
+        Command::BindSceneToSchema { .. } => {
+            return Err(crate::command::CommandError::Unsupported(
+                "BindSceneToSchema must be applied via command_scene_component::apply_bind".to_string()
+            ));
+        }
         Command::Batch { commands, .. } => {
             // Validate each command in order. Snapshot doc state in memory for
             // accurate validation (later commands see earlier ones).
@@ -404,6 +419,21 @@ pub fn apply_with_context(
                 old_name: Some(actual_old.clone()),
                 new_name: actual_old,
             })
+        }
+        Command::CreateSceneComponent { .. } => {
+            Err(crate::command::CommandError::Unsupported(
+                "CreateSceneComponent must be applied via command_scene_component::apply_create".to_string()
+            ))
+        }
+        Command::UpdateSceneComponentFields { .. } => {
+            Err(crate::command::CommandError::Unsupported(
+                "UpdateSceneComponentFields must be applied via command_scene_component::apply_update".to_string()
+            ))
+        }
+        Command::BindSceneToSchema { .. } => {
+            Err(crate::command::CommandError::Unsupported(
+                "BindSceneToSchema must be applied via command_scene_component::apply_bind".to_string()
+            ))
         }
         Command::Batch { commands, .. } => {
             // CRIT-2: snapshot the doc before the batch. On any command failure,
