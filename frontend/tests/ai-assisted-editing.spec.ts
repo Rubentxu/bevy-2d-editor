@@ -30,11 +30,27 @@ test.describe("AI-Assisted Editing", () => {
         typeof (window as any).dispatch_command === "function",
       { timeout: WASM_LOAD_TIMEOUT }
     );
-    // Point the AI service at the mock proxy for all tests
-    await page.addInitScript(() => {
-      // Override the fetch used by ai-assistant.ts to always hit mock proxy
-      // The actual fetch call uses window.fetch, so we ensure the proxy URL is set
-    });
+    // Point the AI service at the mock proxy for all tests.
+    // The proxy URL is read from OPFS by getProxyUrl(); we override the
+    // implementation here so the test does not depend on prior OPFS state.
+    // We also patch window.fetch as a safety net for any code path that
+    // does not go through fetchPropose.
+    await page.addInitScript((url) => {
+      (window as any).__aiProxyUrlOverride = url;
+      const origFetch = window.fetch.bind(window);
+      window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+        const u = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        if (u.includes("/v1/propose") && !u.startsWith(url)) {
+          // Rewrite to mock URL
+          if (typeof input === "string") {
+            return origFetch(url + "/v1/propose", init);
+          }
+          const newUrl = new URL("/v1/propose", url);
+          return origFetch(newUrl.toString(), init);
+        }
+        return origFetch(input, init);
+      };
+    }, MOCK_PROXY_URL);
   });
 
   // ─── Test 1: AI button opens panel ─────────────────────────────────────────

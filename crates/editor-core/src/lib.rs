@@ -874,6 +874,45 @@ pub use preview_runtime::process_hot_reload_requests;
 pub use preview_runtime::start_engine;
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Bus pointer accessors (used by engine-bridge.ts to build DataView over shared
+// memory). These are wasm32-only exports that the JS bridge calls via
+// `wasm.get_command_bus_ptr()` / `wasm.get_event_bus_ptr()`. They live here
+// (not in `preview_runtime.rs`) because they are 1-line thunks that must
+// remain reachable from the public API surface.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Returns the pointer (offset into WebAssembly.Memory) of the command bus
+/// LinearBus buffer. Used by the JS engine-bridge to build a DataView for
+/// polling commands written by the host (move-sprite, etc.).
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn get_command_bus_ptr() -> u32 {
+    COMMAND_BUS.with(|b| b.borrow().as_ref().unwrap().ptr())
+}
+
+/// Returns the byte length of the command bus LinearBus buffer.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn get_command_bus_len() -> u32 {
+    COMMAND_BUS.with(|b| b.borrow().as_ref().unwrap().len())
+}
+
+/// Returns the pointer of the event bus LinearBus buffer (where the Bevy
+/// runtime writes sprite positions, FPS, etc.).
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn get_event_bus_ptr() -> u32 {
+    EVENT_BUS.with(|b| b.borrow().as_ref().unwrap().ptr())
+}
+
+/// Returns the byte length of the event bus LinearBus buffer.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn get_event_bus_len() -> u32 {
+    EVENT_BUS.with(|b| b.borrow().as_ref().unwrap().len())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // OPFS Persistence — wasm_bindgen externs + high-level functions
 // ─────────────────────────────────────────────────────────────────────────────
 

@@ -5,9 +5,13 @@
  * and orchestrates fetchPropose → dispatch to the command system.
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { fetchPropose, CommandEnvelope, Command, ProposeResponse } from "../services/ai-assistant";
 import { getSceneSnapshot } from "../engine-bridge";
+import { assembleMultiSourceContext, type AssembledContext } from "../services/ai-context";
+import type { SourceFileRef } from "../types/ai";
+import { listSourceFiles, readSourceFile } from "../services/code-files";
+import { subscribe } from "../services/hot-reload";
 
 /** A batch of proposed commands with associated metadata */
 export interface Proposal {
@@ -45,6 +49,27 @@ export function useAIAssistant({ onApplied }: UseAIAssistantOptions = {}) {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  // Hito 4 Order 6 (T2.5): source-files context invalidation.
+  // When a source file is saved, code-files.ts emits a hot-reload-source
+  // event. We track the count of such events so the next submit() refetches
+  // source files (since `assembleMultiSourceContext` reads them fresh on
+  // every submit, this is implicit — the subscriber just refreshes a
+  // counter for telemetry / UI).
+  const sourceReloadCountRef = useRef(0);
+  useEffect(() => {
+    const unsub = subscribe("hot-reload-source", (event) => {
+      if (event.type === "hot-reload-source") {
+        sourceReloadCountRef.current += 1;
+        // The next submit() will re-fetch source files via listSourceFiles()
+        // (no caching layer in this hook), so this counter is observability
+        // only. The context debug view (PR3) can show this counter.
+      }
+    });
+    return () => {
+      unsub();
+    };
+  }, []);
+
   /**
    * Submit a prompt to the AI proxy and append the returned proposals.
    * Dispatches nothing — proposals are held in state for user review.
@@ -64,10 +89,66 @@ export function useAIAssistant({ onApplied }: UseAIAssistantOptions = {}) {
 
         const schemas = schemasJson ? JSON.parse(schemasJson) : [];
 
+        // Hito 4 Order 6: assemble multi-source context (code-aware-ai).
+        // Fetch source files + assemble under token budget. Failures here
+        // are non-fatal — we fall back to the 3-field request shape.
+        // Note: in test env (mock-ai-proxy), source-files fetch may be slow
+        // or fail; the wrapper catches and continues.
+        let extraContext: Parameters<typeof fetchPropose>[5] | undefined = undefined;
+        try {
+          // Fetch with a 2s budget to avoid blocking the propose flow
+          // when the source-files API is slow or unavailable.
+          const sourceList = await Promise.race([
+            listSourceFiles(),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("source-files fetch timeout")), 2000)
+            ),
+          ]);
+          const sourceFilesWithContent: SourceFileRef[] = await Promise.all(
+            sourceList.map(async (sf) => {
+              try {
+                const result = await Promise.race([
+                  readSourceFile(sf.id),
+                  new Promise<{ ok: false; error: string }>((resolve) =>
+                    setTimeout(() => resolve({ ok: false, error: "timeout" }), 1500)
+                  ),
+                ]);
+                return {
+                  id: sf.id,
+                  path: sf.path,
+                  content: result.ok ? result.value : "",
+                };
+              } catch {
+                return { id: sf.id, path: sf.path, content: "" };
+              }
+            })
+          );
+          const assembled: AssembledContext = assembleMultiSourceContext(
+            sceneSnapshot,
+            schemas,
+            sourceFilesWithContent,
+            [], // logic_graphs: TBD via useLogicGraph (out of scope for PR2)
+            { catalog: [], selected_body: null }, // scene_assets: TBD
+            null
+          );
+          extraContext = {
+            source_files: assembled.context.source_files,
+            logic_graphs: assembled.context.logic_graphs,
+            scene_assets: assembled.context.scene_assets,
+            selected_entity: assembled.context.selected_entity,
+          };
+        } catch (ctxErr) {
+          // Non-fatal: log and continue with 3-field request.
+          console.warn("[useAIAssistant] multi-source context assembly failed:", ctxErr);
+        }
+
         const response: ProposeResponse = await fetchPropose(
           prompt.trim(),
           sceneSnapshot,
           schemas,
+          undefined,
+          undefined,
+          extraContext
         );
 
         const newProposals: Proposal[] = response.commands.map((envelope, i) => {
