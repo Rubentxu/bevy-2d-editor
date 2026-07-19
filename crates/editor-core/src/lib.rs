@@ -55,6 +55,7 @@ pub mod actuator_bus;
 pub mod source_files;
 pub mod asset_files;
 mod preview_runtime;
+mod lock_utils;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ADR References (documentation only — no code changes here)
