@@ -2162,3 +2162,32 @@ body {
   margin: 6px 0 0 0;
   font-size: 11px;
 }
+
+/* Hito 4 Order 7 — SceneComponent authoring UI */
+.kind-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 0;
+}
+.kind-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #ccc;
+  cursor: pointer;
+  font-size: 13px;
+}
+.kind-toggle input[type="radio"] {
+  margin: 0;
+}
+.schema-hint-inline {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #888;
+  font-style: italic;
+}
+.dropdown-item span:first-child {
+  font-family: monospace;
+}
