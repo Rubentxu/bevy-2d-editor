@@ -120,6 +120,37 @@ pub enum Command {
         component_type_id: crate::schema::ComponentTypeId,
         field_path: Vec<String>,
     },
+    // ─────────────────────────────────────────────────────────────────────────
+    // Hito 4 Order 7 — SceneComponent authoring commands
+    // ─────────────────────────────────────────────────────────────────────────
+    /// Create a new SceneComponent schema (Bevy 0.19 `#[derive(SceneComponent)]`).
+    /// The schema's `kind` is implicitly `SchemaKind::SceneComponent`. Inverse
+    /// removes the schema (which cascades to any entity referencing it).
+    CreateSceneComponent {
+        /// Full schema JSON (type_id, display_name, fields, kind, binding,
+        /// auto_spawn, source_location, exports_to_bevy).
+        schema: crate::schema::ComponentSchema,
+    },
+    /// Update an existing SceneComponent schema's fields. Inverse restores
+    /// the captured pre-state schema.
+    UpdateSceneComponentFields {
+        type_id: String,
+        /// Replacement field list. The whole `fields: Vec<FieldDef>` is
+        /// replaced atomically; partial updates use the underlying
+        /// `SetComponentField` command instead.
+        fields: Vec<crate::schema::FieldDef>,
+    },
+    /// Bind a schema (typically `Simple` or `SceneComponent`) to a scene
+    /// asset. When the schema is `Simple`, the bind upgrades it to
+    /// `SceneComponent` and sets `bound_scene_asset_ref`. When the schema
+    /// is `SceneComponent`, only the binding is updated. Passing
+    /// `scene_asset_id = None` clears the binding (downgrades
+    /// `SceneComponent` to `Simple`).
+    BindSceneToSchema {
+        type_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        scene_asset_id: Option<String>,
+    },
 }
 
 /// Metadata attached to each command for future agent auditing (Hito 0 §6.4).
@@ -179,6 +210,11 @@ pub enum CommandError {
 
     #[error("Field not found: {0}")]
     FieldNotFound(String),
+
+    /// Hito 4 Order 7: command must be applied through a specialized handler
+    /// (e.g. `command_scene_component::apply_create`).
+    #[error("Command not supported in this processor: {0}")]
+    Unsupported(String),
 
     #[error("Reparent would create cycle through {0}")]
     WouldCreateCycle(StableId),

@@ -1604,6 +1604,91 @@ pub fn unregister_schema(type_id: &str) -> Result<(), JsValue> {
     schema::unregister_schema(type_id).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Hito 4 Order 7 — SceneComponent authoring WASM exports
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Create a new SceneComponent schema (Bevy 0.19 `#[derive(SceneComponent)]`).
+/// Accepts a full `ComponentSchema` JSON. The schema's `kind` field MUST be
+/// `SceneComponent` and `bound_scene_asset_ref` MUST reference an existing
+/// scene asset.
+///
+/// Returns the registered schema's `type_id` on success.
+#[wasm_bindgen]
+pub fn create_scene_component(schema_json: &str) -> Result<JsValue, JsValue> {
+    let mut schema: schema::ComponentSchema = serde_json::from_str(schema_json)
+        .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+    if schema.kind != schema::SchemaKind::SceneComponent {
+        return Err(JsValue::from_str(
+            "create_scene_component requires kind = SceneComponent",
+        ));
+    }
+    // Resolve the bound_scene_asset_ref (must be present and non-empty)
+    let asset_ref = match &schema.bound_scene_asset_ref {
+        Some(s) if !s.is_empty() => s.clone(),
+        _ => {
+            return Err(JsValue::from_str(
+                "create_scene_component requires non-empty bound_scene_asset_ref",
+            ));
+        }
+    };
+    // Store the type_id to return before moving the schema
+    let type_id = schema.type_id.clone();
+    // Register via the standard path (validates SceneComponent requires binding)
+    schema::register_schema(schema).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    // Note: the actual scene asset is not stored via this call — the caller
+    // is expected to have already created the scene asset via the existing
+    // create_scene_asset WASM export. The binding here is a pointer to the
+    // existing asset (no further validation needed at this level).
+    Ok(JsValue::from_str(&type_id))
+}
+
+/// Bind an existing schema to a scene asset. Pass `scene_asset_id = None`
+/// to clear the binding (downgrades SceneComponent → Simple).
+#[wasm_bindgen]
+pub fn bind_scene_to_schema(type_id: &str, scene_asset_id: Option<String>) -> Result<(), JsValue> {
+    // Read the current schema from whichever registry holds it (built-in
+    // or user), mutate it, and re-register via the user registry.
+    // Built-in schemas CAN be bound (this is how the editor augments
+    // built-ins with Scene Component metadata), but the resulting schema
+    // is registered as a user override.
+    let mut schema = if schema::is_builtin_type(type_id) {
+        schema::global_registry()
+            .get(type_id)
+            .ok_or_else(|| JsValue::from_str(&format!("Schema not found: {}", type_id)))?
+            .clone()
+    } else {
+        let user = schema::USER_SCHEMAS
+            .with(|r| r.borrow().get(type_id).cloned())
+            .ok_or_else(|| JsValue::from_str(&format!("Schema not found: {}", type_id)))?;
+        user
+    };
+    match &scene_asset_id {
+        Some(s) if !s.is_empty() => {
+            schema.kind = schema::SchemaKind::SceneComponent;
+            schema.bound_scene_asset_ref = Some(s.clone());
+        }
+        _ => {
+            schema.kind = schema::SchemaKind::Simple;
+            schema.bound_scene_asset_ref = None;
+        }
+    }
+    schema::register_schema(schema).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    Ok(())
+}
+
+/// List all schemas with `kind = SceneComponent` as a JSON array.
+#[wasm_bindgen]
+pub fn list_scene_component_schemas() -> Result<JsValue, JsValue> {
+    let schemas: Vec<&schema::ComponentSchema> = schema::global_registry()
+        .iter()
+        .filter(|s| s.kind == schema::SchemaKind::SceneComponent)
+        .collect();
+    let json = serde_json::to_string(&schemas)
+        .map_err(|e| JsValue::from_str(&format!("Serialize error: {}", e)))?;
+    Ok(JsValue::from_str(&json))
+}
+
 /// Check if a type_id is a built-in.
 #[wasm_bindgen]
 pub fn is_builtin_type(type_id: &str) -> bool {

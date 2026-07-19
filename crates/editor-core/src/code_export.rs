@@ -39,6 +39,11 @@ pub fn rust_type_for_field(field_type: &FieldType) -> &'static str {
         FieldType::Color => "Color",
         FieldType::Anchor => "String",
         FieldType::AssetReference => "String",
+        // Hito 4 Order 7: ComponentRef and Enum are surfaced as `String` for
+        // now; deeper Rust codegen for typed enums / cross-component refs
+        // is deferred to a future Hito (requires type-system work).
+        FieldType::ComponentRef(_) => "String",
+        FieldType::Enum { .. } => "String",
     }
 }
 
@@ -383,7 +388,7 @@ mod tests {
     #[test]
     fn test_codegen_empty_scene() {
         let doc = make_doc(vec![]);
-        let schemas = ComponentSchemaRegistry::with_builtin_seeds();
+        let schemas = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
         let result = export_rust_source(&doc, &schemas);
         assert!(result.source.contains("use bevy::prelude::*;"));
         assert!(result.source.contains("pub struct ScenePlugin"));
@@ -396,7 +401,7 @@ mod tests {
     #[test]
     fn test_codegen_header() {
         let doc = make_doc(vec![]);
-        let schemas = ComponentSchemaRegistry::with_builtin_seeds();
+        let schemas = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
         let result = export_rust_source(&doc, &schemas);
         assert!(result.source.contains("AUTO-GENERATED"));
         assert!(result.source.contains("Bevy 0.19"));
@@ -407,7 +412,7 @@ mod tests {
     #[test]
     fn test_codegen_name_component() {
         let doc = make_doc(vec![entity("e1", "Player", vec![name_component("Player")])]);
-        let schemas = ComponentSchemaRegistry::with_builtin_seeds();
+        let schemas = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
         let result = export_rust_source(&doc, &schemas);
         assert!(result.source.contains("Name::new(\"Player\")"));
         assert!(result.source.contains("ids.insert(\"e1\".to_string(), id)"));
@@ -419,7 +424,7 @@ mod tests {
         let doc = make_doc(vec![entity(
             "e1", "T", vec![transform_component(100.0, 200.0, 0.5, 2.0, 3.0)],
         )]);
-        let schemas = ComponentSchemaRegistry::with_builtin_seeds();
+        let schemas = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
         let result = export_rust_source(&doc, &schemas);
         assert!(result.source.contains("Transform::from_translation"));
         assert!(result.source.contains("from_rotation_z(0.5)"));
@@ -433,7 +438,7 @@ mod tests {
         let doc = make_doc(vec![entity(
             "e1", "S", vec![sprite_component("assets/player.png", 1.0, 0.0, 0.0, 1.0, "Center")],
         )]);
-        let schemas = ComponentSchemaRegistry::with_builtin_seeds();
+        let schemas = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
         let result = export_rust_source(&doc, &schemas);
         assert!(result.source.contains("Sprite {"));
         assert!(result.source.contains("Color::srgba(1, 0, 0, 1)"));
@@ -452,7 +457,7 @@ mod tests {
             let doc = make_doc(vec![entity(
                 "e1", "S", vec![sprite_component("a.png", 1.0, 1.0, 1.0, 1.0, anchor)],
             )]);
-            let schemas = ComponentSchemaRegistry::with_builtin_seeds();
+            let schemas = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
             let result = export_rust_source(&doc, &schemas);
             assert!(
                 result.source.contains(&format!("anchor: {}", anchor)),
@@ -478,7 +483,7 @@ mod tests {
                 },
             ],
         )]);
-        let schemas = ComponentSchemaRegistry::with_builtin_seeds();
+        let schemas = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
         let result = export_rust_source(&doc, &schemas);
         // No mention of Visible or Locked
         assert!(!result.source.contains("Visible"));
@@ -492,7 +497,7 @@ mod tests {
             entity("p", "Parent", vec![name_component("Parent")]),
             child("c", "Child", "p", vec![name_component("Child")]),
         ]);
-        let schemas = ComponentSchemaRegistry::with_builtin_seeds();
+        let schemas = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
         let result = export_rust_source(&doc, &schemas);
         assert!(result.source.contains("add_child"));
         assert!(result.source.contains("ids[\"p\"]"));
@@ -502,7 +507,7 @@ mod tests {
     // §Scenario 9: User-defined game.* schema struct
     #[test]
     fn test_codegen_user_struct() {
-        let mut schemas = ComponentSchemaRegistry::with_builtin_seeds();
+        let mut schemas = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
         schemas.insert(ComponentSchema {
             // Use snake_case type_id (the correct convention)
             type_id: "game.player_health".to_string(),
@@ -523,6 +528,7 @@ mod tests {
             ],
             exports_to_bevy: true,
             source_location: None,
+            ..Default::default()
         });
 
         let doc = make_doc(vec![entity(
@@ -574,7 +580,7 @@ mod tests {
     // §Scenario 12: snapshot — full output structure
     #[test]
     fn test_codegen_snapshot_full_output() {
-        let mut schemas = ComponentSchemaRegistry::with_builtin_seeds();
+        let mut schemas = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
         schemas.insert(ComponentSchema {
             // Use snake_case type_id (the correct convention)
             type_id: "game.player_health".to_string(),
@@ -587,6 +593,7 @@ mod tests {
             }],
             exports_to_bevy: true,
             source_location: None,
+            ..Default::default()
         });
 
         let doc = make_doc(vec![

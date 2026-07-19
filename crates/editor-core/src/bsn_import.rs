@@ -497,6 +497,7 @@ impl Parser {
             components,
             children,
             relationships: Vec::new(), // relationships rebuilt in scene_asset_from_bsn_ir
+        ..Default::default()
         })
     }
 
