@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use crate::document::SceneDocument;
+use crate::lock_utils::lock_or_recover;
 use crate::operation_log::OperationLog;
 
 /// Maximum number of scenes allowed in a single project.
@@ -79,7 +80,7 @@ impl SceneRegistry {
     /// Returns the actual name used (may differ from input due to deduplication).
     /// Returns Err if MAX_SCENES is reached.
     pub fn create(&self, name: &str) -> Result<String, SceneRegistryError> {
-        let mut entries = self.entries.lock().unwrap();
+        let mut entries = lock_or_recover(&self.entries, "scene_registry.entries");
 
         if entries.len() >= MAX_SCENES {
             return Err(SceneRegistryError::new(
@@ -97,7 +98,7 @@ impl SceneRegistry {
         entries.insert(actual_name.clone(), entry);
 
         // Set as current if first scene
-        let mut current = self.current_scene_id.lock().unwrap();
+        let mut current = lock_or_recover(&self.current_scene_id, "scene_registry.current_scene_id");
         if current.is_none() {
             *current = Some(actual_name.clone());
         }
@@ -111,7 +112,7 @@ impl SceneRegistry {
     /// The caller is responsible for actually performing the value-swap in
     /// SCENE_DOC / OPERATION_LOG thread_locals after checking `dirty_prompt_required`.
     pub fn switch(&self, id: &str) -> Result<SwitchResult, SceneRegistryError> {
-        let mut current = self.current_scene_id.lock().unwrap();
+        let mut current = lock_or_recover(&self.current_scene_id, "scene_registry.current_scene_id");
 
         let source_name = current
             .as_ref()
@@ -128,7 +129,7 @@ impl SceneRegistry {
 
         // Check if source scene is dirty — if so, caller must prompt
         let dirty_prompt_required = if let Some(cur) = current.as_ref() {
-            let entries = self.entries.lock().unwrap();
+            let entries = lock_or_recover(&self.entries, "scene_registry.entries");
             entries.get(cur).map(|e| e.is_dirty).unwrap_or(false)
         } else {
             false
@@ -136,7 +137,7 @@ impl SceneRegistry {
 
         if !dirty_prompt_required {
             // Safe to switch immediately
-            let entries = self.entries.lock().unwrap();
+            let entries = lock_or_recover(&self.entries, "scene_registry.entries");
             if !entries.contains_key(id) {
                 return Err(SceneRegistryError::new("NOT_FOUND", &format!("Scene '{}' not found", id)));
             }
@@ -159,8 +160,8 @@ impl SceneRegistry {
     /// Commit the switch after user resolves the dirty prompt.
     /// Call this only after confirming the source scene is saved or discarded.
     pub fn commit_switch(&self, target_id: &str) -> Result<(), SceneRegistryError> {
-        let mut current = self.current_scene_id.lock().unwrap();
-        let entries = self.entries.lock().unwrap();
+        let mut current = lock_or_recover(&self.current_scene_id, "scene_registry.current_scene_id");
+        let entries = lock_or_recover(&self.entries, "scene_registry.entries");
         if !entries.contains_key(target_id) {
             return Err(SceneRegistryError::new("NOT_FOUND", &format!("Scene '{}' not found", target_id)));
         }
@@ -170,7 +171,7 @@ impl SceneRegistry {
 
     /// Delete a scene. Returns Err if it's the last remaining scene.
     pub fn delete(&self, id: &str) -> Result<(), SceneRegistryError> {
-        let mut entries = self.entries.lock().unwrap();
+        let mut entries = lock_or_recover(&self.entries, "scene_registry.entries");
 
         if entries.len() <= 1 {
             return Err(SceneRegistryError::new(
@@ -184,7 +185,7 @@ impl SceneRegistry {
         }
 
         // If we deleted the current scene, switch to the first remaining
-        let mut current = self.current_scene_id.lock().unwrap();
+        let mut current = lock_or_recover(&self.current_scene_id, "scene_registry.current_scene_id");
         if current.as_deref() == Some(id) {
             *current = entries.keys().next().cloned();
         }
@@ -199,7 +200,7 @@ impl SceneRegistry {
         }
 
         let actual_new_name = {
-            let entries = self.entries.lock().unwrap();
+            let entries = lock_or_recover(&self.entries, "scene_registry.entries");
             // Check existence first (release lock before re-acquiring for mut ops)
             if !entries.contains_key(id) {
                 return Err(SceneRegistryError::new("NOT_FOUND", &format!("Scene '{}' not found", id)));
@@ -208,7 +209,7 @@ impl SceneRegistry {
         };
 
         // Now acquire mutable access to perform the rename
-        let mut entries = self.entries.lock().unwrap();
+        let mut entries = lock_or_recover(&self.entries, "scene_registry.entries");
         let entry = entries
             .get_mut(id)
             .ok_or_else(|| SceneRegistryError::new("NOT_FOUND", &format!("Scene '{}' not found", id)))?;
@@ -221,7 +222,7 @@ impl SceneRegistry {
         entries.insert(actual_new_name.clone(), entry);
 
         // Update current pointer if needed
-        let mut current = self.current_scene_id.lock().unwrap();
+        let mut current = lock_or_recover(&self.current_scene_id, "scene_registry.current_scene_id");
         if current.as_deref() == Some(id) {
             *current = Some(actual_new_name.clone());
         }
@@ -231,8 +232,8 @@ impl SceneRegistry {
 
     /// List all scenes with metadata.
     pub fn list(&self) -> Vec<SceneInfo> {
-        let entries = self.entries.lock().unwrap();
-        let current = self.current_scene_id.lock().unwrap();
+        let entries = lock_or_recover(&self.entries, "scene_registry.entries");
+        let current = lock_or_recover(&self.current_scene_id, "scene_registry.current_scene_id");
 
         entries
             .iter()
@@ -247,15 +248,15 @@ impl SceneRegistry {
 
     /// Get the current scene entry (cloned).
     pub fn current(&self) -> Option<SceneEntry> {
-        let entries = self.entries.lock().unwrap();
-        let current = self.current_scene_id.lock().unwrap();
+        let entries = lock_or_recover(&self.entries, "scene_registry.entries");
+        let current = lock_or_recover(&self.current_scene_id, "scene_registry.current_scene_id");
         current.as_ref().and_then(|id| entries.get(id).cloned())
     }
 
     /// Mark the current scene as dirty (unsaved changes).
     pub fn mark_current_dirty(&self) {
-        if let Some(current) = self.current_scene_id.lock().unwrap().clone() {
-            if let Some(entry) = self.entries.lock().unwrap().get_mut(&current) {
+        if let Some(current) = lock_or_recover(&self.current_scene_id, "scene_registry.current_scene_id").clone() {
+            if let Some(entry) = lock_or_recover(&self.entries, "scene_registry.entries").get_mut(&current) {
                 entry.is_dirty = true;
             }
         }
@@ -263,8 +264,8 @@ impl SceneRegistry {
 
     /// Clear the dirty flag on the current scene (called after save).
     pub fn clear_current_dirty(&self) {
-        if let Some(current) = self.current_scene_id.lock().unwrap().clone() {
-            if let Some(entry) = self.entries.lock().unwrap().get_mut(&current) {
+        if let Some(current) = lock_or_recover(&self.current_scene_id, "scene_registry.current_scene_id").clone() {
+            if let Some(entry) = lock_or_recover(&self.entries, "scene_registry.entries").get_mut(&current) {
                 entry.is_dirty = false;
             }
         }
@@ -272,27 +273,27 @@ impl SceneRegistry {
 
     /// Get the current scene ID.
     pub fn current_id(&self) -> Option<String> {
-        self.current_scene_id.lock().unwrap().clone()
+        lock_or_recover(&self.current_scene_id, "scene_registry.current_scene_id").clone()
     }
 
     /// Get the scene entry by id.
     pub fn get(&self, id: &str) -> Option<SceneEntry> {
-        self.entries.lock().unwrap().get(id).cloned()
+        lock_or_recover(&self.entries, "scene_registry.entries").get(id).cloned()
     }
 
     /// Check if a scene with the given name exists.
     pub fn contains(&self, name: &str) -> bool {
-        self.entries.lock().unwrap().contains_key(name)
+        lock_or_recover(&self.entries, "scene_registry.entries").contains_key(name)
     }
 
     /// Number of scenes currently in the registry.
     pub fn len(&self) -> usize {
-        self.entries.lock().unwrap().len()
+        lock_or_recover(&self.entries, "scene_registry.entries").len()
     }
 
     /// Load an existing scene into the registry (used during project load).
     pub fn load_scene(&self, name: String, scene: SceneDocument, log: OperationLog) {
-        let mut entries = self.entries.lock().unwrap();
+        let mut entries = lock_or_recover(&self.entries, "scene_registry.entries");
         let entry = SceneEntry {
             scene,
             log,
@@ -303,15 +304,15 @@ impl SceneRegistry {
 
     /// Set the current scene ID (used after loading project).
     pub fn set_current(&self, id: Option<String>) {
-        let mut current = self.current_scene_id.lock().unwrap();
+        let mut current = lock_or_recover(&self.current_scene_id, "scene_registry.current_scene_id");
         *current = id;
     }
 
     /// Take a snapshot of the current scene's doc+log for value-swap.
     /// Returns (scene, log) that should be stored back into registry[old_id].
     pub fn swap_out_current(&self) -> Option<(SceneDocument, OperationLog)> {
-        let current = self.current_scene_id.lock().unwrap().clone()?;
-        let mut entries = self.entries.lock().unwrap();
+        let current = lock_or_recover(&self.current_scene_id, "scene_registry.current_scene_id").clone()?;
+        let mut entries = lock_or_recover(&self.entries, "scene_registry.entries");
         let entry = entries.get_mut(&current)?;
         Some((entry.scene.clone(), entry.log.clone()))
     }
@@ -319,14 +320,14 @@ impl SceneRegistry {
     /// Load a scene's doc+log into the active view (value-swap target).
     /// Takes (scene, log) from registry[new_id] and makes them active.
     pub fn swap_in(&self, id: &str) -> Option<(SceneDocument, OperationLog)> {
-        let mut entries = self.entries.lock().unwrap();
+        let mut entries = lock_or_recover(&self.entries, "scene_registry.entries");
         let entry = entries.get_mut(id)?;
         Some((entry.scene.clone(), entry.log.clone()))
     }
 
     /// Store the active doc+log back into a specific scene entry (after editing).
     pub fn store_to(&self, id: &str, scene: SceneDocument, log: OperationLog) {
-        if let Some(entry) = self.entries.lock().unwrap().get_mut(id) {
+        if let Some(entry) = lock_or_recover(&self.entries, "scene_registry.entries").get_mut(id) {
             entry.scene = scene;
             entry.log = log;
         }
