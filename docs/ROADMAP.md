@@ -518,4 +518,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level
 
 ---
 
-*Last updated: v0.69.0 — 2026-07-19 (3 pre-existing Playwright test failures CLOSED (PR #82): missing WASM export load_scene_by_name + bridge fix; schema count off-by-one (editor.LogicBinding added in hot-reload PR); asset-pipeline race condition fix via waitForFunction; CRIT-3 mutex poison policy complete from v0.68.0; LAYER_ID_UNIFICATION full complete from v0.67.0; HIGH-1 phase 4 complete from v0.66.0; Hito 4 Order 5 hot-reload complete from v0.48.0; Hito 4 Order 6 code-aware-ai cycle pending)
+*Last updated: v0.70.0 — 2026-07-19 (Hito 4 Order 6 code-aware-ai PR1/3 COMPLETE (PR #83): multi-source context model (ContextSource trait + 6 impls + ContextBuilder orchestrator + TokenBudget); ProposeRequest extended with 4 optional fields (backward compat); CreateSourceFile + WriteSourceFile commands; FORBIDDEN_AI_COMMANDS server-side filter (D2 security); ADR-0015 written; mock-ai-proxy +4 patterns; 52 lib + 14 integration + 417 editor-core tests passing; PR2 frontend (ai-context service) + PR3 UI (context debug view + 4 E2E) pending)
