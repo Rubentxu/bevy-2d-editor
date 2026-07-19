@@ -7,6 +7,11 @@ export interface ComponentSchema {
   exports_to_bevy: boolean;
   fields: FieldDef[];
   version: string;
+  // Hito 4 Order 7 (scene-component-authoring) — optional fields for new
+  // SceneComponent authoring. All default to legacy behavior when absent.
+  kind?: "simple" | "scene_component";
+  bound_scene_asset_ref?: string;
+  auto_spawn?: boolean;
 }
 
 // Constraint in Rust enum serialization format
@@ -65,6 +70,16 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [isBuiltin, setIsBuiltin] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  // Hito 4 Order 7 (scene-component-authoring) — Kind toggle + bound scene asset
+  const [schemaKind, setSchemaKind] = useState<"simple" | "scene_component">(
+    initial?.kind ?? "simple"
+  );
+  const [boundSceneAssetRef, setBoundSceneAssetRef] = useState<string>(
+    initial?.bound_scene_asset_ref ?? ""
+  );
+  const [autoSpawn, setAutoSpawn] = useState<boolean>(
+    initial?.auto_spawn ?? true
+  );
 
   // Load schema data when in edit mode with just type_id (no full field data)
   useEffect(() => {
@@ -316,6 +331,70 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
           />
           {errors.display_name && <span className="schema-error-inline">{errors.display_name}</span>}
         </div>
+
+        {/* Hito 4 Order 7 — SceneComponent authoring UI */}
+        <div className="form-group">
+          <label>Schema Kind</label>
+          <div className="kind-toggle" data-testid="schema-kind-toggle">
+            <label>
+              <input
+                type="radio"
+                name="schema-kind"
+                value="simple"
+                checked={schemaKind === "simple"}
+                onChange={() => {
+                  setSchemaKind("simple");
+                  setBoundSceneAssetRef("");
+                }}
+                data-testid="schema-kind-simple"
+              />
+              Simple (no bound scene)
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="schema-kind"
+                value="scene_component"
+                checked={schemaKind === "scene_component"}
+                onChange={() => setSchemaKind("scene_component")}
+                data-testid="schema-kind-scene-component"
+              />
+              Scene Component (Bevy 0.19 #[derive(SceneComponent)])
+            </label>
+          </div>
+        </div>
+
+        {schemaKind === "scene_component" && (
+          <>
+            <div className="form-group">
+              <label>Bound Scene Asset</label>
+              <input
+                type="text"
+                value={boundSceneAssetRef}
+                onChange={(e) => setBoundSceneAssetRef(e.target.value)}
+                placeholder="scene_asset_id (e.g. level1)"
+                data-testid="schema-bound-scene-asset"
+              />
+              <span className="schema-hint-inline">
+                ID of an existing scene asset to bind. Leave empty and set Kind back to Simple to unbind.
+              </span>
+            </div>
+            <div className="form-group">
+              <div className="exports-toggle">
+                <input
+                  type="checkbox"
+                  id="auto_spawn"
+                  checked={autoSpawn}
+                  onChange={(e) => setAutoSpawn(e.target.checked)}
+                  data-testid="schema-auto-spawn"
+                />
+                <label htmlFor="auto_spawn">
+                  Auto-spawn bound scene when instancing (default)
+                </label>
+              </div>
+            </div>
+          </>
+        )}
 
         <div className="form-group">
           <div className="exports-toggle">

@@ -28,6 +28,33 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
   // Store last saved schema data so edit mode can use it without re-reading from OPFS
   const lastSavedSchemaRef = useRef<ComponentSchema | null>(null);
 
+  // Hito 4 Order 7: list of SceneComponent schemas (those whose schema kind is
+  // SceneComponent). Used to render the 🧩 badge in the dropdown.
+  const [sceneComponentSchemas, setSceneComponentSchemas] = useState<Set<string>>(
+    new Set()
+  );
+
+  // Hito 4 Order 7: refresh both the schema list and the SceneComponent subset.
+  const refreshSchemas = () => {
+    if (typeof (window as any).list_schemas === "function") {
+      try {
+        const s = (window as any).list_schemas();
+        setSchemas(s);
+      } catch (e) {
+        console.error("list_schemas failed:", e);
+      }
+    }
+    if (typeof (window as any).list_scene_component_schemas === "function") {
+      try {
+        const json = (window as any).list_scene_component_schemas();
+        const arr = JSON.parse(json) as Array<{ type_id: string }>;
+        setSceneComponentSchemas(new Set(arr.map((sc) => sc.type_id)));
+      } catch (e) {
+        console.error("list_scene_component_schemas failed:", e);
+      }
+    }
+  };
+
   useEffect(() => {
     // Fetch all schemas via window-exposed bridge function
     const fetchSchemas = async () => {
@@ -43,6 +70,16 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
           setSchemas(s);
         } catch (e) {
           console.error("list_schemas failed:", e);
+        }
+      }
+      // Hito 4 Order 7: also fetch SceneComponent subset
+      if (typeof (window as any).list_scene_component_schemas === "function") {
+        try {
+          const json = await (window as any).list_scene_component_schemas();
+          const arr = JSON.parse(json) as Array<{ type_id: string }>;
+          setSceneComponentSchemas(new Set(arr.map((sc) => sc.type_id)));
+        } catch (e) {
+          console.error("list_scene_component_schemas failed:", e);
         }
       }
     };
@@ -94,15 +131,8 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
     }
     setEditingSchema(null);
     setEditInitialData(undefined);
-    // Refresh schemas list
-    if (typeof (window as any).list_schemas === "function") {
-      try {
-        const s = (window as any).list_schemas();
-        setSchemas(s);
-      } catch (e) {
-        console.error("list_schemas failed:", e);
-      }
-    }
+    // Hito 4 Order 7: refresh both regular and SceneComponent lists
+    refreshSchemas();
   }
 
   return (
@@ -136,7 +166,8 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
                 }}
                 data-testid={`add-schema-${s}`}
               >
-                <span>{s}</span>
+                {/* Hito 4 Order 7: SceneComponent badge 🧩 */}
+                <span>{sceneComponentSchemas.has(s) ? "🧩 " : "🔷 "}{s}</span>
                 {!isBuiltin && (
                   <button
                     type="button"
