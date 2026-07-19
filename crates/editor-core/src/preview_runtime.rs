@@ -44,7 +44,7 @@ pub(crate) const EVT_FPS: u16 = 2;
 
 const DEFAULT_SCENE_JSON: &str = r#"{
   "scene_id": "default",
-  "version": 1,
+  "version": "1",
   "name": "Default Scene",
   "entities": [],
   "instances": {}
