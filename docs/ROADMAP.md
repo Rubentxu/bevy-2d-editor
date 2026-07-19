@@ -518,4 +518,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level
 
 ---
 
-*Last updated: v0.68.0 — 2026-07-19 (CRIT-3 mutex poison policy CLOSED: log-and-recover via lock_or_recover helper (PR #81); 30 .lock().unwrap() in scenes.rs replaced with stable-named helpers; new lock_utils module with 6 regression tests; LAYER_ID_UNIFICATION full complete from v0.67.0; HIGH-1 phase 4 complete from v0.66.0; Hito 4 Order 5 hot-reload complete from v0.48.0; Hito 4 Order 6 code-aware-ai cycle pending)
+*Last updated: v0.69.0 — 2026-07-19 (3 pre-existing Playwright test failures CLOSED (PR #82): missing WASM export load_scene_by_name + bridge fix; schema count off-by-one (editor.LogicBinding added in hot-reload PR); asset-pipeline race condition fix via waitForFunction; CRIT-3 mutex poison policy complete from v0.68.0; LAYER_ID_UNIFICATION full complete from v0.67.0; HIGH-1 phase 4 complete from v0.66.0; Hito 4 Order 5 hot-reload complete from v0.48.0; Hito 4 Order 6 code-aware-ai cycle pending)
