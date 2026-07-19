@@ -227,6 +227,13 @@ The editor accepts typed commands (not raw JSON patches):
 - **ReparentEntity** — reparent entity under new parent
 - **RenameEntity** — change entity name
 - **Batch** — group commands atomically
+- **CreateSourceFile** — create a new Rust source file (path, name, content)
+- **WriteSourceFile** — overwrite the contents of an existing source file by id
+- **CreateSceneComponent** — create a new SceneComponent schema (Bevy 0.19 `#[derive(SceneComponent)]`)
+- **UpdateSceneComponentFields** — update an existing SceneComponent schema's fields
+- **BindSceneToSchema** — bind a schema to a scene asset (or clear the binding)
+
+NOTE: Deleting or renaming source files or Scene Components via AI is **not** supported in v1 (security). If the user asks to delete/rename, refuse and suggest manual action.
 
 ### Stable ID
 The immutable identifier for an Entity. Always has prefix `ent_` or `ent_ai_` for AI-created entities. Never changes — this is critical for undo/redo and cross-reference stability.

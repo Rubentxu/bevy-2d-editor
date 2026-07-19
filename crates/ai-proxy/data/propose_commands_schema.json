@@ -1,0 +1,173 @@
+{
+  "type": "function",
+  "function": {
+    "name": "propose_commands",
+    "description": "Propose one or more editor commands to fulfill the user's natural language request.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "commands": {
+          "type": "array",
+          "description": "Array of editor commands to apply.",
+          "items": {
+            "type": "object",
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string", "const": "CreateEntity" },
+                  "id": { "type": "string", "description": "Stable entity ID (use ent_ai_<uuid>)" },
+                  "name": { "type": "string", "description": "Human-readable entity name" },
+                  "components": {
+                    "type": "array",
+                    "description": "Component instances to attach",
+                    "default": [],
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type_id": { "type": "string" },
+                        "values": { "type": "object", "description": "Component field values" }
+                      },
+                      "required": ["type_id", "values"]
+                    }
+                  }
+                },
+                "required": ["type", "id", "name"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string", "const": "DeleteEntity" },
+                  "id": { "type": "string", "description": "Stable entity ID to delete" }
+                },
+                "required": ["type", "id"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string", "const": "AddComponent" },
+                  "entity_id": { "type": "string" },
+                  "type_id": { "type": "string", "description": "Schema type ID e.g. editor.Sprite2D" },
+                  "values": { "type": "object" }
+                },
+                "required": ["type", "entity_id", "type_id", "values"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string", "const": "RemoveComponent" },
+                  "entity_id": { "type": "string" },
+                  "type_id": { "type": "string" }
+                },
+                "required": ["type", "entity_id", "type_id"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string", "const": "SetComponentField" },
+                  "entity_id": { "type": "string" },
+                  "type_id": { "type": "string" },
+                  "field_path": { "type": "string", "description": "Dotted path e.g. translation.x" },
+                  "value": { "type": "object", "description": "New field value" }
+                },
+                "required": ["type", "entity_id", "type_id", "field_path", "value"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string", "const": "ReparentEntity" },
+                  "entity_id": { "type": "string" },
+                  "old_parent": { "type": ["string", "null"] },
+                  "new_parent": { "type": ["string", "null"] }
+                },
+                "required": ["type", "entity_id"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string", "const": "RenameEntity" },
+                  "entity_id": { "type": "string" },
+                  "old_name": { "type": ["string", "null"] },
+                  "new_name": { "type": "string" }
+                },
+                "required": ["type", "entity_id", "new_name"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string", "const": "Batch" },
+                  "label": { "type": "string" },
+                  "commands": {
+                    "type": "array",
+                    "items": { "$ref": "#" }
+                  }
+                },
+                "required": ["type", "label", "commands"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string", "const": "CreateSourceFile" },
+                  "path": { "type": "string", "description": "Project-relative path e.g. 'src/player.rs'" },
+                  "name": { "type": "string", "description": "File name e.g. 'player.rs'" },
+                  "content": { "type": "string", "description": "Full file body" }
+                },
+                "required": ["type", "path", "name", "content"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string", "const": "WriteSourceFile" },
+                  "id": { "type": "string", "description": "Existing source-file id (from create_source_file response)" },
+                  "content": { "type": "string", "description": "New full file body" }
+                },
+                "required": ["type", "id", "content"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string", "const": "CreateSceneComponent" },
+                  "schema": {
+                    "type": "object",
+                    "description": "Full ComponentSchema JSON (type_id, display_name, fields, kind=SceneComponent, bound_scene_asset_ref, auto_spawn, etc.)",
+                    "properties": {
+                      "type_id": { "type": "string" },
+                      "display_name": { "type": "string" },
+                      "fields": { "type": "array" },
+                      "exports_to_bevy": { "type": "boolean" }
+                    },
+                    "required": ["type_id", "display_name", "fields"]
+                  }
+                },
+                "required": ["type", "schema"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string", "const": "UpdateSceneComponentFields" },
+                  "type_id": { "type": "string" },
+                  "fields": { "type": "array" }
+                },
+                "required": ["type", "type_id", "fields"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string", "const": "BindSceneToSchema" },
+                  "type_id": { "type": "string" },
+                  "scene_asset_id": { "type": ["string", "null"], "description": "null to clear binding" }
+                },
+                "required": ["type", "type_id"]
+              }
+            ]
+          }
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Brief explanation of why these commands were proposed."
+        }
+      },
+      "required": ["commands", "rationale"]
+    }
+  }
+}

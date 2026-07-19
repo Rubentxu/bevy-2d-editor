@@ -219,6 +219,88 @@ function buildCodeAwareResponse(prompt, body) {
     };
   }
 
+  // Hito 4 Order 7 (scene-component-authoring) — 3 new patterns
+  if (
+    lower.includes("scene component") ||
+    lower.includes("create scene component") ||
+    lower.includes("derive scenecomponent")
+  ) {
+    return {
+      commands: [
+        {
+          command: {
+            type: "CreateSceneComponent",
+            schema: {
+              type_id: "game.EnemyAI",
+              display_name: "Enemy AI",
+              fields: [
+                { name: "aggression", field_type: "F32", default: 0.5, constraints: [] },
+              ],
+              exports_to_bevy: true,
+              kind: "scene_component",
+              bound_scene_asset_ref: "level1",
+              auto_spawn: true,
+            },
+          },
+          metadata: {
+            authorship: "agent:gpt-4o",
+            timestamp: Date.now(),
+            rationale: "Created SceneComponent schema (mock)",
+            model: "gpt-4o",
+          },
+        },
+      ],
+      rationale: "Created SceneComponent (mock)",
+      model: "gpt-4o",
+    };
+  }
+
+  if (lower.includes("update component") || lower.includes("update scene component fields")) {
+    return {
+      commands: [
+        {
+          command: {
+            type: "UpdateSceneComponentFields",
+            type_id: "game.EnemyAI",
+            fields: [
+              { name: "aggression", field_type: "F32", default: 0.8, constraints: [] },
+            ],
+          },
+          metadata: {
+            authorship: "agent:gpt-4o",
+            timestamp: Date.now(),
+            rationale: "Updated SceneComponent fields (mock)",
+            model: "gpt-4o",
+          },
+        },
+      ],
+      rationale: "Updated SceneComponent (mock)",
+      model: "gpt-4o",
+    };
+  }
+
+  if (lower.includes("bind scene") || lower.includes("bind to schema")) {
+    return {
+      commands: [
+        {
+          command: {
+            type: "BindSceneToSchema",
+            type_id: "game.EnemyAI",
+            scene_asset_id: "level1",
+          },
+          metadata: {
+            authorship: "agent:gpt-4o",
+            timestamp: Date.now(),
+            rationale: "Bound schema to scene asset (mock)",
+            model: "gpt-4o",
+          },
+        },
+      ],
+      rationale: "Bound SceneComponent (mock)",
+      model: "gpt-4o",
+    };
+  }
+
   return null;
 }
 

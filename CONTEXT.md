@@ -197,3 +197,21 @@ _Avoid_: "Cursor-like AI" (that's the v2 vision), "code completion" (we mean fil
 **Context Debug Section**:
 A collapsible UI section in the AI Assistant Panel showing per-source token counts and a per-source toggle to include/exclude. Hidden by default; opens on click.
 _Avoid_: "context panel" (we already have the AI panel)
+
+## Hito 4 Order 7 Additions (scene-component-authoring)
+
+**SchemaKind**:
+A discriminator for component schema purpose. `Simple` (default) is a regular component; `SceneComponent` is bound to a `SceneAssetDocument` (Bevy 0.19 `#[derive(SceneComponent)]` semantics). Stored inline on `ComponentSchema.kind`.
+_Avoid_: "Scene Component type" (use "SceneComponent" for the kind, and the schema's `type_id` for the specific schema)
+
+**Bound Scene Asset**:
+The scene asset (`SceneAssetDocument`) that a SceneComponent schema materializes when an instance is placed. Stored as `bound_scene_asset_ref: Option<String>` on `ComponentSchema`. Always required when `kind = SceneComponent` (enforced by `SchemaError::MissingBoundSceneAsset`).
+_Avoid_: "scene ref", "scene_id" (we use the asset id, not a separate identifier)
+
+**Auto-spawn**:
+A boolean on `ComponentSchema` (default `true`) that controls whether placing a SceneComponent instance automatically materializes the bound scene. Mirrors Bevy 0.19's `#[derive(SceneComponent)]` default behavior. When `false`, the user must explicitly opt in.
+_Avoid_: "spawn scene", "auto-instantiate" (use "auto-spawn" — matches the Rust field name)
+
+**SceneComponent Command Set**:
+Three new `Command` variants added in Hito 4 Order 7: `CreateSceneComponent { schema }`, `UpdateSceneComponentFields { type_id, fields }`, `BindSceneToSchema { type_id, scene_asset_id }`. All three are in the OperationLog (full undo/redo). Per design decision DC5, the AI is allowed to emit these but is forbidden from `DeleteSceneComponent` and `RenameSceneComponent` (mirrors code-aware-ai D2 policy).
+_Avoid_: "scene command", "asset command" (use "SceneComponent command" for clarity)
