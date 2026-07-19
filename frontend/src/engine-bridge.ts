@@ -292,7 +292,12 @@ export async function initEngine(
     try {
       console.log("[bridge] Starting Bevy engine...");
       wasm.start_engine(canvasId);
-      console.log("[bridge] start_engine returned normally");
+      console.log("[bridge] Bevy engine started");
+      // Hito 5 (bevy-engine-hardening): signal that the Bevy app.run() has
+      // returned control (which means the engine has started its first frame
+      // and `rebuild_preview_world` has had a chance to run). Tests wait on
+      // this via `window.__bevyEngineStarted` before submitting AI prompts.
+      (window as any).__bevyEngineStarted = true;
     } catch (e) {
       console.error("[bridge] start_engine threw:", e);
     }

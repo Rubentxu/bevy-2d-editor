@@ -149,13 +149,20 @@ fn setup(mut commands: Commands) {
     };
 
     // Insert SceneDocumentState resource
-    commands.insert_resource(SceneDocumentState::new(scene));
+    commands.insert_resource(SceneDocumentState::new(scene.clone()));
     // Insert OperationLogState resource (UI hooks read this)
     commands.insert_resource(OperationLogState::default());
     // Insert PlayMode resource (defaults to Edit)
     commands.insert_resource(PlayMode::default());
     // Insert TransformSnapshot
     commands.insert_resource(TransformSnapshot::default());
+
+    // Hito 5 (bevy-engine-hardening): also populate SCENE_DOC thread-local
+    // so that `get_scene_snapshot()` (which reads from SCENE_DOC) returns
+    // the same data as SceneDocumentState. Without this, the JS bridge
+    // returns NULL on the very first call (before any load_scene_json).
+    crate::SCENE_DOC.with(|s| *s.borrow_mut() = Some(scene));
+
     mark_dirty();
 }
 
@@ -169,8 +176,16 @@ fn setup(mut commands: Commands) {
 fn process_play_mode_request(
     mut play_mode: ResMut<PlayMode>,
     mut snapshot: ResMut<TransformSnapshot>,
-    scene_transforms: Query<(bevy::prelude::Entity, &Transform), With<SceneEntity>>,
-    mut scene_transforms_mut: Query<(bevy::prelude::Entity, &mut Transform), With<SceneEntity>>,
+    // Hito 5 (bevy-engine-hardening): Bevy 0.19 enforces no-aliasing on
+    // system parameters. Two queries filtered by the same `With<SceneEntity>`
+    // are considered aliasing (the mutable one could invalidate the
+    // immutable one) — even if the system only uses one at a time in
+    // separate `match` arms. We use `ParamSet` to declare them as
+    // mutually exclusive at runtime.
+    mut scene_transforms: ParamSet<(
+        Query<(bevy::prelude::Entity, &Transform), With<SceneEntity>>,
+        Query<(bevy::prelude::Entity, &mut Transform), With<SceneEntity>>,
+    )>,
 ) {
     let request = PLAY_MODE_REQUEST.with(|r| (*r.borrow()).clone());
 
@@ -178,7 +193,7 @@ fn process_play_mode_request(
         Some(PlayModeRequest::Enter) => {
             // Snapshot all placed entity transforms
             snapshot.transforms.clear();
-            for (entity, transform) in scene_transforms.iter() {
+            for (entity, transform) in scene_transforms.p0().iter() {
                 snapshot.transforms.insert(entity, *transform);
             }
             *play_mode = PlayMode::Playing;
@@ -186,7 +201,7 @@ fn process_play_mode_request(
         }
         Some(PlayModeRequest::Exit) => {
             // Restore transforms from snapshot
-            for (entity, mut transform) in scene_transforms_mut.iter_mut() {
+            for (entity, mut transform) in scene_transforms.p1().iter_mut() {
                 if let Some(saved) = snapshot.transforms.get(&entity) {
                     *transform = *saved;
                 }
