@@ -79,7 +79,7 @@ export async function initEngine(
   (window as any).get_log_state = () => wasm.get_log_state();
   // Expose OPFS persistence for testing
   (window as any).save_scene = (name: string) => wasm.save_scene(name);
-  (window as any).load_scene = (name: string) => wasm.load_scene(name);
+  (window as any).load_scene = (name: string) => wasm.load_scene_by_name(name);
   (window as any).list_scenes = () => wasm.list_scenes();
   (window as any).project_exists = () => wasm.project_exists();
   // Expose schema registry persistence for testing

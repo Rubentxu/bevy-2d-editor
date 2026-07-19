@@ -772,14 +772,16 @@ test.describe("Spike — Schema Registry Persistence", () => {
     );
 
     // After reload, combined registry should only have built-ins
+    // (6 built-ins: editor.Name, editor.Transform2D, editor.Sprite2D,
+    //  editor.Visible, editor.Locked, editor.LogicBinding)
     const sizeBefore = await page.evaluate(() => (window as any).combined_registry_size());
-    expect(sizeBefore).toBe(5);
+    expect(sizeBefore).toBe(6);
 
     // Load project: should re-register all schemas from OPFS
     await page.evaluate(() => (window as any).load_project());
 
     const sizeAfter = await page.evaluate(() => (window as any).combined_registry_size());
-    expect(sizeAfter).toBe(6); // 5 built-ins + 1 custom
+    expect(sizeAfter).toBe(7); // 6 built-ins + 1 custom
 
     const schemas = await page.evaluate(() => (window as any).list_schemas());
     expect(schemas).toContain("game.EnemyAI");

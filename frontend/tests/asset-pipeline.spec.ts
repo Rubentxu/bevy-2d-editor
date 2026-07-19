@@ -44,6 +44,19 @@ test.describe("Asset Pipeline", () => {
   });
 
   test("engine exposes asset_files WASM bindings", async ({ page }) => {
+    // The bridge exposes these window.* helpers only after initEngine()
+    // completes (WASM module loaded + bridge wiring). Wait for them to be
+    // registered before reading — avoids the race where the test runs
+    // before the bridge has had a chance to assign the functions.
+    await page.waitForFunction(
+      () =>
+        typeof (window as any).list_asset_files === "function" &&
+        typeof (window as any).import_asset_file === "function" &&
+        typeof (window as any).delete_asset_file === "function",
+      undefined,
+      { timeout: WASM_LOAD_TIMEOUT }
+    );
+
     // Check that the WASM bindings are present on window
     const hasListAssetFiles = await page.evaluate(
       () => typeof (window as any).list_asset_files === "function"
