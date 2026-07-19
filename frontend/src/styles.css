@@ -2107,3 +2107,58 @@ body {
 .auto-layer-panel .rule-actions .regen-btn:hover:not(:disabled) {
   background: #6cb6ff;
 }
+
+/* ContextDebugSection (Hito 4 Order 6 PR3) */
+.context-debug-section {
+  margin: 8px 0;
+  border: 1px solid #333;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.context-debug-toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #1e1e2e;
+  color: #ccc;
+  border: none;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+}
+.context-debug-toggle:hover {
+  background: #2a2a3a;
+}
+.context-debug-meter {
+  font-family: monospace;
+}
+.context-debug-body {
+  padding: 8px;
+  background: #16161e;
+}
+.context-debug-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: monospace;
+}
+.context-debug-table th,
+.context-debug-table td {
+  padding: 4px 6px;
+  text-align: left;
+  border-bottom: 1px solid #2a2a3a;
+  color: #aaa;
+}
+.context-debug-table th {
+  color: #888;
+  font-weight: normal;
+}
+.context-debug-empty {
+  color: #888;
+  font-style: italic;
+}
+.context-debug-warning {
+  margin: 6px 0 0 0;
+  font-size: 11px;
+}

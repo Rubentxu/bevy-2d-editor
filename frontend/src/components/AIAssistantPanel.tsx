@@ -8,10 +8,13 @@
  * - Stack of ProposalCards (pending proposals)
  * - Empty state when no proposals
  * - Inline error display
+ * - ContextDebugSection (Hito 4 Order 6) showing per-source token counts
  */
 
 import { AIAssistantState, Proposal } from "../hooks/useAIAssistant";
 import ProposalCard from "./ProposalCard";
+import { ContextDebugSection } from "./ContextDebugSection";
+import type { PerSourceStats } from "../types/ai";
 
 interface Props {
   aiState: AIAssistantState;
@@ -21,6 +24,12 @@ interface Props {
   onApply: (proposalId: string) => void;
   onDiscard: (proposalId: string) => void;
   applyingIds: Set<string>;
+  // Hito 4 Order 6: context debug props (optional; panel works without)
+  contextStats?: PerSourceStats[];
+  contextBudgetChars?: number;
+  contextUsedChars?: number;
+  onToggleContextSource?: (sourceName: string, enabled: boolean) => void;
+  disabledContextSources?: Set<string>;
 }
 
 export default function AIAssistantPanel({
@@ -31,6 +40,11 @@ export default function AIAssistantPanel({
   onApply,
   onDiscard,
   applyingIds,
+  contextStats = [],
+  contextBudgetChars = 40000,
+  contextUsedChars = 0,
+  onToggleContextSource,
+  disabledContextSources,
 }: Props) {
   return (
     <div className="ai-assistant-panel">
@@ -77,6 +91,17 @@ export default function AIAssistantPanel({
             "Submit"
           )}
         </button>
+
+        {/* Hito 4 Order 6: context debug section (per-source token counts) */}
+        {contextStats.length > 0 && (
+          <ContextDebugSection
+            stats={contextStats}
+            totalBudgetChars={contextBudgetChars}
+            totalUsedChars={contextUsedChars}
+            onToggle={onToggleContextSource}
+            disabledSources={disabledContextSources}
+          />
+        )}
 
         {/* Error display */}
         {aiState.error && (
