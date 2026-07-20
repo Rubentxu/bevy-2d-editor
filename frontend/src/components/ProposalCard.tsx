@@ -54,8 +54,16 @@ export default function ProposalCard({
   onDiscard,
   applying = false,
 }: Props) {
+  // Hito 5 followups (v0.77.1): expose data-command-type for tests.
+  // When commands have 1 element, use that type; when Batch, use "Batch".
+  const commandType =
+    commands.length === 1
+      ? (commands[0].command as any)?.type ?? ""
+      : commands.length > 1
+      ? "Batch"
+      : "";
   return (
-    <div className="proposal-card">
+    <div className="proposal-card" data-command-type={commandType}>
       <div className="proposal-header">
         <span className="proposal-rationale">{rationale}</span>
         {model && <span className="proposal-model">{model}</span>}

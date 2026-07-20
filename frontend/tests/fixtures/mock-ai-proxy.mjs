@@ -35,13 +35,16 @@ const COMMAND_ENVELOPES = {
       type: "SetComponentField",
       entity_id: "ent_ai_001",
       type_id: "editor.Sprite2D",
-      field_path: "translation.x",
-      value: 100,
+      // editor.Sprite2D has fields {asset, color, anchor}. The `color`
+      // field is a Color object {r, g, b, a}. To "update alpha", the
+      // field path must be "color.a" (NOT "color.alpha").
+      field_path: "color.a",
+      value: 0.5,
     },
     metadata: {
       authorship: "agent:gpt-4o",
       timestamp: Date.now(),
-      rationale: "Set translation.x to 100",
+      rationale: "Set color.a to 0.5",
       model: "gpt-4o",
     },
   },
@@ -52,9 +55,45 @@ const RESPONSES = new Map([
   [
     "create sprite",
     {
+      // Hito 5 followups (v0.77.1): wrap the CreateEntity + SetComponentField
+      // in a single Batch envelope so the frontend creates 1 Proposal
+      // (instead of 2 separate Proposals). The inner CreateEntity must
+      // include the editor.Sprite2D component instance, otherwise the
+      // SetComponentField that follows would fail with "Unknown schema"
+      // because the entity has no Sprite2D component attached yet.
       commands: [
-        COMMAND_ENVELOPES.create_entity,
-        COMMAND_ENVELOPES.set_field,
+        {
+          command: {
+            type: "Batch",
+            label: "Create AI Sprite",
+            commands: [
+              {
+                ...COMMAND_ENVELOPES.create_entity.command,
+                components: [
+                  // editor.Sprite2D (not editor.Transform2D) because the
+                  // SetComponentField that follows references editor.Sprite2D.
+                  // The Rust processor rejects SetComponentField if the
+                  // entity has no component with that type_id attached.
+                  {
+                    type_id: "editor.Sprite2D",
+                    values: {
+                      asset: "",
+                      color: { r: 1.0, g: 1.0, b: 1.0, a: 1.0 },
+                      anchor: "Center",
+                    },
+                  },
+                ],
+              },
+              COMMAND_ENVELOPES.set_field.command,
+            ],
+          },
+          metadata: {
+            authorship: "agent:gpt-4o",
+            timestamp: Date.now(),
+            rationale: "Created a new sprite entity named 'AI Sprite'",
+            model: "gpt-4o",
+          },
+        },
       ],
       rationale: "Created a new sprite entity named 'AI Sprite'",
       model: "gpt-4o",
