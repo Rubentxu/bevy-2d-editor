@@ -518,4 +518,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level
 
 ---
 
-*Last updated: v0.77.0 — 2026-07-19 (Hito 5 bevy-engine-hardening COMPLETE (PR #90 v0.77.0): fixed Bevy 0.19 B0001 query conflict via ParamSet + populated SCENE_DOC thread-local in setup; 4/6 ai-assisted-editing E2E tests now pass (2 followup: test-only issues with multi-command mock); scene-component-authoring tests unskipped; 423 editor-core + 53 ai-proxy Rust tests passing; Hito 4 FINAL state: 5 features complete across 12 PRs (v0.66-77.0), 2 known test-only followups in E2E locators)
+*Last updated: v0.77.1 — 2026-07-21 (Hito 5 E2E followups COMPLETE (PR #91 v0.77.1): fixed 3 mock-ai-proxy bugs (Batch wrapper, valid field path, included Sprite2D component); added data-command-type attribute to ProposalCard; added waitForReady to useAIAssistant; 7/12 originally-blocked E2E tests now pass (6/6 ai-assisted-editing + 1/4 code-aware-ai + 1/2 scene-component-authoring); 3 remaining code-aware-ai tests blocked by Playwright webServer race killing mock-ai-proxy between tests — documented as test infra followup; Rust 476 tests passing; Hito 4 + Hito 5 effectively complete)
