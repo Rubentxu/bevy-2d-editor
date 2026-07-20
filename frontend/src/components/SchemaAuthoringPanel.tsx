@@ -1,5 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
-import SchemaFieldRow, { DraftField, FieldType, generateId, getDefaultValueForType } from "./SchemaFieldRow";
+import SchemaFieldRow, { DraftField, FieldType, generateId } from "./SchemaFieldRow";
+import {
+  getSceneAssetCatalog,
+  validateSceneComponentDraft,
+  type SceneComponentDraftIssues,
+  type DraftValidationIssue,
+} from "../services/scene-components";
+import type { SceneAssetCatalogEntry } from "../services/scene-assets";
 
 export interface ComponentSchema {
   type_id: string;
@@ -35,7 +42,26 @@ interface ValidationErrors {
   type_id?: string;
   display_name?: string;
   fields?: Record<number, string>;
+  /** Inline stale-bound-ref message (S3). Rendered next to the picker. */
+  bound_scene_asset_ref?: string;
+  /** Inline global-issue lines (S4). Aggregated below the fields list. */
+  issue_list?: string[];
   general?: string;
+}
+
+/**
+ * Convert a Rust constraint (`"NonEmpty"` | `{ Min: number }` | `{ Max: number }`)
+ * into a DraftField constraint. Used both for the initial state hydration and
+ * when `load_schema` returns a full Rust-shaped body in edit mode.
+ */
+function convertConstraint(c: ConstraintJson): DraftField["constraints"][number] {
+  if (c === "NonEmpty") {
+    return { type: "NonEmpty" };
+  } else if ("Min" in c) {
+    return { type: "Min", value: c.Min };
+  } else {
+    return { type: "Max", value: c.Max };
+  }
 }
 
 export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }: Props) {
@@ -44,26 +70,13 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
   const [exportsToBevy, setExportsToBevy] = useState(initial?.exports_to_bevy ?? true);
   const [fields, setFields] = useState<DraftField[]>(() => {
     if (initial?.fields) {
-      return initial.fields.map((f) => {
-        // Convert from Rust format: "NonEmpty" | { Min: number } | { Max: number }
-        // to DraftField constraint format: { type: "Min" | "Max" | "NonEmpty", value?: number }
-        const convertConstraint = (c: ConstraintJson) => {
-          if (c === "NonEmpty") {
-            return { type: "NonEmpty" as const };
-          } else if ("Min" in c) {
-            return { type: "Min" as const, value: c.Min };
-          } else {
-            return { type: "Max" as const, value: c.Max };
-          }
-        };
-        return {
-          id: generateId(),
-          name: f.name,
-          field_type: f.field_type,
-          default: f.default,
-          constraints: f.constraints.map(convertConstraint),
-        };
-      });
+      return initial.fields.map((f) => ({
+        id: generateId(),
+        name: f.name,
+        field_type: f.field_type,
+        default: f.default,
+        constraints: f.constraints.map(convertConstraint),
+      }));
     }
     return [];
   });
@@ -80,6 +93,30 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
   const [autoSpawn, setAutoSpawn] = useState<boolean>(
     initial?.auto_spawn ?? true
   );
+
+  // Hito 7 (scene-component-authoring-ux PR1) — catalog-backed picker state.
+  const [catalogEntries, setCatalogEntries] = useState<SceneAssetCatalogEntry[]>([]);
+  const [catalogLoaded, setCatalogLoaded] = useState<boolean>(false);
+  const [draftIssues, setDraftIssues] = useState<SceneComponentDraftIssues>({
+    staleBoundRef: false,
+    emptyCatalog: false,
+    globalIssues: [],
+  });
+
+  // Fetch the catalog whenever the panel becomes visible AND the kind is
+  // scene_component. Refreshed on edit-mode entry (see AddComponentButton
+  // → render path which calls back into this component).
+  useEffect(() => {
+    if (schemaKind !== "scene_component") return;
+    let cancelled = false;
+    (async () => {
+      const entries = await getSceneAssetCatalog();
+      if (cancelled) return;
+      setCatalogEntries(entries);
+      setCatalogLoaded(true);
+    })();
+    return () => { cancelled = true; };
+  }, [schemaKind]);
 
   // Load schema data when in edit mode with just type_id (no full field data)
   useEffect(() => {
@@ -112,17 +149,8 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
         setDisplayName(schema.display_name);
         setExportsToBevy(schema.exports_to_bevy);
 
-        // Convert fields from Rust format to DraftField format
-        const convertConstraint = (c: ConstraintJson) => {
-          if (c === "NonEmpty") {
-            return { type: "NonEmpty" as const };
-          } else if ("Min" in c) {
-            return { type: "Min" as const, value: c.Min };
-          } else {
-            return { type: "Max" as const, value: c.Max };
-          }
-        };
-
+        // Convert fields from Rust format to DraftField format. Reuses the
+        // module-scoped convertConstraint() so both hydration paths stay in sync.
         setFields(schema.fields.map((f: FieldDef) => ({
           id: generateId(),
           name: f.name,
@@ -184,7 +212,68 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
     setErrors(errs);
   }, [typeId, displayName, fields, validate]);
 
-  const isValid = Object.keys(validate()).length === 0;
+  // Hito 7 — run SceneComponent draft validation (stale ref + WASM issues).
+  // Runs whenever the catalog, bound ref, typeId, or schemaKind changes.
+  useEffect(() => {
+    if (schemaKind !== "scene_component") {
+      // Reset stale state when the kind toggles back to simple.
+      setDraftIssues({
+        staleBoundRef: false,
+        emptyCatalog: false,
+        globalIssues: [],
+      });
+      return;
+    }
+    // Wait for the catalog fetch to finish before validating — otherwise
+    // every fresh load would briefly report a stale-ref false positive.
+    if (!catalogLoaded) return;
+
+    let cancelled = false;
+    (async () => {
+      const result = await validateSceneComponentDraft(
+        typeId,
+        boundSceneAssetRef,
+        catalogEntries
+      );
+      if (cancelled) return;
+      setDraftIssues(result);
+    })();
+    return () => { cancelled = true; };
+  }, [schemaKind, catalogLoaded, catalogEntries, boundSceneAssetRef, typeId]);
+
+  /**
+   * Combine the synchronous form-level errors with the draft issues so that:
+   * - S3: stale `bound_scene_asset_ref` shows inline next to the picker.
+   * - S4: WASM issues surface in the inline issue list AND block save.
+   */
+  const combinedErrors: ValidationErrors = (() => {
+    const base = validate();
+    if (schemaKind !== "scene_component") return base;
+    if (!catalogLoaded) return base;
+    const next: ValidationErrors = { ...base };
+    if (draftIssues.staleBoundRef) {
+      next.bound_scene_asset_ref = `Bound scene asset is missing from the catalog (ref: "${boundSceneAssetRef || "<empty>"}"). Pick a valid catalog entry or set Kind back to Simple.`;
+    }
+    if (draftIssues.globalIssues.length > 0) {
+      next.issue_list = draftIssues.globalIssues.map(
+        (i: DraftValidationIssue) => `[${i.code}] ${i.message}`
+      );
+    }
+    return next;
+  })();
+
+  // Render-time validity: form errors AND (when scene_component) no stale +
+  // no blocking WASM issues.
+  const isValid = (() => {
+    if (Object.keys(combinedErrors).length > 0) return false;
+    if (schemaKind === "scene_component" && catalogLoaded) {
+      if (draftIssues.staleBoundRef) return false;
+      // Empty catalog also blocks save: spec S2 forbids leaving the field
+      // unresolved when no entries exist.
+      if (draftIssues.emptyCatalog) return false;
+    }
+    return true;
+  })();
 
   function handleFieldChange(index: number, updated: DraftField) {
     setFields((prev) => {
@@ -220,6 +309,33 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
   }
 
   async function handleSave() {
+    // Hito 7 — block save on stale bound ref, open WASM issues, or empty
+    // catalog (S2, S3, S4). We re-run the validator here so a stale read from
+    // earlier does not let an invalid draft slip through.
+    if (schemaKind === "scene_component" && catalogLoaded) {
+      const fresh = await validateSceneComponentDraft(
+        typeId,
+        boundSceneAssetRef,
+        catalogEntries
+      );
+      if (
+        fresh.staleBoundRef ||
+        fresh.emptyCatalog ||
+        fresh.globalIssues.length > 0
+      ) {
+        setDraftIssues(fresh);
+        setErrors({
+          general:
+            fresh.staleBoundRef
+              ? "Save blocked: bound scene asset is missing from the catalog."
+              : fresh.emptyCatalog
+              ? "Save blocked: Scene Asset catalog is empty. Create a Scene Asset first."
+              : "Save blocked: validation issues must be resolved first.",
+        });
+        return;
+      }
+    }
+
     const validationErrors = validate();
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
@@ -247,6 +363,12 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
       display_name: displayName,
       exports_to_bevy: exportsToBevy,
       version: "0.1",
+      kind: schemaKind,
+      bound_scene_asset_ref:
+        schemaKind === "scene_component" && boundSceneAssetRef
+          ? boundSceneAssetRef
+          : undefined,
+      auto_spawn: schemaKind === "scene_component" ? autoSpawn : true,
       fields: fields.map((f) => ({
         name: f.name,
         field_type: f.field_type,
@@ -299,8 +421,6 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
   function handleCancel() {
     onClose();
   }
-
-  const validationErrors = validate();
 
   return (
     <div className="schema-authoring-panel" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -368,16 +488,50 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
           <>
             <div className="form-group">
               <label>Bound Scene Asset</label>
-              <input
-                type="text"
+              {/* Hito 7 (scene-component-authoring-ux PR1) — catalog-backed picker.
+                  A `<select>` is always rendered so the existing
+                  `data-testid="schema-bound-scene-asset"` Playwright locator
+                  keeps working (it pre-existed and proves visibility S1).
+                  When the catalog is empty, an explicit empty-state message
+                  is rendered and the picker offers only the placeholder
+                  option — there is NO raw-ID input. */}
+              <select
                 value={boundSceneAssetRef}
                 onChange={(e) => setBoundSceneAssetRef(e.target.value)}
-                placeholder="scene_asset_id (e.g. level1)"
                 data-testid="schema-bound-scene-asset"
-              />
+                aria-label="Bound scene asset (from catalog)"
+                disabled={!catalogLoaded}
+              >
+                <option value="">— Select a scene asset —</option>
+                {catalogEntries.map((entry) => (
+                  <option key={entry.asset_id} value={entry.asset_id}>
+                    {entry.logical_path} ({entry.asset_id})
+                  </option>
+                ))}
+              </select>
+              {catalogLoaded && catalogEntries.length === 0 && (
+                <div
+                  className="bound-scene-empty"
+                  data-testid="schema-bound-scene-asset-empty"
+                  role="status"
+                >
+                  <em>
+                    No scene assets available in the catalog. Create a Scene
+                    Asset first, then return to bind it to this schema.
+                  </em>
+                </div>
+              )}
               <span className="schema-hint-inline">
-                ID of an existing scene asset to bind. Leave empty and set Kind back to Simple to unbind.
+                Catalog-backed selection. Switch Kind back to Simple to unbind.
               </span>
+              {combinedErrors.bound_scene_asset_ref && (
+                <span
+                  className="schema-error-inline"
+                  data-testid="schema-bound-scene-asset-error"
+                >
+                  {combinedErrors.bound_scene_asset_ref}
+                </span>
+              )}
             </div>
             <div className="form-group">
               <div className="exports-toggle">
@@ -393,6 +547,23 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
                 </label>
               </div>
             </div>
+            {/* Hito 7 — Global issue list (S4). Rendered inline below the
+                picker so reviewers see all open issues in one place; the
+                Validation Center component reads the same data via
+                get_validation_issues_wasm. */}
+            {combinedErrors.issue_list && combinedErrors.issue_list.length > 0 && (
+              <div
+                className="schema-error"
+                data-testid="schema-issue-list"
+              >
+                <strong>Open issues</strong>
+                <ul>
+                  {combinedErrors.issue_list.map((line, idx) => (
+                    <li key={idx}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </>
         )}
 
@@ -467,6 +638,7 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
             className="save-btn"
             onClick={handleSave}
             disabled={!isValid || isSaving}
+            data-testid="schema-save-btn"
           >
             {isSaving ? "Saving..." : "Save"}
           </button>
