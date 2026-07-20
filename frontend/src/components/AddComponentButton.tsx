@@ -34,6 +34,11 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
     new Set()
   );
 
+  // Hito 7 (scene-component-authoring-ux PR1): bump on every edit-mode entry
+  // so the child SchemaAuthoringPanel sees a fresh catalog even if assets
+  // were added/renamed since the dropdown opened.
+  const [catalogRefreshTick, setCatalogRefreshTick] = useState(0);
+
   // Hito 4 Order 7: refresh both the schema list and the SceneComponent subset.
   const refreshSchemas = () => {
     if (typeof (window as any).list_schemas === "function") {
@@ -93,6 +98,10 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
         return; // Can't edit builtins
       }
     }
+
+    // Hito 7 — refresh catalog on edit-mode entry so the picker shows the
+    // latest scene assets (S1, spec change UX PR1 / task 2.5).
+    setCatalogRefreshTick((t) => t + 1);
 
     // First check if we have the schema from a recent save
     if (lastSavedSchemaRef.current && lastSavedSchemaRef.current.type_id === schemaId) {
@@ -194,6 +203,9 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
       )}
       {editingSchema && (
         <SchemaAuthoringPanel
+          // Hito 7 — re-mount the panel each time Edit is clicked so the
+          // catalog is freshly fetched and stale bindings surface inline.
+          key={`${editingSchema}:${catalogRefreshTick}`}
           mode="edit"
           initial={editInitialData}
           onClose={() => {

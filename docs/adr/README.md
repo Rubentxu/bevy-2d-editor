@@ -21,6 +21,7 @@ ADR numbering is monotonic and never reused. Superseded decisions keep their ori
 | [ADR-0009](./0009-component-override-ecs-bsn-replacement-for-override-patch.md) | ComponentOverride as the ECS/BSN-friendly replacement for OverridePatch | Accepted (2026-06-30) |
 | [ADR-0010](./0010-bsn-exporter-trait-file-export.md) | BsnExporter trait — output-only .bsn file export | Accepted (2026-06-30) |
 | [ADR-0011](./0011-logic-bricks-compiled-rust-controllers.md) | Logic Bricks — compiled Rust controllers and dispatch scheduler (no VM) | Accepted (2026-07-01) |
+| [ADR-0018](./0018-deferred-scene-component-command-handlers-keep-unsupported.md) | Deferred SceneComponent command handlers remain Unsupported | Accepted (2026-07-20) |
 
 ## Related Documents
 
