@@ -90,6 +90,19 @@ export function useAIAssistant({ onApplied }: UseAIAssistantOptions = {}) {
       setError(null);
 
       try {
+        // Hito 5 followups (v0.77.1): wait for the WASM bridge to mount
+        // before reading scene/schemas. Without this, getSceneSnapshot may
+        // throw because the bridge has not yet registered (initEngine
+        // completes asynchronously after start_engine's setTimeout).
+        const waitForReady = async (): Promise<void> => {
+          if ((window as any).isEngineReady?.()) return;
+          for (let i = 0; i < 50; i++) {
+            if ((window as any).isEngineReady?.()) return;
+            await new Promise((r) => setTimeout(r, 100));
+          }
+        };
+        await waitForReady();
+
         const [sceneSnapshot, schemasJson] = await Promise.all([
           getSceneSnapshot(),
           (window as any).get_combined_schemas_json(),

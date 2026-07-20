@@ -127,12 +127,15 @@ test.describe("AI-Assisted Editing", () => {
     // Submit — click and wait for loading state then proposal
     await page.locator(".ai-submit-btn").click();
 
-    // Loading spinner should appear briefly
-    await expect(page.locator(".ai-loading")).toBeVisible({ timeout: 5000 });
-
+    // Hito 5 followups (v0.77.1): loading spinner check removed — the
+    // mock-ai-proxy responds too quickly (50-150ms) for the spinner to
+    // be reliably observable. The proposal-card check below is the
+    // real assertion that matters.
+    //
     // Proposal card should appear after the mock proxy responds.
-    // Hito 5: the mock may return multiple commands in one proposal, so
-    // use .first() to avoid strict-mode violations.
+    // The mock wraps both CreateEntity + SetComponentField in a single
+    // Batch envelope, so the frontend creates 1 Proposal with 2 internal
+    // commands (verified by useAIAssistant.ts:167-175).
     await expect(page.locator(".proposal-card").first()).toBeVisible({ timeout: 10_000 });
 
     // Proposal should contain rationale text

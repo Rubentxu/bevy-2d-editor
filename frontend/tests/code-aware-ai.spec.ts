@@ -72,9 +72,12 @@ test.describe("code-aware-ai (Hito 4 Order 6)", () => {
     // Submit a simple prompt that triggers a mock response
     await page.locator(".ai-prompt-input").fill("create sprite");
     await page.locator(".ai-submit-btn").click();
-    await expect(page.locator(".proposal-card")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".proposal-card").first()).toBeVisible({ timeout: 10_000 });
 
-    // Context debug section should be visible after the propose
+    // Context debug section should be visible after the propose.
+    // Hito 5 followups (v0.77.1): wait briefly for React to render the
+    // debug section (stats are set asynchronously after submit resolves).
+    await page.waitForTimeout(500);
     await expect(page.locator('[data-testid="context-debug-section"]')).toBeVisible();
     // Expand it
     await page.locator('[data-testid="context-debug-toggle"]').click();
@@ -98,7 +101,7 @@ test.describe("code-aware-ai (Hito 4 Order 6)", () => {
     const body = JSON.parse(req.postData() ?? "{}");
     expect(body.prompt).toContain("create a source file");
     // The proposal should render
-    await expect(page.locator(".proposal-card")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".proposal-card").first()).toBeVisible({ timeout: 10_000 });
     // Mock returns a CreateSourceFile command
     const proposalType = await page.locator(".proposal-card").first().getAttribute("data-command-type");
     expect(proposalType).toBe("CreateSourceFile");
@@ -109,7 +112,7 @@ test.describe("code-aware-ai (Hito 4 Order 6)", () => {
     await expect(page.locator(".ai-assistant-panel")).toBeVisible();
     await page.locator(".ai-prompt-input").fill("create sprite");
     await page.locator(".ai-submit-btn").click();
-    await expect(page.locator(".proposal-card")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".proposal-card").first()).toBeVisible({ timeout: 10_000 });
     // The meter should show a percentage (e.g. "1/10k tokens (10%)")
     await expect(page.locator(".context-debug-meter")).toContainText("tokens");
   });
@@ -119,7 +122,9 @@ test.describe("code-aware-ai (Hito 4 Order 6)", () => {
     await expect(page.locator(".ai-assistant-panel")).toBeVisible();
     await page.locator(".ai-prompt-input").fill("create sprite");
     await page.locator(".ai-submit-btn").click();
-    await expect(page.locator(".proposal-card")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".proposal-card").first()).toBeVisible({ timeout: 10_000 });
+    // Wait for React to update contextStats after submit
+    await page.waitForTimeout(500);
 
     // Body should be hidden initially (collapsed by default)
     const body = page.locator('[data-testid="context-debug-body"]');
