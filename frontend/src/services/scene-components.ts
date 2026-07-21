@@ -20,7 +20,9 @@
 import type { ComponentSchema } from "../types/schema";
 import {
   getSceneAssetCatalogJson,
+  placeSceneInstance,
   type SceneAssetCatalogEntry,
+  type SceneInstanceCommandResult,
 } from "./scene-assets";
 
 declare global {
@@ -192,4 +194,72 @@ export async function validateSceneComponentDraft(
     emptyCatalog,
     globalIssues,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Place Instance entry point (Hito 7 PR2 — change `scene-component-authoring-ux`)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Raised when "Place Instance" targets a SceneComponent whose
+ * `bound_scene_asset_ref` no longer resolves in the catalog. The persisted
+ * ref is left unchanged — we never re-bind here.
+ */
+export class StaleSceneComponentBindingError extends Error {
+  readonly code = "stale_scene_component_binding" as const;
+  constructor(
+    public readonly typeId: string,
+    public readonly boundAssetRef: string,
+  ) {
+    super(
+      `SceneComponent "${typeId}" bound to asset "${boundAssetRef}" but the catalog no longer contains it.`,
+    );
+  }
+}
+
+/** Result of a successful place: which asset was used + the underlying command. */
+export interface PlaceSceneComponentInstanceResult {
+  assetId: string;
+  command: SceneInstanceCommandResult;
+}
+
+/**
+ * Place a SceneComponent's bound asset as a new Scene Instance.
+ *
+ * Resolves `typeId` → schema → `bound_scene_asset_ref`, verifies the ref
+ * is in the freshly-fetched catalog, then delegates to
+ * `placeSceneInstance` (which dispatches `Command::PlaceInstance` and is
+ * therefore reversible via the shared undo log). The persisted
+ * `bound_scene_asset_ref` is intentionally NOT rewritten on stale.
+ */
+export async function placeSceneComponentInstance(
+  typeId: string,
+  translation?: { x: number; y: number },
+): Promise<PlaceSceneComponentInstanceResult> {
+  if (typeof typeId !== "string" || typeId.length === 0) {
+    throw new Error("placeSceneComponentInstance: typeId is required");
+  }
+  await waitForEngine();
+  const loadSchema = (window as any).load_schema;
+  if (typeof loadSchema !== "function") {
+    throw new Error("placeSceneComponentInstance: load_schema binding not available");
+  }
+  const raw = await loadSchema(typeId);
+  const schema: Partial<ComponentSchema> = typeof raw === "string" ? JSON.parse(raw) : raw;
+  if (!schema || schema.kind !== "scene_component") {
+    throw new Error(
+      `placeSceneComponentInstance: "${typeId}" is not a SceneComponent`,
+    );
+  }
+  const boundRef = schema.bound_scene_asset_ref;
+  if (typeof boundRef !== "string" || boundRef.length === 0) {
+    throw new StaleSceneComponentBindingError(typeId, boundRef ?? "<empty>");
+  }
+  const catalog = await getSceneAssetCatalog();
+  const resolved = catalog.find((entry) => entry.asset_id === boundRef);
+  if (!resolved) {
+    throw new StaleSceneComponentBindingError(typeId, boundRef);
+  }
+  const command = await placeSceneInstance(resolved.asset_id, translation);
+  return { assetId: resolved.asset_id, command };
 }

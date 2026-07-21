@@ -3,6 +3,8 @@ import SchemaFieldRow, { DraftField, FieldType, generateId } from "./SchemaField
 import {
   getSceneAssetCatalog,
   validateSceneComponentDraft,
+  placeSceneComponentInstance,
+  StaleSceneComponentBindingError,
   type SceneComponentDraftIssues,
   type DraftValidationIssue,
 } from "../services/scene-components";
@@ -240,6 +242,36 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
     })();
     return () => { cancelled = true; };
   }, [schemaKind, catalogLoaded, catalogEntries, boundSceneAssetRef, typeId]);
+
+  // Hito 7 — Place Instance entry point for a SAVED SceneComponent (S5, S6).
+  // Visible only in edit mode when the kind is `scene_component` and the
+  // bound ref resolves. Clicking delegates to `placeSceneComponentInstance`,
+  // which routes through `Command::PlaceInstance` so undo parity is
+  // preserved (S6). Stale refs at place time surface as a typed error (S7).
+  const [placeInstanceBusy, setPlaceInstanceBusy] = useState(false);
+  const canPlaceInstance =
+    mode === "edit" &&
+    schemaKind === "scene_component" &&
+    !!boundSceneAssetRef &&
+    !draftIssues.staleBoundRef &&
+    !placeInstanceBusy;
+
+  const handlePlaceInstanceClick = useCallback(async () => {
+    if (!canPlaceInstance) return;
+    setPlaceInstanceBusy(true);
+    try {
+      await placeSceneComponentInstance(typeId);
+    } catch (e) {
+      const msg =
+        e instanceof StaleSceneComponentBindingError
+          ? e.message
+          : "Place Instance failed: " +
+            (e instanceof Error ? e.message : String(e));
+      setErrors({ general: msg });
+    } finally {
+      setPlaceInstanceBusy(false);
+    }
+  }, [canPlaceInstance, typeId]);
 
   /**
    * Combine the synchronous form-level errors with the draft issues so that:
@@ -615,6 +647,26 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
         )}
 
         <div className="panel-actions">
+          {/* Hito 7 (PR2 / S5): Place Instance entry from the Schema panel,
+              visible only for saved SceneComponents (mode === "edit") with a
+              resolvable bound asset. Stale refs block the button; the click
+              handler surfaces typed errors via the general-error slot. */}
+          {mode === "edit" && schemaKind === "scene_component" && (
+            <button
+              type="button"
+              className="place-instance-btn"
+              onClick={handlePlaceInstanceClick}
+              disabled={!canPlaceInstance}
+              data-testid="schema-place-instance-btn"
+              title={
+                draftIssues.staleBoundRef
+                  ? "Bound scene asset is missing from the catalog"
+                  : "Place a new instance of the bound scene"
+              }
+            >
+              {placeInstanceBusy ? "Placing..." : "Place Instance"}
+            </button>
+          )}
           {mode === "edit" && !isBuiltin && (
             <button
               type="button"
