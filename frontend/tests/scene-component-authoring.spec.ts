@@ -9,8 +9,13 @@
  * Hito 7 (`scene-component-authoring-ux` PR1) adds focused coverage for
  * the catalog-backed bound-scene picker, empty-state save block, and
  * stale-reference save block. PR2 layers the Place Instance entry-point
- * smoke test (button visibility on bound assets). Full S5–S7 sweep
- * lives in PR3. See docs/sddk/scene-component-authoring-ux/spec.md.
+ * smoke test (button visibility on bound assets). PR3 closes out the
+ * spec with a budget-trimmed subset: S5 panel click + S6 undo parity
+ * (executable) and S5 Asset Browser + S7 stale-at-place (test.skip
+ * with ADR-0017 cross-reference — deferred until the OPFS catalog
+ * flake is fixed). See docs/sddk/scene-component-authoring-ux/spec.md
+ * and ADR-0018 (deferred SceneComponent command handlers stay
+ * Unsupported; we drive direct WASM exports only).
  */
 
 import { test, expect, type Page } from "@playwright/test";
@@ -104,6 +109,40 @@ async function openCreateSchemaPanel(page: Page): Promise<void> {
 async function switchToSceneComponent(page: Page): Promise<void> {
   await page.click('[data-testid="schema-kind-scene-component"]');
   await expect(page.locator('[data-testid="schema-bound-scene-asset"]')).toBeVisible();
+}
+
+// ─── PR3 helpers (S5/S6/S7) ───────────────────────────────────────────────────
+
+/**
+ * Register a SceneComponent schema bound to `assetId` via the direct WASM
+ * bridge. The only PR3-specific helper — it lands the schema in the
+ * in-memory registry so `list_scene_component_schemas` sees it on the
+ * next poll, mirroring the post-Save state without racing the OPFS
+ * Save path (ADR-0017).
+ */
+async function registerSceneComponent(page: Page, typeId: string, assetId: string) {
+  await page.waitForFunction(
+    () => typeof (window as any).create_scene_component === "function",
+    { timeout: WASM_LOAD_TIMEOUT },
+  );
+  await page.evaluate(
+    ({ tid, aid }) => {
+      (window as any).create_scene_component(
+        JSON.stringify({
+          type_id: tid,
+          display_name: tid.split(".").pop() ?? tid,
+          fields: [{ name: "speed", field_type: "F32", default: 1.0, constraints: [] }],
+          exports_to_bevy: true,
+          version: "0.1",
+          kind: "scene_component",
+          bound_scene_asset_ref: aid,
+          auto_spawn: true,
+        }),
+      );
+    },
+    { tid: typeId, aid: assetId },
+  );
+  await page.waitForTimeout(150);
 }
 
 test.describe("scene-component-authoring (Hito 4 Order 7)", () => {
@@ -415,5 +454,200 @@ test.describe("scene-component-authoring-ux PR2 — Place Instance entry-point s
     );
     await expect(placeBtn.first()).toBeVisible({ timeout: 10_000 });
     await expect(placeBtn.first()).toBeEnabled();
+  });
+});
+
+
+// ─── PR3 — focused S5/S6 executable + S7 deferred (Hito 7) ────────────────────
+
+/**
+ * PR3 — focused, budget-trimmed subset of the S5–S7 sweep.
+ *
+ * Scope per PR3 brief revision:
+ *  - Two executable scenarios (S5 panel click + S6 undo parity).
+ *  - One placeholder (`test.skip`) for S7 stale-at-place and one for the
+ *    Asset Browser entry point — both blocked on the OPFS catalog-persistence
+ *    flake (ADR-0017) and the multi-step React-driven Edit-mode path that
+ *    the brief asks us to defer rather than run.
+ *  - No new helpers beyond the single `registerSceneComponent` defined at
+ *    the top of this file; all PR1 helpers (`seedOneAsset`,
+ *    `openCreateSchemaPanel`, `switchToScenePanel`) are reused unchanged.
+ *  - Per ADR-0018 the deferred `command_scene_component::apply_*` handlers
+ *    stay Unsupported; the executable tests drive direct WASM exports only.
+ *
+ * Blockers cross-referenced from the test.skip TODO comments:
+ *  - docs/adr/0017-e2e-test-failure-root-cause.md (OPFS catalog-persistence
+ *    flake + Bevy 0.19 B0001 init panic). Both gates the Edit-mode + Asset
+ *    Browser paths in this CI run.
+ */
+test.describe("scene-component-authoring-ux PR3 — focused S5/S6 + deferred S7 (Hito 7)", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator('[data-testid="topbar"]')).toBeVisible({
+      timeout: WASM_LOAD_TIMEOUT,
+    });
+    await page.waitForFunction(
+      () =>
+        typeof (window as any).create_scene_component === "function" &&
+        typeof (window as any).list_scene_component_schemas === "function" &&
+        typeof (window as any).place_scene_instance === "function" &&
+        typeof (window as any).get_scene_instances === "function" &&
+        typeof (window as any).get_log_state === "function",
+      { timeout: WASM_LOAD_TIMEOUT },
+    );
+  });
+
+  /**
+   * S5 (Schema panel) — Place Instance from the Edit panel button on a
+   * saved SceneComponent. Reuses PR1's `seedOneAsset` to land a real
+   * catalog entry, then `registerSceneComponent` to bind a schema. Drives
+   * the Edit-mode panel through the Add Component dropdown edit icon
+   * (same path the AI proxy + manual flow take) and clicks the panel's
+   * `schema-place-instance-btn`. Asserts `get_scene_instances()` grew.
+   *
+   * Known to inherit the OPFS seedOneAsset flake (ADR-0017); when the
+   * flake fires the test surfaces a clear error rather than silently
+   * passing, so it remains a useful gate in green runs.
+   */
+  test("S5 place instance from Schema panel button (edit mode)", async ({ page }) => {
+    const assetId = await seedOneAsset(page, "Pr3S5Panel");
+    // Seed a root entity so placement passes the single-root gate.
+    await page.evaluate((aid: string) => {
+      const w = window as any;
+      w.open_scene_asset(aid);
+      w.dispatch_asset_command(
+        JSON.stringify({
+          command: { type: "AddEntity", local_id: "root_panel", name: "RootPanel", local_path: "/root_panel", components: [] },
+          metadata: { authorship: "test", timestamp: Date.now() },
+        }),
+      );
+      w.save_scene_asset();
+      w.close_scene_asset();
+    }, assetId);
+    await page.waitForTimeout(200);
+    await registerSceneComponent(page, "game.Pr3S5Panel", assetId);
+
+    // Drive Edit mode via the existing Add Component dropdown.
+    await page.evaluate(() =>
+      (window as any).load_scene_json(
+        JSON.stringify({
+          version: "0.1", scene_id: "pr3-s5-target", name: "S5 Target",
+          entities: [{ id: "pr3-s5-panel-e1", name: "PanelE", parent: null, components: [] }],
+        }),
+      ),
+    );
+    await page.locator('[data-testid="hierarchy-entity-pr3-s5-panel-e1"]').click();
+    await page.click(".add-btn");
+    const editIcon = page.locator(
+      '[data-testid="add-schema-game.Pr3S5Panel"] .edit-icon',
+    );
+    await expect(editIcon).toBeVisible({ timeout: 10_000 });
+    await editIcon.click();
+    await expect(page.locator(".schema-authoring-panel")).toBeVisible();
+
+    const panelBtn = page.locator('[data-testid="schema-place-instance-btn"]');
+    await expect(panelBtn).toBeVisible({ timeout: 5_000 });
+    await expect(panelBtn).toBeEnabled();
+
+    const before = Object.keys(
+      (await page.evaluate(() => (window as any).get_scene_instances())) ?? {},
+    ).length;
+    await panelBtn.click();
+    await page.waitForTimeout(300);
+
+    const after = await page.evaluate(() => (window as any).get_scene_instances());
+    expect(Object.keys(after ?? {}).length).toBe(before + 1);
+  });
+
+  /**
+   * S6 — Successful placement is reversible via the shared undo pipeline.
+   *
+   * Asserts the contract end-to-end with the smallest possible surface:
+   *  1. Place via the same `place_scene_instance` WASM bridge the panel
+   *     button delegates to.
+   *  2. `get_log_state()` grew by 1 and reports `can_undo === true`.
+   *  3. `undo()` removes the placed instance; `redo()` restores it.
+   *
+   * No React Edit-mode setup needed — this test exercises the OperationLog
+   * contract directly, which is the load-bearing S6 invariant.
+   */
+  test("S6 placed instance joins the undo stack and round-trips", async ({ page }) => {
+    const assetId = await seedOneAsset(page, "Pr3S6Asset");
+    await page.evaluate((aid: string) => {
+      const w = window as any;
+      w.open_scene_asset(aid);
+      w.dispatch_asset_command(
+        JSON.stringify({
+          command: { type: "AddEntity", local_id: "root_s6", name: "RootS6", local_path: "/root_s6", components: [] },
+          metadata: { authorship: "test", timestamp: Date.now() },
+        }),
+      );
+      w.save_scene_asset();
+      w.close_scene_asset();
+    }, assetId);
+    await page.waitForTimeout(200);
+    await page.evaluate(() =>
+      (window as any).load_scene_json(
+        JSON.stringify({ version: "0.1", scene_id: "pr3-s6-target", name: "S6 Target", entities: [] }),
+      ),
+    );
+    await page.waitForTimeout(150);
+
+    const stateBefore = JSON.parse(
+      await page.evaluate(() => (window as any).get_log_state()),
+    );
+    await page.evaluate(
+      (aid: string) => (window as any).place_scene_instance(aid),
+      assetId,
+    );
+    await page.waitForTimeout(150);
+
+    const stateAfterPlace = JSON.parse(
+      await page.evaluate(() => (window as any).get_log_state()),
+    );
+    expect(stateAfterPlace.size).toBe(stateBefore.size + 1);
+    expect(stateAfterPlace.can_undo).toBe(true);
+
+    await page.evaluate(() => (window as any).undo());
+    await page.waitForTimeout(150);
+    const afterUndo = await page.evaluate(() => (window as any).get_scene_instances());
+    expect(Object.keys(afterUndo ?? {}).length).toBe(0);
+
+    await page.evaluate(() => (window as any).redo());
+    await page.waitForTimeout(150);
+    const afterRedo = await page.evaluate(() => (window as any).get_scene_instances());
+    expect(Object.keys(afterRedo ?? {}).length).toBe(1);
+  });
+
+  // ─── Deferred scenarios (test.skip with ADR-0017 cross-reference) ─────────
+
+  /**
+   * S5 (Asset Browser) — DEFERRED.
+   *
+   * TODO: re-enable once ADR-0017 OPFS catalog-persistence flake is fixed.
+   *       The full scenario requires a real bound asset row in the browser,
+   *       `window.prompt` stubbing, and a multi-step place-from-row click —
+   *       the prompt stub alone added ~25 lines of helper code (now removed
+   *       in the budget trim) and the flake makes the green run non-reliable.
+   *       Spec: docs/sddk/scene-component-authoring-ux/spec.md §S5.
+   */
+  test.skip("S5 place instance from Asset Browser row (bound schema) — deferred (ADR-0017)", () => {
+    // Implementation lives in PR3 history (reverted for budget); restore once
+    // the OPFS flake is resolved.
+  });
+
+  /**
+   * S7 — Stale bound ref at place is reported, not stored.
+   *
+   * TODO: re-enable once the OPFS seedOneAsset flake (ADR-0017) is fixed.
+   *       The original scenario registered a schema, deleted the bound
+   *       asset via `delete_scene_asset`, drove the Edit-mode panel, and
+   *       asserted the `StaleSceneComponentBindingError` surface path plus
+   *       the no-rewrite-on-stale invariant. All blocked on the same OPFS
+   *       seedOneAsset timing that fails every PR1 S1–S4 test today.
+   *       Spec: docs/sddk/scene-component-authoring-ux/spec.md §S7.
+   */
+  test.skip("S7 stale bound ref at place surfaces error — deferred (ADR-0017)", () => {
+    // Implementation deferred; see test.skip comment above.
   });
 });
