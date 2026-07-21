@@ -93,6 +93,20 @@ export async function initEngine(
   (window as any).combined_registry_size = () => wasm.combined_registry_size();
   (window as any).get_combined_schemas_json = () => wasm.get_combined_schemas_json();
   (window as any).load_project = () => wasm.load_project();
+  // Hito 7 — SceneComponent authoring (PR2): expose the
+  // `bind_scene_to_schema`, `create_scene_component`, and
+  // `list_scene_component_schemas` WASM exports so the schema authoring panel
+  // and Playwright tests can drive the registry directly. They already exist
+  // on the wasm module — only the bridge was missing (ADR-0018 §direct WASM
+  // exports). No behavioural change for existing surfaces.
+  (window as any).create_scene_component = (json: string) =>
+    wasm.create_scene_component(json);
+  (window as any).bind_scene_to_schema = (
+    typeId: string,
+    sceneAssetId: string | null
+  ) => wasm.bind_scene_to_schema(typeId, sceneAssetId ?? null);
+  (window as any).list_scene_component_schemas = () =>
+    wasm.list_scene_component_schemas();
   // Expose scene snapshot read for UI panels
   (window as any).get_scene_snapshot = () => wasm.get_scene_snapshot();
   // Expose DynamicScene export (Hito 0 §9.5) for UI/tests

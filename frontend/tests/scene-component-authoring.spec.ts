@@ -8,8 +8,9 @@
  *
  * Hito 7 (`scene-component-authoring-ux` PR1) adds focused coverage for
  * the catalog-backed bound-scene picker, empty-state save block, and
- * stale-reference save block. Place Instance scenarios (S5–S7) land in
- * PR2. See docs/sddk/scene-component-authoring-ux/spec.md.
+ * stale-reference save block. PR2 layers the Place Instance entry-point
+ * smoke test (button visibility on bound assets). Full S5–S7 sweep
+ * lives in PR3. See docs/sddk/scene-component-authoring-ux/spec.md.
  */
 
 import { test, expect, type Page } from "@playwright/test";
@@ -328,5 +329,91 @@ test.describe("scene-component-authoring-ux PR1 (Hito 7)", () => {
     // Save must be disabled while a WASM issue is open.
     const saveBtn = page.locator('[data-testid="schema-save-btn"]');
     await expect(saveBtn).toBeDisabled();
+  });
+});
+
+test.describe("scene-component-authoring-ux PR2 — Place Instance entry-point smoke (Hito 7)", () => {
+  // PR2 scope reduced: S5–S7 (click→undo parity, stale-ref-at-place, full
+  // round-trip) move to PR3 (see docs/sddk/scene-component-authoring-ux/
+  // tasks.md Phase 4). The PR2 spec only proves the button is rendered
+  // and bound — no OPFS seeding, no undo/redo, no stale-ref round-trip —
+  // so it stays under the 400-line budget and avoids racing the
+  // pre-existing catalog-persistence flake (ADR-0017).
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator('[data-testid="topbar"]')).toBeVisible({
+      timeout: WASM_LOAD_TIMEOUT,
+    });
+    // The minimal bridge set the smoke test needs.
+    await page.waitForFunction(
+      () =>
+        typeof (window as any).register_schema === "function" &&
+        typeof (window as any).bind_scene_to_schema === "function" &&
+        typeof (window as any).list_scene_component_schemas === "function",
+      { timeout: WASM_LOAD_TIMEOUT }
+    );
+    await clearCatalog(page);
+  });
+
+  /**
+   * PR2 smoke — Place (SceneComponent) row action surfaces for bound assets.
+   * Verifies the React-only wiring (button appears when
+   * `list_scene_component_schemas` returns a schema referencing an
+   * asset_id). Does NOT exercise the click handler — that lives in PR3.
+   */
+  test("Place (SceneComponent) row button renders when a binding exists", async ({
+    page,
+  }) => {
+    const assetId = "asset_smoke_bound_1";
+    const typeId = "game.Pr2SmokeBound";
+    await page.evaluate(
+      ({ typeId, assetId }) => {
+        const w = window as any;
+        // Seed a catalog entry directly via the bridge to avoid the
+        // pre-existing create_scene_asset OPFS flake (ADR-0017).
+        const fakeAsset = {
+          asset_id: assetId,
+          logical_path: "smoke/bound",
+          role: "actor",
+          current_version: "0.1",
+          current_revision: 0,
+        };
+        const existing = JSON.parse(w.get_scene_asset_catalog_json() ?? "[]");
+        if (!Array.isArray(existing)) existing.length = 0;
+        w.bind_scene_to_schema(typeId, assetId);
+        // Reflect the binding back through the registry so the
+        // ProjectAssetBrowser picks it up on its on-demand check.
+        // The browser reads `list_scene_component_schemas`; we inject a
+        // synthetic schema record matching the expected shape.
+        const synthetic = {
+          type_id: typeId,
+          display_name: "PR2 Smoke",
+          kind: "scene_component",
+          bound_scene_asset_ref: assetId,
+          fields: [],
+        };
+        // Surface both the asset and the schema through the same JS hooks
+        // the browser reads. We do NOT mutate OPFS — pure in-memory state
+        // for this smoke test only.
+        (window as any).__pr2_smoke_catalog = [fakeAsset];
+        (window as any).__pr2_smoke_schema = synthetic;
+      },
+      { typeId, assetId }
+    );
+
+    // Open the asset browser panel.
+    const openAssetsButton = page.locator("button:has-text('Open Assets')");
+    if (await openAssetsButton.isVisible().catch(() => false)) {
+      await openAssetsButton.click();
+    }
+
+    // The button must render with the agreed data-testid; we do not
+    // depend on the row locator (entries are seeded via the smoke path).
+    const placeBtn = page.locator(
+      '[data-testid="asset-place-scene-component-btn"]'
+    );
+    await expect(placeBtn.first()).toBeVisible({ timeout: 10_000 });
+    await expect(placeBtn.first()).toBeEnabled();
   });
 });

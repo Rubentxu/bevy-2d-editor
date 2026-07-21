@@ -1,8 +1,13 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   SceneAssetCatalogEntry,
   exportAssetToBsn,
 } from "../services/scene-assets";
+import {
+  listSceneComponentSchemas,
+  placeSceneComponentInstance,
+  StaleSceneComponentBindingError,
+} from "../services/scene-components";
 import { importBsnAssetFromFile } from "../services/bsnImport";
 
 interface Props {
@@ -36,6 +41,50 @@ export default function ProjectAssetBrowser({
   const [placingAssetId, setPlacingAssetId] = useState<string | null>(null);
   const [exportingAssetId, setExportingAssetId] = useState<string | null>(null);
   const bsnFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Hito 7 (scene-component-authoring-ux PR2): for each asset row, surface
+  // "Place Instance (SceneComponent)" when a registered SceneComponent schema
+  // references this asset's id via `bound_scene_asset_ref`. The lookup is
+  // on-demand — it runs once on mount and re-runs whenever `entries` changes
+  // (parent re-render), so newly-saved schemas are picked up via the
+  // existing useSceneAssets refresh path. When the bound id no longer
+  // resolves (stale), the click handler raises a typed error instead of a
+  // silent success.
+  const [bindingsByAsset, setBindingsByAsset] = useState<
+    Record<string, string>
+  >({});
+
+  const refreshBindings = useCallback(async () => {
+    if (typeof (window as any).list_scene_component_schemas !== "function") {
+      return;
+    }
+    try {
+      const schemas = await listSceneComponentSchemas();
+      const next: Record<string, string> = {};
+      for (const s of schemas) {
+        const ref = s.bound_scene_asset_ref;
+        if (typeof ref === "string" && ref.length > 0) {
+          // Keep the first schema binding if multiple schemas share the same
+          // asset (rare — schemas should be 1:1 with bound assets). The
+          // click handler resolves and rejects stale refs at place time.
+          next[ref] = s.type_id;
+        }
+      }
+      setBindingsByAsset(next);
+    } catch (e) {
+      // list_scene_component_schemas may not be available in some contexts;
+      // tolerate and fall back to no bindings rather than crashing the browser.
+      console.warn("[ProjectAssetBrowser] refreshBindings failed:", e);
+    }
+  }, []);
+
+  // On-demand refresh: mount + whenever the parent refreshes the catalog
+  // (`entries` identity changes). Avoids the 500ms setInterval PR2 used
+  // before — the bindings stay in sync because `entries` is the parent
+  // refresh trigger.
+  useEffect(() => {
+    refreshBindings();
+  }, [refreshBindings, entries]);
 
   const filteredEntries =
     roleFilter === "all"
@@ -211,6 +260,59 @@ export default function ProjectAssetBrowser({
     [onPlaceInstance]
   );
 
+  // Hito 7 (scene-component-authoring-ux PR2 / S5, S7): Place Instance
+  // directly from the asset row when a SceneComponent schema binds to this
+  // asset. Translation prompt stays identical to the plain path so behaviour
+  // is consistent across entry points. The click handler dispatches into
+  // `placeSceneComponentInstance` which performs the stale-ref check, so
+  // even if a stale binding somehow lingers in `bindingsByAsset`, the user
+  // sees a typed error instead of a silent success.
+  const handlePlaceSceneComponentInstance = useCallback(
+    async (assetId: string) => {
+      const typeId = bindingsByAsset[assetId];
+      if (!typeId) {
+        window.alert(
+          "No SceneComponent schema is currently bound to this asset. Save a SceneComponent schema first.",
+        );
+        return;
+      }
+      const translationStr = window.prompt(
+        "Translation (optional, e.g. {x:100, y:200} or leave empty):",
+      );
+      let translation: { x: number; y: number } | undefined;
+      if (translationStr && translationStr.trim()) {
+        try {
+          translation = JSON.parse(translationStr);
+        } catch {
+          const match = translationStr.match(
+            /x\s*:\s*([-\d.]+)\s*,\s*y\s*:\s*([-\d.]+)/i,
+          );
+          if (match) {
+            translation = {
+              x: parseFloat(match[1]),
+              y: parseFloat(match[2]),
+            };
+          }
+        }
+      }
+      setPlacingAssetId(assetId);
+      try {
+        await placeSceneComponentInstance(typeId, translation);
+      } catch (e) {
+        if (e instanceof StaleSceneComponentBindingError) {
+          window.alert(e.message);
+        } else {
+          window.alert(
+            `Place Instance failed: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      } finally {
+        setPlacingAssetId(null);
+      }
+    },
+    [bindingsByAsset],
+  );
+
   return (
     <div className="project-asset-browser" data-testid="project-asset-browser">
       <div className="browser-header">
@@ -327,6 +429,32 @@ export default function ProjectAssetBrowser({
                     >
                       {placingAssetId === entry.asset_id ? "Placing..." : "Place Instance"}
                     </button>
+                    {/* Hito 7 (PR2 / S5, S7): when a SceneComponent schema binds
+                        this asset, surface a separate entry point that
+                        resolves through `placeSceneComponentInstance`. The
+                        stale-ref check lives in the service, so we always
+                        enable the button when a binding is known — if the
+                        reference becomes stale before the click, the typed
+                        error is surfaced as an alert. */}
+                    {bindingsByAsset[entry.asset_id] && (
+                      <button
+                        onClick={() =>
+                          handlePlaceSceneComponentInstance(entry.asset_id)
+                        }
+                        data-testid="asset-place-scene-component-btn"
+                        disabled={placingAssetId === entry.asset_id}
+                        title={
+                          "Place instance via bound SceneComponent schema (" +
+                          bindingsByAsset[entry.asset_id] +
+                          ")"
+                        }
+                        className="primary"
+                      >
+                        {placingAssetId === entry.asset_id
+                          ? "Placing..."
+                          : "Place (SceneComponent)"}
+                      </button>
+                    )}
                     <button
                       onClick={() => handleRenameStart(entry)}
                       data-testid="asset-rename-btn"
