@@ -219,7 +219,7 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 | 4 | `build-and-run-loop` | v0.47.0 (PR #53) | ✅ DONE |
 | 5 | `hot-reload` | v0.48.0 (PRs #56 + #57) | ✅ DONE — data-only (logic graphs + BSN scene components + source files); texture hot-reload deferred per ADR-0014 §Deferred |
 | 6 | `code-aware-ai` | — | 🔲 Planned |
-| 7 | `scene-component-authoring` | — | 🔲 Planned |
+| 7 | `scene-component-authoring` (data + UX) | v0.75.0 (PRs #86 #87 #88) + v0.78.0 (PRs #93 #94 #95) | ✅ DONE |
 | 8 | `animation-graph-editor` (deferred) | — | 🔲 Planned |
 
 ### `code-editor-foundation` PR Sub-Sequence (4-PR stacked-to-main chain)
@@ -303,6 +303,22 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 - WASM module re-instantiation — architecturally undesirable (would reset Bevy App state)
 
 **Next**: Hito 4 Order 6 (`code-aware-ai`). New SDDK cycle.
+
+## Hito 7: scene-component-authoring UX follow-up
+
+**Goal**: Hardening of the SceneComponent authoring flow on top of the data-layer milestone (Hito 4 Order 7, v0.75.0). Three stacked PRs to `main`.
+
+**Status**: ✅ DONE — PRs #93 + #94 + #95 merged on `main`, tag `v0.78.0`.
+
+| Order | Change | Version | PR | Status |
+|-------|--------|---------|----|--------|
+| 1/3 | `scene-component-authoring-ux` PR1 — catalog picker + draft validation + ADR-0018 | v0.78.0 | [#93](https://github.com/Rubentxu/bevy-2d-editor/pull/93) | ✅ MERGED |
+| 2/3 | `scene-component-authoring-ux` PR2 — Place Instance helper + Asset Browser / Schema panel buttons + bridge exports | v0.78.0 | [#94](https://github.com/Rubentxu/bevy-2d-editor/pull/94) | ✅ MERGED |
+| 3/3 | `scene-component-authoring-ux` PR3 — focused Playwright coverage (S5 panel + S6 undo executable; S5 Asset Browser + S7 deferred per ADR-0017) | v0.78.0 | [#95](https://github.com/Rubentxu/bevy-2d-editor/pull/95) | ✅ MERGED |
+
+**Normative reference**: [ADR-0018: Deferred SceneComponent command handlers remain Unsupported](./adr/0018-deferred-scene-component-command-handlers-keep-unsupported.md).
+
+**Carried debt**: two `test.skip()` blocks in `frontend/tests/scene-component-authoring.spec.ts` for Asset Browser row placement (S5) and stale-at-place (S7) blocked by the OPFS catalog-persistence flake documented in [ADR-0017](./adr/0017-e2e-test-failure-root-cause.md). Pre-existing; out of scope for Hito 7.
 
 ### Post-Order 4 Hot-fixes
 
@@ -518,4 +534,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level
 
 ---
 
-*Last updated: v0.77.1 — 2026-07-21 (Hito 5 E2E followups COMPLETE (PR #91 v0.77.1): fixed 3 mock-ai-proxy bugs (Batch wrapper, valid field path, included Sprite2D component); added data-command-type attribute to ProposalCard; added waitForReady to useAIAssistant; 7/12 originally-blocked E2E tests now pass (6/6 ai-assisted-editing + 1/4 code-aware-ai + 1/2 scene-component-authoring); 3 remaining code-aware-ai tests blocked by Playwright webServer race killing mock-ai-proxy between tests — documented as test infra followup; Rust 476 tests passing; Hito 4 + Hito 5 effectively complete)
+*Last updated: v0.78.0 — 2026-07-21 (Hito 7 `scene-component-authoring-ux` COMPLETE via PR #93 (catalog picker + draft validation + ADR-0018), PR #94 (Place Instance helper + Asset Browser / Schema panel buttons + bridge exports) and PR #95 (focused Playwright coverage: S5 panel + S6 undo executable; S5 Asset Browser + S7 deferred per ADR-0017). Stacked-to-main, three merge commits `ed29230`/`4224957`/`8dbb520`. ADR-0018 records that `command_scene_component::apply_*` remain `CommandError::Unsupported` and the UX reuses direct WASM exports per ADR-0016. Code changes are TS-only; ADR-0012–0017 entries added to the ADR index. Pre-existing debt unchanged (cargo test fixtures missing `BsnIrNode.kind` and OPFS catalog-persistence flake per ADR-0017).)
