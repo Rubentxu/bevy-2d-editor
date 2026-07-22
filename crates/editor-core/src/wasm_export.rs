@@ -9,9 +9,10 @@ use crate::document::SceneDocument;
 
 /// Export a SceneDocument JSON to a Bevy DynamicScene format.
 ///
-/// `serde_wasm_bindgen::to_value` cannot serialize this directly because
-/// the underlying `DynamicSceneExport` contains nested `serde_json::Value`
-/// fields that `to_value` mangles to `{}`.
+/// Returns a JSON string envelope of shape `{ json: String, warnings: ExportWarning[] }`.
+/// The inner `DynamicSceneExport` is serialized separately because it contains
+/// nested `serde_json::Value` inside `BTreeMap` values that are easier to
+/// round-trip as a JSON string than via `serde_wasm_bindgen`.
 ///
 /// Returns a JsValue error (thrown as exception on the JS side) if the input
 /// is not valid SceneDocument JSON.
@@ -33,6 +34,7 @@ pub fn export_dynamic_scene_wasm(doc_json: &str) -> Result<JsValue, JsValue> {
         "json": export_json,
         "warnings": export.warnings,
     });
-    serde_wasm_bindgen::to_value(&envelope)
-        .map_err(|e| JsValue::from_str(&format!("Failed to serialize envelope: {}", e)))
+    let envelope_str = serde_json::to_string(&envelope)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize envelope: {}", e)))?;
+    Ok(JsValue::from_str(&envelope_str))
 }
