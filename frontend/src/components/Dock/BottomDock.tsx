@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, type DragEvent } from "react";
 import ConsoleTab from "../ConsoleTab";
 import OutputTab from "../OutputTab";
 import ProblemsTab from "../ProblemsTab";
 import SearchTab from "../SearchTab";
+import { DOCK_PANEL_MIME } from "./DockPanel";
 
 interface Props {
   visible: boolean;
@@ -27,15 +28,29 @@ const TABS: {
 export default function BottomDock({ visible, onToggle, onClose }: Props) {
   const [activeTab, setActiveTab] = useState<BottomDockTab>("console");
 
+  // Tier 1c: when the user grabs the tab strip, stamp the active tab id so
+  // the region-swap hook (v0.82) can decide which bottom panel to relocate.
+  const handleDragStart = (e: DragEvent<HTMLDivElement>) => {
+    e.dataTransfer.setData(DOCK_PANEL_MIME, `bottom-${activeTab}`);
+    e.dataTransfer.setData("text/plain", `bottom-${activeTab}`);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
   if (!visible) return null;
 
   return (
     <aside
       className="dock dock-bottom"
       data-testid="dock-bottom"
+      data-panel-id="bottom"
       aria-label="Tools"
     >
-      <header className="bottom-dock-header">
+      <header
+        className="bottom-dock-header"
+        draggable
+        onDragStart={handleDragStart}
+        style={{ cursor: "grab" }}
+      >
         <div
           className="bottom-dock-tabs"
           role="tablist"
