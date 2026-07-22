@@ -20,7 +20,7 @@ async function getRoot(): Promise<FileSystemDirectoryHandle | null> {
 
 async function getSubdir(
   segments: string[],
-  createDirs: boolean = true
+  createDirs: boolean = true,
 ): Promise<FileSystemDirectoryHandle | null> {
   const root = await getRoot();
   if (!root) return null;
@@ -41,7 +41,7 @@ async function getSubdir(
 
 export async function opfsSaveFile(
   path: string,
-  contents: string
+  contents: string,
 ): Promise<OpfsResult> {
   try {
     if (!navigator.storage?.getDirectory) {
@@ -92,7 +92,9 @@ export async function opfsLoadFile(path: string): Promise<OpfsResult<string>> {
   }
 }
 
-export async function opfsListFiles(path: string): Promise<OpfsResult<string[]>> {
+export async function opfsListFiles(
+  path: string,
+): Promise<OpfsResult<string[]>> {
   try {
     if (!navigator.storage?.getDirectory) {
       return { ok: false, error: "OPFS unavailable" };
@@ -151,7 +153,7 @@ export async function opfsDeleteFile(path: string): Promise<OpfsResult> {
 
 export async function opfsSaveBinary(
   path: string,
-  contents: Uint8Array
+  contents: Uint8Array,
 ): Promise<OpfsResult> {
   try {
     if (!navigator.storage?.getDirectory) {
@@ -176,7 +178,7 @@ export async function opfsSaveBinary(
 }
 
 export async function opfsLoadBinary(
-  path: string
+  path: string,
 ): Promise<OpfsResult<Uint8Array>> {
   try {
     if (!navigator.storage?.getDirectory) {

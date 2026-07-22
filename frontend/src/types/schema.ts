@@ -18,7 +18,7 @@ export type FieldType =
   | "Color"
   | "Anchor"
   | "AssetReference"
-  | string  // ComponentRef (serialized as plain string) or Enum (object)
+  | string // ComponentRef (serialized as plain string) or Enum (object)
   | { Enum: { variants: string[] } };
 
 export interface Constraint {

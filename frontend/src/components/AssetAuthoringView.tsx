@@ -16,7 +16,12 @@ interface Props {
   document: SceneAssetDocument;
   activeEntityId: string | null;
   onSelectEntity: (localId: string | null) => void;
-  onCommit: (localId: string, typeId: string, fieldPath: string, value: any) => Promise<void>;
+  onCommit: (
+    localId: string,
+    typeId: string,
+    fieldPath: string,
+    value: any,
+  ) => Promise<void>;
   onAddComponent: (localId: string, typeId: string) => Promise<void>;
   onRemoveComponent: (localId: string, typeId: string) => Promise<void>;
   onUndo: () => Promise<void>;
@@ -57,7 +62,7 @@ export default function AssetAuthoringView({
   const isLevel = document.role === "level";
 
   const activeEntity = document.entities.find(
-    (e) => e.local_id === activeEntityId
+    (e) => e.local_id === activeEntityId,
   );
 
   /**
@@ -70,7 +75,7 @@ export default function AssetAuthoringView({
       // Wrap as [fieldPath] for SetComponentValue.field_path: Vec<String>
       await onCommit(localId, typeId, fieldPath, value);
     },
-    [onCommit]
+    [onCommit],
   );
 
   /**
@@ -81,14 +86,11 @@ export default function AssetAuthoringView({
     async (localId: string, typeId: string) => {
       await onAddComponent(localId, typeId);
     },
-    [onAddComponent]
+    [onAddComponent],
   );
 
   return (
-    <div
-      className="asset-authoring-view"
-      data-testid="asset-authoring-view"
-    >
+    <div className="asset-authoring-view" data-testid="asset-authoring-view">
       {/* Header with asset info and actions */}
       <div className="authoring-header" data-testid="authoring-header">
         <div className="asset-info">
@@ -125,10 +127,7 @@ export default function AssetAuthoringView({
           >
             Save
           </button>
-          <button
-            onClick={onBackToScene}
-            data-testid="back-to-scene-btn"
-          >
+          <button onClick={onBackToScene} data-testid="back-to-scene-btn">
             Back to Scene
           </button>
         </div>
@@ -186,9 +185,7 @@ export default function AssetAuthoringView({
       {/* Component editor for selected entity */}
       {activeEntity && (
         <div className="entity-editor" data-testid="entity-editor">
-          <h3 data-testid="entity-editor-title">
-            Entity: {activeEntity.name}
-          </h3>
+          <h3 data-testid="entity-editor-title">Entity: {activeEntity.name}</h3>
           <div className="components-list">
             {activeEntity.components.map((comp) => (
               <ComponentCard
@@ -200,7 +197,7 @@ export default function AssetAuthoringView({
                     activeEntity.local_id,
                     comp.type_id,
                     fieldPath,
-                    value
+                    value,
                   )
                 }
                 onRemove={() =>
@@ -210,7 +207,9 @@ export default function AssetAuthoringView({
             ))}
             <AddComponentButton
               entityId={activeEntity.local_id}
-              onAdd={(typeId) => handleAddComponent(activeEntity.local_id, typeId)}
+              onAdd={(typeId) =>
+                handleAddComponent(activeEntity.local_id, typeId)
+              }
             />
           </div>
         </div>
@@ -253,7 +252,10 @@ function EntityList({
           onClick={() => onSelectEntity(entity.local_id)}
           data-testid={`entity-item-${entity.local_id}`}
         >
-          <span className="entity-name" data-testid={`entity-name-${entity.local_id}`}>
+          <span
+            className="entity-name"
+            data-testid={`entity-name-${entity.local_id}`}
+          >
             {entity.name}
           </span>
           <span className="entity-components-count">
@@ -273,7 +275,10 @@ interface RelationshipsPanelProps {
   entities: SceneAssetEntity[];
 }
 
-function RelationshipsPanel({ relationships, entities }: RelationshipsPanelProps) {
+function RelationshipsPanel({
+  relationships,
+  entities,
+}: RelationshipsPanelProps) {
   const getEntityName = (localId: string) => {
     const entity = entities.find((e) => e.local_id === localId);
     return entity ? entity.name : localId;
@@ -281,7 +286,8 @@ function RelationshipsPanel({ relationships, entities }: RelationshipsPanelProps
 
   const formatKind = (kind: any): string => {
     if (kind === "Child") return "Child";
-    if (typeof kind === "object" && kind.custom) return `Custom: ${kind.custom}`;
+    if (typeof kind === "object" && kind.custom)
+      return `Custom: ${kind.custom}`;
     return String(kind);
   };
 
@@ -297,7 +303,11 @@ function RelationshipsPanel({ relationships, entities }: RelationshipsPanelProps
   return (
     <div className="relationships-list" data-testid="relationships-list">
       {relationships.map((rel, idx) => (
-        <div key={idx} className="relationship-item" data-testid={`relationship-${idx}`}>
+        <div
+          key={idx}
+          className="relationship-item"
+          data-testid={`relationship-${idx}`}
+        >
           <span className="rel-from" data-testid="rel-from">
             {getEntityName(rel.from_local_id)}
           </span>
@@ -366,7 +376,7 @@ function LayersPanel({ document, onAssetJsonChanged }: LayersPanelProps) {
       const updated = await createSceneInstanceLayer(
         JSON.stringify(document),
         name,
-        creatingKind
+        creatingKind,
       );
       await onAssetJsonChanged(updated);
       setCreatingName("");
@@ -382,7 +392,7 @@ function LayersPanel({ document, onAssetJsonChanged }: LayersPanelProps) {
       try {
         const updated = await deleteSceneInstanceLayer(
           JSON.stringify(document),
-          layerId
+          layerId,
         );
         await onAssetJsonChanged(updated);
         // No explicit refresh — same as handleCreate.
@@ -390,7 +400,7 @@ function LayersPanel({ document, onAssetJsonChanged }: LayersPanelProps) {
         setError(e instanceof Error ? e.message : String(e));
       }
     },
-    [document, onAssetJsonChanged]
+    [document, onAssetJsonChanged],
   );
 
   if (layers.length === 0) {

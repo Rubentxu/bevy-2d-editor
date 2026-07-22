@@ -70,7 +70,7 @@ export async function listSourceFiles(): Promise<SourceFile[]> {
  * @returns Object with ok:true and value:content string, or ok:false with error.
  */
 export async function readSourceFile(
-  id: string
+  id: string,
 ): Promise<{ ok: true; value: string } | { ok: false; error: string }> {
   await waitForEngine();
   const parsed = parseOpfs<string>((window as any).read_source_file(id));
@@ -87,12 +87,14 @@ export async function readSourceFile(
  */
 export async function writeSourceFile(
   id: string,
-  content: string
+  content: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   await waitForEngine();
   inFlightSaveCounter.incr();
   try {
-    const parsed = parseOpfs<null>((window as any).write_source_file(id, content));
+    const parsed = parseOpfs<null>(
+      (window as any).write_source_file(id, content),
+    );
     if (parsed.ok) {
       emit({ type: "hot-reload-source", fileId: id });
       return { ok: true };
@@ -115,7 +117,7 @@ export async function createSourceFile(name: string): Promise<string> {
   // Derive path from name: "main.rs" -> "main", "src/lib.rs" -> "src/lib"
   const path = name.endsWith(".rs") ? name.slice(0, -3) : name;
   const parsed = parseOpfs<SourceFile>(
-    (window as any).create_source_file(path, name)
+    (window as any).create_source_file(path, name),
   );
   if (!parsed.ok) throw new Error(parsed.error!);
   return parsed.value!.id;
@@ -136,9 +138,10 @@ export async function deleteSourceFile(id: string): Promise<void> {
  * Get the source location for a component schema type_id.
  * Returns SourceLocation or null if not found / not set.
  */
-export async function findSourceLocation(typeId: string): Promise<SourceLocation | null> {
+export async function findSourceLocation(
+  typeId: string,
+): Promise<SourceLocation | null> {
   await waitForEngine();
   const result: string = (window as any).find_source_location(typeId);
   return result === "null" ? null : JSON.parse(result);
 }
-

@@ -12,7 +12,10 @@
  * @returns JSON string of the new SceneAssetCatalogEntry
  * @throws Error with parse details if the `.bsn` text is malformed
  */
-export async function importBsnAsset(name: string, bsnText: string): Promise<string> {
+export async function importBsnAsset(
+  name: string,
+  bsnText: string,
+): Promise<string> {
   const result = await (window as any).import_bsn_asset_wasm(name, bsnText);
   if (typeof result !== "string") {
     throw new Error("Unexpected WASM return type for import_bsn_asset_wasm");
@@ -27,7 +30,10 @@ export async function importBsnAsset(name: string, bsnText: string): Promise<str
  * @param file - The File object from an <input type="file"> picker
  * @returns JSON string of the new SceneAssetCatalogEntry
  */
-export function importBsnAssetFromFile(name: string, file: File): Promise<string> {
+export function importBsnAssetFromFile(
+  name: string,
+  file: File,
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -56,10 +62,14 @@ export function importBsnAssetFromFile(name: string, file: File): Promise<string
  * @returns JSON string of the resulting SceneAssetDocument
  * @throws Error with parse details if the `.bsn` text is malformed
  */
-export async function importBsnTextToDocument(bsnText: string): Promise<string> {
+export async function importBsnTextToDocument(
+  bsnText: string,
+): Promise<string> {
   const result = (window as any).import_bsn_text_to_asset_wasm(bsnText);
   if (typeof result !== "string") {
-    throw new Error("Unexpected WASM return type for import_bsn_text_to_asset_wasm");
+    throw new Error(
+      "Unexpected WASM return type for import_bsn_text_to_asset_wasm",
+    );
   }
   return result;
 }

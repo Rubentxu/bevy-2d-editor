@@ -17,10 +17,7 @@ export interface TilesetMetadata {
 
 async function waitForEngine(): Promise<void> {
   let attempts = 0;
-  while (
-    typeof (window as any).paint_tile !== "function" &&
-    attempts < 50
-  ) {
+  while (typeof (window as any).paint_tile !== "function" && attempts < 50) {
     await new Promise((r) => setTimeout(r, 100));
     attempts++;
   }
@@ -76,7 +73,7 @@ export async function createTileset(
   tileWidth: number,
   tileHeight: number,
   columns: number,
-  spacing: number = 0
+  spacing: number = 0,
 ): Promise<string> {
   const tileset = {
     name,
@@ -108,10 +105,17 @@ export async function paintTile(
   x: number,
   y: number,
   tilesetId: string,
-  localIndex: number
+  localIndex: number,
 ): Promise<void> {
   await waitForEngine();
-  await (window as any).paint_tile(assetRef, layerId, x, y, tilesetId, localIndex);
+  await (window as any).paint_tile(
+    assetRef,
+    layerId,
+    x,
+    y,
+    tilesetId,
+    localIndex,
+  );
 }
 
 /**
@@ -126,7 +130,7 @@ export async function eraseTile(
   assetRef: string,
   layerId: string,
   x: number,
-  y: number
+  y: number,
 ): Promise<void> {
   await waitForEngine();
   await (window as any).erase_tile(assetRef, layerId, x, y);

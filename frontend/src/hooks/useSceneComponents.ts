@@ -32,7 +32,7 @@ export interface UseSceneComponentsResult extends State {
 }
 
 export function useSceneComponents(
-  options: { enabled?: boolean } = {}
+  options: { enabled?: boolean } = {},
 ): UseSceneComponentsResult {
   const { enabled = true } = options;
   const [state, setState] = useState<State>({
@@ -58,7 +58,7 @@ export function useSceneComponents(
       await refresh();
       return typeId;
     },
-    [refresh]
+    [refresh],
   );
 
   const bind = useCallback(
@@ -66,7 +66,7 @@ export function useSceneComponents(
       await bindSceneToSchema(typeId, sceneAssetId);
       await refresh();
     },
-    [refresh]
+    [refresh],
   );
 
   useEffect(() => {

@@ -5,7 +5,12 @@ interface Props {
   onCancel: () => void;
 }
 
-export default function UnsavedChangesDialog({ sourceName, onSave, onDiscard, onCancel }: Props) {
+export default function UnsavedChangesDialog({
+  sourceName,
+  onSave,
+  onDiscard,
+  onCancel,
+}: Props) {
   return (
     <div className="dialog-overlay" data-testid="unsaved-dialog">
       <div className="dialog">
@@ -28,10 +33,7 @@ export default function UnsavedChangesDialog({ sourceName, onSave, onDiscard, on
           >
             Discard
           </button>
-          <button
-            data-testid="unsaved-cancel-btn"
-            onClick={onCancel}
-          >
+          <button data-testid="unsaved-cancel-btn" onClick={onCancel}>
             Cancel
           </button>
         </div>

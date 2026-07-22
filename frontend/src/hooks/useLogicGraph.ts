@@ -118,7 +118,9 @@ export function toRFEdges(graph: LogicGraphAsset): RFEdge[] {
  * - Open/create/auto-create-on-mount/clear-on-mode-leave
  */
 export function useLogicGraph() {
-  const [graph, setGraph] = useState<LogicGraphAsset | null>(DEFAULT_LOGIC_GRAPH);
+  const [graph, setGraph] = useState<LogicGraphAsset | null>(
+    DEFAULT_LOGIC_GRAPH,
+  );
   const [logState, setLogState] = useState<LogicLogState>(DEFAULT_LOG_STATE);
   const [descriptors, setDescriptors] = useState<NodeDescriptor[]>([]);
 
@@ -178,23 +180,28 @@ export function useLogicGraph() {
     // OPFS-backed open() pending. See ROADMAP §Hito 4 Order 5 deferral list:
     // logic-graph OPFS persistence is post-Order-5 work (data-only hot-reload
     // doesn't ship .logic persistence; that needs a dedicated cycle).
-    console.warn("useLogicGraph: open() is a placeholder — using create instead");
+    console.warn(
+      "useLogicGraph: open() is a placeholder — using create instead",
+    );
     await create(assetId, `logic/${assetId}`);
   }, []);
 
   /**
    * Create a new empty logic graph.
    */
-  const create = useCallback(async (assetId: string, logicalPath: string) => {
-    try {
-      await (window as any).create_logic_graph_asset(assetId, logicalPath);
-      await refresh();
-      await refreshDescriptors();
-    } catch (e) {
-      console.error("useLogicGraph: create failed:", e);
-      throw e;
-    }
-  }, [refresh, refreshDescriptors]);
+  const create = useCallback(
+    async (assetId: string, logicalPath: string) => {
+      try {
+        await (window as any).create_logic_graph_asset(assetId, logicalPath);
+        await refresh();
+        await refreshDescriptors();
+      } catch (e) {
+        console.error("useLogicGraph: create failed:", e);
+        throw e;
+      }
+    },
+    [refresh, refreshDescriptors],
+  );
 
   /**
    * Create the default empty logic graph for editor mode entry.
@@ -209,12 +216,17 @@ export function useLogicGraph() {
    * Sends the raw command JSON directly — Rust dispatch_logic_command parses
    * a flat LogicCommand (#[serde(tag="type")]), not an envelope.
    */
-  const dispatch = useCallback(async (command: object): Promise<string> => {
-    const result = await (window as any).dispatch_logic_command(JSON.stringify(command));
-    // Refresh graph and log state after dispatch
-    await refresh();
-    return result;
-  }, [refresh]);
+  const dispatch = useCallback(
+    async (command: object): Promise<string> => {
+      const result = await (window as any).dispatch_logic_command(
+        JSON.stringify(command),
+      );
+      // Refresh graph and log state after dispatch
+      await refresh();
+      return result;
+    },
+    [refresh],
+  );
 
   /**
    * Undo the last logic command.

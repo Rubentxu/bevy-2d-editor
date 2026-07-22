@@ -32,13 +32,39 @@ export type ComponentValues = Record<string, JsonValue>;
 // ─── Command variants ────────────────────────────────────────────────────────
 
 export type Command =
-  | { type: "CreateEntity"; id: StableId; name: string; components?: ComponentInstance[] }
+  | {
+      type: "CreateEntity";
+      id: StableId;
+      name: string;
+      components?: ComponentInstance[];
+    }
   | { type: "DeleteEntity"; id: StableId }
-  | { type: "AddComponent"; entity_id: StableId; type_id: string; values?: JsonValue }
+  | {
+      type: "AddComponent";
+      entity_id: StableId;
+      type_id: string;
+      values?: JsonValue;
+    }
   | { type: "RemoveComponent"; entity_id: StableId; type_id: string }
-  | { type: "SetComponentField"; entity_id: StableId; type_id: string; field_path: FieldPath; value: JsonValue }
-  | { type: "ReparentEntity"; entity_id: StableId; old_parent?: StableId | null; new_parent?: StableId | null }
-  | { type: "RenameEntity"; entity_id: StableId; old_name?: string | null; new_name: string }
+  | {
+      type: "SetComponentField";
+      entity_id: StableId;
+      type_id: string;
+      field_path: FieldPath;
+      value: JsonValue;
+    }
+  | {
+      type: "ReparentEntity";
+      entity_id: StableId;
+      old_parent?: StableId | null;
+      new_parent?: StableId | null;
+    }
+  | {
+      type: "RenameEntity";
+      entity_id: StableId;
+      old_name?: string | null;
+      new_name: string;
+    }
   | {
       type: "Batch";
       label: string;
@@ -158,11 +184,12 @@ export async function fetchPropose(
     logic_graphs?: LogicGraphRef[];
     scene_assets?: SceneAssetContext;
     selected_entity?: SelectedEntity | null;
-  }
+  },
 ): Promise<ProposeResponse> {
-  const baseUrl = proxyUrl
-    ?? (typeof window !== "undefined" && (window as any).__aiProxyUrlOverride)
-    ?? (await import("./ai-settings").then((m) => m.getProxyUrl()));
+  const baseUrl =
+    proxyUrl ??
+    (typeof window !== "undefined" && (window as any).__aiProxyUrlOverride) ??
+    (await import("./ai-settings").then((m) => m.getProxyUrl()));
   const url = `${baseUrl}/v1/propose`;
 
   const controller = new AbortController();
@@ -175,7 +202,10 @@ export async function fetchPropose(
       schemas,
       source_files: extraContext?.source_files ?? [],
       logic_graphs: extraContext?.logic_graphs ?? [],
-      scene_assets: extraContext?.scene_assets ?? { catalog: [], selected_body: null },
+      scene_assets: extraContext?.scene_assets ?? {
+        catalog: [],
+        selected_body: null,
+      },
       selected_entity: extraContext?.selected_entity ?? null,
     };
     const response = await fetch(url, {
@@ -191,13 +221,17 @@ export async function fetchPropose(
       throw new InvalidRequestError(await response.text());
     }
     if (response.status === 503) {
-      throw new MissingApiKeyError("API key missing or invalid — check AI settings");
+      throw new MissingApiKeyError(
+        "API key missing or invalid — check AI settings",
+      );
     }
     if (response.status === 502) {
       throw new UpstreamError("AI service returned an error");
     }
     if (!response.ok) {
-      throw new UpstreamError(`Proxy returned ${response.status}: ${await response.text()}`);
+      throw new UpstreamError(
+        `Proxy returned ${response.status}: ${await response.text()}`,
+      );
     }
 
     const data = (await response.json()) as ProposeResponse;

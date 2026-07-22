@@ -39,7 +39,7 @@ function formatCommand(envelope: CommandEnvelope): string {
     case "RenameEntity":
       return `RenameEntity → "${(cmd as any).new_name ?? ""}"`;
     case "Batch":
-      return `Batch: ${((cmd as any).label ?? "nested")} (${((cmd as any).commands ?? []).length} commands)`;
+      return `Batch: ${(cmd as any).label ?? "nested"} (${((cmd as any).commands ?? []).length} commands)`;
     default:
       return t;
   }
@@ -58,10 +58,10 @@ export default function ProposalCard({
   // When commands have 1 element, use that type; when Batch, use "Batch".
   const commandType =
     commands.length === 1
-      ? (commands[0].command as any)?.type ?? ""
+      ? ((commands[0].command as any)?.type ?? "")
       : commands.length > 1
-      ? "Batch"
-      : "";
+        ? "Batch"
+        : "";
   return (
     <div className="proposal-card" data-command-type={commandType}>
       <div className="proposal-header">

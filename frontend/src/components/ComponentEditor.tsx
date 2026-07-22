@@ -27,30 +27,46 @@ interface FieldProps {
  * - Booleans: checkbox
  * - Strings: text input
  */
-export default function ComponentEditor({ fieldPath, value, onCommit }: FieldProps) {
+export default function ComponentEditor({
+  fieldPath,
+  value,
+  onCommit,
+}: FieldProps) {
   // Vec2 (translation, scale)
   if (isVec2Like(value)) {
-    return <Vec2Editor fieldPath={fieldPath} value={value} onCommit={onCommit} />;
+    return (
+      <Vec2Editor fieldPath={fieldPath} value={value} onCommit={onCommit} />
+    );
   }
   // Color (color object)
   if (isColorLike(value)) {
-    return <ColorEditor fieldPath={fieldPath} value={value} onCommit={onCommit} />;
+    return (
+      <ColorEditor fieldPath={fieldPath} value={value} onCommit={onCommit} />
+    );
   }
   // Anchor
   if (typeof value === "string" && ANCHOR_VALUES.includes(value)) {
-    return <AnchorEditor fieldPath={fieldPath} value={value} onCommit={onCommit} />;
+    return (
+      <AnchorEditor fieldPath={fieldPath} value={value} onCommit={onCommit} />
+    );
   }
   // Number
   if (typeof value === "number") {
-    return <NumberEditor fieldPath={fieldPath} value={value} onCommit={onCommit} />;
+    return (
+      <NumberEditor fieldPath={fieldPath} value={value} onCommit={onCommit} />
+    );
   }
   // Boolean
   if (typeof value === "boolean") {
-    return <BoolEditor fieldPath={fieldPath} value={value} onCommit={onCommit} />;
+    return (
+      <BoolEditor fieldPath={fieldPath} value={value} onCommit={onCommit} />
+    );
   }
   // String
   if (typeof value === "string") {
-    return <StringEditor fieldPath={fieldPath} value={value} onCommit={onCommit} />;
+    return (
+      <StringEditor fieldPath={fieldPath} value={value} onCommit={onCommit} />
+    );
   }
   // Fallback: JSON textarea
   return <JsonEditor fieldPath={fieldPath} value={value} onCommit={onCommit} />;
@@ -117,10 +133,46 @@ function ColorEditor({ fieldPath, value, onCommit }: FieldProps) {
     <div className="field" data-testid={`field-${fieldPath}`}>
       <span className="field-label">{fieldPath}</span>
       <div className="color-fields">
-        <input type="number" step="any" min="0" max="1" value={r} onChange={(e) => setR(Number(e.target.value))} onBlur={() => onCommit({ r, g, b, a })} title="R" />
-        <input type="number" step="any" min="0" max="1" value={g} onChange={(e) => setG(Number(e.target.value))} onBlur={() => onCommit({ r, g, b, a })} title="G" />
-        <input type="number" step="any" min="0" max="1" value={b} onChange={(e) => setB(Number(e.target.value))} onBlur={() => onCommit({ r, g, b, a })} title="B" />
-        <input type="number" step="any" min="0" max="1" value={a} onChange={(e) => setA(Number(e.target.value))} onBlur={() => onCommit({ r, g, b, a })} title="A" />
+        <input
+          type="number"
+          step="any"
+          min="0"
+          max="1"
+          value={r}
+          onChange={(e) => setR(Number(e.target.value))}
+          onBlur={() => onCommit({ r, g, b, a })}
+          title="R"
+        />
+        <input
+          type="number"
+          step="any"
+          min="0"
+          max="1"
+          value={g}
+          onChange={(e) => setG(Number(e.target.value))}
+          onBlur={() => onCommit({ r, g, b, a })}
+          title="G"
+        />
+        <input
+          type="number"
+          step="any"
+          min="0"
+          max="1"
+          value={b}
+          onChange={(e) => setB(Number(e.target.value))}
+          onBlur={() => onCommit({ r, g, b, a })}
+          title="B"
+        />
+        <input
+          type="number"
+          step="any"
+          min="0"
+          max="1"
+          value={a}
+          onChange={(e) => setA(Number(e.target.value))}
+          onBlur={() => onCommit({ r, g, b, a })}
+          title="A"
+        />
       </div>
     </div>
   );
@@ -136,7 +188,9 @@ function AnchorEditor({ fieldPath, value, onCommit }: FieldProps) {
         data-testid={`field-${fieldPath}-select`}
       >
         {ANCHOR_VALUES.map((a) => (
-          <option key={a} value={a}>{a}</option>
+          <option key={a} value={a}>
+            {a}
+          </option>
         ))}
       </select>
     </div>

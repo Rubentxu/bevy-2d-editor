@@ -6,9 +6,17 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { fetchPropose, CommandEnvelope, Command, ProposeResponse } from "../services/ai-assistant";
+import {
+  fetchPropose,
+  CommandEnvelope,
+  Command,
+  ProposeResponse,
+} from "../services/ai-assistant";
 import { getSceneSnapshot } from "../engine-bridge";
-import { assembleMultiSourceContext, type AssembledContext } from "../services/ai-context";
+import {
+  assembleMultiSourceContext,
+  type AssembledContext,
+} from "../services/ai-context";
 import type { SourceFileRef } from "../types/ai";
 import { listSourceFiles, readSourceFile } from "../services/code-files";
 import { subscribe } from "../services/hot-reload";
@@ -54,7 +62,9 @@ export function useAIAssistant({ onApplied }: UseAIAssistantOptions = {}) {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [error, setError] = useState<string | null>(null);
   // Hito 4 Order 6: context debug view state.
-  const [contextStats, setContextStats] = useState<import("../types/ai").PerSourceStats[]>([]);
+  const [contextStats, setContextStats] = useState<
+    import("../types/ai").PerSourceStats[]
+  >([]);
   const [contextUsedChars, setContextUsedChars] = useState(0);
 
   // Hito 4 Order 6 (T2.5): source-files context invalidation.
@@ -83,7 +93,9 @@ export function useAIAssistant({ onApplied }: UseAIAssistantOptions = {}) {
    * Dispatches nothing — proposals are held in state for user review.
    */
   const submit = useCallback(
-    async (dispatchFn: (envelope: CommandEnvelope) => Promise<{ error?: string }>) => {
+    async (
+      dispatchFn: (envelope: CommandEnvelope) => Promise<{ error?: string }>,
+    ) => {
       if (!prompt.trim()) return;
 
       setLoading(true);
@@ -115,14 +127,18 @@ export function useAIAssistant({ onApplied }: UseAIAssistantOptions = {}) {
         // are non-fatal — we fall back to the 3-field request shape.
         // Note: in test env (mock-ai-proxy), source-files fetch may be slow
         // or fail; the wrapper catches and continues.
-        let extraContext: Parameters<typeof fetchPropose>[5] | undefined = undefined;
+        let extraContext: Parameters<typeof fetchPropose>[5] | undefined =
+          undefined;
         try {
           // Fetch with a 2s budget to avoid blocking the propose flow
           // when the source-files API is slow or unavailable.
           const sourceList = await Promise.race([
             listSourceFiles(),
             new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error("source-files fetch timeout")), 2000)
+              setTimeout(
+                () => reject(new Error("source-files fetch timeout")),
+                2000,
+              ),
             ),
           ]);
           const sourceFilesWithContent: SourceFileRef[] = await Promise.all(
@@ -131,7 +147,10 @@ export function useAIAssistant({ onApplied }: UseAIAssistantOptions = {}) {
                 const result = await Promise.race([
                   readSourceFile(sf.id),
                   new Promise<{ ok: false; error: string }>((resolve) =>
-                    setTimeout(() => resolve({ ok: false, error: "timeout" }), 1500)
+                    setTimeout(
+                      () => resolve({ ok: false, error: "timeout" }),
+                      1500,
+                    ),
                   ),
                 ]);
                 return {
@@ -142,7 +161,7 @@ export function useAIAssistant({ onApplied }: UseAIAssistantOptions = {}) {
               } catch {
                 return { id: sf.id, path: sf.path, content: "" };
               }
-            })
+            }),
           );
           const assembled: AssembledContext = assembleMultiSourceContext(
             sceneSnapshot,
@@ -150,7 +169,7 @@ export function useAIAssistant({ onApplied }: UseAIAssistantOptions = {}) {
             sourceFilesWithContent,
             [], // logic_graphs: TBD via useLogicGraph (out of scope for PR2)
             { catalog: [], selected_body: null }, // scene_assets: TBD
-            null
+            null,
           );
           extraContext = {
             source_files: assembled.context.source_files,
@@ -160,7 +179,10 @@ export function useAIAssistant({ onApplied }: UseAIAssistantOptions = {}) {
           };
         } catch (ctxErr) {
           // Non-fatal: log and continue with 3-field request.
-          console.warn("[useAIAssistant] multi-source context assembly failed:", ctxErr);
+          console.warn(
+            "[useAIAssistant] multi-source context assembly failed:",
+            ctxErr,
+          );
         }
 
         const response: ProposeResponse = await fetchPropose(
@@ -169,32 +191,39 @@ export function useAIAssistant({ onApplied }: UseAIAssistantOptions = {}) {
           schemas,
           undefined,
           undefined,
-          extraContext
+          extraContext,
         );
 
-        const newProposals: Proposal[] = response.commands.map((envelope, i) => {
-          // If the returned command is a Batch, unwrap its inner commands into
-          // individual CommandEnvelopes for display and step-by-step dispatch.
-          const topCommand = envelope.command as Command;
-          let commands: CommandEnvelope[] = [];
-          if (topCommand.type === "Batch" && Array.isArray((topCommand as any).commands)) {
-            const inner = (topCommand as any).commands as Command[];
-            commands = inner.map((cmd) => ({
-              command: cmd,
-              metadata: { ...envelope.metadata },
-            }));
-          } else {
-            commands = [envelope];
-          }
+        const newProposals: Proposal[] = response.commands.map(
+          (envelope, i) => {
+            // If the returned command is a Batch, unwrap its inner commands into
+            // individual CommandEnvelopes for display and step-by-step dispatch.
+            const topCommand = envelope.command as Command;
+            let commands: CommandEnvelope[] = [];
+            if (
+              topCommand.type === "Batch" &&
+              Array.isArray((topCommand as any).commands)
+            ) {
+              const inner = (topCommand as any).commands as Command[];
+              commands = inner.map((cmd) => ({
+                command: cmd,
+                metadata: { ...envelope.metadata },
+              }));
+            } else {
+              commands = [envelope];
+            }
 
-          return {
-            id: `proposal-${Date.now()}-${i}`,
-            rationale: (envelope.metadata as any).rationale ?? `AI suggestion ${i + 1}`,
-            model: (envelope.metadata as any).model,
-            commands,
-            validationErrors: [],
-          };
-        });
+            return {
+              id: `proposal-${Date.now()}-${i}`,
+              rationale:
+                (envelope.metadata as any).rationale ??
+                `AI suggestion ${i + 1}`,
+              model: (envelope.metadata as any).model,
+              commands,
+              validationErrors: [],
+            };
+          },
+        );
 
         setProposals((prev) => [...prev, ...newProposals]);
         // Hito 4 Order 6: persist context stats for the debug view.
@@ -210,7 +239,9 @@ export function useAIAssistant({ onApplied }: UseAIAssistantOptions = {}) {
             extraContext.selected_entity ?? null,
           ).stats;
           setContextStats(stats);
-          setContextUsedChars(stats.reduce((sum, s) => sum + s.included_chars, 0));
+          setContextUsedChars(
+            stats.reduce((sum, s) => sum + s.included_chars, 0),
+          );
         }
         setPrompt("");
       } catch (err) {

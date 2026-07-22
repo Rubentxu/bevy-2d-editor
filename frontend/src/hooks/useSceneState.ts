@@ -33,7 +33,10 @@ export function useSceneState() {
     try {
       // Wait for engine to be ready (window.get_scene_snapshot may not be set yet)
       let attempts = 0;
-      while (typeof (window as any).get_scene_snapshot !== "function" && attempts < 50) {
+      while (
+        typeof (window as any).get_scene_snapshot !== "function" &&
+        attempts < 50
+      ) {
         await new Promise((r) => setTimeout(r, 100));
         attempts += 1;
       }
@@ -44,26 +47,32 @@ export function useSceneState() {
     }
   }, []);
 
-  const dispatch = useCallback(async (envelope: object): Promise<DispatchResult> => {
-    try {
-      // Wait for engine ready
-      let attempts = 0;
-      while (typeof (window as any).dispatch_command !== "function" && attempts < 50) {
-        await new Promise((r) => setTimeout(r, 100));
-        attempts += 1;
+  const dispatch = useCallback(
+    async (envelope: object): Promise<DispatchResult> => {
+      try {
+        // Wait for engine ready
+        let attempts = 0;
+        while (
+          typeof (window as any).dispatch_command !== "function" &&
+          attempts < 50
+        ) {
+          await new Promise((r) => setTimeout(r, 100));
+          attempts += 1;
+        }
+        const resultJson = await dispatchCommand(envelope);
+        const parsed = JSON.parse(resultJson);
+        if (parsed.snapshot) {
+          setScene(parsed.snapshot);
+        }
+        return parsed;
+      } catch (e) {
+        const msg = String(e);
+        console.error("useSceneState.dispatch failed:", e);
+        return { error: msg };
       }
-      const resultJson = await dispatchCommand(envelope);
-      const parsed = JSON.parse(resultJson);
-      if (parsed.snapshot) {
-        setScene(parsed.snapshot);
-      }
-      return parsed;
-    } catch (e) {
-      const msg = String(e);
-      console.error("useSceneState.dispatch failed:", e);
-      return { error: msg };
-    }
-  }, []);
+    },
+    [],
+  );
 
   useEffect(() => {
     refresh();

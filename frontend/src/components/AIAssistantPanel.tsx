@@ -119,11 +119,13 @@ export default function AIAssistantPanel({
         )}
 
         {/* Proposals stack */}
-        {aiState.proposals.length === 0 && !aiState.loading && !aiState.error && (
-          <div className="ai-empty-state">
-            <p>Describe what you want to create or change</p>
-          </div>
-        )}
+        {aiState.proposals.length === 0 &&
+          !aiState.loading &&
+          !aiState.error && (
+            <div className="ai-empty-state">
+              <p>Describe what you want to create or change</p>
+            </div>
+          )}
 
         {aiState.proposals.length > 0 && (
           <div className="ai-proposals-stack">

@@ -45,17 +45,15 @@ const DEFAULT_INSTANCES: Record<string, SceneInstance> = {};
  * - 500ms polling refresh for catalog
  */
 export function useSceneAssets() {
-  const [entries, setEntries] = useState<SceneAssetCatalogEntry[]>(
-    DEFAULT_ENTRIES
-  );
+  const [entries, setEntries] =
+    useState<SceneAssetCatalogEntry[]>(DEFAULT_ENTRIES);
   const [assetDoc, setAssetDoc] = useState<SceneAssetDocument | null>(
-    DEFAULT_DOC
+    DEFAULT_DOC,
   );
   const [activeAssetId, setActiveAssetId] = useState<string | null>(null);
   const [logState, setLogState] = useState<AssetLogState>(DEFAULT_LOG_STATE);
-  const [instances, setInstances] = useState<Record<string, SceneInstance>>(
-    DEFAULT_INSTANCES
-  );
+  const [instances, setInstances] =
+    useState<Record<string, SceneInstance>>(DEFAULT_INSTANCES);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   /**
@@ -84,13 +82,24 @@ export function useSceneAssets() {
 
   /**
    * Refresh the scene instances from the backend.
+   *
+   * Quietly tolerates the "No scene loaded" condition that occurs on every
+   * fresh page load before the user has loaded a scene — the polling effect
+   * fires before any user action. Other failures remain as `console.error`.
    */
   const refreshInstances = useCallback(async () => {
     try {
       const inst = await getSceneInstances();
       setInstances(inst);
     } catch (e) {
-      console.error("useSceneAssets: refreshInstances failed:", e);
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes("No scene loaded")) {
+        console.debug(
+          "useSceneAssets: refreshInstances skipped (no scene loaded yet)",
+        );
+      } else {
+        console.error("useSceneAssets: refreshInstances failed:", e);
+      }
     }
   }, []);
 
@@ -98,7 +107,11 @@ export function useSceneAssets() {
    * Full refresh - catalog + log state + instances.
    */
   const refresh = useCallback(async () => {
-    await Promise.all([refreshCatalog(), refreshLogState(), refreshInstances()]);
+    await Promise.all([
+      refreshCatalog(),
+      refreshLogState(),
+      refreshInstances(),
+    ]);
   }, [refreshCatalog, refreshLogState, refreshInstances]);
 
   /**
@@ -119,7 +132,7 @@ export function useSceneAssets() {
         throw e;
       }
     },
-    [refreshLogState]
+    [refreshLogState],
   );
 
   /**
@@ -150,7 +163,7 @@ export function useSceneAssets() {
       await refreshLogState();
       return result;
     },
-    [refreshLogState]
+    [refreshLogState],
   );
 
   /**
@@ -191,7 +204,7 @@ export function useSceneAssets() {
       await createSceneAsset(name, role);
       await refreshCatalog();
     },
-    [refreshCatalog]
+    [refreshCatalog],
   );
 
   /**
@@ -202,7 +215,7 @@ export function useSceneAssets() {
       await renameSceneAsset(assetId, newPath);
       await refreshCatalog();
     },
-    [refreshCatalog]
+    [refreshCatalog],
   );
 
   /**
@@ -214,7 +227,7 @@ export function useSceneAssets() {
       await duplicateSceneAsset(assetId);
       await refreshCatalog();
     },
-    [refreshCatalog]
+    [refreshCatalog],
   );
 
   /**
@@ -229,7 +242,7 @@ export function useSceneAssets() {
       }
       await refreshCatalog();
     },
-    [activeAssetId, close, refreshCatalog]
+    [activeAssetId, close, refreshCatalog],
   );
 
   // ── Scene Instance operations (PR3) ──────────────────────────────────────────
@@ -245,7 +258,7 @@ export function useSceneAssets() {
       // Refresh instances after placing
       await refreshInstances();
     },
-    [refreshInstances]
+    [refreshInstances],
   );
 
   /**
@@ -258,7 +271,7 @@ export function useSceneAssets() {
       // Refresh instances after removing
       await refreshInstances();
     },
-    [refreshInstances]
+    [refreshInstances],
   );
 
   /**
@@ -272,7 +285,7 @@ export function useSceneAssets() {
       // Refresh instances after replacing
       await refreshInstances();
     },
-    [refreshInstances]
+    [refreshInstances],
   );
 
   /**

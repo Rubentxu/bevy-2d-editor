@@ -1,5 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import SchemaFieldRow, { DraftField, FieldType, generateId } from "./SchemaFieldRow";
+import SchemaFieldRow, {
+  DraftField,
+  FieldType,
+  generateId,
+} from "./SchemaFieldRow";
 import {
   getSceneAssetCatalog,
   validateSceneComponentDraft,
@@ -56,7 +60,9 @@ interface ValidationErrors {
  * into a DraftField constraint. Used both for the initial state hydration and
  * when `load_schema` returns a full Rust-shaped body in edit mode.
  */
-function convertConstraint(c: ConstraintJson): DraftField["constraints"][number] {
+function convertConstraint(
+  c: ConstraintJson,
+): DraftField["constraints"][number] {
   if (c === "NonEmpty") {
     return { type: "NonEmpty" };
   } else if ("Min" in c) {
@@ -66,10 +72,17 @@ function convertConstraint(c: ConstraintJson): DraftField["constraints"][number]
   }
 }
 
-export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }: Props) {
+export default function SchemaAuthoringPanel({
+  mode,
+  initial,
+  onClose,
+  onSaved,
+}: Props) {
   const [typeId, setTypeId] = useState(initial?.type_id ?? "");
   const [displayName, setDisplayName] = useState(initial?.display_name ?? "");
-  const [exportsToBevy, setExportsToBevy] = useState(initial?.exports_to_bevy ?? true);
+  const [exportsToBevy, setExportsToBevy] = useState(
+    initial?.exports_to_bevy ?? true,
+  );
   const [fields, setFields] = useState<DraftField[]>(() => {
     if (initial?.fields) {
       return initial.fields.map((f) => ({
@@ -87,17 +100,19 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
   const [isSaving, setIsSaving] = useState(false);
   // Hito 4 Order 7 (scene-component-authoring) — Kind toggle + bound scene asset
   const [schemaKind, setSchemaKind] = useState<"simple" | "scene_component">(
-    initial?.kind ?? "simple"
+    initial?.kind ?? "simple",
   );
   const [boundSceneAssetRef, setBoundSceneAssetRef] = useState<string>(
-    initial?.bound_scene_asset_ref ?? ""
+    initial?.bound_scene_asset_ref ?? "",
   );
   const [autoSpawn, setAutoSpawn] = useState<boolean>(
-    initial?.auto_spawn ?? true
+    initial?.auto_spawn ?? true,
   );
 
   // Hito 7 (scene-component-authoring-ux PR1) — catalog-backed picker state.
-  const [catalogEntries, setCatalogEntries] = useState<SceneAssetCatalogEntry[]>([]);
+  const [catalogEntries, setCatalogEntries] = useState<
+    SceneAssetCatalogEntry[]
+  >([]);
   const [catalogLoaded, setCatalogLoaded] = useState<boolean>(false);
   const [draftIssues, setDraftIssues] = useState<SceneComponentDraftIssues>({
     staleBoundRef: false,
@@ -117,7 +132,9 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
       setCatalogEntries(entries);
       setCatalogLoaded(true);
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [schemaKind]);
 
   // Load schema data when in edit mode with just type_id (no full field data)
@@ -126,9 +143,11 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
 
     // Check if we already have full field data
     if (initial.fields && initial.fields.length > 0) {
-      setIsBuiltin(typeof (window as any).is_builtin_type === "function"
-        ? (window as any).is_builtin_type(initial.type_id)
-        : false);
+      setIsBuiltin(
+        typeof (window as any).is_builtin_type === "function"
+          ? (window as any).is_builtin_type(initial.type_id)
+          : false,
+      );
       return;
     }
 
@@ -144,7 +163,8 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
         const schemaJson = await (window as any).load_schema(initial.type_id);
         if (cancelled) return;
 
-        const schema = typeof schemaJson === "string" ? JSON.parse(schemaJson) : schemaJson;
+        const schema =
+          typeof schemaJson === "string" ? JSON.parse(schemaJson) : schemaJson;
 
         // Pre-populate draft state from loaded schema
         setTypeId(schema.type_id);
@@ -153,25 +173,33 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
 
         // Convert fields from Rust format to DraftField format. Reuses the
         // module-scoped convertConstraint() so both hydration paths stay in sync.
-        setFields(schema.fields.map((f: FieldDef) => ({
-          id: generateId(),
-          name: f.name,
-          field_type: f.field_type,
-          default: f.default,
-          constraints: f.constraints.map(convertConstraint),
-        })));
+        setFields(
+          schema.fields.map((f: FieldDef) => ({
+            id: generateId(),
+            name: f.name,
+            field_type: f.field_type,
+            default: f.default,
+            constraints: f.constraints.map(convertConstraint),
+          })),
+        );
 
-        setIsBuiltin(typeof (window as any).is_builtin_type === "function"
-          ? (window as any).is_builtin_type(schema.type_id)
-          : false);
+        setIsBuiltin(
+          typeof (window as any).is_builtin_type === "function"
+            ? (window as any).is_builtin_type(schema.type_id)
+            : false,
+        );
       } catch (e: any) {
         if (cancelled) return;
         console.error("load_schema failed:", e);
-        setErrors({ general: `Failed to load schema: ${e?.message ?? "Unknown error"}` });
+        setErrors({
+          general: `Failed to load schema: ${e?.message ?? "Unknown error"}`,
+        });
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [mode, initial?.type_id]);
 
   const validate = useCallback((): ValidationErrors => {
@@ -235,12 +263,14 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
       const result = await validateSceneComponentDraft(
         typeId,
         boundSceneAssetRef,
-        catalogEntries
+        catalogEntries,
       );
       if (cancelled) return;
       setDraftIssues(result);
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [schemaKind, catalogLoaded, catalogEntries, boundSceneAssetRef, typeId]);
 
   // Hito 7 — Place Instance entry point for a SAVED SceneComponent (S5, S6).
@@ -288,7 +318,7 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
     }
     if (draftIssues.globalIssues.length > 0) {
       next.issue_list = draftIssues.globalIssues.map(
-        (i: DraftValidationIssue) => `[${i.code}] ${i.message}`
+        (i: DraftValidationIssue) => `[${i.code}] ${i.message}`,
       );
     }
     return next;
@@ -348,7 +378,7 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
       const fresh = await validateSceneComponentDraft(
         typeId,
         boundSceneAssetRef,
-        catalogEntries
+        catalogEntries,
       );
       if (
         fresh.staleBoundRef ||
@@ -357,10 +387,9 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
       ) {
         setDraftIssues(fresh);
         setErrors({
-          general:
-            fresh.staleBoundRef
-              ? "Save blocked: bound scene asset is missing from the catalog."
-              : fresh.emptyCatalog
+          general: fresh.staleBoundRef
+            ? "Save blocked: bound scene asset is missing from the catalog."
+            : fresh.emptyCatalog
               ? "Save blocked: Scene Asset catalog is empty. Create a Scene Asset first."
               : "Save blocked: validation issues must be resolved first.",
         });
@@ -412,7 +441,10 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
     try {
       // Register the schema in memory
       const regResult = (window as any).register_schema(JSON.stringify(schema));
-      if (regResult instanceof Promise || (regResult && typeof regResult.then === "function")) {
+      if (
+        regResult instanceof Promise ||
+        (regResult && typeof regResult.then === "function")
+      ) {
         await regResult;
       }
 
@@ -437,7 +469,7 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
     if (!typeId) return;
 
     const confirmed = window.confirm(
-      `Are you sure you want to delete schema '${typeId}'? This cannot be undone.`
+      `Are you sure you want to delete schema '${typeId}'? This cannot be undone.`,
     );
     if (!confirmed) return;
 
@@ -455,7 +487,10 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
   }
 
   return (
-    <div className="schema-authoring-panel" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div
+      className="schema-authoring-panel"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
       <div className="panel-content">
         <h2>{mode === "create" ? "Create New Schema" : "Edit Schema"}</h2>
 
@@ -470,7 +505,9 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
             placeholder="game.MyComponent"
             disabled={mode === "edit"}
           />
-          {errors.type_id && <span className="schema-error-inline">{errors.type_id}</span>}
+          {errors.type_id && (
+            <span className="schema-error-inline">{errors.type_id}</span>
+          )}
         </div>
 
         <div className="form-group">
@@ -481,7 +518,9 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder="My Component"
           />
-          {errors.display_name && <span className="schema-error-inline">{errors.display_name}</span>}
+          {errors.display_name && (
+            <span className="schema-error-inline">{errors.display_name}</span>
+          )}
         </div>
 
         {/* Hito 4 Order 7 — SceneComponent authoring UI */}
@@ -583,19 +622,17 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
                 picker so reviewers see all open issues in one place; the
                 Validation Center component reads the same data via
                 get_validation_issues_wasm. */}
-            {combinedErrors.issue_list && combinedErrors.issue_list.length > 0 && (
-              <div
-                className="schema-error"
-                data-testid="schema-issue-list"
-              >
-                <strong>Open issues</strong>
-                <ul>
-                  {combinedErrors.issue_list.map((line, idx) => (
-                    <li key={idx}>{line}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            {combinedErrors.issue_list &&
+              combinedErrors.issue_list.length > 0 && (
+                <div className="schema-error" data-testid="schema-issue-list">
+                  <strong>Open issues</strong>
+                  <ul>
+                    {combinedErrors.issue_list.map((line, idx) => (
+                      <li key={idx}>{line}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
           </>
         )}
 
@@ -613,13 +650,20 @@ export default function SchemaAuthoringPanel({ mode, initial, onClose, onSaved }
 
         <div className="fields-header">
           <h3>Fields</h3>
-          <button type="button" className="add-field-btn" onClick={handleAddField}>
+          <button
+            type="button"
+            className="add-field-btn"
+            onClick={handleAddField}
+          >
             + Add Field
           </button>
         </div>
 
         {fields.length === 0 && (
-          <div className="panel-empty" style={{ padding: "16px", textAlign: "center", color: "#666" }}>
+          <div
+            className="panel-empty"
+            style={{ padding: "16px", textAlign: "center", color: "#666" }}
+          >
             No fields yet. Click "Add Field" to add one.
           </div>
         )}

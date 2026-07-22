@@ -27,7 +27,11 @@ export type PatternCell = "filled" | "empty" | "any";
  *   [1][0] [1][1] [1][2]   ← center [1][1] is ignored during matching
  *   [2][0] [2][1] [2][2]
  */
-export type Pattern3x3 = [[PatternCell, PatternCell, PatternCell], [PatternCell, PatternCell, PatternCell], [PatternCell, PatternCell, PatternCell]];
+export type Pattern3x3 = [
+  [PatternCell, PatternCell, PatternCell],
+  [PatternCell, PatternCell, PatternCell],
+  [PatternCell, PatternCell, PatternCell],
+];
 
 /**
  * One auto-tiling rule.
@@ -58,7 +62,10 @@ export interface TileRefPayload {
 async function waitForEngine(): Promise<void> {
   let attempts = 0;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  while (typeof (window as any).is_auto_layer_stale_wasm !== "function" && attempts < 50) {
+  while (
+    typeof (window as any).is_auto_layer_stale_wasm !== "function" &&
+    attempts < 50
+  ) {
     await new Promise((r) => setTimeout(r, 100));
     attempts++;
   }
@@ -78,7 +85,7 @@ async function waitForEngine(): Promise<void> {
  */
 export async function isAutoLayerStale(
   assetRef: string,
-  layerId: string
+  layerId: string,
 ): Promise<boolean> {
   await waitForEngine();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -97,7 +104,7 @@ export async function isAutoLayerStale(
  */
 export async function regenerateAutoLayer(
   assetRef: string,
-  layerId: string
+  layerId: string,
 ): Promise<string> {
   await waitForEngine();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -115,11 +122,15 @@ export async function regenerateAutoLayer(
 export async function addAutoRule(
   assetRef: string,
   layerId: string,
-  rule: AutoRule
+  rule: AutoRule,
 ): Promise<string> {
   await waitForEngine();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (window as any).add_auto_rule_wasm(assetRef, layerId, JSON.stringify(rule));
+  return (window as any).add_auto_rule_wasm(
+    assetRef,
+    layerId,
+    JSON.stringify(rule),
+  );
 }
 
 /**
@@ -136,7 +147,7 @@ export async function updateAutoRule(
   assetRef: string,
   layerId: string,
   ruleIndex: number,
-  rule: AutoRule
+  rule: AutoRule,
 ): Promise<string> {
   await waitForEngine();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -144,7 +155,7 @@ export async function updateAutoRule(
     assetRef,
     layerId,
     ruleIndex,
-    JSON.stringify(rule)
+    JSON.stringify(rule),
   );
 }
 
@@ -160,7 +171,7 @@ export async function updateAutoRule(
 export async function removeAutoRule(
   assetRef: string,
   layerId: string,
-  ruleIndex: number
+  ruleIndex: number,
 ): Promise<string> {
   await waitForEngine();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

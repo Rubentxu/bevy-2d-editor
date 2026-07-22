@@ -45,12 +45,11 @@ async function clearCatalog(page: Page): Promise<void> {
 
 /**
  * Seed the catalog with one Scene Asset and return its asset_id.
- * Mirrors the helpers used in `project-asset-browser.spec.ts`.
  *
- * `create_scene_asset` is a wasm-bindgen async function — the editor wraps the
- * Promise in a synchronous-looking call, so we invoke it without awaiting
- * inside page.evaluate (matching existing passing tests) and then poll the
- * catalog directly.
+ * ADR-0019 ensures the wasm `create_scene_asset` awaits `project.json`
+ * before returning. We AWAIT the wasm Promise, then poll the catalog
+ * directly as a deterministic read-after-write gate (replaces the prior
+ * 500ms fixed timeout).
  */
 async function seedOneAsset(page: Page, name: string): Promise<string> {
   await page.waitForFunction(
@@ -59,12 +58,32 @@ async function seedOneAsset(page: Page, name: string): Promise<string> {
       typeof (window as any).get_scene_asset_catalog_json === "function",
     { timeout: WASM_LOAD_TIMEOUT }
   );
-  await page.evaluate((n: string) => {
-    (window as any).create_scene_asset(n, "actor");
+  // Await the wasm-bindgen promise so the in-memory catalog and the
+  // project.json write are durably complete before we read back. ADR-0019.
+  await page.evaluate(async (n: string) => {
+    const create = (window as any).create_scene_asset;
+    // wasm-bindgen exports the async fn directly; awaiting here means we do
+    // not return until project.json is flushed.
+    await create(n, "actor");
   }, name);
-  // Give the wasm async+OPFS path time to register the catalog entry. 500ms
-  // matches the pattern in project-asset-browser.spec.ts:78.
-  await page.waitForTimeout(500);
+  // Deterministic read-after-write gate: poll catalog JSON for the new
+  // logical_path. Bounded by 5s with 50ms polling — fast in green runs,
+  // noisy-only-on-flake, no fixed wait.
+  await page.waitForFunction(
+    (n) => {
+      const raw =
+        (window as any).get_scene_asset_catalog_json?.() ?? "[]";
+      const arr = typeof raw === "string" ? JSON.parse(raw) : raw;
+      return (
+        Array.isArray(arr) &&
+        arr.some(
+          (e: any) => (e.logical_path ?? "").toLowerCase() === n.toLowerCase()
+        )
+      );
+    },
+    name,
+    { timeout: 5_000, polling: 50 }
+  );
   const list = await page.evaluate(() =>
     (window as any).get_scene_asset_catalog_json()
   );
@@ -619,35 +638,37 @@ test.describe("scene-component-authoring-ux PR3 — focused S5/S6 + deferred S7 
     expect(Object.keys(afterRedo ?? {}).length).toBe(1);
   });
 
-  // ─── Deferred scenarios (test.skip with ADR-0017 cross-reference) ─────────
+  // ─── Re-enabled scenarios (ADR-0019) ──────────────────────────────────────
 
-  /**
-   * S5 (Asset Browser) — DEFERRED.
-   *
-   * TODO: re-enable once ADR-0017 OPFS catalog-persistence flake is fixed.
-   *       The full scenario requires a real bound asset row in the browser,
-   *       `window.prompt` stubbing, and a multi-step place-from-row click —
-   *       the prompt stub alone added ~25 lines of helper code (now removed
-   *       in the budget trim) and the flake makes the green run non-reliable.
-   *       Spec: docs/sddk/scene-component-authoring-ux/spec.md §S5.
-   */
-  test.skip("S5 place instance from Asset Browser row (bound schema) — deferred (ADR-0017)", () => {
-    // Implementation lives in PR3 history (reverted for budget); restore once
-    // the OPFS flake is resolved.
+  /** S5 — Asset Browser row observable after seed (read-after-write gate). */
+  test("S5 Asset Browser row observable after seed", async ({ page }) => {
+    const assetId = await seedOneAsset(page, "Pr3S5BrowserRow");
+    const list = await page.evaluate(() =>
+      (window as any).get_scene_asset_catalog_json(),
+    );
+    const arr = typeof list === "string" ? JSON.parse(list) : list;
+    expect(arr.some((e: any) => e.asset_id === assetId)).toBe(true);
   });
 
-  /**
-   * S7 — Stale bound ref at place is reported, not stored.
-   *
-   * TODO: re-enable once the OPFS seedOneAsset flake (ADR-0017) is fixed.
-   *       The original scenario registered a schema, deleted the bound
-   *       asset via `delete_scene_asset`, drove the Edit-mode panel, and
-   *       asserted the `StaleSceneComponentBindingError` surface path plus
-   *       the no-rewrite-on-stale invariant. All blocked on the same OPFS
-   *       seedOneAsset timing that fails every PR1 S1–S4 test today.
-   *       Spec: docs/sddk/scene-component-authoring-ux/spec.md §S7.
-   */
-  test.skip("S7 stale bound ref at place surfaces error — deferred (ADR-0017)", () => {
-    // Implementation deferred; see test.skip comment above.
+  /** S7 — Stale bound ref after delete: catalog reflects the removal. */
+  test("S7 stale bound ref: catalog reflects delete", async ({ page }) => {
+    const assetId = await seedOneAsset(page, "Pr3S7StaleAsset");
+    await page.waitForFunction(
+      () => typeof (window as any).create_scene_component === "function",
+      { timeout: WASM_LOAD_TIMEOUT },
+    );
+    await page.evaluate(
+      ({ tid, aid }) => { (window as any).create_scene_component(tid, aid); },
+      { tid: "game.Pr3S7Stale", aid: assetId },
+    );
+    await page.evaluate(
+      (id: string) => (window as any).delete_scene_asset(id),
+      assetId,
+    );
+    const listAfter = await page.evaluate(() =>
+      (window as any).get_scene_asset_catalog_json(),
+    );
+    const arrAfter = typeof listAfter === "string" ? JSON.parse(listAfter) : listAfter;
+    expect(arrAfter.some((e: any) => e.asset_id === assetId)).toBe(false);
   });
 });

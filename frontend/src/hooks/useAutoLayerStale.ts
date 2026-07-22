@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { isAutoLayerStale } from '../services/autoLayer';
+import { useState, useEffect, useCallback } from "react";
+import { isAutoLayerStale } from "../services/autoLayer";
 
 /**
  * React hook that tracks whether an AutoLayer's cached tile grid is stale,
@@ -12,7 +12,10 @@ import { isAutoLayerStale } from '../services/autoLayer';
  * @param layerId  - The AutoLayer's stable id string
  * @returns [stale, setStale, refreshStale] tuple
  */
-export function useAutoLayerStale(assetRef: string, layerId: string): [boolean, (v: boolean) => void, () => void] {
+export function useAutoLayerStale(
+  assetRef: string,
+  layerId: string,
+): [boolean, (v: boolean) => void, () => void] {
   const [stale, setStale] = useState(false);
 
   const refreshStale = useCallback(() => {
@@ -24,9 +27,13 @@ export function useAutoLayerStale(assetRef: string, layerId: string): [boolean, 
   useEffect(() => {
     let cancelled = false;
     isAutoLayerStale(assetRef, layerId)
-      .then((s) => { if (!cancelled) setStale(s); })
+      .then((s) => {
+        if (!cancelled) setStale(s);
+      })
       .catch(() => {});
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [assetRef, layerId]);
 
   return [stale, setStale, refreshStale];

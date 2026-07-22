@@ -46,7 +46,7 @@ export function useAssetFiles() {
       await refresh();
       return asset;
     },
-    [refresh]
+    [refresh],
   );
 
   const removeFile = useCallback(
@@ -54,7 +54,7 @@ export function useAssetFiles() {
       await deleteAssetFile(id);
       await refresh();
     },
-    [refresh]
+    [refresh],
   );
 
   return {

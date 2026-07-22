@@ -45,7 +45,10 @@ export async function sceneDelete(id: string): Promise<void> {
   (window as any).scene_delete(id);
 }
 
-export async function sceneRename(id: string, newName: string): Promise<string> {
+export async function sceneRename(
+  id: string,
+  newName: string,
+): Promise<string> {
   await waitForEngine();
   return (window as any).scene_rename(id, newName);
 }

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState } from "react";
 
 interface TileCanvasProps {
   layerId: string;
@@ -7,9 +7,9 @@ interface TileCanvasProps {
   tileWidth: number;
   tileHeight: number;
   columns: number;
-  gridWidth: number;  // number of tiles horizontally
+  gridWidth: number; // number of tiles horizontally
   gridHeight: number; // number of tiles vertically
-  mode: 'paint' | 'erase';
+  mode: "paint" | "erase";
   selectedTile: { tilesetId: string; localIndex: number } | null;
   onPaint: (x: number, y: number) => void;
 }
@@ -38,7 +38,7 @@ export const TileCanvas: React.FC<TileCanvasProps> = ({
   useEffect(() => {
     if (!canvasRef.current || !image) return;
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     canvas.width = gridWidth * tileWidth;
@@ -46,7 +46,7 @@ export const TileCanvas: React.FC<TileCanvasProps> = ({
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Draw a background grid
-    ctx.strokeStyle = '#333';
+    ctx.strokeStyle = "#333";
     ctx.lineWidth = 1;
     for (let x = 0; x <= gridWidth; x++) {
       ctx.beginPath();
@@ -75,7 +75,7 @@ export const TileCanvas: React.FC<TileCanvasProps> = ({
     <canvas
       ref={canvasRef}
       onClick={handleClick}
-      style={{ cursor: mode === 'paint' ? 'crosshair' : 'not-allowed' }}
+      style={{ cursor: mode === "paint" ? "crosshair" : "not-allowed" }}
     />
   );
 };

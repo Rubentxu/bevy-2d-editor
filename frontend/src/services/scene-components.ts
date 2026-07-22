@@ -28,7 +28,10 @@ import {
 declare global {
   interface Window {
     create_scene_component?: (json: string) => string;
-    bind_scene_to_schema?: (typeId: string, sceneAssetId: string | null) => void;
+    bind_scene_to_schema?: (
+      typeId: string,
+      sceneAssetId: string | null,
+    ) => void;
     list_scene_component_schemas?: () => string;
     get_validation_issues_wasm?: () => string;
   }
@@ -36,13 +39,17 @@ declare global {
 
 async function waitForEngine(): Promise<void> {
   if (typeof window === "undefined") return;
-  if (window.create_scene_component && window.list_scene_component_schemas) return;
+  if (window.create_scene_component && window.list_scene_component_schemas)
+    return;
   // Wait briefly for the WASM bridge to register the bindings.
   for (let i = 0; i < 50; i++) {
-    if (window.create_scene_component && window.list_scene_component_schemas) return;
+    if (window.create_scene_component && window.list_scene_component_schemas)
+      return;
     await new Promise((r) => setTimeout(r, 100));
   }
-  throw new Error("SceneComponent WASM bindings not available (engine not initialized)");
+  throw new Error(
+    "SceneComponent WASM bindings not available (engine not initialized)",
+  );
 }
 
 /**
@@ -52,7 +59,9 @@ async function waitForEngine(): Promise<void> {
  *
  * Returns the registered schema's `type_id` on success.
  */
-export async function createSceneComponent(schema: ComponentSchema): Promise<string> {
+export async function createSceneComponent(
+  schema: ComponentSchema,
+): Promise<string> {
   await waitForEngine();
   if (!window.create_scene_component) {
     throw new Error("create_scene_component binding not available");
@@ -66,7 +75,7 @@ export async function createSceneComponent(schema: ComponentSchema): Promise<str
  */
 export async function bindSceneToSchema(
   typeId: string,
-  sceneAssetId: string | null
+  sceneAssetId: string | null,
 ): Promise<void> {
   await waitForEngine();
   if (!window.bind_scene_to_schema) {
@@ -167,10 +176,11 @@ async function fetchWasmIssues(): Promise<DraftValidationIssue[]> {
 export async function validateSceneComponentDraft(
   typeId: string,
   boundAssetRef: string | null | undefined,
-  catalog: SceneAssetCatalogEntry[]
+  catalog: SceneAssetCatalogEntry[],
 ): Promise<SceneComponentDraftIssues> {
   const emptyCatalog = catalog.length === 0;
-  const hasBound = typeof boundAssetRef === "string" && boundAssetRef.length > 0;
+  const hasBound =
+    typeof boundAssetRef === "string" && boundAssetRef.length > 0;
 
   // Stale if the bound ref is set but no catalog entry matches. An empty
   // catalog also counts as stale — there is no asset to bind against.
@@ -184,7 +194,8 @@ export async function validateSceneComponentDraft(
   const allIssues = staleBoundRef ? [] : await fetchWasmIssues();
 
   const globalIssues = allIssues.filter((iss) => {
-    if (iss.affected_asset_id && iss.affected_asset_id === boundAssetRef) return true;
+    if (iss.affected_asset_id && iss.affected_asset_id === boundAssetRef)
+      return true;
     if (iss.affected_asset_id && iss.affected_asset_id === typeId) return true;
     return false;
   });
@@ -242,10 +253,13 @@ export async function placeSceneComponentInstance(
   await waitForEngine();
   const loadSchema = (window as any).load_schema;
   if (typeof loadSchema !== "function") {
-    throw new Error("placeSceneComponentInstance: load_schema binding not available");
+    throw new Error(
+      "placeSceneComponentInstance: load_schema binding not available",
+    );
   }
   const raw = await loadSchema(typeId);
-  const schema: Partial<ComponentSchema> = typeof raw === "string" ? JSON.parse(raw) : raw;
+  const schema: Partial<ComponentSchema> =
+    typeof raw === "string" ? JSON.parse(raw) : raw;
   if (!schema || schema.kind !== "scene_component") {
     throw new Error(
       `placeSceneComponentInstance: "${typeId}" is not a SceneComponent`,

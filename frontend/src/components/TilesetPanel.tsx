@@ -1,7 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { listTilesets, createTileset, deleteTileset, paintTile, eraseTile, type TilesetMetadata } from '../services/tilesets';
-import { type SceneAssetDocument, type TileLayerPayload } from '../services/scene-assets';
-import { TileCanvas } from './TileCanvas';
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  listTilesets,
+  createTileset,
+  deleteTileset,
+  paintTile,
+  eraseTile,
+  type TilesetMetadata,
+} from "../services/tilesets";
+import {
+  type SceneAssetDocument,
+  type TileLayerPayload,
+} from "../services/scene-assets";
+import { TileCanvas } from "./TileCanvas";
 
 // Default grid dimensions for the paint surface, used as a fallback when
 // a TileLayer payload doesn't include grid_width/grid_height (legacy
@@ -26,24 +36,32 @@ export const TilesetPanel: React.FC<TilesetPanelProps> = ({
   const [tilesets, setTilesets] = useState<TilesetMetadata[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [newTileset, setNewTileset] = useState({
-    name: '',
-    imageRef: '',
+    name: "",
+    imageRef: "",
     tileWidth: 16,
     tileHeight: 16,
     columns: 16,
     spacing: 0,
   });
-  const [selectedTileLayerId, setSelectedTileLayerId] = useState<string | null>(null);
-  const [paintMode, setPaintMode] = useState<'paint' | 'erase'>('paint');
-  const [selectedTileIndex, setSelectedTileIndex] = useState<number | null>(null);
+  const [selectedTileLayerId, setSelectedTileLayerId] = useState<string | null>(
+    null,
+  );
+  const [paintMode, setPaintMode] = useState<"paint" | "erase">("paint");
+  const [selectedTileIndex, setSelectedTileIndex] = useState<number | null>(
+    null,
+  );
 
   // Derive TileLayers from assetDoc
   const tileLayers: TileLayerPayload[] =
-    (assetDoc?.layers?.filter((l) => l.kind === 'tile') as TileLayerPayload[]) ?? [];
+    (assetDoc?.layers?.filter(
+      (l) => l.kind === "tile",
+    ) as TileLayerPayload[]) ?? [];
 
   // Selected TileLayer and Tileset
-  const selectedTileLayer = tileLayers.find((l) => l.id === selectedTileLayerId) ?? null;
-  const selectedTileset = tilesets.find((ts) => ts.id === selectedTilesetId) ?? null;
+  const selectedTileLayer =
+    tileLayers.find((l) => l.id === selectedTileLayerId) ?? null;
+  const selectedTileset =
+    tilesets.find((ts) => ts.id === selectedTilesetId) ?? null;
 
   useEffect(() => {
     listTilesets().then(setTilesets).catch(console.error);
@@ -63,30 +81,44 @@ export const TilesetPanel: React.FC<TilesetPanelProps> = ({
         newTileset.tileWidth,
         newTileset.tileHeight,
         newTileset.columns,
-        newTileset.spacing
+        newTileset.spacing,
       );
       const updated = await listTilesets();
       setTilesets(updated);
       setShowCreate(false);
     } catch (e) {
-      console.error('Failed to create tileset:', e);
+      console.error("Failed to create tileset:", e);
     }
   };
 
   const handlePaint = useCallback(
     async (x: number, y: number) => {
-      if (!activeAssetLogicalPath || !selectedTileLayerId || !selectedTilesetId) return;
+      if (!activeAssetLogicalPath || !selectedTileLayerId || !selectedTilesetId)
+        return;
       try {
-        if (paintMode === 'paint' && selectedTileIndex !== null) {
-          await paintTile(activeAssetLogicalPath, selectedTileLayerId, x, y, selectedTilesetId, selectedTileIndex);
-        } else if (paintMode === 'erase') {
+        if (paintMode === "paint" && selectedTileIndex !== null) {
+          await paintTile(
+            activeAssetLogicalPath,
+            selectedTileLayerId,
+            x,
+            y,
+            selectedTilesetId,
+            selectedTileIndex,
+          );
+        } else if (paintMode === "erase") {
           await eraseTile(activeAssetLogicalPath, selectedTileLayerId, x, y);
         }
       } catch (e) {
-        console.error('Paint failed:', e);
+        console.error("Paint failed:", e);
       }
     },
-    [activeAssetLogicalPath, selectedTileLayerId, selectedTilesetId, selectedTileIndex, paintMode]
+    [
+      activeAssetLogicalPath,
+      selectedTileLayerId,
+      selectedTilesetId,
+      selectedTileIndex,
+      paintMode,
+    ],
   );
 
   // Show tile canvas when both a tile layer and tileset are selected
@@ -99,27 +131,76 @@ export const TilesetPanel: React.FC<TilesetPanelProps> = ({
 
       {showCreate && (
         <div className="create-form">
-          <input placeholder="Name" value={newTileset.name} onChange={e => setNewTileset({...newTileset, name: e.target.value})} />
-          <input placeholder="Image path (e.g. assets/tilesets/grass.png)" value={newTileset.imageRef} onChange={e => setNewTileset({...newTileset, imageRef: e.target.value})} />
+          <input
+            placeholder="Name"
+            value={newTileset.name}
+            onChange={(e) =>
+              setNewTileset({ ...newTileset, name: e.target.value })
+            }
+          />
+          <input
+            placeholder="Image path (e.g. assets/tilesets/grass.png)"
+            value={newTileset.imageRef}
+            onChange={(e) =>
+              setNewTileset({ ...newTileset, imageRef: e.target.value })
+            }
+          />
           <div className="grid-dims">
-            <input type="number" placeholder="Tile W" value={newTileset.tileWidth} onChange={e => setNewTileset({...newTileset, tileWidth: +e.target.value})} />
-            <input type="number" placeholder="Tile H" value={newTileset.tileHeight} onChange={e => setNewTileset({...newTileset, tileHeight: +e.target.value})} />
-            <input type="number" placeholder="Columns" value={newTileset.columns} onChange={e => setNewTileset({...newTileset, columns: +e.target.value})} />
-            <input type="number" placeholder="Spacing" value={newTileset.spacing} onChange={e => setNewTileset({...newTileset, spacing: +e.target.value})} />
+            <input
+              type="number"
+              placeholder="Tile W"
+              value={newTileset.tileWidth}
+              onChange={(e) =>
+                setNewTileset({ ...newTileset, tileWidth: +e.target.value })
+              }
+            />
+            <input
+              type="number"
+              placeholder="Tile H"
+              value={newTileset.tileHeight}
+              onChange={(e) =>
+                setNewTileset({ ...newTileset, tileHeight: +e.target.value })
+              }
+            />
+            <input
+              type="number"
+              placeholder="Columns"
+              value={newTileset.columns}
+              onChange={(e) =>
+                setNewTileset({ ...newTileset, columns: +e.target.value })
+              }
+            />
+            <input
+              type="number"
+              placeholder="Spacing"
+              value={newTileset.spacing}
+              onChange={(e) =>
+                setNewTileset({ ...newTileset, spacing: +e.target.value })
+              }
+            />
           </div>
           <button onClick={handleCreate}>Create</button>
         </div>
       )}
 
       <ul>
-        {tilesets.map(ts => (
+        {tilesets.map((ts) => (
           <li
             key={ts.id}
-            className={ts.id === selectedTilesetId ? 'selected' : ''}
+            className={ts.id === selectedTilesetId ? "selected" : ""}
             onClick={() => onSelectTileset(ts)}
           >
             {ts.name}
-            <button onClick={e => { e.stopPropagation(); deleteTileset(ts.id).then(() => setTilesets(tilesets.filter(t => t.id !== ts.id))); }}>×</button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                deleteTileset(ts.id).then(() =>
+                  setTilesets(tilesets.filter((t) => t.id !== ts.id)),
+                );
+              }}
+            >
+              ×
+            </button>
           </li>
         ))}
       </ul>
@@ -129,7 +210,7 @@ export const TilesetPanel: React.FC<TilesetPanelProps> = ({
         <div className="tile-layer-picker">
           <h4>Tile Layer</h4>
           <select
-            value={selectedTileLayerId ?? ''}
+            value={selectedTileLayerId ?? ""}
             onChange={(e) => setSelectedTileLayerId(e.target.value || null)}
           >
             <option value="">— select layer —</option>
@@ -147,32 +228,36 @@ export const TilesetPanel: React.FC<TilesetPanelProps> = ({
         <>
           <div className="tile-canvas-toolbar">
             <button
-              className={paintMode === 'paint' ? 'active' : ''}
-              onClick={() => setPaintMode('paint')}
+              className={paintMode === "paint" ? "active" : ""}
+              onClick={() => setPaintMode("paint")}
             >
               Paint
             </button>
             <button
-              className={paintMode === 'erase' ? 'active' : ''}
-              onClick={() => setPaintMode('erase')}
+              className={paintMode === "erase" ? "active" : ""}
+              onClick={() => setPaintMode("erase")}
             >
               Erase
             </button>
-            <span style={{ fontSize: 11, color: '#666', marginLeft: 8 }}>
+            <span style={{ fontSize: 11, color: "#666", marginLeft: 8 }}>
               Pick tile:
             </span>
             <input
               type="number"
               min={0}
-              value={selectedTileIndex ?? ''}
-              onChange={(e) => setSelectedTileIndex(e.target.value ? parseInt(e.target.value) : null)}
+              value={selectedTileIndex ?? ""}
+              onChange={(e) =>
+                setSelectedTileIndex(
+                  e.target.value ? parseInt(e.target.value) : null,
+                )
+              }
               placeholder="index"
               style={{ width: 50 }}
             />
           </div>
           <TileCanvas
             layerId={selectedTileLayer!.id}
-            assetRef={activeAssetLogicalPath ?? ''}
+            assetRef={activeAssetLogicalPath ?? ""}
             tilesetImage={selectedTileset!.image_ref}
             tileWidth={selectedTileset!.tile_width}
             tileHeight={selectedTileset!.tile_height}
@@ -182,7 +267,10 @@ export const TilesetPanel: React.FC<TilesetPanelProps> = ({
             mode={paintMode}
             selectedTile={
               selectedTileIndex !== null
-                ? { tilesetId: selectedTilesetId!, localIndex: selectedTileIndex }
+                ? {
+                    tilesetId: selectedTilesetId!,
+                    localIndex: selectedTileIndex,
+                  }
                 : null
             }
             onPaint={handlePaint}
@@ -191,7 +279,7 @@ export const TilesetPanel: React.FC<TilesetPanelProps> = ({
       )}
 
       {selectedTileLayer && !selectedTileset && (
-        <p style={{ fontSize: 12, color: '#666', margin: '8px 0' }}>
+        <p style={{ fontSize: 12, color: "#666", margin: "8px 0" }}>
           Select a tileset to paint on &quot;{selectedTileLayer.name}&quot;
         </p>
       )}

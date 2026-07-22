@@ -56,7 +56,10 @@ export default function ExportRustModal({ onClose }: Props) {
               className="export-source"
             />
             <div className="modal-actions">
-              <button onClick={handleDownload} data-testid="export-rs-download-btn">
+              <button
+                onClick={handleDownload}
+                data-testid="export-rs-download-btn"
+              >
                 Download scene.rs
               </button>
               <button onClick={handleCopy} data-testid="export-rs-copy-btn">

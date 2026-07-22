@@ -126,7 +126,7 @@ export function useCodeFiles() {
         // is preferred over flicker from a failed refresh (per refresh guard).
       }
     },
-    [refresh, open]
+    [refresh, open],
   );
 
   /**
@@ -160,7 +160,7 @@ export function useCodeFiles() {
         setError(e instanceof Error ? e.message : String(e));
       }
     },
-    [refresh]
+    [refresh],
   );
 
   // Initial fetch + 500ms polling refresh (same cadence as useScenes).

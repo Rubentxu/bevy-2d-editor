@@ -62,7 +62,7 @@ export function assembleMultiSourceContext(
   logicGraphs: LogicGraphRef[] = [],
   sceneAssets: SceneAssetContext = { catalog: [], selected_body: null },
   selectedEntity: SelectedEntity | null = null,
-  budgetChars: number = TOKEN_BUDGET_CHARS
+  budgetChars: number = TOKEN_BUDGET_CHARS,
 ): AssembledContext {
   const stats: PerSourceStats[] = [];
 
@@ -94,7 +94,10 @@ export function assembleMultiSourceContext(
     {
       name: "source_files",
       priority: PRIORITY.source_files,
-      text: () => sourceFiles.map((f) => `=== ${f.path} (${f.id}) ===\n${f.content}`).join("\n\n"),
+      text: () =>
+        sourceFiles
+          .map((f) => `=== ${f.path} (${f.id}) ===\n${f.content}`)
+          .join("\n\n"),
       enabled: () => sourceFiles.length > 0,
     },
     {
@@ -110,9 +113,9 @@ export function assembleMultiSourceContext(
               g.edges
                 .map(
                   (e) =>
-                    `  - ${e.from_node}:${e.from_port}\n    -> ${e.to_node}:${e.to_port}`
+                    `  - ${e.from_node}:${e.from_port}\n    -> ${e.to_node}:${e.to_port}`,
                 )
-                .join("\n")
+                .join("\n"),
           )
           .join("\n\n"),
       enabled: () => logicGraphs.length > 0,
@@ -199,7 +202,7 @@ export function assembleMultiSourceContext(
       included_chars: schemasChars,
       truncated: false,
       enabled: true,
-    }
+    },
   );
 
   return {

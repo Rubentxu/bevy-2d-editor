@@ -63,14 +63,14 @@ export async function listAssetFiles(): Promise<AssetFile[]> {
 export async function importAssetFile(
   name: string,
   mimeType: string,
-  bytes: Uint8Array
+  bytes: Uint8Array,
 ): Promise<AssetFile> {
   await waitForEngine();
   inFlightSaveCounter.incr();
   try {
     const jsBytes = new Uint8Array(bytes);
     const parsed = parseOpfs<AssetFile>(
-      (window as any).import_asset_file(name, mimeType, jsBytes)
+      (window as any).import_asset_file(name, mimeType, jsBytes),
     );
     if (!parsed.ok) throw new Error(parsed.error);
     emit({ type: "hot-reload-asset", assetId: name });
@@ -88,7 +88,7 @@ export async function importAssetFile(
 export async function readAssetFileBytes(id: string): Promise<Uint8Array> {
   await waitForEngine();
   const parsed = parseOpfs<{ kind: "ok"; value: number[] }>(
-    (window as any).read_asset_file_bytes(id)
+    (window as any).read_asset_file_bytes(id),
   );
   if (!parsed.ok) throw new Error(parsed.error);
   // value is a JSON-serialized array of bytes from serde_json

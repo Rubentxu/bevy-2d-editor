@@ -15,7 +15,11 @@ interface GameOverlayProps {
 export default function GameOverlay({ onStop }: GameOverlayProps) {
   const [metrics, setMetrics] = useState<PreviewMetrics | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const { lastReloadedAt, inFlightSaves, refresh: refreshHotReload } = useHotReloadStatus();
+  const {
+    lastReloadedAt,
+    inFlightSaves,
+    refresh: refreshHotReload,
+  } = useHotReloadStatus();
 
   const refreshMetrics = useCallback(async () => {
     try {
@@ -48,8 +52,13 @@ export default function GameOverlay({ onStop }: GameOverlayProps) {
       style={{ pointerEvents: "none" }}
     >
       {metrics && (
-        <div className="game-overlay-metrics" data-testid="game-overlay-metrics">
-          <span data-testid="game-overlay-fps">{metrics.fps.toFixed(1)} FPS</span>
+        <div
+          className="game-overlay-metrics"
+          data-testid="game-overlay-metrics"
+        >
+          <span data-testid="game-overlay-fps">
+            {metrics.fps.toFixed(1)} FPS
+          </span>
           <span data-testid="game-overlay-frame-ms">
             {metrics.frame_time_ms.toFixed(2)} ms
           </span>

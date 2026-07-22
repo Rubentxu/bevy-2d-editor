@@ -22,10 +22,14 @@ interface Props {
 /** CSS class suffix for each override status. */
 function overrideColor(status: ComponentOverrideStatus): string {
   switch (status) {
-    case "active": return "blue";
-    case "stale": return "warning";
-    case "conflict": return "error";
-    case "orphaned": return "dimmed";
+    case "active":
+      return "blue";
+    case "stale":
+      return "warning";
+    case "conflict":
+      return "error";
+    case "orphaned":
+      return "dimmed";
   }
 }
 
@@ -45,7 +49,10 @@ export default function ComponentCard({
   onJumpToSource,
 }: Props) {
   return (
-    <div className="component-card" data-testid={`component-${component.type_id}`}>
+    <div
+      className="component-card"
+      data-testid={`component-${component.type_id}`}
+    >
       <header>
         <span className="type-id">{component.type_id}</span>
         <div style={{ display: "flex", gap: 4 }}>
@@ -74,7 +81,11 @@ export default function ComponentCard({
         const status = fieldOverrideStatus?.[fieldPath];
         const hasOverride = status !== undefined;
         return (
-          <div key={field} className="field-row" data-testid={`field-row-${fieldPath}`}>
+          <div
+            key={field}
+            className="field-row"
+            data-testid={`field-row-${fieldPath}`}
+          >
             {hasOverride && (
               <span
                 className={`override-indicator override-indicator-${overrideColor(status)}`}

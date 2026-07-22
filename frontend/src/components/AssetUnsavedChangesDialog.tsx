@@ -44,10 +44,7 @@ export default function AssetUnsavedChangesDialog({
           >
             Discard and Leave
           </button>
-          <button
-            data-testid="asset-unsaved-cancel-btn"
-            onClick={onCancel}
-          >
+          <button data-testid="asset-unsaved-cancel-btn" onClick={onCancel}>
             Cancel
           </button>
         </div>

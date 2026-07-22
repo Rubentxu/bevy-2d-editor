@@ -46,9 +46,10 @@ export function ContextDebugSection({
 
   const totalTokens = Math.round(totalBudgetChars / 4);
   const usedTokens = Math.round(totalUsedChars / 4);
-  const usagePct = totalBudgetChars > 0
-    ? Math.min(100, Math.round((totalUsedChars / totalBudgetChars) * 100))
-    : 0;
+  const usagePct =
+    totalBudgetChars > 0
+      ? Math.min(100, Math.round((totalUsedChars / totalBudgetChars) * 100))
+      : 0;
 
   const isOverBudget = totalUsedChars > totalBudgetChars;
 
@@ -110,9 +111,7 @@ export function ContextDebugSection({
                           type="checkbox"
                           checked={!isDisabled}
                           disabled={!onToggle || s.total_chars === 0}
-                          onChange={(e) =>
-                            onToggle?.(s.name, e.target.checked)
-                          }
+                          onChange={(e) => onToggle?.(s.name, e.target.checked)}
                           data-testid={`context-toggle-${s.name}`}
                         />
                       </td>

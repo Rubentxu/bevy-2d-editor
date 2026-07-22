@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 
-export type FieldType = "String" | "F32" | "Bool" | "Vec2" | "Color" | "Anchor" | "AssetReference";
+export type FieldType =
+  "String" | "F32" | "Bool" | "Vec2" | "Color" | "Anchor" | "AssetReference";
 
 export interface Constraint {
   type: "Min" | "Max" | "NonEmpty";
@@ -43,7 +44,15 @@ const ANCHOR_VALUES = [
   "CenterRight",
 ];
 
-const FIELD_TYPES: FieldType[] = ["String", "F32", "Bool", "Vec2", "Color", "Anchor", "AssetReference"];
+const FIELD_TYPES: FieldType[] = [
+  "String",
+  "F32",
+  "Bool",
+  "Vec2",
+  "Color",
+  "Anchor",
+  "AssetReference",
+];
 
 function generateId(): string {
   return Math.random().toString(36).substring(2, 9);
@@ -70,7 +79,7 @@ function getDefaultValueForType(type: FieldType): any {
 function renderDefaultEditor(
   fieldType: FieldType,
   value: any,
-  onChange: (val: any) => void
+  onChange: (val: any) => void,
 ) {
   switch (fieldType) {
     case "F32":
@@ -216,19 +225,32 @@ export default function SchemaFieldRow({
     });
   }
 
-  function handleConstraintChange(constraintIndex: number, updates: Partial<Constraint>) {
+  function handleConstraintChange(
+    constraintIndex: number,
+    updates: Partial<Constraint>,
+  ) {
     const newConstraints = [...field.constraints];
-    newConstraints[constraintIndex] = { ...newConstraints[constraintIndex], ...updates };
+    newConstraints[constraintIndex] = {
+      ...newConstraints[constraintIndex],
+      ...updates,
+    };
     updateField({ constraints: newConstraints });
   }
 
   function addConstraint(type: "Min" | "Max" | "NonEmpty") {
     if (type === "NonEmpty") {
       if (field.constraints.some((c) => c.type === "NonEmpty")) return;
-      updateField({ constraints: [...field.constraints, { type: "NonEmpty" }] });
+      updateField({
+        constraints: [...field.constraints, { type: "NonEmpty" }],
+      });
     } else {
       if (field.constraints.some((c) => c.type === type)) return;
-      updateField({ constraints: [...field.constraints, { type, value: type === "Min" ? 0 : 100 }] });
+      updateField({
+        constraints: [
+          ...field.constraints,
+          { type, value: type === "Min" ? 0 : 100 },
+        ],
+      });
     }
   }
 
@@ -245,7 +267,12 @@ export default function SchemaFieldRow({
       <div className="schema-field-row-header">
         <span className="schema-field-index">#{index + 1}</span>
         <div className="schema-field-move-btns">
-          <button type="button" onClick={onMoveUp} disabled={index === 0} title="Move up">
+          <button
+            type="button"
+            onClick={onMoveUp}
+            disabled={index === 0}
+            title="Move up"
+          >
             ↑
           </button>
           <button type="button" onClick={onMoveDown} title="Move down">
@@ -274,7 +301,12 @@ export default function SchemaFieldRow({
             </option>
           ))}
         </select>
-        <button type="button" className="schema-field-remove" onClick={onRemove} title="Remove field">
+        <button
+          type="button"
+          className="schema-field-remove"
+          onClick={onRemove}
+          title="Remove field"
+        >
           ✕
         </button>
       </div>
@@ -282,7 +314,7 @@ export default function SchemaFieldRow({
         <div className="schema-default-value">
           <label>Default:</label>
           {renderDefaultEditor(field.field_type, field.default, (newVal) =>
-            updateField({ default: newVal })
+            updateField({ default: newVal }),
           )}
         </div>
         <div className="schema-constraints">
@@ -297,7 +329,9 @@ export default function SchemaFieldRow({
                     if (e.target.checked) {
                       addConstraint("Min");
                     } else {
-                      const idx = field.constraints.findIndex((c) => c.type === "Min");
+                      const idx = field.constraints.findIndex(
+                        (c) => c.type === "Min",
+                      );
                       if (idx !== -1) removeConstraint(idx);
                     }
                   }}
@@ -308,7 +342,7 @@ export default function SchemaFieldRow({
                 .filter((c) => c.type === "Min")
                 .map((c, i) => {
                   const origIdx = field.constraints.findIndex(
-                    (cc) => cc.type === "Min" && cc === c
+                    (cc) => cc.type === "Min" && cc === c,
                   );
                   return (
                     <input
@@ -317,7 +351,9 @@ export default function SchemaFieldRow({
                       step="any"
                       value={c.value ?? 0}
                       onChange={(e) =>
-                        handleConstraintChange(origIdx, { value: Number(e.target.value) })
+                        handleConstraintChange(origIdx, {
+                          value: Number(e.target.value),
+                        })
                       }
                     />
                   );
@@ -334,7 +370,9 @@ export default function SchemaFieldRow({
                     if (e.target.checked) {
                       addConstraint("Max");
                     } else {
-                      const idx = field.constraints.findIndex((c) => c.type === "Max");
+                      const idx = field.constraints.findIndex(
+                        (c) => c.type === "Max",
+                      );
                       if (idx !== -1) removeConstraint(idx);
                     }
                   }}
@@ -345,7 +383,7 @@ export default function SchemaFieldRow({
                 .filter((c) => c.type === "Max")
                 .map((c, i) => {
                   const origIdx = field.constraints.findIndex(
-                    (cc) => cc.type === "Max" && cc === c
+                    (cc) => cc.type === "Max" && cc === c,
                   );
                   return (
                     <input
@@ -354,7 +392,9 @@ export default function SchemaFieldRow({
                       step="any"
                       value={c.value ?? 100}
                       onChange={(e) =>
-                        handleConstraintChange(origIdx, { value: Number(e.target.value) })
+                        handleConstraintChange(origIdx, {
+                          value: Number(e.target.value),
+                        })
                       }
                     />
                   );
@@ -371,7 +411,9 @@ export default function SchemaFieldRow({
                     if (e.target.checked) {
                       addConstraint("NonEmpty");
                     } else {
-                      const idx = field.constraints.findIndex((c) => c.type === "NonEmpty");
+                      const idx = field.constraints.findIndex(
+                        (c) => c.type === "NonEmpty",
+                      );
                       if (idx !== -1) removeConstraint(idx);
                     }
                   }}
@@ -381,7 +423,9 @@ export default function SchemaFieldRow({
             </div>
           )}
           {!canHaveMinMax && !canHaveNonEmpty && (
-            <span className="schema-constraints-disabled">N/A for {field.field_type}</span>
+            <span className="schema-constraints-disabled">
+              N/A for {field.field_type}
+            </span>
           )}
         </div>
       </div>
