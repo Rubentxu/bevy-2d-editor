@@ -74,7 +74,7 @@ ai-proxy:
     cargo run -p ai-proxy
 
 # Run AI proxy with custom port
-ai-proxy-port port=$PORT:
+ai-proxy-port port="11434":
     cargo run -p ai-proxy -- --port {{port}}
 
 # Run AI proxy unit tests
