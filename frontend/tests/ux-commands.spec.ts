@@ -140,9 +140,12 @@ test.describe("UX Command Palette — Phase 3.2", () => {
     await page.keyboard.press("Control+k");
     await expect(page.locator('[data-testid="command-palette"]')).toBeVisible();
 
+    // Click the palette input to ensure focus, then press Escape from inside
+    // the modal. This is more robust than `page.keyboard.press` when the
+    // global focus has drifted (e.g. body / canvas).
+    await page.locator('[data-testid="command-palette-input"]').focus();
     await page.keyboard.press("Escape");
-    // Allow the close animation to finish (200ms ease-out + RAF).
-    await expect(page.locator('[data-testid="command-palette"]')).toBeHidden({
+    await expect(page.locator('[data-testid="command-palette"]')).not.toBeAttached({
       timeout: 5_000,
     });
   });
