@@ -147,6 +147,7 @@ fn s6_bsn_ir_roundtrip() {
         )]),
         children: vec![],
         relationships: vec![],
+        kind: Default::default(),
     };
 
     let root_node = BsnIrNode {
@@ -164,6 +165,7 @@ fn s6_bsn_ir_roundtrip() {
             kind: "child".to_string(),
             target_identifier: "weapon".to_string(),
         }],
+        kind: Default::default(),
     };
 
     let bsn_ir = BsnIr {

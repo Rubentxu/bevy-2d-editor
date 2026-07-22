@@ -25,7 +25,7 @@ mod state;
 mod wasm_auto_layer;
 mod wasm_bsn;
 mod wasm_export;
-mod wasm_hot_reload;
+pub mod wasm_hot_reload;
 mod wasm_layer;
 mod wasm_preview;
 mod wasm_recipes;
@@ -165,6 +165,11 @@ pub use bsn_export::{
     export_to_bsn_text_with_warnings,
 };
 pub use bsn_import::{BsnImportError, parse_bsn_text, scene_asset_from_bsn_ir};
+pub use preview_runtime::in_play_mode;
+pub use wasm_hot_reload::{
+    force_reload_wasm, hot_reload_asset_wasm, hot_reload_bus_depth_for_tests,
+    hot_reload_source_wasm,
+};
 pub use preview_inspector::{
     PreviewMappingEntry, PreviewMetrics, PreviewProvenance,
 };
@@ -257,6 +262,24 @@ use crate::state::{
     with_asset_body_cache, with_asset_body_cache_mut, mark_dirty,
     with_logic_graph, with_logic_graph_mut, with_logic_log, with_logic_log_mut,
 };
+
+/// Mutably access the asset body cache from integration tests.
+pub fn with_asset_body_cache_mut_for_tests<F, R>(f: F) -> R
+where
+    F: FnOnce(&mut BTreeMap<String, SceneAssetDocument>) -> R,
+{
+    with_asset_body_cache_mut(f)
+}
+
+/// Clear the cross-system dirty flag from integration tests.
+pub fn clear_dirty_for_tests() {
+    DIRTY_FLAG.with(|dirty| *dirty.borrow_mut() = false);
+}
+
+/// Read the cross-system dirty flag from integration tests.
+pub fn is_dirty_for_tests() -> bool {
+    DIRTY_FLAG.with(|dirty| *dirty.borrow())
+}
 
 
 const CMD_MOVE_SPRITE: u16 = 1;
@@ -2414,8 +2437,12 @@ pub async fn create_scene_asset(name: &str, role: &str) -> Result<String, JsValu
         cat.register(entry.clone())
     }).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
-    // Update project.json
-    update_project_metadata_for_asset(&entry, "create").await?;
+    // Update project.json (awaited). On failure roll back the in-memory
+    // registration so we don't publish a ghost. ADR-0019.
+    if let Err(e) = update_project_metadata_for_asset(&entry, "create").await {
+        with_asset_catalog_mut(|cat| { let _ = cat.unregister(&asset_id); });
+        return Err(e);
+    }
 
     serde_json::to_string(&entry)
         .map_err(|e| JsValue::from_str(&e.to_string()))
@@ -2518,8 +2545,18 @@ pub async fn rename_scene_asset(asset_id: &str, new_path: &str) -> Result<String
         Ok::<_, JsValue>(new_entry)
     })?;
 
-    // Update project.json
-    update_project_metadata_for_asset(&new_entry, "rename").await?;
+    // Update project.json (awaited). On failure restore the OLD entry under
+    // its OLD logical_path so the next read does not see a half-rename.
+    // ADR-0019.
+    if let Err(e) = update_project_metadata_for_asset(&new_entry, "rename").await {
+        with_asset_catalog_mut(|cat| {
+            let _ = cat.unregister(asset_id);
+            let mut restored = old_entry.clone();
+            restored.current_version = restored.current_version.saturating_sub(1);
+            let _ = cat.register(restored);
+        });
+        return Err(e);
+    }
 
     // Invalidate ASSET_BODY_CACHE by old_path (D4)
     with_asset_body_cache_mut(|cache| {
@@ -2575,8 +2612,12 @@ pub async fn duplicate_scene_asset(asset_id: &str) -> Result<String, JsValue> {
         cat.register(new_entry.clone())
     }).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
-    // Update project.json
-    update_project_metadata_for_asset(&new_entry, "duplicate").await?;
+    // Update project.json (awaited). On failure roll back the duplicate's
+    // in-memory registration; the source body file is untouched. ADR-0019.
+    if let Err(e) = update_project_metadata_for_asset(&new_entry, "duplicate").await {
+        with_asset_catalog_mut(|cat| { let _ = cat.unregister(&new_id); });
+        return Err(e);
+    }
 
     serde_json::to_string(&new_entry)
         .map_err(|e| JsValue::from_str(&e.to_string()))
@@ -2603,7 +2644,11 @@ pub async fn delete_scene_asset(asset_id: &str) -> Result<(), JsValue> {
         cat.unregister(asset_id)
     }).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
-    // Update project.json
+    // Update project.json — awaited so subsequent reads observe the removal.
+// Delete has no catalog rollback: the entry is intentionally gone. If the
+// metadata write fails, we propagate the error to the caller; the in-memory
+// catalog state matches the OPFS body state (both removed) which is the
+// correct partial state. See opfs-catalog-flake-fix ADR-0019.
     update_project_metadata_for_asset(&entry, "delete").await?;
 
     // Invalidate ASSET_BODY_CACHE by logical_path (D4)
@@ -2909,6 +2954,8 @@ async fn update_project_metadata_for_asset(
         .map_err(|e| JsValue::from_str(&e))?;
     Ok(())
 }
+
+/// Load project metadata from OPFS.
 
 /// Load project metadata from OPFS.
 #[cfg(target_arch = "wasm32")]

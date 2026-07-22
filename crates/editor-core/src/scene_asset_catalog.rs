@@ -386,3 +386,45 @@ fn static_counter() -> u64 {
     static C: AtomicU64 = AtomicU64::new(0);
     C.fetch_add(1, Ordering::SeqCst)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::scene_asset::SceneAssetRole;
+
+    fn entry(asset_id: &str, logical_path: &str, role: SceneAssetRole) -> SceneAssetCatalogEntry {
+        SceneAssetCatalogEntry {
+            asset_id: asset_id.to_string(),
+            logical_path: logical_path.to_string(),
+            role,
+            current_version: 1,
+            tags: vec![],
+            created_at: 1000,
+            updated_at: 1000,
+        }
+    }
+
+    /// Spec scenario from opfs-catalog-persistence cycle, Phase 1.1 RED.
+    /// Verifies that after `register → unregister` the catalog invariants
+    /// are clean (no dangling path_index / role_index entries).
+    #[test]
+    fn register_then_unregister_roundtrip() {
+        let mut catalog = SceneAssetCatalog::new();
+        let e = entry("id_x", "actors/player", SceneAssetRole::Actor);
+        catalog.register(e.clone()).expect("register should succeed");
+
+        assert_eq!(catalog.get("id_x"), Some(&e));
+        assert_eq!(catalog.resolve_path("actors/player"), Some("id_x"));
+        assert_eq!(catalog.list_by_role(SceneAssetRole::Actor).len(), 1);
+
+        // Rollback path used by WASM create/rename helpers on metadata failure
+        let removed = catalog.unregister("id_x").expect("unregister should succeed");
+        assert_eq!(removed.asset_id, "id_x");
+
+        assert_eq!(catalog.get("id_x"), None);
+        assert_eq!(catalog.resolve_path("actors/player"), None);
+        assert!(catalog.list_all().is_empty());
+        assert!(catalog.list_by_role(SceneAssetRole::Actor).is_empty());
+        assert!(catalog.validate_invariants().is_empty());
+    }
+}

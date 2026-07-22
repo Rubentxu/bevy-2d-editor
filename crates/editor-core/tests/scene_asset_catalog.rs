@@ -443,3 +443,49 @@ fn mint_asset_id_produces_distinct_ids() {
     // All should start with "id_"
     assert!(ids.iter().all(|id| id.starts_with("id_")));
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OPFS persistence rollback round-trip (opfs-catalog-flake-fix, ADR-0019)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Spec scenario: "metadata write failure rolls back in-memory entry".
+// After a failed metadata write the in-memory catalog must be empty
+// (entry removed) and indices must be clean. This is the unit-level
+// mirror of the WASM-level invariant the OPFS fix enforces.
+
+#[test]
+fn register_then_unregister_roundtrip_leaves_clean_invariants() {
+    let mut catalog = SceneAssetCatalog::new();
+    let e = entry(
+        "id_rollback_1",
+        "actors/player",
+        SceneAssetRole::Actor,
+        1,
+        vec![],
+        1000,
+        1000,
+    );
+
+    // Register (mirrors create_scene_asset's pre-metadata step).
+    catalog.register(e.clone()).expect("register should succeed");
+    assert_eq!(catalog.get("id_rollback_1"), Some(&e));
+    assert_eq!(catalog.resolve_path("actors/player"), Some("id_rollback_1"));
+
+    // Rollback (mirrors the metadata-failure branch).
+    let removed = catalog
+        .unregister("id_rollback_1")
+        .expect("unregister should succeed");
+    assert_eq!(removed.asset_id, "id_rollback_1");
+
+    // After rollback: entry gone, indices clean, invariants empty.
+    assert_eq!(catalog.get("id_rollback_1"), None);
+    assert_eq!(catalog.resolve_path("actors/player"), None);
+    assert!(catalog.list_all().is_empty());
+    assert!(catalog.list_by_role(SceneAssetRole::Actor).is_empty());
+    assert!(catalog.validate_invariants().is_empty());
+
+    // Re-registering the same id+path succeeds (no leftover ghosts).
+    catalog
+        .register(e.clone())
+        .expect("re-register after rollback should succeed");
+}
