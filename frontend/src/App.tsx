@@ -696,6 +696,10 @@ function AppInner() {
     (delta: number) => dock.setBottomHeight(dock.prefs.bottom.height - delta),
     [dock],
   );
+  const handleResizeStatusBar = useCallback(
+    (delta: number) => dock.setStatusBarHeight(dock.prefs.statusBar.height + delta),
+    [dock],
+  );
   const handleResizeRightSplit = useCallback(
     (deltaPx: number) => {
       // Dragging the inner divider down (positive delta) should grow the top
@@ -1001,12 +1005,15 @@ function AppInner() {
         leftWidth={dock.prefs.left.width}
         rightWidth={dock.prefs.right.width}
         bottomHeight={dock.prefs.bottom.height}
+        statusBarHeight={dock.prefs.statusBar.height}
         onResizeLeft={handleResizeLeft}
         onResizeRight={handleResizeRight}
         onResizeBottom={handleResizeBottom}
+        onResizeStatusBar={handleResizeStatusBar}
         onResetLeft={() => dock.setLeftWidth(280)}
         onResetRight={() => dock.setRightWidth(320)}
         onResetBottom={() => dock.setBottomHeight(240)}
+        onResetStatusBar={() => dock.setStatusBarHeight(24)}
         leftVisible={dock.prefs.left.visible}
         bottomVisible={dock.prefs.bottom.visible && editorMode === "scene"}
         left={

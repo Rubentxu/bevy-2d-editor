@@ -35,12 +35,15 @@ interface Props {
   leftWidth: number;
   rightWidth: number;
   bottomHeight: number;
+  statusBarHeight: number;
   onResizeLeft: (deltaPx: number) => void;
   onResizeRight: (deltaPx: number) => void;
   onResizeBottom: (deltaPx: number) => void;
+  onResizeStatusBar: (deltaPx: number) => void;
   onResetLeft: () => void;
   onResetRight: () => void;
   onResetBottom: () => void;
+  onResetStatusBar: () => void;
   leftVisible: boolean;
   bottomVisible: boolean;
 }
@@ -55,12 +58,15 @@ export default function DockLayout({
   leftWidth,
   rightWidth,
   bottomHeight,
+  statusBarHeight,
   onResizeLeft,
   onResizeRight,
   onResizeBottom,
+  onResizeStatusBar,
   onResetLeft,
   onResetRight,
   onResetBottom,
+  onResetStatusBar,
   leftVisible,
   bottomVisible,
 }: Props) {
@@ -143,8 +149,15 @@ export default function DockLayout({
       </div>
       <div
         className="dock-layout-region dock-layout-status"
-        style={{ gridArea: "status" }}
+        style={{ gridArea: "status", position: "relative" }}
+        data-testid="dock-region-status"
       >
+        <DockDivider
+          orientation="horizontal"
+          testId="dock-divider-status"
+          onResize={onResizeStatusBar}
+          onReset={onResetStatusBar}
+        />
         {status}
       </div>
     </div>
