@@ -32,6 +32,12 @@ import CheatSheet, {
 } from "./components/CheatSheet";
 import OnboardingBanner from "./components/OnboardingBanner";
 import { useCanvasViewport } from "./hooks/useCanvasViewport";
+import { useDockResize } from "./hooks/useDockResize";
+import DockLayout from "./components/Dock/DockLayout";
+import LeftDock from "./components/Dock/LeftDock";
+import CenterDock from "./components/Dock/CenterDock";
+import RightDock from "./components/Dock/RightDock";
+import AssetNavigator from "./components/AssetNavigator";
 import { useScenes } from "./hooks/useScenes";
 import { useSceneAssets } from "./hooks/useSceneAssets";
 import { ToastProvider, useToasts } from "./hooks/useToasts";
@@ -648,6 +654,39 @@ function AppInner() {
     onFitViewport: () => fitToContent(),
   });
 
+  // ── Dock layout (Phase B) ──────────────────────────────────────────────────
+  const dock = useDockResize();
+  // Drag deltas from DockDivider are signed (positive = mouse moves right/down).
+  // For the LEFT divider we want the left dock to grow when delta is positive,
+  // so we pass delta as-is. For the RIGHT divider the right dock grows when
+  // delta is positive, so we pass -delta (drag-left widens the right column).
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [outlineCollapsed, setOutlineCollapsed] = useState(false);
+  const [propertiesCollapsed, setPropertiesCollapsed] = useState(false);
+  const handleResizeLeft = useCallback(
+    (delta: number) => dock.setLeftWidth(dock.prefs.left.width + delta),
+    [dock],
+  );
+  const handleResizeRight = useCallback(
+    (delta: number) => dock.setRightWidth(dock.prefs.right.width - delta),
+    [dock],
+  );
+  const handleResizeBottom = useCallback(
+    (delta: number) => dock.setBottomHeight(dock.prefs.bottom.height - delta),
+    [dock],
+  );
+  const handleResizeRightSplit = useCallback(
+    (deltaPx: number) => {
+      // Dragging the inner divider down (positive delta) should grow the top
+      // region; convert pixel delta into a percentage of the right dock height
+      // by dividing by the dock's rendered height (we approximate with the
+      // current right width which scales proportionally with the layout).
+      const pctDelta = (deltaPx / Math.max(dock.prefs.right.width, 200)) * 50;
+      dock.setRightTopHeight(dock.prefs.right.topHeight + pctDelta);
+    },
+    [dock],
+  );
+
   // ── Command palette catalog (Phase 3.2) ───────────────────────────────────
   // Static list of >15 commands wired to existing App.tsx handlers. Built
   // every render but only when one of the dependencies changes (the
@@ -875,196 +914,267 @@ function AppInner() {
 
   return (
     <div className="app">
-      <MenuBar
-        editorMode={editorMode}
-        onOpenAssets={() => {}}
-        onBackToScene={
-          editorMode === "asset-authoring" ? handleBackToScene : undefined
-        }
-        onOpenLogic={editorMode === "scene" ? handleOpenLogic : undefined}
-        onOpenCode={editorMode === "scene" ? handleOpenCode : undefined}
-        logState={editorMode === "scene" ? logState : assetLogState}
-        onUndo={editorMode === "scene" ? handleUndo : handleAssetUndo}
-        onRedo={editorMode === "scene" ? handleRedo : handleAssetRedo}
-        onSave={editorMode === "scene" ? handleSave : handleAssetSave}
-        onSaveAs={() => setSaveModalOpen(true)}
-        onLoad={handleLoad}
-        onExportRust={() => setExportRustOpen(true)}
-        onNewScene={() => handleNewScene(`scene_${Date.now()}`)}
-        onDeleteEntity={() => {
-          if (selectedEntityId) void handleDeleteEntity(selectedEntityId);
-        }}
-        selectedEntityId={selectedEntityId}
-        onToggleAI={handleToggleAI}
-        aiPanelOpen={aiPanelOpen}
-        onToggleValidationCenter={handleToggleValidationCenter}
-        validationCenterOpen={validationCenterOpen}
-        onToggleTileset={handleToggleTileset}
-        tilesetPanelOpen={tilesetPanelOpen}
-        onToggleAutoLayer={handleToggleAutoLayer}
-        autoLayerPanelOpen={autoLayerPanelOpen}
-        onTogglePlay={handleTogglePlay}
-        onOpenSearch={() => setCommandPaletteOpen(true)}
-        onOpenCheatSheet={() => setCheatSheetOpen(true)}
-        onWelcomeTour={() => console.warn("[menu] TODO: wire Welcome Tour")}
-      />
-      {editorMode === "play" && <GameOverlay onStop={handleTogglePlay} />}
-      <SceneTabs
-        scenes={scenes}
-        currentId={currentId}
-        onTabClick={handleTabClick}
-        onNewScene={handleNewScene}
-        onDeleteScene={handleDeleteScene}
-        onRenameScene={handleRenameScene}
-      />
-      {/* Canvas always mounted — AssetAuthoringView overlays .main content (C-4) */}
-      <div
-        className={`canvas-container${isDragOverCanvas ? " canvas-drop-active" : ""}`}
-        data-testid="canvas-drop-target"
-        onDragOver={handleCanvasDragOver}
-        onDragLeave={handleCanvasDragLeave}
-        onDrop={handleCanvasDrop}
-      >
-        {!ready && (
-          <div style={{ padding: 16, color: "#888" }}>
-            {initError ? `Error: ${initError}` : "Loading WASM..."}
-          </div>
-        )}
-        <div
-          className="canvas-transform"
-          style={{
-            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-          }}
-        >
-          <canvas id="bevy-canvas" />
-        </div>
-        {isDragOverCanvas && (
-          <div
-            className="canvas-drop-outline"
-            data-testid="canvas-drop-outline"
-            aria-hidden="true"
-          />
-        )}
-        <ViewportControls />
-      </div>
-      <div className="main">
-        {editorMode === "logic" ? (
+      <DockLayout
+        menu={
           <>
-            <LogicGraphEditor editorMode={editorMode} />
-          </>
-        ) : editorMode === "code" ? (
-          <>
-            <CodeEditor
-              navigationTarget={pendingNavigation}
-              onEditorReady={() => setPendingNavigation(null)}
-            />
-          </>
-        ) : editorMode === "scene" ? (
-          <>
-            {aiPanelOpen && (
-              <AIAssistantPanel
-                aiState={{
-                  prompt,
-                  loading: aiLoading,
-                  proposals,
-                  error: aiError,
-                  contextStats,
-                  contextUsedChars,
-                }}
-                onToggle={handleToggleAI}
-                onPromptChange={setPrompt}
-                onSubmit={handleSubmitAI}
-                onApply={handleApplyProposal}
-                onDiscard={discardProposal}
-                applyingIds={applyingIds}
-                contextStats={contextStats}
-                contextUsedChars={contextUsedChars}
-              />
-            )}
-            {validationCenterOpen && (
-              <ValidationCenter onClose={handleToggleValidationCenter} />
-            )}
-            {tilesetPanelOpen && (
-              <TilesetPanel
-                selectedTilesetId={selectedTilesetId}
-                onSelectTileset={handleSelectTileset}
-                assetDoc={assetDoc}
-                activeAssetLogicalPath={activeAssetLogicalPath}
-              />
-            )}
-            <HierarchyPanel
-              scene={scene}
-              selectedId={selectedEntityId}
-              onSelect={setSelectedEntityId}
-              onRename={handleRename}
-              instances={instances}
-              onCreateEntity={
-                editorMode === "scene" ? handleCreateEntity : undefined
+            <MenuBar
+              editorMode={editorMode}
+              onOpenAssets={() => {}}
+              onBackToScene={
+                editorMode === "asset-authoring" ? handleBackToScene : undefined
               }
-              renameRequest={renameRequestTick}
+              onOpenLogic={
+                editorMode === "scene" ? handleOpenLogic : undefined
+              }
+              onOpenCode={editorMode === "scene" ? handleOpenCode : undefined}
+              logState={editorMode === "scene" ? logState : assetLogState}
+              onUndo={editorMode === "scene" ? handleUndo : handleAssetUndo}
+              onRedo={editorMode === "scene" ? handleRedo : handleAssetRedo}
+              onSave={editorMode === "scene" ? handleSave : handleAssetSave}
+              onSaveAs={() => setSaveModalOpen(true)}
+              onLoad={handleLoad}
+              onExportRust={() => setExportRustOpen(true)}
+              onNewScene={() => handleNewScene(`scene_${Date.now()}`)}
+              onDeleteEntity={() => {
+                if (selectedEntityId) void handleDeleteEntity(selectedEntityId);
+              }}
+              selectedEntityId={selectedEntityId}
+              onToggleAI={handleToggleAI}
+              aiPanelOpen={aiPanelOpen}
+              onToggleValidationCenter={handleToggleValidationCenter}
+              validationCenterOpen={validationCenterOpen}
+              onToggleTileset={handleToggleTileset}
+              tilesetPanelOpen={tilesetPanelOpen}
+              onToggleAutoLayer={handleToggleAutoLayer}
+              autoLayerPanelOpen={autoLayerPanelOpen}
+              onTogglePlay={handleTogglePlay}
+              onOpenSearch={() => setCommandPaletteOpen(true)}
+              onOpenCheatSheet={() => setCheatSheetOpen(true)}
+              onWelcomeTour={() =>
+                console.warn("[menu] TODO: wire Welcome Tour")
+              }
             />
-            <InspectorPanel
-              scene={scene}
-              selectedId={selectedEntityId}
-              onRename={handleRename}
-              onSetField={handleSetField}
-              onRemoveComponent={handleRemoveComponent}
-              onAddComponent={handleAddComponent}
-              instances={instances}
-              onRemoveInstance={removeInstance}
-              onReplaceInstanceAsset={replaceInstanceAsset}
-              assetEntries={assetEntries}
-              onJumpToSource={handleJumpToSource}
-            />
+            {editorMode === "play" && <GameOverlay onStop={handleTogglePlay} />}
           </>
-        ) : (
-          /* Asset Authoring Mode — overlays canvas via .main (C-4) */
-          <>
-            <ProjectAssetBrowser
-              entries={assetEntries}
-              onCreate={handleAssetCreate}
-              onRename={handleAssetRename}
-              onDuplicate={handleAssetDuplicate}
-              onDelete={handleAssetDelete}
-              onOpen={handleOpenAsset}
-              onPlaceInstance={placeInstance}
-            />
-            {autoLayerPanelOpen &&
-              (selectedAutoLayer ? (
-                <AutoLayerPanel
-                  layer={selectedAutoLayer}
-                  assetRef={activeAssetLogicalPath ?? ""}
-                  onRegenerate={refresh}
-                />
-              ) : (
-                <div className="tileset-panel">
-                  <h3>Auto Layer</h3>
-                  <p style={{ fontSize: 12, color: "#666" }}>
-                    No auto layers in this asset. Open a level scene asset to
-                    edit auto layers.
-                  </p>
+        }
+        status={<StatusBar />}
+        leftWidth={dock.prefs.left.width}
+        rightWidth={dock.prefs.right.width}
+        bottomHeight={dock.prefs.bottom.height}
+        onResizeLeft={handleResizeLeft}
+        onResizeRight={handleResizeRight}
+        onResizeBottom={handleResizeBottom}
+        onResetLeft={() => dock.setLeftWidth(280)}
+        onResetRight={() => dock.setRightWidth(320)}
+        onResetBottom={() => dock.setBottomHeight(240)}
+        leftVisible={dock.prefs.left.visible}
+        bottomVisible={dock.prefs.bottom.visible && editorMode === "scene"}
+        left={
+          <LeftDock
+            visible={dock.prefs.left.visible}
+            collapsed={leftCollapsed}
+            onToggleCollapse={() => setLeftCollapsed((v) => !v)}
+            onClose={dock.toggleLeft}
+          />
+        }
+        center={
+          <CenterDock
+            scenes={scenes}
+            currentId={currentId}
+            onTabClick={handleTabClick}
+            onNewScene={handleNewScene}
+            onDeleteScene={handleDeleteScene}
+            onRenameScene={handleRenameScene}
+            canvas={
+              <div
+                className={`canvas-container${isDragOverCanvas ? " canvas-drop-active" : ""}`}
+                data-testid="canvas-drop-target"
+                onDragOver={handleCanvasDragOver}
+                onDragLeave={handleCanvasDragLeave}
+                onDrop={handleCanvasDrop}
+              >
+                {!ready && (
+                  <div style={{ padding: 16, color: "#888" }}>
+                    {initError ? `Error: ${initError}` : "Loading WASM..."}
+                  </div>
+                )}
+                <div
+                  className="canvas-transform"
+                  style={{
+                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                  }}
+                >
+                  <canvas id="bevy-canvas" />
                 </div>
-              ))}
-            {assetDoc && (
-              <AssetAuthoringView
-                document={assetDoc}
-                activeEntityId={null}
-                onSelectEntity={() => {}}
-                onCommit={handleAssetCommit}
-                onAddComponent={handleAssetAddComponent}
-                onRemoveComponent={handleAssetRemoveComponent}
-                onUndo={handleAssetUndo}
-                onRedo={handleAssetRedo}
-                onSave={handleAssetSave}
-                onBackToScene={handleBackToScene}
-                canUndo={assetLogState.can_undo}
-                canRedo={assetLogState.can_redo}
-                dirty={assetDirty}
-              />
-            )}
-          </>
-        )}
-      </div>
+                {isDragOverCanvas && (
+                  <div
+                    className="canvas-drop-outline"
+                    data-testid="canvas-drop-outline"
+                    aria-hidden="true"
+                  />
+                )}
+                <ViewportControls />
+              </div>
+            }
+          />
+        }
+        right={
+          <RightDock
+            visible={dock.prefs.right.visible}
+            outlineVisible={dock.prefs.right.outlineVisible}
+            propertiesVisible={dock.prefs.right.propertiesVisible}
+            outlineCollapsed={outlineCollapsed}
+            propertiesCollapsed={propertiesCollapsed}
+            topHeightPct={dock.prefs.right.topHeight}
+            outline={
+              <div className="dock-content dock-content-outline">
+                {editorMode === "scene" && (
+                  <>
+                    {aiPanelOpen && (
+                      <AIAssistantPanel
+                        aiState={{
+                          prompt,
+                          loading: aiLoading,
+                          proposals,
+                          error: aiError,
+                          contextStats,
+                          contextUsedChars,
+                        }}
+                        onToggle={handleToggleAI}
+                        onPromptChange={setPrompt}
+                        onSubmit={handleSubmitAI}
+                        onApply={handleApplyProposal}
+                        onDiscard={discardProposal}
+                        applyingIds={applyingIds}
+                        contextStats={contextStats}
+                        contextUsedChars={contextUsedChars}
+                      />
+                    )}
+                    {validationCenterOpen && (
+                      <ValidationCenter
+                        onClose={handleToggleValidationCenter}
+                      />
+                    )}
+                    {tilesetPanelOpen && (
+                      <TilesetPanel
+                        selectedTilesetId={selectedTilesetId}
+                        onSelectTileset={handleSelectTileset}
+                        assetDoc={assetDoc}
+                        activeAssetLogicalPath={activeAssetLogicalPath}
+                      />
+                    )}
+                    <HierarchyPanel
+                      scene={scene}
+                      selectedId={selectedEntityId}
+                      onSelect={setSelectedEntityId}
+                      onRename={handleRename}
+                      instances={instances}
+                      onCreateEntity={
+                        editorMode === "scene"
+                          ? handleCreateEntity
+                          : undefined
+                      }
+                      renameRequest={renameRequestTick}
+                    />
+                  </>
+                )}
+                {editorMode === "asset-authoring" && (
+                  <ProjectAssetBrowser
+                    entries={assetEntries}
+                    onCreate={handleAssetCreate}
+                    onRename={handleAssetRename}
+                    onDuplicate={handleAssetDuplicate}
+                    onDelete={handleAssetDelete}
+                    onOpen={handleOpenAsset}
+                    onPlaceInstance={placeInstance}
+                  />
+                )}
+                {editorMode === "logic" && (
+                  <LogicGraphEditor editorMode={editorMode} />
+                )}
+                {editorMode === "code" && (
+                  <CodeEditor
+                    navigationTarget={pendingNavigation}
+                    onEditorReady={() => setPendingNavigation(null)}
+                  />
+                )}
+              </div>
+            }
+            properties={
+              <div className="dock-content dock-content-properties">
+                {editorMode === "scene" && (
+                  <InspectorPanel
+                    scene={scene}
+                    selectedId={selectedEntityId}
+                    onRename={handleRename}
+                    onSetField={handleSetField}
+                    onRemoveComponent={handleRemoveComponent}
+                    onAddComponent={handleAddComponent}
+                    instances={instances}
+                    onRemoveInstance={removeInstance}
+                    onReplaceInstanceAsset={replaceInstanceAsset}
+                    assetEntries={assetEntries}
+                    onJumpToSource={handleJumpToSource}
+                  />
+                )}
+                {editorMode === "asset-authoring" && assetDoc && (
+                  <AssetAuthoringView
+                    document={assetDoc}
+                    activeEntityId={null}
+                    onSelectEntity={() => {}}
+                    onCommit={handleAssetCommit}
+                    onAddComponent={handleAssetAddComponent}
+                    onRemoveComponent={handleAssetRemoveComponent}
+                    onUndo={handleAssetUndo}
+                    onRedo={handleAssetRedo}
+                    onSave={handleAssetSave}
+                    onBackToScene={handleBackToScene}
+                    canUndo={assetLogState.can_undo}
+                    canRedo={assetLogState.can_redo}
+                    dirty={assetDirty}
+                  />
+                )}
+                {editorMode === "asset-authoring" &&
+                  autoLayerPanelOpen &&
+                  (selectedAutoLayer ? (
+                    <AutoLayerPanel
+                      layer={selectedAutoLayer}
+                      assetRef={activeAssetLogicalPath ?? ""}
+                      onRegenerate={refresh}
+                    />
+                  ) : (
+                    <div className="tileset-panel">
+                      <h3>Auto Layer</h3>
+                      <p style={{ fontSize: 12, color: "#666" }}>
+                        No auto layers in this asset. Open a level scene asset
+                        to edit auto layers.
+                      </p>
+                    </div>
+                  ))}
+              </div>
+            }
+            onToggleCollapseOutline={() => setOutlineCollapsed((v) => !v)}
+            onToggleCollapseProperties={() =>
+              setPropertiesCollapsed((v) => !v)
+            }
+            onCloseOutline={dock.toggleOutline}
+            onCloseProperties={dock.toggleProperties}
+            onResizeSplit={handleResizeRightSplit}
+            onResetSplit={() => dock.setRightTopHeight(60)}
+            onOpen={dock.toggleRight}
+          />
+        }
+        bottom={
+          <div
+            className="dock-bottom-placeholder"
+            data-testid="dock-bottom"
+            style={{ padding: 8, color: "var(--color-ink-muted)", fontSize: 12 }}
+          >
+            Bottom dock placeholder — Phase C will mount Console / Search /
+            Output / Problems here.
+          </div>
+        }
+      />
       {exportRustOpen && (
         <ExportRustModal onClose={() => setExportRustOpen(false)} />
       )}
@@ -1110,7 +1220,6 @@ function AppInner() {
         onCreateBlankScene={() => handleNewScene(`scene_${Date.now()}`)}
         onOpenLogicEditor={handleOpenLogic}
       />
-      <StatusBar />
       <Toasts />
     </div>
   );

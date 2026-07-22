@@ -30,11 +30,17 @@ export interface SourceLocation {
 }
 
 async function waitForEngine(): Promise<void> {
+  // Wait for both the WASM-side `list_source_files` shim AND the OPFS bridge
+  // it depends on internally. The bridge-side OPFS bindings land slightly
+  // after the WASM shims in initEngine()'s sequence — calling the shim
+  // before that raises a pageerror. (Phase B: AssetNavigator mounted
+  // permanently, so this race is now reachable on initial page load.)
   let attempts = 0;
-  while (
-    typeof (window as any).list_source_files !== "function" &&
-    attempts < 50
-  ) {
+  while (attempts < 50) {
+    const ready =
+      typeof (window as any).list_source_files === "function" &&
+      typeof (window as any).opfs_list_files === "function";
+    if (ready) return;
     await new Promise((r) => setTimeout(r, 100));
     attempts++;
   }

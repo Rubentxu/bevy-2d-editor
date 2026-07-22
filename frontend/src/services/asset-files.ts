@@ -23,11 +23,18 @@ export interface AssetFile {
 }
 
 async function waitForEngine(): Promise<void> {
+  // Wait for both the WASM-side `list_asset_files` shim AND the OPFS bridge
+  // it depends on internally (`window.opfs_list_files`). The WASM shim is
+  // attached before initEngine() returns, but the bridge-side OPFS bindings
+  // land later in the init sequence — calling the shim before that point
+  // raises a `window.opfs_list_files is not a function` pageerror that fails
+  // the error-hygiene smoke test (capabilities-smoke §Cross-cutting).
   let attempts = 0;
-  while (
-    typeof (window as any).list_asset_files !== "function" &&
-    attempts < 50
-  ) {
+  while (attempts < 50) {
+    const ready =
+      typeof (window as any).list_asset_files === "function" &&
+      typeof (window as any).opfs_list_files === "function";
+    if (ready) return;
     await new Promise((r) => setTimeout(r, 100));
     attempts++;
   }
