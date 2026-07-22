@@ -22,6 +22,7 @@ import { BUILTIN_PRESETS } from "../data/workspacePresets";
 const CSS_VAR_LEFT = "--dock-left-w";
 const CSS_VAR_RIGHT = "--dock-right-w";
 const CSS_VAR_BOTTOM = "--dock-bottom-h";
+const CSS_VAR_STATUS = "--status-h";
 const CSS_VAR_RIGHT_TOP = "--dock-right-top-h";
 
 const MIN_LEFT = 160;
@@ -32,6 +33,8 @@ const MIN_BOTTOM = 100;
 const MAX_BOTTOM = 480;
 const MIN_RIGHT_TOP = 30;
 const MAX_RIGHT_TOP = 80;
+const MIN_STATUS = 20;
+const MAX_STATUS = 48;
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
@@ -66,11 +69,12 @@ export function useDockResize() {
   }, [prefs.right.width]);
   useEffect(() => {
     applyCssVar(CSS_VAR_BOTTOM, `${prefs.bottom.height}px`);
+    applyCssVar(CSS_VAR_STATUS, `${prefs.statusBar.height}px`);
     applyCssVar(
       CSS_VAR_RIGHT_TOP,
       `${Math.round((prefs.right.topHeight / 100) * 100)}%`,
     );
-  }, [prefs.bottom.height, prefs.right.topHeight]);
+  }, [prefs.bottom.height, prefs.statusBar.height, prefs.right.topHeight]);
 
   // Hydrate from OPFS on mount.
   useEffect(() => {
@@ -111,6 +115,13 @@ export function useDockResize() {
     setPrefs((prev) => ({
       ...prev,
       bottom: { ...prev.bottom, height: clamp(h, MIN_BOTTOM, MAX_BOTTOM) },
+    }));
+  }, []);
+
+  const setStatusBarHeight = useCallback((h: number) => {
+    setPrefs((prev) => ({
+      ...prev,
+      statusBar: { height: clamp(h, MIN_STATUS, MAX_STATUS) },
     }));
   }, []);
 
@@ -175,6 +186,26 @@ export function useDockResize() {
     }));
   }, []);
 
+  const toggleOutlineCollapsed = useCallback(() => {
+    setPrefs((prev) => ({
+      ...prev,
+      right: {
+        ...prev.right,
+        outlineCollapsed: !prev.right.outlineCollapsed,
+      },
+    }));
+  }, []);
+
+  const togglePropertiesCollapsed = useCallback(() => {
+    setPrefs((prev) => ({
+      ...prev,
+      right: {
+        ...prev.right,
+        propertiesCollapsed: !prev.right.propertiesCollapsed,
+      },
+    }));
+  }, []);
+
   const reset = useCallback(() => {
     setPrefs(DEFAULT_DOCK_PREFS);
   }, []);
@@ -219,12 +250,15 @@ export function useDockResize() {
     setLeftWidth,
     setRightWidth,
     setBottomHeight,
+    setStatusBarHeight,
     setRightTopHeight,
     toggleLeft,
     toggleRight,
     toggleBottom,
     toggleOutline,
     toggleProperties,
+    toggleOutlineCollapsed,
+    togglePropertiesCollapsed,
     reset,
     applyPreset,
     saveCurrentAsPreset,
