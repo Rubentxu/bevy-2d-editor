@@ -104,19 +104,41 @@ pub fn start_engine(canvas_id: &str) {
             ..default()
         }))
         .add_systems(Startup, setup)
-        // process_play_mode_request runs every frame to handle WASM enter/exit requests
-        .add_systems(Update, process_play_mode_request.before(process_commands))
+        // BUG-2 (Bevy 0.19 B0001) fix: every system pair that could alias on
+        // `Transform` / `Sprite` is connected by an explicit `.before()` /
+        // `.after()` chain OR by a `Without<SceneEntity>` disjoint filter on
+        // the editor/legacy systems. `apply_actuator_outputs` (play mode) is
+        // chained after `process_play_mode_request` + `process_commands` so
+        // Bevy 0.19's stricter conflict detector sees the systems as ordered
+        // (never running in parallel) and accepts the Transform/Sprite
+        // mutable overlap with the scene-entity ParamSet below.
+        .add_systems(Update, process_play_mode_request)
         // process_hot_reload_requests drains the HOT_RELOAD_BUS each frame before rebuild
         .add_systems(Update, process_hot_reload_requests.before(rebuild_preview_world))
-        // Editor-only systems gated during play mode
-        .add_systems(Update, process_commands.run_if(in_edit_mode))
+        // Editor-only systems gated during play mode. `Without<SceneEntity>`
+        // keeps these queries provably disjoint from play-mode systems that
+        // write to scene-entity Transforms/Sprites (process_play_mode_request
+        // ParamSet, apply_actuator_outputs).
+        .add_systems(Update, process_commands.run_if(in_edit_mode).before(actuator_bus::apply_actuator_outputs))
         .add_systems(Update, rebuild_preview_world.run_if(in_edit_mode).after(process_commands))
         .add_systems(Update, sync_log_state.run_if(in_edit_mode).after(rebuild_preview_world))
         // Play-mode sensor systems — run before logic evaluation
         .add_systems(Update, logic_evaluator::update_keyboard_state.run_if(in_play_mode).before(logic_dispatch::logic_evaluation_system))
         // Logic dispatch runs only in play mode
         .add_systems(Update, logic_dispatch::logic_evaluation_system.run_if(in_play_mode).after(sync_log_state))
-        .add_systems(Update, actuator_bus::apply_actuator_outputs.run_if(in_play_mode).after(logic_dispatch::logic_evaluation_system))
+        // apply_actuator_outputs (play mode) is explicitly ordered AFTER
+        // process_play_mode_request and process_commands so Bevy 0.19 treats
+        // the &mut Transform overlap with those systems as sequential rather
+        // than parallel. `before(emit_events)` makes the Update→Last ordering
+        // explicit for the same reason.
+        .add_systems(
+            Update,
+            actuator_bus::apply_actuator_outputs
+                .run_if(in_play_mode)
+                .after(logic_dispatch::logic_evaluation_system)
+                .after(process_play_mode_request)
+                .before(emit_events),
+        )
         .add_systems(Last, emit_events)
         .run();
 
@@ -654,7 +676,14 @@ fn spawn_preview_entity(commands: &mut Commands, preview: &PreviewEntity) {
 // process_commands
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn process_commands(mut sprites: Query<&mut Transform, With<Sprite>>) {
+fn process_commands(
+    // BUG-2 (Bevy 0.19 B0001) fix: `Without<SceneEntity>` makes this query
+    // provably disjoint from scene-entity transforms, which are mutated by
+    // `process_play_mode_request` (ParamSet) and `apply_actuator_outputs` in
+    // play mode. The legacy JS sprite-move command targets the single
+    // non-scene sprite that pre-dates the SceneInstance pipeline.
+    mut sprites: Query<&mut Transform, (With<Sprite>, Without<SceneEntity>)>,
+) {
     let cmds = crate::COMMAND_BUS.with(|b| {
         b.borrow_mut()
             .as_mut()
@@ -679,7 +708,12 @@ fn process_commands(mut sprites: Query<&mut Transform, With<Sprite>>) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 fn emit_events(
-    sprites: Query<&Transform, With<Sprite>>,
+    // BUG-2 (Bevy 0.19 B0001) fix: `Without<SceneEntity>` keeps this immutable
+    // Transform read disjoint from the mutable Transform accesses in
+    // `apply_actuator_outputs` and `process_play_mode_request` (ParamSet).
+    // `single()` expects exactly one entity — the legacy sprite — not a scene
+    // entity.
+    sprites: Query<&Transform, (With<Sprite>, Without<SceneEntity>)>,
     time: Res<Time>,
     mut fps_accum: Local<f32>,
     mut frame_count: Local<u32>,
