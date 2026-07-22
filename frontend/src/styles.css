@@ -3217,6 +3217,27 @@
   z-index: 5;
 }
 
+/* v0.81 Tier 2: drag-resize handle for the status bar (Phase D).
+   Sits on the top edge of the dock-layout-status region (which is
+   position: relative). Mirrors the bottom-dock divider's geometry but
+   spans the full width of the status bar. */
+.dock-layout-status > .dock-divider-horizontal {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -2px;
+  height: 4px;
+  cursor: row-resize;
+  z-index: 5;
+}
+
+.dock-layout-status .status-bar {
+  /* The status bar fills the status grid row; --status-h (set by
+     useDockResize from OPFS-persisted prefs) controls the row height. */
+  height: 100%;
+  min-height: var(--status-h, 24px);
+}
+
 .dock {
   display: flex;
   flex-direction: column;
