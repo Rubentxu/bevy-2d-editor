@@ -32,7 +32,10 @@ export interface CodeEditorProps {
  * Save trigger: Ctrl+S (Windows/Linux) / Cmd+S (Mac).
  * Load/save failures surface as a dismissible error bar at the top of the editor.
  */
-export default function CodeEditor({ navigationTarget, onEditorReady }: CodeEditorProps = {}) {
+export default function CodeEditor({
+  navigationTarget,
+  onEditorReady,
+}: CodeEditorProps = {}) {
   const {
     files,
     currentId,
@@ -54,7 +57,9 @@ export default function CodeEditor({ navigationTarget, onEditorReady }: CodeEdit
     if (!navigationTarget || !viewRef.current) return;
     if (viewRef.current.state.doc.lines < navigationTarget.line) return;
     try {
-      const lineStart = viewRef.current.state.doc.line(navigationTarget.line).from;
+      const lineStart = viewRef.current.state.doc.line(
+        navigationTarget.line,
+      ).from;
       viewRef.current.dispatch({
         selection: { anchor: lineStart },
         effects: EditorView.scrollIntoView(lineStart, { y: "center" }),
@@ -101,7 +106,7 @@ export default function CodeEditor({ navigationTarget, onEditorReady }: CodeEdit
       if (value === content) return;
       setContent(value);
     },
-    [setContent, content]
+    [setContent, content],
   );
 
   // Extensions for CodeMirror: Rust language + VS Code dark theme.
@@ -124,7 +129,7 @@ export default function CodeEditor({ navigationTarget, onEditorReady }: CodeEdit
         return;
       await deleteFile(id);
     },
-    [files, deleteFile]
+    [files, deleteFile],
   );
 
   const handleNewClick = useCallback(async () => {
@@ -147,7 +152,7 @@ export default function CodeEditor({ navigationTarget, onEditorReady }: CodeEdit
           gap: 12,
         }}
       >
-        <span>No source files yet.</span>
+        <span>No source files — click + to create one</span>
         <button
           onClick={handleNewClick}
           style={{ padding: "4px 12px", cursor: "pointer" }}

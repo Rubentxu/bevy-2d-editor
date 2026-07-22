@@ -35,15 +35,12 @@ interface PaletteItem {
  * RF2: Drag-connect dispatches ConnectPorts via dispatch
  * RF3: Page reload restores graph from WASM (no local durable state)
  */
-export default function LogicGraphEditor({ editorMode }: LogicGraphEditorProps) {
-  const {
-    graph,
-    descriptors,
-    dispatch,
-    createDefault,
-  } = useLogicGraph();
+export default function LogicGraphEditor({
+  editorMode,
+}: LogicGraphEditorProps) {
+  const { graph, descriptors, dispatch, createDefault } = useLogicGraph();
 
-  const [nodes, setNodes, onNodesChange] = useNodesState([] as Node[],);
+  const [nodes, setNodes, onNodesChange] = useNodesState([] as Node[]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([] as Edge[]);
 
   // Auto-create default graph when entering logic mode with no graph
@@ -106,7 +103,7 @@ export default function LogicGraphEditor({ editorMode }: LogicGraphEditorProps) 
         console.error("LogicGraphEditor: onConnect failed:", e);
       }
     },
-    [dispatch]
+    [dispatch],
   );
 
   /**
@@ -132,7 +129,7 @@ export default function LogicGraphEditor({ editorMode }: LogicGraphEditorProps) 
         console.error("LogicGraphEditor: onPaletteAdd failed:", e);
       }
     },
-    [dispatch]
+    [dispatch],
   );
 
   if (editorMode !== "logic") {
@@ -172,7 +169,10 @@ export default function LogicGraphEditor({ editorMode }: LogicGraphEditorProps) 
                 key={item.nodeTypeId}
                 draggable
                 onDragStart={(e) => {
-                  e.dataTransfer.setData("application/logic-node", JSON.stringify(item));
+                  e.dataTransfer.setData(
+                    "application/logic-node",
+                    JSON.stringify(item),
+                  );
                   e.dataTransfer.effectAllowed = "copy";
                 }}
                 onClick={() => onPaletteAdd(item)}
@@ -193,7 +193,7 @@ export default function LogicGraphEditor({ editorMode }: LogicGraphEditorProps) 
         ))}
         {descriptors.length === 0 && (
           <div style={{ fontSize: 11, color: "#999" }}>
-            Loading nodes...
+            Logic graphs coming from Recipe library
           </div>
         )}
       </div>
