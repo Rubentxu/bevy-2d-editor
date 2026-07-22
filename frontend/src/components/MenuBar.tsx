@@ -36,6 +36,12 @@ export interface MenuBarProps {
   onOpenSearch?: () => void;
   onOpenCheatSheet?: () => void;
   onWelcomeTour?: () => void;
+  // Phase E — View menu dock toggles + reset layout + fullscreen.
+  onToggleLeftDock?: () => void;
+  onToggleOutlineDock?: () => void;
+  onTogglePropertiesDock?: () => void;
+  onToggleFullscreen?: () => void;
+  onResetLayout?: () => void;
 }
 
 export default function MenuBar({
@@ -60,6 +66,11 @@ export default function MenuBar({
   onOpenSearch,
   onOpenCheatSheet,
   onWelcomeTour,
+  onToggleLeftDock,
+  onToggleOutlineDock,
+  onTogglePropertiesDock,
+  onToggleFullscreen,
+  onResetLayout,
 }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const { scenes } = useScenes();
@@ -89,6 +100,11 @@ export default function MenuBar({
         handleWelcomeTour:
           onWelcomeTour ??
           (() => console.warn("[menu] TODO: wire Welcome Tour")),
+        handleToggleLeftDock: onToggleLeftDock,
+        handleToggleOutlineDock: onToggleOutlineDock,
+        handleTogglePropertiesDock: onTogglePropertiesDock,
+        handleToggleFullscreen: onToggleFullscreen,
+        handleResetLayout: onResetLayout,
         setTheme,
         selectedEntityId,
         editorMode,
@@ -112,6 +128,11 @@ export default function MenuBar({
       onToggleValidationCenter,
       onUndo,
       onWelcomeTour,
+      onToggleLeftDock,
+      onToggleOutlineDock,
+      onTogglePropertiesDock,
+      onToggleFullscreen,
+      onResetLayout,
       selectedEntityId,
       setTheme,
     ],

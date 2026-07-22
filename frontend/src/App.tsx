@@ -43,6 +43,8 @@ import { useScenes } from "./hooks/useScenes";
 import { useSceneAssets } from "./hooks/useSceneAssets";
 import { ToastProvider, useToasts } from "./hooks/useToasts";
 import Toasts from "./components/Toasts";
+import { useFullscreen } from "./hooks/useFullscreen";
+import WelcomeOverlay from "./components/WelcomeOverlay";
 import {
   sceneCreate,
   sceneSwitch,
@@ -643,6 +645,19 @@ function AppInner() {
 
   // ── Dock layout (Phase B) ──────────────────────────────────────────────────
   const dock = useDockResize();
+  // ── Fullscreen viewport (Phase E) ─────────────────────────────────────────
+  const fullscreen = useFullscreen();
+
+  // Apply the data-fullscreen attribute to body — useFullscreen already
+  // mirrors this, but make sure any mount-time flip is reflected in the
+  // hook state for tests/components querying it.
+  useEffect(() => {
+    if (fullscreen.enabled) {
+      document.body.dataset.fullscreen = "true";
+    } else {
+      delete document.body.dataset.fullscreen;
+    }
+  }, [fullscreen.enabled]);
 
   useKeyboardShortcuts({
     enabled: editorMode !== "play",
@@ -657,6 +672,10 @@ function AppInner() {
     onRenameSelected: () => setRenameRequestTick((t) => t + 1),
     onFitViewport: () => fitToContent(),
     onToggleBottomDock: dock.toggleBottom,
+    onToggleLeftDock: dock.toggleLeft,
+    onToggleOutlineDock: dock.toggleOutline,
+    onTogglePropertiesDock: dock.toggleProperties,
+    onToggleFullscreen: fullscreen.toggle,
   });
   // Drag deltas from DockDivider are signed (positive = mouse moves right/down).
   // For the LEFT divider we want the left dock to grow when delta is positive,
@@ -953,11 +972,21 @@ function AppInner() {
               onWelcomeTour={() =>
                 console.warn("[menu] TODO: wire Welcome Tour")
               }
+              onToggleLeftDock={dock.toggleLeft}
+              onToggleOutlineDock={dock.toggleOutline}
+              onTogglePropertiesDock={dock.toggleProperties}
+              onToggleFullscreen={fullscreen.toggle}
+              onResetLayout={dock.reset}
             />
             {editorMode === "play" && <GameOverlay onStop={handleTogglePlay} />}
           </>
         }
-        status={<StatusBar />}
+        status={
+          <StatusBar
+            selectedEntityId={selectedEntityId}
+            onExportRust={() => setExportRustOpen(true)}
+          />
+        }
         leftWidth={dock.prefs.left.width}
         rightWidth={dock.prefs.right.width}
         bottomHeight={dock.prefs.bottom.height}
@@ -1212,6 +1241,10 @@ function AppInner() {
       <OnboardingBanner
         onCreateBlankScene={() => handleNewScene(`scene_${Date.now()}`)}
         onOpenLogicEditor={handleOpenLogic}
+      />
+      <WelcomeOverlay
+        onTakeTour={() => setEditorMode("asset-authoring")}
+        onSkip={() => undefined}
       />
       <Toasts />
     </div>

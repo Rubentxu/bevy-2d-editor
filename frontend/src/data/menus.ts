@@ -28,6 +28,12 @@ export interface MenuHandlers {
   handleTogglePlay: () => void;
   handleOpenCheatSheet: () => void;
   handleWelcomeTour: () => void;
+  // Phase E — dock toggles + reset layout wired by App.tsx
+  handleToggleLeftDock?: () => void;
+  handleToggleOutlineDock?: () => void;
+  handleTogglePropertiesDock?: () => void;
+  handleToggleFullscreen?: () => void;
+  handleResetLayout?: () => void;
   setTheme: (theme: "dark" | "light") => void;
   selectedEntityId: string | null;
   editorMode: "scene" | "asset-authoring" | "logic" | "code" | "play";
@@ -132,27 +138,35 @@ export function createMenuConfig(
       {
         label: "Toggle Assets",
         shortcut: "F6",
-        onClick: todo("Toggle Assets"),
+        onClick: handlers.handleToggleLeftDock ?? todo("Toggle Assets"),
+        testId: "menu-toggle-assets",
       },
       {
         label: "Toggle Outline",
         shortcut: "F8",
-        onClick: todo("Toggle Outline"),
+        onClick: handlers.handleToggleOutlineDock ?? todo("Toggle Outline"),
+        testId: "menu-toggle-outline",
       },
       {
         label: "Toggle Properties",
         shortcut: "Shift+F8",
-        onClick: todo("Toggle Properties"),
+        onClick: handlers.handleTogglePropertiesDock ?? todo("Toggle Properties"),
+        testId: "menu-toggle-properties",
       },
       { label: "Toggle Tools", shortcut: "F7", onClick: todo("Toggle Tools") },
       separator(),
       {
         label: "Fullscreen Viewport",
         shortcut: "F9",
-        onClick: todo("Fullscreen Viewport"),
+        onClick: handlers.handleToggleFullscreen ?? todo("Fullscreen Viewport"),
+        testId: "menu-fullscreen",
       },
       separator(),
-      { label: "Reset Layout", onClick: todo("Reset Layout") },
+      {
+        label: "Reset Layout",
+        onClick: handlers.handleResetLayout ?? todo("Reset Layout"),
+        testId: "menu-reset-layout",
+      },
       {
         label: "Theme",
         submenu: [

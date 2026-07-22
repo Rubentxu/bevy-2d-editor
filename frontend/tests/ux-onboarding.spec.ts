@@ -61,7 +61,7 @@ async function getEntityCount(page: Page): Promise<number> {
 
 test.describe("UX Onboarding — Add Entity button + N shortcut", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?skip-welcome=1");
     await waitForEngine(page);
     await seedEmptyScene(page, "ux-onboarding", "UX Onboarding");
   });

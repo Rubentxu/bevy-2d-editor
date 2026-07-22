@@ -3,7 +3,7 @@ import { expect, Page, test } from "@playwright/test";
 const WASM_LOAD_TIMEOUT = 120_000;
 
 async function waitForEngine(page: Page): Promise<void> {
-  await page.goto("/");
+  await page.goto("/?skip-welcome=1");
   await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
     timeout: WASM_LOAD_TIMEOUT,
   });

@@ -27,7 +27,7 @@ async function waitForEngine(page: Page): Promise<void> {
 
 test.describe("UX Accessibility — Phase 4", () => {
   test("landing screen has zero critical or serious axe violations", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?skip-welcome=1");
     await waitForEngine(page);
 
     const results = await new AxeBuilder({ page })

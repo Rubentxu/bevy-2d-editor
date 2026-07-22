@@ -43,6 +43,29 @@ export const DEFAULT_DOCK_PREFS: DockPrefs = {
 export function useDockPrefs() {
   const timerRef = useRef<number | null>(null);
 
+  /**
+   * Synchronous bootstrap (Phase E, §E.5): try to read `dock-prefs.json`
+   * during the initial bundle load so we can apply the CSS custom properties
+   * (`--dock-left-w` / `--dock-right-w` / `--dock-bottom-h`) BEFORE the first
+   * paint. OPFS is normally async, so this best-effort relies on a tiny
+   * race: we try to resolve the OPFS directory handle synchronously via the
+   * `navigator.storage.getDirectory()` → `getFileHandle()` chain wrapped in
+   * a non-awaited Promise. If it doesn't resolve in time the defaults stand
+   * and `useDockResize` will apply the persisted values once the async OPFS
+   * call completes.
+   *
+   * NOTE: this is a *best effort* that mostly helps when OPFS is cached
+   * from a previous session; the React state in `useDockResize` remains the
+   * source of truth.
+   */
+  const applyBootstrap = useCallback((prefs: DockPrefs) => {
+    if (typeof document === "undefined") return;
+    const root = document.documentElement;
+    root.style.setProperty("--dock-left-w", `${prefs.left.width}px`);
+    root.style.setProperty("--dock-right-w", `${prefs.right.width}px`);
+    root.style.setProperty("--dock-bottom-h", `${prefs.bottom.height}px`);
+  }, []);
+
   const load = useCallback(async (): Promise<DockPrefs | null> => {
     try {
       const result = await opfsLoadFile(DOCK_PREFS_PATH);
@@ -86,5 +109,5 @@ export function useDockPrefs() {
     [save],
   );
 
-  return { load, save, scheduleSave };
+  return { load, save, scheduleSave, applyBootstrap };
 }

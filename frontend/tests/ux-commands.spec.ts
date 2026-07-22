@@ -26,7 +26,7 @@ async function waitForEngine(page: Page): Promise<void> {
 
 test.describe("UX Command Palette — Phase 3.2", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?skip-welcome=1");
     await waitForEngine(page);
   });
 

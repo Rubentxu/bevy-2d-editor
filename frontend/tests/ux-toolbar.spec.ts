@@ -17,7 +17,7 @@ async function waitForEngine(page: Page): Promise<void> {
 
 test.describe("UX Toolbar — Phase 2", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?skip-welcome=1");
     await waitForEngine(page);
   });
 
@@ -33,7 +33,8 @@ test.describe("UX Toolbar — Phase 2", () => {
 
   test("status bar is always visible", async ({ page }) => {
     await expect(page.locator('[data-testid="status-bar"]')).toBeVisible();
-    await expect(page.locator('[data-testid="status-fps"]')).toContainText("FPS");
+    // Phase D — FPS is now a segment inside the 7-segment status bar.
+    await expect(page.locator('[data-testid="status-segment-fps"]')).toContainText("FPS");
   });
 
   test("inspector search filters visible components", async ({ page }) => {

@@ -19,6 +19,12 @@ interface UseKeyboardShortcutsOptions {
   onRenameSelected?: () => void;
   onFitViewport?: () => void;
   onToggleBottomDock?: () => void;
+  // Phase E — F-keys for dock toggles + fullscreen viewport.
+  onToggleLeftDock?: () => void;
+  onToggleRightDock?: () => void;
+  onToggleOutlineDock?: () => void;
+  onTogglePropertiesDock?: () => void;
+  onToggleFullscreen?: () => void;
 }
 
 /**
@@ -49,6 +55,11 @@ export function useKeyboardShortcuts({
   onRenameSelected,
   onFitViewport,
   onToggleBottomDock,
+  onToggleLeftDock,
+  onToggleRightDock,
+  onToggleOutlineDock,
+  onTogglePropertiesDock,
+  onToggleFullscreen,
 }: UseKeyboardShortcutsOptions) {
   useEffect(() => {
     if (!enabled) return;
@@ -99,9 +110,25 @@ export function useKeyboardShortcuts({
           if (selectedEntityId) {
             onRenameSelected();
           }
+        } else if (e.key === "F6" && onToggleLeftDock) {
+          // F6 — toggle Assets (left) dock
+          e.preventDefault();
+          onToggleLeftDock();
         } else if (e.key === "F7" && onToggleBottomDock) {
           e.preventDefault();
           onToggleBottomDock();
+        } else if (e.key === "F8" && e.shiftKey && onTogglePropertiesDock) {
+          // Shift+F8 — toggle Properties (bottom half of right dock)
+          e.preventDefault();
+          onTogglePropertiesDock();
+        } else if (e.key === "F8" && onToggleOutlineDock) {
+          // F8 — toggle Outline (top half of right dock)
+          e.preventDefault();
+          onToggleOutlineDock();
+        } else if (e.key === "F9" && onToggleFullscreen) {
+          // F9 — toggle fullscreen viewport (hide non-center docks)
+          e.preventDefault();
+          onToggleFullscreen();
         } else if ((e.key === "f" || e.key === "F") && onFitViewport) {
           e.preventDefault();
           onFitViewport();
@@ -125,5 +152,10 @@ export function useKeyboardShortcuts({
     onRenameSelected,
     onFitViewport,
     onToggleBottomDock,
+    onToggleLeftDock,
+    onToggleRightDock,
+    onToggleOutlineDock,
+    onTogglePropertiesDock,
+    onToggleFullscreen,
   ]);
 }

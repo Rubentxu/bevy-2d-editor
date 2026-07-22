@@ -28,7 +28,7 @@ test.describe("UX Toasts — Phase 5", () => {
   test("Triggering an error surfaces a toast that auto-dismisses after 5s", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/?skip-welcome=1");
     await waitForEngine(page);
 
     // Drive a known error path through App.tsx: handleRename with no entity

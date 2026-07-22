@@ -55,7 +55,7 @@ async function assertBinding(
 
 test.describe("Hito 0 — Foundation smoke", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?skip-welcome=1");
     await waitForEngine(page);
   });
 
@@ -147,7 +147,7 @@ test.describe("Hito 0 — Foundation smoke", () => {
 
 test.describe("Hito 1 — AI bindings smoke", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?skip-welcome=1");
     await waitForEngine(page);
   });
 
@@ -180,7 +180,7 @@ test.describe("Hito 1 — AI bindings smoke", () => {
 
 test.describe("Hito 2 — Scene Asset authoring smoke (OPFS-tolerant)", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?skip-welcome=1");
     await waitForEngine(page);
     for (const fn of [
       "create_scene_asset",
@@ -234,7 +234,7 @@ test.describe("Hito 2 — Scene Asset authoring smoke (OPFS-tolerant)", () => {
 
 test.describe("Hito 3 — BSN + Runtime preview smoke", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?skip-welcome=1");
     await waitForEngine(page);
   });
 
@@ -286,7 +286,7 @@ test.describe("Hito 3 — BSN + Runtime preview smoke", () => {
 
 test.describe("Hito 4 — Code + Logic + Hot-reload smoke", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?skip-welcome=1");
     await waitForEngine(page);
   });
 
@@ -390,7 +390,7 @@ test.describe("Hito 4 — Code + Logic + Hot-reload smoke", () => {
 
 test.describe("Hito 7 — SceneComponent smoke", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?skip-welcome=1");
     await waitForEngine(page);
   });
 
@@ -420,7 +420,7 @@ test.describe("Cross-cutting — Error hygiene smoke", () => {
   }) => {
     const pageerrors: string[] = [];
     page.on("pageerror", (e) => pageerrors.push(e.message));
-    await page.goto("/");
+    await page.goto("/?skip-welcome=1");
     await waitForEngine(page);
     await page.waitForTimeout(2_000);
     // OBS-1: useSceneAssets.refreshInstances() now downgrades the
@@ -432,7 +432,7 @@ test.describe("Cross-cutting — Error hygiene smoke", () => {
   test("engine reports __bevyEngineStarted=true within 20s of load (or documents flake)", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/?skip-welcome=1");
     const t0 = Date.now();
     try {
       await page.waitForFunction(

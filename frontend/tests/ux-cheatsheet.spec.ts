@@ -21,7 +21,7 @@ async function waitForEngine(page: Page): Promise<void> {
 
 test.describe("UX Cheat Sheet — Phase 3.3", () => {
   test("`?` opens the cheat sheet", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?skip-welcome=1");
     await waitForEngine(page);
 
     // Ensure no input is focused so `?` is not absorbed
