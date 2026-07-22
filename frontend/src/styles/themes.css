@@ -1,0 +1,28 @@
+/* ── Theme overrides (Phase 5) ─────────────────────────────────────────────
+ * Light-theme token overrides. The base values live in `tokens.css` under
+ * `:root` and assume a dark surface. We override the same custom properties
+ * under `[data-theme="light"]` so any component using `var(--color-…)`
+ * automatically picks up the new palette without needing per-component CSS.
+ *
+ * OKLCH was chosen so we can keep the same chroma/hue as the dark palette and
+ * just flip the lightness axis — the perceptual contrast for accent and
+ * status colors stays close to the dark variant.
+ *
+ * Contrast targets: ≥ 4.5:1 for body ink vs bg, ≥ 3:1 for large text and
+ * UI components against adjacent surfaces.
+ */
+
+[data-theme="light"] {
+  --color-bg: oklch(98% 0.005 260);
+  --color-surface: oklch(96% 0.005 260);
+  --color-surface-hi: oklch(92% 0.005 260);
+  --color-ink: oklch(20% 0.02 260);
+  --color-ink-muted: oklch(45% 0.02 260);
+  --color-accent: oklch(50% 0.18 270);
+  --color-accent-hi: oklch(42% 0.18 270);
+  --color-success: oklch(48% 0.16 145);
+  --color-warning: oklch(55% 0.16 75);
+  --color-danger: oklch(48% 0.2 25);
+  --color-border: oklch(80% 0.01 260);
+  --color-border-hi: oklch(65% 0.01 260);
+}
