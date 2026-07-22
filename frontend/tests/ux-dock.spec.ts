@@ -33,8 +33,8 @@ async function readColumnWidths(page: Page): Promise<number[]> {
       '[data-testid="dock-layout"]',
     ) as HTMLElement | null;
     if (!layout) return [];
-    const cols = getComputedStyle(layout).gridTemplateColumns
-      .trim()
+    const cols = getComputedStyle(layout)
+      .gridTemplateColumns.trim()
       .split(/\s+/);
     return cols.map((c) => (c.endsWith("px") ? parseFloat(c) : NaN));
   });
@@ -47,11 +47,15 @@ test.describe("Defold-inspired 3-region dock layout", () => {
   });
 
   test("renders all three regions", async ({ page }) => {
-    await expect(page.locator('[data-testid="dock-region-left"]')).toBeVisible();
+    await expect(
+      page.locator('[data-testid="dock-region-left"]'),
+    ).toBeVisible();
     await expect(
       page.locator('[data-testid="dock-region-center"]'),
     ).toBeVisible();
-    await expect(page.locator('[data-testid="dock-region-right"]')).toBeVisible();
+    await expect(
+      page.locator('[data-testid="dock-region-right"]'),
+    ).toBeVisible();
   });
 
   test("left dock has 280px default width", async ({ page }) => {
@@ -69,6 +73,28 @@ test.describe("Defold-inspired 3-region dock layout", () => {
     expect(widths[2]).toBeLessThanOrEqual(321);
   });
 
+  test("F7 toggles the bottom dock", async ({ page }) => {
+    const bottomDock = page.locator('[data-testid="dock-bottom"]');
+    await expect(bottomDock).toBeVisible();
+
+    await page.keyboard.press("F7");
+    await expect(bottomDock).toBeHidden();
+
+    await page.keyboard.press("F7");
+    await expect(bottomDock).toBeVisible();
+  });
+
+  test("bottom dock tabs are clickable", async ({ page }) => {
+    for (const tab of ["console", "search", "output", "problems"]) {
+      const tabButton = page.locator(`[data-testid="bottom-dock-tab-${tab}"]`);
+      await tabButton.click();
+      await expect(tabButton).toHaveAttribute("aria-selected", "true");
+      await expect(
+        page.locator(`[data-testid="bottom-tabpanel-${tab}"]`),
+      ).toBeVisible();
+    }
+  });
+
   test("dragging the right divider updates the right dock width", async ({
     page,
   }) => {
@@ -81,8 +107,8 @@ test.describe("Defold-inspired 3-region dock layout", () => {
       ) as HTMLElement | null;
       if (!layout) return null;
       const r = layout.getBoundingClientRect();
-      const cols = getComputedStyle(layout).gridTemplateColumns
-        .trim()
+      const cols = getComputedStyle(layout)
+        .gridTemplateColumns.trim()
         .split(/\s+/);
       const colWidths = cols.map((c) =>
         c.endsWith("px") ? parseFloat(c) : NaN,

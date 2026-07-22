@@ -112,22 +112,22 @@ export default function DockLayout({
         data-testid="dock-region-center"
       >
         {center}
-        {bottomVisible && bottom && (
-          <div
-            className="dock-layout-bottom"
-            style={{ position: "relative" }}
-            data-testid="dock-region-bottom"
-          >
-            {bottom}
-            <DockDivider
-              orientation="horizontal"
-              testId="dock-divider-bottom"
-              onResize={onResizeBottom}
-              onReset={onResetBottom}
-            />
-          </div>
-        )}
       </div>
+      {bottomVisible && bottom && (
+        <div
+          className="dock-layout-bottom"
+          style={{ position: "relative", gridArea: "bottom" }}
+          data-testid="dock-region-bottom"
+        >
+          {bottom}
+          <DockDivider
+            orientation="horizontal"
+            testId="dock-divider-bottom"
+            onResize={onResizeBottom}
+            onReset={onResetBottom}
+          />
+        </div>
+      )}
       <div
         className="dock-layout-region dock-layout-right"
         style={{ gridArea: "right", position: "relative", minWidth: 0 }}

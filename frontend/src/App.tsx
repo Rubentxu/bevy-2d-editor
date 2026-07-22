@@ -37,6 +37,7 @@ import DockLayout from "./components/Dock/DockLayout";
 import LeftDock from "./components/Dock/LeftDock";
 import CenterDock from "./components/Dock/CenterDock";
 import RightDock from "./components/Dock/RightDock";
+import BottomDock from "./components/Dock/BottomDock";
 import AssetNavigator from "./components/AssetNavigator";
 import { useScenes } from "./hooks/useScenes";
 import { useSceneAssets } from "./hooks/useSceneAssets";
@@ -640,6 +641,9 @@ function AppInner() {
     [pan.x, pan.y, zoom, addToast],
   );
 
+  // ── Dock layout (Phase B) ──────────────────────────────────────────────────
+  const dock = useDockResize();
+
   useKeyboardShortcuts({
     enabled: editorMode !== "play",
     onUndo: editorMode === "scene" ? handleUndo : handleAssetUndo,
@@ -652,10 +656,8 @@ function AppInner() {
     onOpenCheatSheet: () => setCheatSheetOpen(true),
     onRenameSelected: () => setRenameRequestTick((t) => t + 1),
     onFitViewport: () => fitToContent(),
+    onToggleBottomDock: dock.toggleBottom,
   });
-
-  // ── Dock layout (Phase B) ──────────────────────────────────────────────────
-  const dock = useDockResize();
   // Drag deltas from DockDivider are signed (positive = mouse moves right/down).
   // For the LEFT divider we want the left dock to grow when delta is positive,
   // so we pass delta as-is. For the RIGHT divider the right dock grows when
@@ -923,9 +925,7 @@ function AppInner() {
               onBackToScene={
                 editorMode === "asset-authoring" ? handleBackToScene : undefined
               }
-              onOpenLogic={
-                editorMode === "scene" ? handleOpenLogic : undefined
-              }
+              onOpenLogic={editorMode === "scene" ? handleOpenLogic : undefined}
               onOpenCode={editorMode === "scene" ? handleOpenCode : undefined}
               logState={editorMode === "scene" ? logState : assetLogState}
               onUndo={editorMode === "scene" ? handleUndo : handleAssetUndo}
@@ -1070,9 +1070,7 @@ function AppInner() {
                       onRename={handleRename}
                       instances={instances}
                       onCreateEntity={
-                        editorMode === "scene"
-                          ? handleCreateEntity
-                          : undefined
+                        editorMode === "scene" ? handleCreateEntity : undefined
                       }
                       renameRequest={renameRequestTick}
                     />
@@ -1154,9 +1152,7 @@ function AppInner() {
               </div>
             }
             onToggleCollapseOutline={() => setOutlineCollapsed((v) => !v)}
-            onToggleCollapseProperties={() =>
-              setPropertiesCollapsed((v) => !v)
-            }
+            onToggleCollapseProperties={() => setPropertiesCollapsed((v) => !v)}
             onCloseOutline={dock.toggleOutline}
             onCloseProperties={dock.toggleProperties}
             onResizeSplit={handleResizeRightSplit}
@@ -1165,14 +1161,11 @@ function AppInner() {
           />
         }
         bottom={
-          <div
-            className="dock-bottom-placeholder"
-            data-testid="dock-bottom"
-            style={{ padding: 8, color: "var(--color-ink-muted)", fontSize: 12 }}
-          >
-            Bottom dock placeholder — Phase C will mount Console / Search /
-            Output / Problems here.
-          </div>
+          <BottomDock
+            visible={dock.prefs.bottom.visible && editorMode === "scene"}
+            onToggle={dock.toggleBottom}
+            onClose={dock.toggleBottom}
+          />
         }
       />
       {exportRustOpen && (

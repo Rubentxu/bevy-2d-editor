@@ -3207,7 +3207,7 @@
   left: 0;
 }
 
-.dock-layout-center > .dock-layout-bottom > .dock-divider-horizontal {
+.dock-layout-bottom > .dock-divider-horizontal {
   position: absolute;
   left: 0;
   right: 0;
@@ -3343,6 +3343,214 @@
 
 .dock-center-canvas > .canvas-container {
   flex: 1;
+}
+
+/* ── Bottom dock (Phase C) ───────────────────────────────────────────────── */
+
+.dock-bottom {
+  border: 0;
+  background: var(--color-bg);
+}
+
+.bottom-dock-header {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding-left: var(--space-1);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.bottom-dock-tabs {
+  display: flex;
+  align-self: stretch;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.bottom-dock-tab,
+.bottom-dock-action {
+  border: 0;
+  background: transparent;
+  color: var(--color-ink-muted);
+  cursor: pointer;
+  font: inherit;
+}
+
+.bottom-dock-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: max-content;
+  padding: 0 var(--space-3);
+  border-bottom: 2px solid transparent;
+  font-size: var(--fs-sm);
+}
+
+.bottom-dock-tab:hover,
+.bottom-dock-tab.active,
+.bottom-dock-action:hover {
+  color: var(--color-ink);
+  background: var(--color-surface-hi);
+}
+
+.bottom-dock-tab.active {
+  border-bottom-color: var(--color-accent);
+}
+
+.bottom-dock-action {
+  width: 28px;
+  height: 28px;
+  margin-right: 2px;
+  border-radius: var(--radius-sm);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.bottom-dock-content {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: auto;
+}
+
+.console-tab,
+.search-tab,
+.output-tab,
+.problems-tab {
+  min-height: 100%;
+  padding: var(--space-2);
+  color: var(--color-ink);
+  font-size: var(--fs-sm);
+}
+
+.console-tab {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  font-family: "JetBrains Mono", monospace;
+}
+
+.bottom-dock-clear {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 1;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-ink-muted);
+  cursor: pointer;
+  font-size: var(--fs-xs);
+}
+
+.bottom-dock-clear:hover {
+  border-color: var(--color-border-hi);
+  color: var(--color-ink);
+}
+
+.console-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 48px;
+}
+
+.console-entry {
+  display: grid;
+  grid-template-columns: 76px 18px 1fr;
+  gap: var(--space-1);
+  padding: 2px var(--space-1);
+  line-height: 1.45;
+}
+
+.console-entry time {
+  color: var(--color-ink-muted);
+}
+
+.console-entry-warn {
+  color: var(--color-warning);
+}
+
+.console-entry-error {
+  color: var(--color-danger);
+}
+
+.console-entry-info {
+  color: var(--color-accent);
+}
+
+.console-entry-message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.bottom-dock-search-input {
+  width: 100%;
+  padding: 6px var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font: inherit;
+}
+
+.bottom-dock-search-input:focus {
+  border-color: var(--color-accent);
+}
+
+.bottom-dock-empty {
+  margin: var(--space-3) 0;
+  color: var(--color-ink-muted);
+}
+
+.bottom-dock-results,
+.problems-group ul {
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bottom-dock-results li,
+.problems-group li {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.bottom-dock-results small {
+  margin-left: auto;
+  color: var(--color-ink-muted);
+}
+
+.bottom-dock-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--color-danger);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.problems-group h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-sm);
+}
+
+.problems-group code {
+  color: var(--color-accent);
 }
 
 /* ── Asset navigator (Phase B left dock body) ─────────────────────────────── */

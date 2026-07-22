@@ -18,6 +18,7 @@ interface UseKeyboardShortcutsOptions {
   onOpenCheatSheet?: () => void;
   onRenameSelected?: () => void;
   onFitViewport?: () => void;
+  onToggleBottomDock?: () => void;
 }
 
 /**
@@ -47,6 +48,7 @@ export function useKeyboardShortcuts({
   onOpenCheatSheet,
   onRenameSelected,
   onFitViewport,
+  onToggleBottomDock,
 }: UseKeyboardShortcutsOptions) {
   useEffect(() => {
     if (!enabled) return;
@@ -97,6 +99,9 @@ export function useKeyboardShortcuts({
           if (selectedEntityId) {
             onRenameSelected();
           }
+        } else if (e.key === "F7" && onToggleBottomDock) {
+          e.preventDefault();
+          onToggleBottomDock();
         } else if ((e.key === "f" || e.key === "F") && onFitViewport) {
           e.preventDefault();
           onFitViewport();
@@ -119,5 +124,6 @@ export function useKeyboardShortcuts({
     onOpenCheatSheet,
     onRenameSelected,
     onFitViewport,
+    onToggleBottomDock,
   ]);
 }
