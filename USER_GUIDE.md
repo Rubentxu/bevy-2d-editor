@@ -55,6 +55,24 @@ The editor follows the same spatial layout as Defold/Unity/Construct:
 | **Bottom dock — Tools** | Console · Search · Output · Problems | **F7** to toggle |
 | **Status bar** | 7 segments: mouse pos · entities · project · scene · zoom · fps · build | Always visible |
 
+### Resizing the dock
+
+Every region of the dock is resizable. Drag the thin 4px handle on the
+leading edge of each region (left edge of the right dock, top edge of the
+bottom dock, top edge of the status bar) to resize it. Clamps:
+
+- **Left dock width**: 160–600 px
+- **Right dock width**: 200–600 px
+- **Bottom dock height**: 100–480 px
+- **Status bar height**: 20–48 px (v0.81 Tier 2)
+
+Double-click any handle to reset to the default size. The layout persists
+to OPFS (`/bevy-2d-editor/dock-prefs.json`) and survives page reloads.
+
+The right dock also has a **collapse/expand** caret on each section header.
+Collapsed sections (just the title bar showing) survive reloads too — see
+`docs/adr/0021-defold-inspired-layout.md` for the full layout spec.
+
 ## Keyboard shortcuts
 
 Shortcuts are disabled while focus is in an input, text area, or editable code field.

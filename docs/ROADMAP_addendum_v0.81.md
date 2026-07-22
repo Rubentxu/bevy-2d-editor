@@ -78,4 +78,20 @@ After v0.80.0 ships the Defold-inspired layout, the natural next iteration exten
 
 Start with **#3 (Global search)** since the Search tab is already in the bottom dock and users will hit it first. Then **#2 (Workspace presets)** for power users. **#1 (Drag-and-drop docking)** last because it requires the most visual polish.
 
+## v0.81 shipped status
+
+| Tier | Item | Status | PR |
+| --- | --- | --- | --- |
+| Tier 1 | #3 Global search | ✅ Shipped in v0.81.0 | PR1 |
+| Tier 1 | #2 Workspace presets | ✅ Shipped in v0.81.0 | PR2 |
+| Tier 1 | #1 Drag-and-dock infra | ✅ Shipped in v0.81.0 (region-swap in v0.82) | PR3 |
+| Tier 2 | #5 Per-panel state persistence | ✅ Shipped in v0.81.0 (collapse flags + OPFS schemaVersion) | PR4 |
+| Tier 2 | #10 Drag-to-resize status bar | ✅ Shipped in v0.81.0 (clamp 20–48 px) | PR4 |
+| Tier 2 | #4 Floating panels | 🔲 Deferred to v0.82 | — |
+| Tier 2 | #6 Inspector multi-select | 🔲 Deferred to v0.82 | — |
+| Tier 3 | #7 Tab groups | 🔲 Deferred | — |
+| Tier 3 | #8 Asset browser thumbnails | 🔲 Deferred | — |
+| Tier 3 | #9 Welcome tour step-through | 🔲 Deferred | — |
+
+
 Estimated total: 5-7 weeks for one dev, 3-5 weeks for two devs in parallel.
