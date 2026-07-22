@@ -366,16 +366,21 @@ test.describe("Hito 4 — Code + Logic + Hot-reload smoke", () => {
   test("clicking Code button reveals code editor container", async ({
     page,
   }) => {
-    const codeBtn = page.locator("button", { hasText: "Code" }).first();
-    await codeBtn.click();
-    // Code editor mounts into the .main slot — topbar must still be visible
-    await expect(page.locator('[data-testid="topbar"]')).toBeVisible();
+    // After Phase A (Defold-inspired menu bar), Code lives in the Tools menu
+    // via menu header data-testid="menu-tools". The legacy standalone Code
+    // button was removed when TopBar became MenuBar. Open the Tools menu
+    // and click the "Code Editor" item.
+    await page.locator('[data-testid="menu-tools"]').click();
+    await page.locator('[data-testid="menu-item-code-editor"]').click();
+    // Top-level UI must remain visible (menubar always rendered).
+    await expect(page.locator('[data-testid="menubar"]')).toBeVisible();
   });
 
   test("clicking Logic button reveals logic graph editor", async ({ page }) => {
-    const logicBtn = page.locator("button", { hasText: "Logic" }).first();
-    await logicBtn.click();
-    await expect(page.locator('[data-testid="topbar"]')).toBeVisible();
+    // After Phase A, Logic lives in the Tools menu.
+    await page.locator('[data-testid="menu-tools"]').click();
+    await page.locator('[data-testid="menu-item-logic-editor"]').click();
+    await expect(page.locator('[data-testid="menubar"]')).toBeVisible();
   });
 });
 

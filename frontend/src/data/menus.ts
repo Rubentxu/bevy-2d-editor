@@ -1,0 +1,238 @@
+import type { ReactNode } from "react";
+
+export interface MenuItem {
+  label: string;
+  shortcut?: string;
+  disabled?: boolean;
+  onClick?: () => void;
+  submenu?: MenuItem[];
+  testId?: string;
+  separator?: boolean;
+}
+
+export interface MenuHandlers {
+  handleNewScene: () => void;
+  handleSave: () => void;
+  handleSaveAs: () => void;
+  handleLoad: () => void;
+  handleExportRust: () => void;
+  handleUndo: () => void;
+  handleRedo: () => void;
+  handleDeleteEntity: () => void;
+  handleToggleAI: () => void;
+  handleToggleValidationCenter: () => void;
+  handleToggleTileset: () => void;
+  handleToggleAutoLayer: () => void;
+  handleOpenLogic: () => void;
+  handleOpenCode: () => void;
+  handleTogglePlay: () => void;
+  handleOpenCheatSheet: () => void;
+  handleWelcomeTour: () => void;
+  setTheme: (theme: "dark" | "light") => void;
+  selectedEntityId: string | null;
+  editorMode: "scene" | "asset-authoring" | "logic" | "code" | "play";
+}
+
+const separator = (): MenuItem => ({ label: "", separator: true });
+const todo = (label: string) => () =>
+  console.warn(`[menu] TODO: wire ${label}`);
+
+export function createMenuConfig(
+  handlers: MenuHandlers,
+): Record<string, MenuItem[]> {
+  const sceneMode = handlers.editorMode === "scene";
+
+  return {
+    File: [
+      {
+        label: "New Scene",
+        shortcut: "Ctrl+N",
+        onClick: handlers.handleNewScene,
+      },
+      {
+        label: "Save Scene",
+        shortcut: "Ctrl+S",
+        onClick: handlers.handleSave,
+        testId: "save-btn",
+      },
+      {
+        label: "Save Scene As…",
+        shortcut: "Ctrl+Shift+S",
+        onClick: handlers.handleSaveAs,
+      },
+      {
+        label: "Load Project",
+        shortcut: "Ctrl+O",
+        onClick: handlers.handleLoad,
+        testId: "load-btn",
+      },
+      separator(),
+      {
+        label: "Export Rust…",
+        shortcut: "Ctrl+E",
+        onClick: handlers.handleExportRust,
+        testId: "export-rs-btn",
+      },
+      separator(),
+      { label: "Quit (browser)", disabled: true },
+    ],
+    Edit: [
+      {
+        label: "Undo",
+        shortcut: "Ctrl+Z",
+        onClick: handlers.handleUndo,
+        testId: "undo-btn",
+      },
+      {
+        label: "Redo",
+        shortcut: "Ctrl+Y / Ctrl+Shift+Z",
+        onClick: handlers.handleRedo,
+        testId: "redo-btn",
+      },
+      separator(),
+      {
+        label: "Cut",
+        shortcut: "Ctrl+X",
+        disabled: true,
+        onClick: todo("Cut"),
+      },
+      {
+        label: "Copy",
+        shortcut: "Ctrl+C",
+        disabled: true,
+        onClick: todo("Copy"),
+      },
+      {
+        label: "Paste",
+        shortcut: "Ctrl+V",
+        disabled: true,
+        onClick: todo("Paste"),
+      },
+      {
+        label: "Duplicate",
+        shortcut: "Ctrl+D",
+        disabled: true,
+        onClick: todo("Duplicate"),
+      },
+      {
+        label: "Delete",
+        shortcut: "Del",
+        disabled: !handlers.selectedEntityId,
+        onClick: handlers.handleDeleteEntity,
+      },
+      separator(),
+      {
+        label: "Find",
+        shortcut: "Ctrl+F",
+        disabled: true,
+        onClick: todo("Find"),
+      },
+    ],
+    View: [
+      {
+        label: "Toggle Assets",
+        shortcut: "F6",
+        onClick: todo("Toggle Assets"),
+      },
+      {
+        label: "Toggle Outline",
+        shortcut: "F8",
+        onClick: todo("Toggle Outline"),
+      },
+      {
+        label: "Toggle Properties",
+        shortcut: "Shift+F8",
+        onClick: todo("Toggle Properties"),
+      },
+      { label: "Toggle Tools", shortcut: "F7", onClick: todo("Toggle Tools") },
+      separator(),
+      {
+        label: "Fullscreen Viewport",
+        shortcut: "F9",
+        onClick: todo("Fullscreen Viewport"),
+      },
+      separator(),
+      { label: "Reset Layout", onClick: todo("Reset Layout") },
+      {
+        label: "Theme",
+        submenu: [
+          { label: "Dark", onClick: () => handlers.setTheme("dark") },
+          { label: "Light", onClick: () => handlers.setTheme("light") },
+        ],
+      },
+    ],
+    Tools: [
+      {
+        label: "AI Assistant",
+        shortcut: "Ctrl+K",
+        onClick: handlers.handleToggleAI,
+      },
+      {
+        label: "Validation Center",
+        shortcut: "Ctrl+;",
+        onClick: handlers.handleToggleValidationCenter,
+      },
+      { label: "Schema Authoring", onClick: todo("Schema Authoring") },
+      {
+        label: "Tileset Panel",
+        shortcut: "Ctrl+T",
+        onClick: handlers.handleToggleTileset,
+      },
+      {
+        label: "Auto Layer Panel",
+        shortcut: "Ctrl+L",
+        onClick: handlers.handleToggleAutoLayer,
+      },
+      separator(),
+      {
+        label: "Logic Editor",
+        disabled: !sceneMode,
+        onClick: handlers.handleOpenLogic,
+        testId: "menu-item-logic-editor",
+      },
+      {
+        label: "Code Editor",
+        disabled: !sceneMode,
+        onClick: handlers.handleOpenCode,
+        testId: "menu-item-code-editor",
+      },
+      separator(),
+      {
+        label: "Project Asset Browser",
+        shortcut: "Ctrl+P",
+        onClick: todo("Project Asset Browser"),
+      },
+    ],
+    Run: [
+      {
+        label: handlers.editorMode === "play" ? "Stop" : "Play",
+        shortcut: "Ctrl+P",
+        onClick: handlers.handleTogglePlay,
+        testId: handlers.editorMode === "play" ? "stop-btn" : "play-btn",
+      },
+      { label: "Pause", disabled: true, onClick: todo("Pause") },
+      { label: "Step", disabled: true, onClick: todo("Step") },
+    ],
+    Help: [
+      {
+        label: "Cheat Sheet",
+        shortcut: "?",
+        onClick: handlers.handleOpenCheatSheet,
+      },
+      { label: "About", onClick: () => window.alert("Bevy 2D Editor v0.80.0") },
+      { label: "Welcome Tour", onClick: handlers.handleWelcomeTour },
+    ],
+  };
+}
+
+export const menuConfig: Record<string, MenuItem[]> = {};
+
+export interface MenuDropdownProps {
+  label: string;
+  items?: MenuItem[];
+  children?: ReactNode;
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  testId: string;
+}

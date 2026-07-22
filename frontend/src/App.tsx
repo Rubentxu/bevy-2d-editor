@@ -5,7 +5,7 @@ import { useSceneState, SceneDocument } from "./hooks/useSceneState";
 import { useLogState } from "./hooks/useLogState";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useAIAssistant } from "./hooks/useAIAssistant";
-import TopBar from "./components/TopBar";
+import MenuBar from "./components/MenuBar";
 import HierarchyPanel from "./components/HierarchyPanel";
 import InspectorPanel from "./components/InspectorPanel";
 import AIAssistantPanel from "./components/AIAssistantPanel";
@@ -875,7 +875,7 @@ function AppInner() {
 
   return (
     <div className="app">
-      <TopBar
+      <MenuBar
         editorMode={editorMode}
         onOpenAssets={() => {}}
         onBackToScene={
@@ -887,8 +887,14 @@ function AppInner() {
         onUndo={editorMode === "scene" ? handleUndo : handleAssetUndo}
         onRedo={editorMode === "scene" ? handleRedo : handleAssetRedo}
         onSave={editorMode === "scene" ? handleSave : handleAssetSave}
+        onSaveAs={() => setSaveModalOpen(true)}
         onLoad={handleLoad}
         onExportRust={() => setExportRustOpen(true)}
+        onNewScene={() => handleNewScene(`scene_${Date.now()}`)}
+        onDeleteEntity={() => {
+          if (selectedEntityId) void handleDeleteEntity(selectedEntityId);
+        }}
+        selectedEntityId={selectedEntityId}
         onToggleAI={handleToggleAI}
         aiPanelOpen={aiPanelOpen}
         onToggleValidationCenter={handleToggleValidationCenter}
@@ -898,6 +904,9 @@ function AppInner() {
         onToggleAutoLayer={handleToggleAutoLayer}
         autoLayerPanelOpen={autoLayerPanelOpen}
         onTogglePlay={handleTogglePlay}
+        onOpenSearch={() => setCommandPaletteOpen(true)}
+        onOpenCheatSheet={() => setCheatSheetOpen(true)}
+        onWelcomeTour={() => console.warn("[menu] TODO: wire Welcome Tour")}
       />
       {editorMode === "play" && <GameOverlay onStop={handleTogglePlay} />}
       <SceneTabs
