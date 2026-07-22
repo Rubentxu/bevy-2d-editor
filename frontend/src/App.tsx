@@ -682,8 +682,9 @@ function AppInner() {
   // so we pass delta as-is. For the RIGHT divider the right dock grows when
   // delta is positive, so we pass -delta (drag-left widens the right column).
   const [leftCollapsed, setLeftCollapsed] = useState(false);
-  const [outlineCollapsed, setOutlineCollapsed] = useState(false);
-  const [propertiesCollapsed, setPropertiesCollapsed] = useState(false);
+  // Note: outlineCollapsed and propertiesCollapsed now live in DockPrefs
+  // (persisted to OPFS) instead of local useState so they survive reloads.
+  // See useDockPrefs.toggleOutlineCollapsed / togglePropertiesCollapsed.
   const handleResizeLeft = useCallback(
     (delta: number) => dock.setLeftWidth(dock.prefs.left.width + delta),
     [dock],
@@ -1070,8 +1071,8 @@ function AppInner() {
             visible={dock.prefs.right.visible}
             outlineVisible={dock.prefs.right.outlineVisible}
             propertiesVisible={dock.prefs.right.propertiesVisible}
-            outlineCollapsed={outlineCollapsed}
-            propertiesCollapsed={propertiesCollapsed}
+            outlineCollapsed={dock.prefs.right.outlineCollapsed}
+            propertiesCollapsed={dock.prefs.right.propertiesCollapsed}
             topHeightPct={dock.prefs.right.topHeight}
             outline={
               <div className="dock-content dock-content-outline">
@@ -1198,8 +1199,8 @@ function AppInner() {
                   ))}
               </div>
             }
-            onToggleCollapseOutline={() => setOutlineCollapsed((v) => !v)}
-            onToggleCollapseProperties={() => setPropertiesCollapsed((v) => !v)}
+            onToggleCollapseOutline={dock.toggleOutlineCollapsed}
+            onToggleCollapseProperties={dock.togglePropertiesCollapsed}
             onCloseOutline={dock.toggleOutline}
             onCloseProperties={dock.toggleProperties}
             onResizeSplit={handleResizeRightSplit}
