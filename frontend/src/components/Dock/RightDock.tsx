@@ -7,10 +7,11 @@
  * outer right-dock width.
  */
 
-import type { ReactNode } from "react";
+import type { DragEvent, ReactNode } from "react";
 import DockHeader from "./DockHeader";
 import DockBody from "./DockBody";
 import DockDivider from "./DockDivider";
+import { DOCK_PANEL_MIME } from "./DockPanel";
 
 interface Props {
   visible: boolean;
@@ -47,11 +48,25 @@ export default function RightDock({
   onResetSplit,
   onOpen,
 }: Props) {
+  // Tier 1c: stamp each half-panel id into the dataTransfer so the future
+  // region-swap hook (v0.82) knows which panel the user picked up.
+  const handleOutlineDragStart = (e: DragEvent<HTMLDivElement>) => {
+    e.dataTransfer.setData(DOCK_PANEL_MIME, "outline");
+    e.dataTransfer.setData("text/plain", "outline");
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const handlePropertiesDragStart = (e: DragEvent<HTMLDivElement>) => {
+    e.dataTransfer.setData(DOCK_PANEL_MIME, "properties");
+    e.dataTransfer.setData("text/plain", "properties");
+    e.dataTransfer.effectAllowed = "move";
+  };
+
   if (!visible) {
     return (
       <div
         className="dock dock-right dock-collapsed-strip"
         data-testid="dock-right-strip"
+        data-panel-id="right-outline"
       >
         <button
           type="button"
@@ -66,18 +81,21 @@ export default function RightDock({
   }
 
   return (
-    <div className="dock dock-right" data-testid="dock-right">
+    <div className="dock dock-right" data-testid="dock-right" data-panel-id="right">
       {outlineVisible && (
         <>
           <div
             className="dock dock-right-top"
             style={{ flexBasis: `${topHeightPct}%` }}
             data-testid="dock-right-outline"
+            data-panel-id="right-outline"
           >
             <DockHeader
               title="Outline"
               testId="dock-right-outline-header"
               collapsed={outlineCollapsed}
+              draggable
+              onDragStart={handleOutlineDragStart}
               onToggleCollapse={onToggleCollapseOutline}
               onClose={onCloseOutline}
             />
@@ -100,11 +118,14 @@ export default function RightDock({
           className="dock dock-right-bottom"
           style={{ flexBasis: `${100 - topHeightPct}%` }}
           data-testid="dock-right-properties"
+          data-panel-id="right-properties"
         >
           <DockHeader
             title="Properties"
             testId="dock-right-properties-header"
             collapsed={propertiesCollapsed}
+            draggable
+            onDragStart={handlePropertiesDragStart}
             onToggleCollapse={onToggleCollapseProperties}
             onClose={onCloseProperties}
           />

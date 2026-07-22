@@ -3940,3 +3940,49 @@ button.status-segment:last-of-type,
   font-size: var(--fs-xs);
   font-family: "JetBrains Mono", monospace;
 }
+
+/* ── Drag-and-Dock (v0.81 Tier 1c) ─────────────────────────────────────── */
+/* Visual feedback while a dock header is being dragged onto a target
+   region. The dashed outline signals "drop here" without permanently
+   changing the layout — the actual panel move happens in v0.82 once the
+   region-swap hook lands. */
+
+.dock-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  width: 100%;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.dock-panel--drag-over {
+  outline: 2px dashed var(--color-accent);
+  outline-offset: -2px;
+  background: var(--color-surface-hi);
+}
+
+.dock-header[draggable="true"] {
+  cursor: grab;
+  user-select: none;
+}
+
+.dock-header[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.dock-region[data-drag-over="true"] {
+  outline: 2px dashed var(--color-accent);
+  outline-offset: -2px;
+}
+
+.bottom-dock-header[draggable="true"] {
+  cursor: grab;
+  user-select: none;
+}
+
+.bottom-dock-header[draggable="true"]:active {
+  cursor: grabbing;
+}

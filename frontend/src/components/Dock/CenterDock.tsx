@@ -48,7 +48,11 @@ export default function CenterDock({
     onRenameScene,
   };
   return (
-    <div className="dock dock-center" data-testid="dock-center">
+    <div
+      className="dock dock-center"
+      data-testid="dock-center"
+      data-panel-id="center"
+    >
       <SceneTabs {...tabsProps} />
       <div className="dock-center-canvas">{canvas}</div>
     </div>
