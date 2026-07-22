@@ -45,12 +45,16 @@ async function dismissWelcomeIfPresent(page: Page): Promise<void> {
  * Read the dock-prefs.json contents as a parsed object via OPFS. Returns
  * `null` if the file is missing or OPFS is unavailable (the latter happens
  * on some headless environments). Tests skip when null is returned.
+ *
+ * NOTE: the app's `opfs-bridge` stores files under a `bevy-2d-editor`
+ * subdirectory; we mirror that path so test reads match the app's writes.
  */
 async function readPrefs(page: Page): Promise<unknown | null> {
   return await page.evaluate(async () => {
     try {
       const root = await navigator.storage.getDirectory();
-      const handle = await root.getFileHandle("dock-prefs.json");
+      const dir = await root.getDirectoryHandle("bevy-2d-editor");
+      const handle = await dir.getFileHandle("dock-prefs.json");
       const file = await handle.getFile();
       const text = await file.text();
       return JSON.parse(text);
@@ -64,6 +68,9 @@ async function readPrefs(page: Page): Promise<unknown | null> {
  * Reset OPFS prefs to a known empty state before each test so persistence
  * round-trips start from a clean baseline. Tests that need to verify a
  * specific pref state call this in their beforeEach.
+ *
+ * NOTE: the app's `opfs-bridge` stores files under a `bevy-2d-editor`
+ * subdirectory; we mirror that path so test reads match the app's writes.
  */
 async function clearPrefs(page: Page): Promise<void> {
   await page.evaluate(async () => {
@@ -71,7 +78,8 @@ async function clearPrefs(page: Page): Promise<void> {
       const root = await navigator.storage.getDirectory();
       // Best-effort delete — the file may not exist on the first run.
       try {
-        await root.removeEntry("dock-prefs.json");
+        const dir = await root.getDirectoryHandle("bevy-2d-editor");
+        await dir.removeEntry("dock-prefs.json");
       } catch {
         /* not present */
       }
@@ -84,19 +92,44 @@ async function clearPrefs(page: Page): Promise<void> {
 /**
  * Locate the status-bar divider's center point. The divider is a 4px-tall
  * horizontal handle positioned at `top: -2px` of the status region, so we
- * compute the screen position from the dock-region-status rect.
+ * compute the screen position from the divider's own rect rather than the
+ * region rect (the divider extends slightly outside the region above).
  */
 async function statusDividerCenter(
   page: Page,
 ): Promise<{ x: number; y: number } | null> {
   return await page.evaluate(() => {
-    const region = document.querySelector(
-      '[data-testid="dock-region-status"]',
+    const divider = document.querySelector(
+      '[data-testid="dock-divider-status"]',
     ) as HTMLElement | null;
-    if (!region) return null;
-    const r = region.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + 1 };
+    if (!divider) return null;
+    const r = divider.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   });
+}
+
+/**
+ * Drag from the divider's center by a given y-delta, using a fresh mouse
+ * down/move/up sequence. This is the same pattern used by the bottom-dock
+ * drag test in ux-dock.spec.ts.
+ *
+ * Note: the divider is intentionally positioned at `top: -2px` so its hit
+ * area extends 2px above the status bar region. We use the divider's own
+ * bounding rect for the start position so we hit the divider directly,
+ * not whatever happens to overlap its center in the status-bar region.
+ */
+async function dragStatusBar(page: Page, deltaY: number): Promise<void> {
+  const divider = page.locator('[data-testid="dock-divider-status"]');
+  const box = await divider.boundingBox();
+  if (!box) throw new Error("status divider not found");
+  const x = box.x + box.width / 2;
+  const y = box.y + 1; // top edge of the 4px-tall divider
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  // Move in 10 steps so pointermove handlers fire.
+  await page.mouse.move(x, y + deltaY, { steps: 10 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
 }
 
 async function readStatusHeight(page: Page): Promise<number> {
@@ -136,17 +169,10 @@ test.describe("v0.81 Tier 2 — Panel Polish", () => {
   });
 
   test("status-bar drag grows height up to 48px max", async ({ page }) => {
-    const start = await statusDividerCenter(page);
-    expect(start).not.toBeNull();
-    const { x, y } = start as { x: number; y: number };
-
-    // Drag UP by 60px — handle convention: positive delta (y decreasing
-    // here) increases height, clamped at MAX_STATUS=48.
-    await page.mouse.move(x, y);
-    await page.mouse.down();
-    await page.mouse.move(x, y - 60, { steps: 10 });
-    await page.mouse.up();
-    await page.waitForTimeout(150);
+    // Drag UP by 60px (negative deltaY) — the handle convention is the
+    // same as the bottom-dock divider (height - delta): negative delta
+    // grows the bar, clamped at MAX_STATUS=48.
+    await dragStatusBar(page, -60);
 
     const height = await readStatusHeight(page);
     expect(height).toBeGreaterThanOrEqual(40);
@@ -154,16 +180,8 @@ test.describe("v0.81 Tier 2 — Panel Polish", () => {
   });
 
   test("status-bar drag shrinks height down to 20px min", async ({ page }) => {
-    const start = await statusDividerCenter(page);
-    expect(start).not.toBeNull();
-    const { x, y } = start as { x: number; y: number };
-
-    // Drag DOWN by 200px — clamp at MIN_STATUS=20.
-    await page.mouse.move(x, y);
-    await page.mouse.down();
-    await page.mouse.move(x, y + 200, { steps: 10 });
-    await page.mouse.up();
-    await page.waitForTimeout(150);
+    // Drag DOWN by 200px (positive deltaY) — clamp at MIN_STATUS=20.
+    await dragStatusBar(page, 200);
 
     const height = await readStatusHeight(page);
     expect(height).toBeGreaterThanOrEqual(20);
@@ -171,16 +189,10 @@ test.describe("v0.81 Tier 2 — Panel Polish", () => {
   });
 
   test("status-bar resize persists across page reload", async ({ page }) => {
-    const start = await statusDividerCenter(page);
-    expect(start).not.toBeNull();
-    const { x, y } = start as { x: number; y: number };
-
-    // Drag to a noticeable height.
-    await page.mouse.move(x, y);
-    await page.mouse.down();
-    await page.mouse.move(x, y - 20, { steps: 5 });
-    await page.mouse.up();
-    await page.waitForTimeout(600); // debounce window is 500ms
+    // Drag up by 20px (not enough to clamp at max), then wait for the
+    // debounce window to elapse before reloading.
+    await dragStatusBar(page, -20);
+    await page.waitForTimeout(700); // debounce window is 500ms
 
     const before = await readStatusHeight(page);
     expect(before).toBeGreaterThan(24);
@@ -264,12 +276,16 @@ test.describe("v0.81 Tier 2 — Panel Polish", () => {
     page,
   }) => {
     // Manually write a partial prefs file (no schemaVersion, no statusBar)
-    // to simulate a v0.80 file. After reload, defaults should fill in but
-    // the user-saved values must round-trip.
+    // to simulate a v0.80 file. After reload + a small pref change (which
+    // triggers the debounced save), defaults should fill in but the
+    // user-saved values must round-trip.
     const written = await page.evaluate(async () => {
       try {
         const root = await navigator.storage.getDirectory();
-        const handle = await root.getFileHandle("dock-prefs.json", {
+        const dir = await root.getDirectoryHandle("bevy-2d-editor", {
+          create: true,
+        });
+        const handle = await dir.getFileHandle("dock-prefs.json", {
           create: true,
         });
         const writable = await handle.createWritable();
@@ -296,7 +312,17 @@ test.describe("v0.81 Tier 2 — Panel Polish", () => {
     await waitForEngine(page);
     await dismissWelcomeIfPresent(page);
 
-    // The user-saved values must survive.
+    // Trigger a real pref change so the hook debounce-saves the migrated
+    // prefs (with schemaVersion stamped on). Without this, the on-disk
+    // file still has the old payload and schemaVersion would be undefined.
+    // Drag the status-bar divider by 5px then leave it there.
+    await dragStatusBar(page, -5);
+    // Wait for the OPFS debounce (500ms) plus a generous buffer for the
+    // async save + write to settle on slow CI runners.
+    await page.waitForTimeout(1500);
+
+    // The user-saved values must survive the migration, and the
+    // previously-missing keys must now exist with default values.
     const prefs = await readPrefs(page);
     expect(prefs).not.toBeNull();
     const obj = prefs as Record<string, Record<string, unknown>>;

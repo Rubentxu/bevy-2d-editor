@@ -132,6 +132,16 @@ export default function DockLayout({
             onResize={onResizeBottom}
             onReset={onResetBottom}
           />
+          {/* Status-bar drag handle sits on the bottom edge of the bottom
+             dock so it doesn't compete with the bottom-dock divider above
+             (which is at top: 0). This avoids the two handles overlapping
+             in the same pixel row. */}
+          <DockDivider
+            orientation="horizontal"
+            testId="dock-divider-status"
+            onResize={onResizeStatusBar}
+            onReset={onResetStatusBar}
+          />
         </div>
       )}
       <div
@@ -152,12 +162,6 @@ export default function DockLayout({
         style={{ gridArea: "status", position: "relative" }}
         data-testid="dock-region-status"
       >
-        <DockDivider
-          orientation="horizontal"
-          testId="dock-divider-status"
-          onResize={onResizeStatusBar}
-          onReset={onResetStatusBar}
-        />
         {status}
       </div>
     </div>

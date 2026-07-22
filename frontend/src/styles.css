@@ -3218,17 +3218,14 @@
 }
 
 /* v0.81 Tier 2: drag-resize handle for the status bar (Phase D).
-   Sits on the top edge of the dock-layout-status region (which is
-   position: relative). Mirrors the bottom-dock divider's geometry but
-   spans the full width of the status bar. */
-.dock-layout-status > .dock-divider-horizontal {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: -2px;
+   Sits on the BOTTOM edge of the bottom-dock region (which is the top
+   edge of the status bar). This avoids the visual/hit overlap with the
+   bottom-dock divider above (which lives at the top edge of the same
+   region). The handle spans the full width of the bottom dock. */
+.dock-layout-bottom > .dock-divider-horizontal[data-testid="dock-divider-status"] {
+  top: auto;
+  bottom: -2px;
   height: 4px;
-  cursor: row-resize;
-  z-index: 5;
 }
 
 .dock-layout-status .status-bar {
