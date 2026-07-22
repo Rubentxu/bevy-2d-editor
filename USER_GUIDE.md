@@ -1,39 +1,118 @@
 # Bevy 2D Editor User Guide
 
+> **Layout**: Defold-inspired 3-region dock + menu bar + status bar (v0.80.0).
+> See [`docs/adr/0021-defold-inspired-layout.md`](docs/adr/0021-defold-inspired-layout.md) for the full design rationale.
+
+![Editor overview — empty scene](docs/screenshots/02-empty-scene.png)
+
 ## Place a sprite in 60 seconds
 
-1. Complete the [README quickstart](README.md#quickstart) and open <http://localhost:5173>.
-2. Press `N` to create an entity and select it in the Hierarchy.
-3. In the Inspector, choose **Add Component** and add `editor.Transform2D` and `editor.Sprite2D`.
-4. Set the sprite asset path and adjust position, scale, or anchor values.
-5. Press the Play button to run the scene. Stop play mode to return to authoring.
-6. Save the scene from the toolbar or command palette (`Ctrl/Cmd+K`).
+![Scene with entities](docs/screenshots/03-scene-with-entities.png)
 
-For reusable content, create a Scene Asset in the Project Asset Browser and use **Place Instance** to add it to the current level.
+1. Complete the [README quickstart](README.md#quickstart) and open <http://localhost:5173>.
+2. Dismiss the Welcome overlay (or check "Don't show again").
+3. Press `N` (or click **+ Add Entity** in the Hierarchy panel) to create a new entity.
+4. Select the entity. In the **Properties** panel (right dock), click **+ Add Component** and add:
+   - `editor.Transform2D` — position/rotation/scale
+   - `editor.Sprite2D` — color, anchor
+5. Adjust the values in the Properties panel.
+6. Press **Play** in the menu bar (or `Ctrl+P`) to run the scene. Press again to stop.
+7. **File ▸ Save Scene** (or `Ctrl+S`) to save to OPFS.
+
+## The layout (Defold-inspired)
+
+The editor follows the same spatial layout as Defold/Unity/Construct:
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+│ 🎮 ProjectName │ File  Edit  View  Tools  Run  Help                  [☀] [🔍] [▶ Play]           │ ← Menu bar
+├──────────┬───────────────────────────────────────────────┬─────────────────────────────┤
+│          │  SceneTabs [Level1] [Level2]                 │   Outline                    │
+│  Assets  │  ┌─────────────────────────────────────────┐  │   🔍 Search                  │
+│ (left)   │  │                                         │  │   ▾ 🌳 World                │ ← 3-region dock
+│          │  │              Scene Viewport             │  │     ▸ Hero                  │   (drag-resizable
+│          │  │                                         │  ├─────────────────────────────┤    dividers,
+│          │  │                                         │  │   Properties                 │    OPFS persisted)
+│          │  │                       ⊕  + − ⌂ ⛶        │  │   🔍 Search                  │
+├──────────┼───────────────────────────────────────────────┤                             │
+│   Tools  │ 📋 Console  🔍 Search  📤 Output  ⚠ Problems  │                             │ ← F7 toggles
+│ (bottom) │ [12:34:56] Loading WASM module...            │                             │
+├──────────┴───────────────────────────────────────────────┴─────────────────────────────┤
+│ (120.5, 80.0) │ 3 entities │ ProjectName │ Level1●dirty │ 100% │ 60 fps │ ✓ Built │   │ ← 7-segment status bar
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+   F6=toggle Assets    F7=toggle Tools    F8=toggle Outline    Shift+F8=toggle Properties    F9=fullscreen
+```
+
+### Region guide
+
+| Region | Contents | Toggle |
+|---|---|---|
+| **Menu bar** | File · Edit · View · Tools · Run · Help | Always visible |
+| **Left dock — Assets** | Project navigator: Scenes · Scene Assets · Logic Graphs · Code · Tilesets · Asset Files | **F6** to toggle |
+| **Center — Scene viewport** | Scene tabs + Bevy canvas + viewport controls (zoom, fit) | Always visible |
+| **Right dock — Outline** | Hierarchy tree + search + + Add Entity | **F8** to toggle |
+| **Right dock — Properties** | Component sections + search + + Add Component | **Shift+F8** to toggle |
+| **Bottom dock — Tools** | Console · Search · Output · Problems | **F7** to toggle |
+| **Status bar** | 7 segments: mouse pos · entities · project · scene · zoom · fps · build | Always visible |
 
 ## Keyboard shortcuts
 
 Shortcuts are disabled while focus is in an input, text area, or editable code field.
 
+### General
+
 | Shortcut | Action |
-| --- | --- |
+|---|---|
 | `Ctrl/Cmd+K` | Open the command palette |
 | `?` | Open the keyboard shortcut cheatsheet |
-| `N` | Create a new entity |
-| `F2` | Rename the selected entity |
-| `F` | Fit the viewport |
-| `Delete` / `Backspace` | Delete the selected entity |
+| `Ctrl/Cmd+S` | Save scene |
+| `Ctrl/Cmd+O` | Load project |
 | `Ctrl/Cmd+Z` | Undo |
 | `Ctrl+Y` / `Cmd+Shift+Z` | Redo |
 | `Escape` | Close the active modal or palette |
 
-Press `?` in the editor for the current in-app list.
+### Editing
+
+| Shortcut | Action |
+|---|---|
+| `N` | Create a new entity |
+| `Delete` / `Backspace` | Delete the selected entity |
+| `F2` | Rename the selected entity |
+| `Ctrl/Cmd+D` | Duplicate (v0.81) |
+| `Ctrl/Cmd+F` | Find in scene (v0.81) |
+
+### Viewport
+
+| Shortcut | Action |
+|---|---|
+| `Space + drag` | Pan the scene viewport |
+| Mouse wheel | Zoom toward cursor |
+| `F` | Fit viewport to content |
+| `F6` | Toggle Assets dock |
+| `F7` | Toggle Tools dock |
+| `F8` | Toggle Outline panel |
+| `Shift+F8` | Toggle Properties panel |
+| `F9` | Fullscreen viewport (hide all docks except center) |
+
+### Running
+
+| Shortcut | Action |
+|---|---|
+| `Ctrl/Cmd+P` | Play / Stop preview |
+| `Ctrl/Cmd+;` | Toggle validation center |
+| `Ctrl/Cmd+T` | Toggle tileset panel |
+| `Ctrl/Cmd+L` | Toggle auto layer panel |
+| `Ctrl/Cmd+R` | Force hot-reload |
+
+Press `?` in the editor for the current in-app list. See the cheat sheet screenshot below.
+
+![Cheat sheet](docs/screenshots/06-cheat-sheet.png)
 
 ## Core concepts
 
 ### Scene
 
-A Scene is the editable level document. It owns entities, component instances, placed Scene Instances, and the operation history used by undo and redo.
+A Scene is the editable level document. It owns entities, component instances, placed Scene Instances, and the operation history used by undo and redo. Switch between scenes via the **SceneTabs** row above the viewport.
 
 ### Scene Asset
 
@@ -41,85 +120,128 @@ A Scene Asset is reusable authored content stored in the project asset catalog. 
 
 ### Scene Instance
 
-A Scene Instance places a Scene Asset into a Scene. It retains its source asset identity and can carry instance-specific component overrides while still participating in resync and validation.
+A Scene Instance is a placed use of a Scene Asset. It carries an asset reference, instance-owned components (typically `editor.Transform2D` for placement), and Component Overrides for non-destructive patches.
 
 ### Component
 
-A Component is typed data attached to an entity, such as transform, sprite, collider, or a project-specific gameplay value. Components are edited in the Inspector.
+A Component is a typed bundle of values on an entity or scene-asset entity. Components have a `type_id` (e.g. `editor.Transform2D`) and a `values` object.
+
+### Component Override
+
+A Component Override is a non-destructive patch applied by a Scene Instance to a specific asset-local Entity component. Field paths always start with the `component_type_id`.
 
 ### Schema
 
-A Schema describes the fields and types accepted by a component. Built-in and project schemas drive validation and Inspector controls while preserving unknown fields for forward compatibility.
+A Schema describes a Component's fields and types. Built-in schemas are seeded automatically. User schemas can be registered via the Schema Authoring panel.
 
-### Layer
-
-A Layer organizes level content and draw or editing structure. Level layers can contain authored entities, tile or IntGrid data, auto-generated content, or placed Scene Instances.
-
-## Common workflows
+## Workflows
 
 ### Create a level
 
-1. Create or open a Scene.
-2. Add root entities and organize them in the Hierarchy.
-3. Add components through the Inspector.
-4. Use layers for level structure and tile or IntGrid content.
-5. Review the Validation Center before saving.
+1. **File ▸ New Scene** (`Ctrl+N`) — creates an empty scene.
+2. **+ Add Entity** (`N`) in the Hierarchy — creates a sprite entity.
+3. In **Properties**, add `editor.Transform2D` and `editor.Sprite2D`.
+4. Save with `Ctrl+S`.
 
-### Place content from the catalog
+### Reuse content (Scene Assets)
 
-1. Open the Project Asset Browser.
-2. Select a Scene Asset.
-3. Choose **Place Instance**.
-4. Position the new instance and set overrides in the Inspector when needed.
+1. Open **Project Asset Browser** from the **Tools** menu.
+2. Click **+ Create** to make a new Scene Asset (e.g., `coin_actor`).
+3. Edit it in **Asset Authoring mode**.
+4. Drag the asset from the Asset Browser into the Hierarchy or the Scene viewport to place an instance.
 
-### Run the scene
+### Run the game
 
-1. Save authoring changes.
-2. Press Play in the top bar.
-3. Inspect behavior in the Bevy preview canvas.
-4. Press Stop to restore the authoring snapshot.
+1. Press the **Play** button or `Ctrl+P`.
+2. The bottom Console shows runtime logs.
+3. Press **Stop** (or `Ctrl+P` again) to return to authoring.
 
-### Save
+### Switch theme
 
-Use the save action in the top bar or command palette. Project metadata and assets are written to Origin Private File System (OPFS), which is local to the current browser profile and origin.
+1. **View ▸ Theme ▸ Light / Dark**.
+2. Or click the sun/moon icon in the menu bar.
 
-### Export
+## Common tasks
 
-Use the relevant export action for the current document. The editor can produce Bevy-oriented Rust/BSN representations; resolve Validation Center errors before integrating exported output into a game project.
+### Open the command palette
+
+Press `Ctrl+K` (or `Cmd+K`). Type to filter 21+ commands. Enter to execute, Escape to close.
+
+![Command palette](docs/screenshots/05-command-palette.png)
+
+### Open the file menu
+
+Click **File** in the menu bar. New Scene, Save, Save As, Load Project, Export Rust, Quit.
+
+![File menu](docs/screenshots/04-file-menu-open.png)
+
+### Toggle the bottom dock
+
+Press `F7` to show/hide the bottom dock with Console / Search / Output / Problems tabs.
+
+![Bottom dock](docs/screenshots/07-bottom-dock-console.png)
+
+### Enter fullscreen viewport
+
+Press `F9` to hide all docks except the center viewport. Useful for previews. Press again to restore.
+
+![Fullscreen](docs/screenshots/08-fullscreen.png)
+
+### Switch to light theme
+
+![Light theme](docs/screenshots/09-light-theme.png)
+
+### Reset layout
+
+**View ▸ Reset Layout** (or `?` then search for "Reset"). Restores default dock widths.
+
+## Welcome overlay
+
+The first time you open the editor, a 5-card Welcome overlay appears:
+
+![Welcome overlay](docs/screenshots/01-welcome-overlay.png)
+
+It introduces the 5-step workflow:
+1. Pick a scene asset from the left dock
+2. Drag it into the canvas
+3. Edit properties in the right panel
+4. Press Play to run
+5. Save with `Ctrl+S`
+
+Dismiss with **Skip** or **Take the tour**. Check **Don't show again** to hide it permanently. You can re-open it from the **Help ▸ Welcome Tour** menu.
+
+For tests, append `?skip-welcome=1` to the URL to bypass the overlay.
 
 ## Troubleshooting
 
-### OPFS data is missing
+### Engine doesn't start (canvas is black)
 
-OPFS is scoped to the exact browser origin and profile. `http://localhost:5173` and another port or hostname have different storage. Private browsing, clearing site data, or using a different browser profile can remove or hide the project. Keep exports or source-control copies for important work.
+Check the browser console for `[bridge]` logs. Most common causes:
 
-If catalog entries appear inconsistent, wait for the save operation to finish before reloading. ADR-0019 defines the required metadata ordering; that ADR is currently present in the working tree but not yet merged into the repository history.
+- WASM not built: run `just wasm` (or `cd crates/editor-core && wasm-pack build --target web --dev --out-dir ../../frontend/src/wasm`).
+- OPFS unavailable: try a different browser or check that you're not in incognito (some browsers disable OPFS in private mode).
+- Bevy B0001 conflict: see [ADR-0017](docs/adr/0017-e2e-test-failure-root-cause.md).
 
-### Hot reload did not trigger
+### Save doesn't persist
 
-Hot reload is data-only. Save the source file, Logic Graph, or supported scene data and confirm the status indicator reports the change. Texture hot reload and Rust/WASM recompilation are not covered; run `just wasm` or keep `just watch` running, then refresh the browser when Rust code changes.
+OPFS is per-origin and per-browser-profile. Switching browsers or clearing site data will erase saved scenes. Use **File ▸ Export Rust** to keep a backup.
 
-### WASM build errors
+### Canvas is empty after Play
 
-Verify the toolchain and target:
+Check the bottom Console for errors. The most common cause is a missing `editor.Sprite2D` component (entities render invisible without a sprite).
 
-```sh
-rustup target add wasm32-unknown-unknown
-cargo install wasm-pack
-just wasm
-```
+### Drag-from-Asset-Browser not working
 
-On Linux, native Rust tests may also require system packages such as `libudev` and ALSA development headers.
+The drag-and-drop system uses native HTML5 DnD. If you have a browser extension that intercepts drag events (e.g., a download manager), disable it for the editor URL.
 
-### Frontend build errors
+### UI layout glitches
 
-Reinstall locked dependencies and rebuild generated WASM:
+Press **View ▸ Reset Layout** to restore default dock widths/heights. If problems persist, open DevTools and clear `dock-prefs.json` from OPFS.
 
-```sh
-cd frontend
-npm ci
-npm run build:wasm
-npm run build
-```
+## See also
 
-If generated bindings look stale, remove `frontend/src/wasm` and rerun `npm run build:wasm`.
+- [`README.md`](README.md) — Quickstart, development commands
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — Development workflow
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — Project milestones
+- [`docs/adr/0021-defold-inspired-layout.md`](docs/adr/0021-defold-inspired-layout.md) — Layout design rationale
+- [`sddk/defold-inspired-redesign/`](sddk/defold-inspired-redesign/) — Full SDDK artifacts (local-only, ADR-0022 policy)
