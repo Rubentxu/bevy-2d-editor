@@ -23,16 +23,22 @@ const DEFAULT_VALUES: Record<string, any> = {
 export default function AddComponentButton({ entityId, onAdd }: Props) {
   const [open, setOpen] = useState(false);
   const [schemas, setSchemas] = useState<string[]>([]);
+  const [search, setSearch] = useState("");
+  const [focusIdx, setFocusIdx] = useState(0);
   const [editingSchema, setEditingSchema] = useState<string | null>(null);
-  const [editInitialData, setEditInitialData] = useState<ComponentSchema | undefined>();
+  const [editInitialData, setEditInitialData] = useState<
+    ComponentSchema | undefined
+  >();
   // Store last saved schema data so edit mode can use it without re-reading from OPFS
   const lastSavedSchemaRef = useRef<ComponentSchema | null>(null);
+  // Keep a ref to the dropdown list DOM node so we can focus items by index
+  const listRef = useRef<HTMLDivElement>(null);
 
   // Hito 4 Order 7: list of SceneComponent schemas (those whose schema kind is
   // SceneComponent). Used to render the 🧩 badge in the dropdown.
-  const [sceneComponentSchemas, setSceneComponentSchemas] = useState<Set<string>>(
-    new Set()
-  );
+  const [sceneComponentSchemas, setSceneComponentSchemas] = useState<
+    Set<string>
+  >(new Set());
 
   // Hito 7 (scene-component-authoring-ux PR1): bump on every edit-mode entry
   // so the child SchemaAuthoringPanel sees a fresh catalog even if assets
@@ -65,7 +71,10 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
     const fetchSchemas = async () => {
       // Wait for engine to be ready
       let attempts = 0;
-      while (typeof (window as any).list_schemas !== "function" && attempts < 50) {
+      while (
+        typeof (window as any).list_schemas !== "function" &&
+        attempts < 50
+      ) {
         await new Promise((r) => setTimeout(r, 100));
         attempts += 1;
       }
@@ -104,7 +113,10 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
     setCatalogRefreshTick((t) => t + 1);
 
     // First check if we have the schema from a recent save
-    if (lastSavedSchemaRef.current && lastSavedSchemaRef.current.type_id === schemaId) {
+    if (
+      lastSavedSchemaRef.current &&
+      lastSavedSchemaRef.current.type_id === schemaId
+    ) {
       setEditInitialData(lastSavedSchemaRef.current);
       setEditingSchema(schemaId);
       return;
@@ -115,7 +127,10 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
       try {
         const schemaJson = await (window as any).load_schema(schemaId);
         if (schemaJson) {
-          const schema = typeof schemaJson === "string" ? JSON.parse(schemaJson) : schemaJson;
+          const schema =
+            typeof schemaJson === "string"
+              ? JSON.parse(schemaJson)
+              : schemaJson;
           setEditInitialData(schema);
           setEditingSchema(schemaId);
         }
@@ -144,61 +159,128 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
     refreshSchemas();
   }
 
+  // Filtered schemas based on search input
+  const filteredSchemas = search.trim()
+    ? schemas.filter((s) =>
+        s.toLowerCase().includes(search.trim().toLowerCase()),
+      )
+    : schemas;
+
+  const handleClose = () => {
+    setOpen(false);
+    setSearch("");
+    setFocusIdx(0);
+  };
+
+  const handlePickSchema = (s: string) => {
+    onAdd(s);
+    handleClose();
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      handleClose();
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setFocusIdx((idx) =>
+        filteredSchemas.length === 0 ? 0 : (idx + 1) % filteredSchemas.length,
+      );
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setFocusIdx((idx) =>
+        filteredSchemas.length === 0
+          ? 0
+          : (idx - 1 + filteredSchemas.length) % filteredSchemas.length,
+      );
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const choice = filteredSchemas[focusIdx];
+      if (choice) handlePickSchema(choice);
+    }
+  };
+
   return (
     <div className="add-component" data-testid={`add-component-${entityId}`}>
       <button
         className="add-btn"
-        onClick={() => setOpen(!open)}
+        onClick={() => setOpen((o) => !o)}
         data-testid={`add-component-btn-${entityId}`}
       >
         + Add Component
       </button>
       {open && (
-        <div className="dropdown">
-          {schemas.length === 0 && (
-            <div className="dropdown-item" style={{ color: "#666" }}>
-              No schemas available
-            </div>
-          )}
-          {schemas.map((s) => {
-            const isBuiltin =
-              typeof (window as any).is_builtin_type === "function"
-                ? (window as any).is_builtin_type(s)
-                : false;
-            return (
-              <div
-                key={s}
-                className="dropdown-item"
-                onClick={() => {
-                  onAdd(s);
-                  setOpen(false);
-                }}
-                data-testid={`add-schema-${s}`}
-              >
-                {/* Hito 4 Order 7: SceneComponent badge 🧩 */}
-                <span>{sceneComponentSchemas.has(s) ? "🧩 " : "🔷 "}{s}</span>
-                {!isBuiltin && (
-                  <button
-                    type="button"
-                    className="edit-icon"
-                    onClick={(e) => handleEditClick(e, s)}
-                    title={`Edit ${s}`}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: "#4a9eff",
-                      cursor: "pointer",
-                      padding: "2px 6px",
-                      fontSize: "12px",
-                      marginLeft: "auto",
-                    }}
-                  >
-                    ✎
-                  </button>
-                )}
+        <div
+          className="dropdown"
+          data-testid={`add-component-dropdown-${entityId}`}
+        >
+          <input
+            type="search"
+            className="add-component-search"
+            data-testid={`add-component-search-${entityId}`}
+            placeholder="Search schemas…"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setFocusIdx(0);
+            }}
+            onKeyDown={handleSearchKeyDown}
+            autoFocus
+            aria-label="Search schemas"
+          />
+          <div ref={listRef} role="listbox">
+            {filteredSchemas.length === 0 && (
+              <div className="dropdown-item" style={{ color: "#666" }}>
+                {schemas.length === 0 ? "No schemas available" : "No matches"}
               </div>
-            );
-          })}
+            )}
+            {filteredSchemas.map((s, idx) => {
+              const isBuiltin =
+                typeof (window as any).is_builtin_type === "function"
+                  ? (window as any).is_builtin_type(s)
+                  : false;
+              const isFocused = idx === focusIdx;
+              return (
+                <div
+                  key={s}
+                  className={`dropdown-item${
+                    isFocused ? " dropdown-item-focused" : ""
+                  }`}
+                  onClick={() => handlePickSchema(s)}
+                  data-testid={`add-schema-${s}`}
+                  role="option"
+                  aria-selected={isFocused}
+                  onMouseEnter={() => setFocusIdx(idx)}
+                >
+                  {/* Hito 4 Order 7: SceneComponent badge 🧩 */}
+                  <span>
+                    {sceneComponentSchemas.has(s) ? "🧩 " : "🔷 "}
+                    {s}
+                  </span>
+                  {!isBuiltin && (
+                    <button
+                      type="button"
+                      className="edit-icon"
+                      onClick={(e) => handleEditClick(e, s)}
+                      title={`Edit ${s}`}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#4a9eff",
+                        cursor: "pointer",
+                        padding: "2px 6px",
+                        fontSize: "12px",
+                        marginLeft: "auto",
+                      }}
+                    >
+                      ✎
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
       {editingSchema && (

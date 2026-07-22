@@ -19,7 +19,7 @@ interface Props {
   onOpen: (assetId: string) => void;
   onPlaceInstance: (
     assetId: string,
-    translation?: { x: number; y: number }
+    translation?: { x: number; y: number },
   ) => Promise<void>;
 }
 
@@ -95,7 +95,7 @@ export default function ProjectAssetBrowser({
     (e: React.ChangeEvent<HTMLSelectElement>) => {
       setRoleFilter(e.target.value);
     },
-    []
+    [],
   );
 
   const handleCreate = useCallback(async () => {
@@ -104,7 +104,7 @@ export default function ProjectAssetBrowser({
 
     const role = window.prompt(
       `Scene Asset role (${ROLES.join(", ")}):`,
-      "actor"
+      "actor",
     );
     if (!role || !ROLES.includes(role as Role)) {
       alert(`Invalid role. Using "actor" as default.`);
@@ -114,13 +114,10 @@ export default function ProjectAssetBrowser({
     await onCreate(name, role);
   }, [onCreate]);
 
-  const handleRenameStart = useCallback(
-    (entry: SceneAssetCatalogEntry) => {
-      setRenamingId(entry.asset_id);
-      setRenameValue(entry.logical_path);
-    },
-    []
-  );
+  const handleRenameStart = useCallback((entry: SceneAssetCatalogEntry) => {
+    setRenamingId(entry.asset_id);
+    setRenameValue(entry.logical_path);
+  }, []);
 
   const handleRenameConfirm = useCallback(
     async (assetId: string) => {
@@ -136,7 +133,7 @@ export default function ProjectAssetBrowser({
       setRenamingId(null);
       setRenameValue("");
     },
-    [renameValue, onRename]
+    [renameValue, onRename],
   );
 
   const handleRenameCancel = useCallback(() => {
@@ -152,7 +149,7 @@ export default function ProjectAssetBrowser({
         console.error("Duplicate failed:", e);
       }
     },
-    [onDuplicate]
+    [onDuplicate],
   );
 
   const handleDelete = useCallback(
@@ -160,7 +157,7 @@ export default function ProjectAssetBrowser({
       const entry = entries.find((e) => e.asset_id === assetId);
       if (!entry) return;
       const confirmed = window.confirm(
-        `Delete Scene Asset "${entry.logical_path}"? This cannot be undone.`
+        `Delete Scene Asset "${entry.logical_path}"? This cannot be undone.`,
       );
       if (!confirmed) return;
       try {
@@ -169,7 +166,7 @@ export default function ProjectAssetBrowser({
         console.error("Delete failed:", e);
       }
     },
-    [entries, onDelete]
+    [entries, onDelete],
   );
 
   const handleExportBsn = useCallback(async (assetId: string) => {
@@ -213,7 +210,9 @@ export default function ProjectAssetBrowser({
         if ((window as any).refreshAssetCatalog) {
           (window as any).refreshAssetCatalog();
         }
-        window.alert(`Imported "${name}" successfully. You can open it from the asset list.`);
+        window.alert(
+          `Imported "${name}" successfully. You can open it from the asset list.`,
+        );
       } catch (err) {
         console.error("[ProjectAssetBrowser] Import .bsn failed:", err);
         window.alert(`Import failed: ${err}`);
@@ -224,14 +223,14 @@ export default function ProjectAssetBrowser({
         }
       }
     },
-    []
+    [],
   );
 
   const handlePlaceInstance = useCallback(
     async (assetId: string) => {
       // Show translation dialog (S1, E5)
       const translationStr = window.prompt(
-        "Translation (optional, e.g. {x:100, y:200} or leave empty):"
+        "Translation (optional, e.g. {x:100, y:200} or leave empty):",
       );
       let translation: { x: number; y: number } | undefined;
       if (translationStr && translationStr.trim()) {
@@ -239,7 +238,9 @@ export default function ProjectAssetBrowser({
           translation = JSON.parse(translationStr);
         } catch {
           // If parsing fails, try simple x,y format
-          const match = translationStr.match(/x\s*:\s*([-\d.]+)\s*,\s*y\s*:\s*([-\d.]+)/i);
+          const match = translationStr.match(
+            /x\s*:\s*([-\d.]+)\s*,\s*y\s*:\s*([-\d.]+)/i,
+          );
           if (match) {
             translation = {
               x: parseFloat(match[1]),
@@ -257,7 +258,7 @@ export default function ProjectAssetBrowser({
         setPlacingAssetId(null);
       }
     },
-    [onPlaceInstance]
+    [onPlaceInstance],
   );
 
   // Hito 7 (scene-component-authoring-ux PR2 / S5, S7): Place Instance
@@ -363,11 +364,10 @@ export default function ProjectAssetBrowser({
       <div className="browser-content">
         {filteredEntries.length === 0 ? (
           <div className="empty-state" data-testid="asset-browser-empty">
-            <p>No Scene Assets found.</p>
             <p>
               {roleFilter === "all"
-                ? "Create your first Scene Asset to get started."
-                : `No assets with role "${roleFilter}".`}
+                ? "No Scene Assets yet — click + to create your first one"
+                : `No Scene Assets with role "${roleFilter}".`}
             </p>
           </div>
         ) : (
@@ -382,7 +382,21 @@ export default function ProjectAssetBrowser({
             </thead>
             <tbody>
               {filteredEntries.map((entry) => (
-                <tr key={entry.asset_id} data-testid={`asset-row-${entry.asset_id}`}>
+                <tr
+                  key={entry.asset_id}
+                  data-testid={`asset-row-${entry.asset_id}`}
+                  draggable={true}
+                  onDragStart={(e) => {
+                    if (e.dataTransfer) {
+                      e.dataTransfer.setData(
+                        "application/x-bevy-asset-id",
+                        entry.asset_id,
+                      );
+                      e.dataTransfer.setData("text/plain", entry.logical_path);
+                      e.dataTransfer.effectAllowed = "copy";
+                    }
+                  }}
+                >
                   <td className="asset-name">
                     {renamingId === entry.asset_id ? (
                       <input
@@ -403,15 +417,14 @@ export default function ProjectAssetBrowser({
                     )}
                   </td>
                   <td>
-                    <span
-                      className="role-badge"
-                      data-testid="asset-role-badge"
-                    >
+                    <span className="role-badge" data-testid="asset-role-badge">
                       {entry.role}
                     </span>
                   </td>
                   <td className="version">
-                    <span data-testid="asset-version">v{entry.current_version}</span>
+                    <span data-testid="asset-version">
+                      v{entry.current_version}
+                    </span>
                   </td>
                   <td className="actions">
                     <button
@@ -427,7 +440,9 @@ export default function ProjectAssetBrowser({
                       disabled={placingAssetId === entry.asset_id}
                       title="Place instance in scene"
                     >
-                      {placingAssetId === entry.asset_id ? "Placing..." : "Place Instance"}
+                      {placingAssetId === entry.asset_id
+                        ? "Placing..."
+                        : "Place Instance"}
                     </button>
                     {/* Hito 7 (PR2 / S5, S7): when a SceneComponent schema binds
                         this asset, surface a separate entry point that
