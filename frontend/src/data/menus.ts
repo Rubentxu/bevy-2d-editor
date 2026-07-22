@@ -34,6 +34,10 @@ export interface MenuHandlers {
   handleTogglePropertiesDock?: () => void;
   handleToggleFullscreen?: () => void;
   handleResetLayout?: () => void;
+  // v0.81 Tier 1b — workspace presets. Both handlers are optional so the
+  // menu still works in surface-level previews (tests, snapshots).
+  handleApplyPreset?: (presetId: string) => void;
+  handleSaveWorkspacePreset?: () => void;
   setTheme: (theme: "dark" | "light") => void;
   selectedEntityId: string | null;
   editorMode: "scene" | "asset-authoring" | "logic" | "code" | "play";
@@ -166,6 +170,51 @@ export function createMenuConfig(
         label: "Reset Layout",
         onClick: handlers.handleResetLayout ?? todo("Reset Layout"),
         testId: "menu-reset-layout",
+      },
+      // ── Workspace presets (v0.81 Tier 1b) ──────────────────────────────
+      // Built-in layouts target common game genres (2D Platformer, Top-Down
+      // RPG, FPS) plus a Minimal layout for full-screen preview.
+      // `handleApplyPreset` / `handleSaveWorkspacePreset` are wired by
+      // App.tsx → useDockResize so the layout actually shifts; the menu
+      // itself just dispatch the click.
+      {
+        label: "Workspace",
+        submenu: [
+          {
+            label: "Default",
+            onClick: () => handlers.handleApplyPreset?.("default"),
+            testId: "menu-preset-default",
+          },
+          {
+            label: "2D Platformer",
+            onClick: () => handlers.handleApplyPreset?.("2d-platformer"),
+            testId: "menu-preset-2d-platformer",
+          },
+          {
+            label: "Top-Down RPG",
+            onClick: () => handlers.handleApplyPreset?.("top-down-rpg"),
+            testId: "menu-preset-top-down-rpg",
+          },
+          {
+            label: "FPS",
+            onClick: () => handlers.handleApplyPreset?.("fps"),
+            testId: "menu-preset-fps",
+          },
+          {
+            label: "Minimal",
+            onClick: () => handlers.handleApplyPreset?.("minimal"),
+            testId: "menu-preset-minimal",
+          },
+          { label: "", separator: true },
+          {
+            label: "Save Current as Preset…",
+            onClick:
+              handlers.handleSaveWorkspacePreset ??
+              todo("Save Current as Preset…"),
+            testId: "menu-preset-save",
+          },
+        ],
+        testId: "menu-view-workspace",
       },
       {
         label: "Theme",
