@@ -6,7 +6,7 @@
 //! S9: Resync never auto-deletes overrides - orphaned patches go to orphaned_overrides
 
 use editor_core::{
-    document::SceneDocument,
+    document::{ComponentInstance, SceneDocument},
     scene_asset::{AssetReference, LocalId, SceneAssetDocument, SceneAssetEntity, SceneAssetRole},
     scene_instance::{ComponentOverride, ComponentOverrideStatus, SceneInstance},
     scene_instance_overrides::{resync, ResyncReport},
@@ -231,14 +231,23 @@ fn s9_multiple_orphaned_overrides() {
         orphaned_component_overrides: vec![],
     };
 
-    // Asset only has "root" entity now
+    // Asset only has "root" entity now — must include Transform2D so the
+    // "root"-targeted override remains Active (the other two targets are
+    // deleted and become orphaned).
     let asset = make_asset(
         "multi_asset",
         vec![SceneAssetEntity {
             local_id: LocalId("root".to_string()),
             local_path: "root".to_string(),
             name: "Multi".to_string(),
-            components: vec![],
+            components: vec![ComponentInstance {
+                type_id: "editor.Transform2D".to_string(),
+                values: serde_json::json!({
+                    "translation": {"x": 0.0, "y": 0.0},
+                    "rotation": 0.0,
+                    "scale": {"x": 1.0, "y": 1.0},
+                }),
+            }],
         }],
     );
 

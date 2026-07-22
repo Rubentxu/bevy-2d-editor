@@ -74,7 +74,10 @@ pub struct SceneAssetDocument {
 
 /// One entity inside a Scene Asset. Reuses existing ComponentInstance.
 /// NOTE: NO children_local_ids — hierarchy lives only in relationships (spec S9).
+/// `deny_unknown_fields` ensures legacy `children_local_ids` documents are rejected
+/// on deserialize, per spec S9 (relations are the only hierarchy source).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SceneAssetEntity {
     pub local_id: LocalId,
     pub local_path: String,
@@ -85,6 +88,7 @@ pub struct SceneAssetEntity {
 /// Typed relationship between entities. Mirrors BSN's typed relationship lists.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum RelationshipKind {
+    #[serde(rename = "child")]
     Child,
     #[serde(rename = "custom")]
     Custom(String),

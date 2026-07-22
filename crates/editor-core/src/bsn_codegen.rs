@@ -80,7 +80,7 @@ fn emit_spawn_function(
     let _ = writeln!(out, "pub fn spawn_{}(mut commands: Commands) {{", snake);
     let _ = writeln!(out, "    commands.spawn_scene_list(bsn_list![");
     emit_bsn_list_body(out, ir, warnings);
-    let _ = writeln!(out, "    ]);");
+    let _ = writeln!(out, "    ]).unwrap();");
     let _ = writeln!(out, "}}");
 }
 
