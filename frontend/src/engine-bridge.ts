@@ -3,7 +3,7 @@ const EVT_SPRITE_POSITION = 1;
 const EVT_FPS = 2;
 
 let wasm: any = null;
-let wasmMemory: WebAssembly.Memory | null = null;
+const wasmMemory: WebAssembly.Memory | null = null;
 let cmdView: DataView | null = null;
 let evtView: DataView | null = null;
 let lastMemSize = 0;
@@ -22,12 +22,12 @@ function refreshViews() {
     cmdView = new DataView(
       wasmMemory.buffer,
       wasm.get_command_bus_ptr(),
-      wasm.get_command_bus_len()
+      wasm.get_command_bus_len(),
     );
     evtView = new DataView(
       wasmMemory.buffer,
       wasm.get_event_bus_ptr(),
-      wasm.get_event_bus_len()
+      wasm.get_event_bus_len(),
     );
   }
 }
@@ -43,7 +43,7 @@ function pollEvents() {
     const payload = new DataView(
       evtView.buffer,
       evtView.byteOffset + pos + 4,
-      len
+      len,
     );
     frameCallback(type, payload);
     pos += 4 + len;
@@ -53,7 +53,7 @@ function pollEvents() {
 
 export async function initEngine(
   canvasId: string,
-  onEvent: (type: number, payload: DataView) => void
+  onEvent: (type: number, payload: DataView) => void,
 ): Promise<void> {
   console.log("[bridge] Loading WASM module...");
 
@@ -70,9 +70,11 @@ export async function initEngine(
   };
 
   // Expose load_scene_json for testing
-  (window as any).load_scene_json = (json: string) => wasm.load_scene_json(json);
+  (window as any).load_scene_json = (json: string) =>
+    wasm.load_scene_json(json);
   // Expose dispatch_command for testing (typed command system)
-  (window as any).dispatch_command = (json: string) => wasm.dispatch_command(json);
+  (window as any).dispatch_command = (json: string) =>
+    wasm.dispatch_command(json);
   // Expose undo/redo for testing (operation log)
   (window as any).undo = () => wasm.undo();
   (window as any).redo = () => wasm.redo();
@@ -85,13 +87,18 @@ export async function initEngine(
   // Expose schema registry persistence for testing
   (window as any).save_schema = (typeId: string) => wasm.save_schema(typeId);
   (window as any).load_schema = (typeId: string) => wasm.load_schema(typeId);
-  (window as any).delete_schema = (typeId: string) => wasm.delete_schema(typeId);
+  (window as any).delete_schema = (typeId: string) =>
+    wasm.delete_schema(typeId);
   (window as any).list_schemas = () => wasm.list_schemas();
-  (window as any).register_schema = (json: string) => wasm.register_schema_from_json(json);
-  (window as any).unregister_schema = (typeId: string) => wasm.unregister_schema(typeId);
-  (window as any).is_builtin_type = (typeId: string) => wasm.is_builtin_type(typeId);
+  (window as any).register_schema = (json: string) =>
+    wasm.register_schema_from_json(json);
+  (window as any).unregister_schema = (typeId: string) =>
+    wasm.unregister_schema(typeId);
+  (window as any).is_builtin_type = (typeId: string) =>
+    wasm.is_builtin_type(typeId);
   (window as any).combined_registry_size = () => wasm.combined_registry_size();
-  (window as any).get_combined_schemas_json = () => wasm.get_combined_schemas_json();
+  (window as any).get_combined_schemas_json = () =>
+    wasm.get_combined_schemas_json();
   (window as any).load_project = () => wasm.load_project();
   // Hito 7 — SceneComponent authoring (PR2): expose the
   // `bind_scene_to_schema`, `create_scene_component`, and
@@ -103,7 +110,7 @@ export async function initEngine(
     wasm.create_scene_component(json);
   (window as any).bind_scene_to_schema = (
     typeId: string,
-    sceneAssetId: string | null
+    sceneAssetId: string | null,
   ) => wasm.bind_scene_to_schema(typeId, sceneAssetId ?? null);
   (window as any).list_scene_component_schemas = () =>
     wasm.list_scene_component_schemas();
@@ -116,23 +123,33 @@ export async function initEngine(
   (window as any).export_code = (json: string) => wasm.export_code(json);
 
   // ── Scene Instance Placement (PR3) ────────────────────────────────────────
-  (window as any).place_scene_instance = (assetId: string, translationJson?: string) =>
-    wasm.place_scene_instance(assetId, translationJson ?? null);
+  (window as any).place_scene_instance = (
+    assetId: string,
+    translationJson?: string,
+  ) => wasm.place_scene_instance(assetId, translationJson ?? null);
   (window as any).remove_scene_instance = (instanceId: string) =>
     wasm.remove_scene_instance(instanceId);
-  (window as any).replace_scene_instance_asset = (instanceId: string, newAssetId: string) =>
-    wasm.replace_scene_instance_asset(instanceId, newAssetId);
+  (window as any).replace_scene_instance_asset = (
+    instanceId: string,
+    newAssetId: string,
+  ) => wasm.replace_scene_instance_asset(instanceId, newAssetId);
   (window as any).get_scene_instances = () => wasm.get_scene_instances();
   (window as any).get_instance_components_wasm = (instanceId: string) =>
     wasm.get_instance_components_wasm(instanceId);
 
   // ── Override / Resync (override-resync-workbench) ──────────────────────────
-  (window as any).validate_overrides_wasm = (instanceJson: string, assetJson: string) =>
-    wasm.validate_overrides_wasm(instanceJson, assetJson);
-  (window as any).effective_values_wasm = (instanceJson: string, assetJson: string) =>
-    wasm.effective_values_wasm(instanceJson, assetJson);
-  (window as any).try_rebind_wasm = (orphanedPatchJson: string, assetJson: string) =>
-    wasm.try_rebind_wasm(orphanedPatchJson, assetJson);
+  (window as any).validate_overrides_wasm = (
+    instanceJson: string,
+    assetJson: string,
+  ) => wasm.validate_overrides_wasm(instanceJson, assetJson);
+  (window as any).effective_values_wasm = (
+    instanceJson: string,
+    assetJson: string,
+  ) => wasm.effective_values_wasm(instanceJson, assetJson);
+  (window as any).try_rebind_wasm = (
+    orphanedPatchJson: string,
+    assetJson: string,
+  ) => wasm.try_rebind_wasm(orphanedPatchJson, assetJson);
   (window as any).get_resync_reports = () => wasm.get_resync_reports();
   // ── Override Mutation (level-inspector-and-override-panel PR3) ────────────
   (window as any).override_field_status_wasm = (instanceJson: string) =>
@@ -142,17 +159,25 @@ export async function initEngine(
     localId: string,
     typeId: string,
     fieldPathJson: string,
-    valueJson: string
-  ) => wasm.upsert_override_wasm(instanceId, localId, typeId, fieldPathJson, valueJson);
+    valueJson: string,
+  ) =>
+    wasm.upsert_override_wasm(
+      instanceId,
+      localId,
+      typeId,
+      fieldPathJson,
+      valueJson,
+    );
   (window as any).revert_override_wasm = (
     instanceId: string,
     localId: string,
     typeId: string,
-    fieldPathJson: string
+    fieldPathJson: string,
   ) => wasm.revert_override_wasm(instanceId, localId, typeId, fieldPathJson);
 
   // ── Validation Center (validation-center) ──────────────────────────────────
-  (window as any).get_validation_issues_wasm = () => wasm.get_validation_issues_wasm();
+  (window as any).get_validation_issues_wasm = () =>
+    wasm.get_validation_issues_wasm();
 
   // ── Scene Instance Layer (scene-instance-layer) ──────────────────────────
   (window as any).list_scene_instance_layers_wasm = (assetJson: string) =>
@@ -160,18 +185,20 @@ export async function initEngine(
   (window as any).create_scene_instance_layer_wasm = (
     assetJson: string,
     name: string,
-    kind: string
+    kind: string,
   ) => wasm.create_scene_instance_layer_wasm(assetJson, name, kind);
   (window as any).delete_scene_instance_layer_wasm = (
     assetJson: string,
-    layerId: string
+    layerId: string,
   ) => wasm.delete_scene_instance_layer_wasm(assetJson, layerId);
   (window as any).set_asset_document_wasm = (assetJson: string) =>
     wasm.set_asset_document_wasm(assetJson);
 
   // ── Runtime Preview Inspector (runtime-preview-inspector) ────────────────
-  (window as any).get_preview_metrics_wasm = () => wasm.get_preview_metrics_wasm();
-  (window as any).get_preview_mapping_wasm = () => wasm.get_preview_mapping_wasm();
+  (window as any).get_preview_metrics_wasm = () =>
+    wasm.get_preview_metrics_wasm();
+  (window as any).get_preview_mapping_wasm = () =>
+    wasm.get_preview_mapping_wasm();
   (window as any).get_preview_provenance_wasm = (stableId: string) =>
     wasm.get_preview_provenance_wasm(stableId);
 
@@ -197,27 +224,30 @@ export async function initEngine(
     x: number,
     y: number,
     tilesetId: string,
-    localIndex: number
+    localIndex: number,
   ) => wasm.paint_tile(assetRef, layerId, x, y, tilesetId, localIndex);
   (window as any).erase_tile = (
     assetRef: string,
     layerId: string,
     x: number,
-    y: number
+    y: number,
   ) => wasm.erase_tile(assetRef, layerId, x, y);
 
   // ── Tileset CRUD (level-design-tools PR1) ────────────────────────────────
   (window as any).list_tilesets = () => wasm.list_tilesets();
   (window as any).load_tileset = (id: string) => wasm.load_tileset(id);
-  (window as any).save_tileset = (tilesetJson: string) => wasm.save_tileset(tilesetJson);
+  (window as any).save_tileset = (tilesetJson: string) =>
+    wasm.save_tileset(tilesetJson);
   (window as any).delete_tileset = (id: string) => wasm.delete_tileset(id);
 
   // ── Scene Registry (PR2 multi-scene) ──────────────────────────────────────
   (window as any).scene_create = (name: string) => wasm.scene_create(name);
   (window as any).scene_switch = (id: string) => wasm.scene_switch(id);
-  (window as any).scene_switch_commit = (id: string) => wasm.scene_switch_commit(id);
+  (window as any).scene_switch_commit = (id: string) =>
+    wasm.scene_switch_commit(id);
   (window as any).scene_delete = (id: string) => wasm.scene_delete(id);
-  (window as any).scene_rename = (id: string, newName: string) => wasm.scene_rename(id, newName);
+  (window as any).scene_rename = (id: string, newName: string) =>
+    wasm.scene_rename(id, newName);
   (window as any).list_scenes_extended = () => wasm.list_scenes_extended();
   (window as any).get_current_scene_id = () => wasm.get_current_scene_id();
 
@@ -228,18 +258,24 @@ export async function initEngine(
     wasm.write_source_file(id, content);
   (window as any).create_source_file = (path: string, name: string) =>
     wasm.create_source_file(path, name);
-  (window as any).delete_source_file = (id: string) => wasm.delete_source_file(id);
+  (window as any).delete_source_file = (id: string) =>
+    wasm.delete_source_file(id);
 
   // ── Rust Source Integration (rust-source-integration) ───────────────────────
-  (window as any).find_source_location = (typeId: string) => wasm.find_source_location(typeId);
-
+  (window as any).find_source_location = (typeId: string) =>
+    wasm.find_source_location(typeId);
 
   // ── Asset Pipeline — binary OPFS texture assets ─────────────────────────────
   (window as any).list_asset_files = () => wasm.list_asset_files();
-  (window as any).import_asset_file = (name: string, mimeType: string, bytes: Uint8Array) =>
-    wasm.import_asset_file(name, mimeType, bytes);
-  (window as any).read_asset_file_bytes = (id: string) => wasm.read_asset_file_bytes(id);
-  (window as any).delete_asset_file = (id: string) => wasm.delete_asset_file(id);
+  (window as any).import_asset_file = (
+    name: string,
+    mimeType: string,
+    bytes: Uint8Array,
+  ) => wasm.import_asset_file(name, mimeType, bytes);
+  (window as any).read_asset_file_bytes = (id: string) =>
+    wasm.read_asset_file_bytes(id);
+  (window as any).delete_asset_file = (id: string) =>
+    wasm.delete_asset_file(id);
 
   // ── Scene Asset Browser + Authoring (PR3) ──────────────────────────────────
   (window as any).create_scene_asset = (name: string, role: string) =>
@@ -255,7 +291,8 @@ export async function initEngine(
   (window as any).open_scene_asset = (assetId: string) =>
     wasm.open_scene_asset(assetId);
   (window as any).close_scene_asset = () => wasm.close_scene_asset();
-  (window as any).get_asset_document_json = () => wasm.get_asset_document_json();
+  (window as any).get_asset_document_json = () =>
+    wasm.get_asset_document_json();
   (window as any).get_scene_asset_catalog_json = () =>
     wasm.get_scene_asset_catalog_json();
   (window as any).dispatch_asset_command = (cmdJson: string) =>
@@ -272,9 +309,12 @@ export async function initEngine(
   (window as any).redo_logic = () => wasm.redo_logic();
   (window as any).get_logic_log_state = () => wasm.get_logic_log_state();
   (window as any).get_logic_graph = () => wasm.get_logic_graph();
-  (window as any).create_logic_graph_asset = (assetId: string, logicalPath: string) =>
-    wasm.create_logic_graph_asset(assetId, logicalPath);
-  (window as any).list_logic_graph_assets = () => wasm.list_logic_graph_assets();
+  (window as any).create_logic_graph_asset = (
+    assetId: string,
+    logicalPath: string,
+  ) => wasm.create_logic_graph_asset(assetId, logicalPath);
+  (window as any).list_logic_graph_assets = () =>
+    wasm.list_logic_graph_assets();
   (window as any).get_node_descriptors = () => wasm.get_node_descriptors();
 
   // Expose sendMoveSprite (LinearBus raw command, used by legacy tests)
@@ -294,10 +334,10 @@ export async function initEngine(
   // Step 2: Set up DataView references to shared memory
   refreshViews();
   console.log(
-    `[bridge] cmdView: ptr=${wasm.get_command_bus_ptr()} len=${wasm.get_command_bus_len()}`
+    `[bridge] cmdView: ptr=${wasm.get_command_bus_ptr()} len=${wasm.get_command_bus_len()}`,
   );
   console.log(
-    `[bridge] evtView: ptr=${wasm.get_event_bus_ptr()} len=${wasm.get_event_bus_len()}`
+    `[bridge] evtView: ptr=${wasm.get_event_bus_ptr()} len=${wasm.get_event_bus_len()}`,
   );
 
   // Step 3: Start Bevy engine (deferred so this promise can resolve)
@@ -330,6 +370,13 @@ export async function initEngine(
       (window as any).hot_reload_asset_wasm(event.assetId);
     }
   });
+
+  // Expose for direct invocation from Playwright / external integrations
+  (window as any).hot_reload_source_wasm = (fileId: string) =>
+    wasm.hot_reload_source_wasm(fileId);
+  (window as any).hot_reload_asset_wasm = (assetId: string) =>
+    wasm.hot_reload_asset_wasm(assetId);
+  (window as any).force_reload_wasm = () => wasm.force_reload_wasm();
 
   console.log("[bridge] initEngine resolved");
 }
@@ -379,7 +426,12 @@ export async function redo(): Promise<string> {
 /**
  * Get operation log metadata (size, can_undo, can_redo, cursor).
  */
-export async function getLogState(): Promise<{ size: number; can_undo: boolean; can_redo: boolean; cursor: number }> {
+export async function getLogState(): Promise<{
+  size: number;
+  can_undo: boolean;
+  can_redo: boolean;
+  cursor: number;
+}> {
   const json = (window as any).get_log_state();
   return JSON.parse(json);
 }
@@ -429,7 +481,7 @@ export interface DynamicSceneExportResult {
  * Throws if the input is not a valid SceneDocument JSON.
  */
 export async function exportDynamicScene(
-  sceneJson: string
+  sceneJson: string,
 ): Promise<DynamicSceneExportResult> {
   const raw = await (window as any).export_dynamic_scene_wasm(sceneJson);
   if (typeof raw !== "string") {
