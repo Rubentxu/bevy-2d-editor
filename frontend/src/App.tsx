@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import "./styles.css";
 import { initEngine, isEngineReady } from "./engine-bridge";
 import { useSceneState, SceneDocument } from "./hooks/useSceneState";
@@ -11,6 +11,7 @@ import InspectorPanel from "./components/InspectorPanel";
 import AIAssistantPanel from "./components/AIAssistantPanel";
 import ExportRustModal from "./components/ExportRustModal";
 import ValidationCenter from "./components/ValidationCenter";
+import SaveSceneModal from "./components/SaveSceneModal";
 import SceneTabs from "./components/SceneTabs";
 import UnsavedChangesDialog from "./components/UnsavedChangesDialog";
 import ProjectAssetBrowser from "./components/ProjectAssetBrowser";
@@ -21,47 +22,96 @@ import { AutoLayerPanel } from "./components/AutoLayerPanel";
 import LogicGraphEditor from "./components/LogicGraphEditor";
 import GameOverlay from "./components/GameOverlay";
 import CodeEditor, { type NavigationTarget } from "./components/CodeEditor";
+import StatusBar from "./components/StatusBar";
+import ViewportControls from "./components/ViewportControls";
+import CommandPalette, {
+  type PaletteCommand,
+} from "./components/CommandPalette";
+import CheatSheet, {
+  type ShortcutGroup as CheatSheetGroup,
+} from "./components/CheatSheet";
+import OnboardingBanner from "./components/OnboardingBanner";
+import { useCanvasViewport } from "./hooks/useCanvasViewport";
 import { useScenes } from "./hooks/useScenes";
 import { useSceneAssets } from "./hooks/useSceneAssets";
-import { sceneCreate, sceneSwitch, sceneSwitchCommit, sceneDelete, sceneRename } from "./services/scenes";
+import { ToastProvider, useToasts } from "./hooks/useToasts";
+import Toasts from "./components/Toasts";
+import {
+  sceneCreate,
+  sceneSwitch,
+  sceneSwitchCommit,
+  sceneDelete,
+  sceneRename,
+} from "./services/scenes";
 import { type TilesetMetadata } from "./services/tilesets";
-import { type AutoLayerPayload, type LevelLayerPayload } from "./services/scene-assets";
+import {
+  type AutoLayerPayload,
+  type LevelLayerPayload,
+  placeSceneInstance,
+} from "./services/scene-assets";
 import { findSourceLocation } from "./services/code-files";
 
 type EditorMode = "scene" | "asset-authoring" | "logic" | "code" | "play";
 
 export default function App() {
+  return (
+    <ToastProvider>
+      <AppInner />
+    </ToastProvider>
+  );
+}
+
+function AppInner() {
   const [ready, setReady] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
   const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { addToast } = useToasts();
   const initGuard = (() => {
     let guard = false;
-    return { current: guard, set: (v: boolean) => (guard = v), get: () => guard };
+    return {
+      current: guard,
+      set: (v: boolean) => (guard = v),
+      get: () => guard,
+    };
   })();
 
   const { scene, refresh, dispatch } = useSceneState();
   const logState = useLogState();
+  const { zoom, pan, reset: resetViewport, fitToContent } = useCanvasViewport();
+  const [isDragOverCanvas, setIsDragOverCanvas] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [cheatSheetOpen, setCheatSheetOpen] = useState(false);
+  const [renameRequestTick, setRenameRequestTick] = useState(0);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [validationCenterOpen, setValidationCenterOpen] = useState(false);
   const [tilesetPanelOpen, setTilesetPanelOpen] = useState(false);
-  const [selectedTilesetId, setSelectedTilesetId] = useState<string | null>(null);
+  const [selectedTilesetId, setSelectedTilesetId] = useState<string | null>(
+    null,
+  );
   const [autoLayerPanelOpen, setAutoLayerPanelOpen] = useState(false);
-  const [selectedAutoLayerId, setSelectedAutoLayerId] = useState<string | null>(null);
+  const [selectedAutoLayerId, setSelectedAutoLayerId] = useState<string | null>(
+    null,
+  );
   const [exportRustOpen, setExportRustOpen] = useState(false);
+  const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [applyingIds, setApplyingIds] = useState<Set<string>>(new Set());
   const { scenes, currentId, refresh: refreshScenes } = useScenes();
   const [pendingSwitchId, setPendingSwitchId] = useState<string | null>(null);
-  const [pendingSwitchSource, setPendingSwitchSource] = useState<string | null>(null);
+  const [pendingSwitchSource, setPendingSwitchSource] = useState<string | null>(
+    null,
+  );
 
   // ── Asset Authoring Mode ─────────────────────────────────────────────────
   const [editorMode, setEditorMode] = useState<EditorMode>("scene");
-  const [activeAssetLogicalPath, setActiveAssetLogicalPath] = useState<string | null>(null);
+  const [activeAssetLogicalPath, setActiveAssetLogicalPath] = useState<
+    string | null
+  >(null);
   const [pendingBackToScene, setPendingBackToScene] = useState(false);
 
   // ── Cross-mode Navigation (rust-source-integration) ─────────────────────
   // Holds the target file + line for scene → code jump-to-source navigation.
-  const [pendingNavigation, setPendingNavigation] = useState<NavigationTarget | null>(null);
+  const [pendingNavigation, setPendingNavigation] =
+    useState<NavigationTarget | null>(null);
 
   const {
     entries: assetEntries,
@@ -88,13 +138,12 @@ export default function App() {
   // Derive the first auto layer from assetDoc as a fallback for AutoLayerPanel
   const autoLayers: AutoLayerPayload[] =
     (assetDoc?.layers?.filter(
-      (l: LevelLayerPayload) => l.kind === "auto"
+      (l: LevelLayerPayload) => l.kind === "auto",
     ) as AutoLayerPayload[]) ?? [];
 
-  const selectedAutoLayer: AutoLayerPayload | null =
-    selectedAutoLayerId
-      ? autoLayers.find((l) => l.id === selectedAutoLayerId) ?? null
-      : autoLayers[0] ?? null;
+  const selectedAutoLayer: AutoLayerPayload | null = selectedAutoLayerId
+    ? (autoLayers.find((l) => l.id === selectedAutoLayerId) ?? null)
+    : (autoLayers[0] ?? null);
 
   // ── AI Assistant ─────────────────────────────────────────────────────────
   const {
@@ -160,8 +209,12 @@ export default function App() {
       // FPS and sprite position events handled silently (legacy)
     })
       .then(() => setReady(isEngineReady()))
-      .catch((e) => setInitError(String(e)));
-  }, []);
+      .catch((e) => {
+        const msg = String(e);
+        setInitError(msg);
+        addToast(`Engine init failed: ${msg}`, "error");
+      });
+  }, [addToast]);
 
   const handleUndo = async () => {
     try {
@@ -170,7 +223,7 @@ export default function App() {
       await refresh();
       setSelectedEntityId(null);
     } catch (e) {
-      setError(`Undo failed: ${e}`);
+      addToast(`Undo failed: ${e}`, "error");
     }
   };
 
@@ -180,20 +233,22 @@ export default function App() {
       await refresh();
       setSelectedEntityId(null);
     } catch (e) {
-      setError(`Redo failed: ${e}`);
+      addToast(`Redo failed: ${e}`, "error");
     }
   };
 
   const handleSave = async () => {
-    const name = window.prompt("Scene name:", "level_01");
-    if (!name) return;
+    // Phase 1.5: replace window.prompt with SaveSceneModal
+    setSaveModalOpen(true);
+  };
+
+  const handleSaveConfirm = async (name: string) => {
+    setSaveModalOpen(false);
     try {
       const path = await (window as any).save_scene(name);
-      setError(null);
-      // Briefly show success — use topbar status
       console.log(`Saved to ${path}`);
     } catch (e) {
-      setError(`Save failed: ${e}`);
+      addToast(`Save failed: ${e}`, "error");
     }
   };
 
@@ -203,7 +258,7 @@ export default function App() {
       await refresh();
       setSelectedEntityId(null);
     } catch (e) {
-      setError(`Load project failed: ${e}`);
+      addToast(`Load project failed: ${e}`, "error");
     }
   };
 
@@ -212,7 +267,7 @@ export default function App() {
       command: { type: "RenameEntity", entity_id: entityId, new_name: newName },
       metadata: { authorship: "user", timestamp: Date.now() },
     });
-    if (result.error) setError(`Rename failed: ${result.error}`);
+    if (result.error) addToast(`Rename failed: ${result.error}`, "error");
   };
 
   const handleSetField = async (
@@ -231,15 +286,20 @@ export default function App() {
       },
       metadata: { authorship: "user", timestamp: Date.now() },
     });
-    if (result.error) setError(`Set field failed: ${result.error}`);
+    if (result.error) addToast(`Set field failed: ${result.error}`, "error");
   };
 
   const handleRemoveComponent = async (entityId: string, typeId: string) => {
     const result = await dispatch({
-      command: { type: "RemoveComponent", entity_id: entityId, type_id: typeId },
+      command: {
+        type: "RemoveComponent",
+        entity_id: entityId,
+        type_id: typeId,
+      },
       metadata: { authorship: "user", timestamp: Date.now() },
     });
-    if (result.error) setError(`Remove component failed: ${result.error}`);
+    if (result.error)
+      addToast(`Remove component failed: ${result.error}`, "error");
   };
 
   const handleAddComponent = async (entityId: string, typeId: string) => {
@@ -252,45 +312,92 @@ export default function App() {
       },
       metadata: { authorship: "user", timestamp: Date.now() },
     });
-    if (result.error) setError(`Add component failed: ${result.error}`);
+    if (result.error)
+      addToast(`Add component failed: ${result.error}`, "error");
   };
 
-  const handleDeleteEntity = useCallback(async (id: string) => {
-    if (!id) return;
+  const handleDeleteEntity = useCallback(
+    async (id: string) => {
+      if (!id) return;
+      await dispatch({
+        command: { type: "DeleteEntity", id },
+        metadata: { authorship: "keyboard", timestamp: Date.now() },
+      });
+      setSelectedEntityId(null);
+    },
+    [dispatch],
+  );
+
+  // ── Create entity (Phase 1.4 — UX overhaul) ──────────────────────────────
+  // Counter + suffix derivation lives here so button + N shortcut stay in sync.
+  // New entity gets name "Entity N" where N is one greater than the highest
+  // existing "Entity <n>" suffix to avoid collisions.
+  const handleCreateEntity = useCallback(async () => {
+    const existing = scene?.entities ?? [];
+    let maxSuffix = 0;
+    const re = /^Entity (\d+)$/;
+    for (const e of existing) {
+      const m = re.exec(e.name);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (!Number.isNaN(n) && n > maxSuffix) maxSuffix = n;
+      }
+    }
+    const newName = `Entity ${maxSuffix + 1}`;
+    // Stable unique id — timestamp + random suffix to avoid collisions across
+    // rapid double-clicks before the scene snapshot updates.
+    const newId = `ent_${Date.now()}_${Math.floor(Math.random() * 1e6).toString(36)}`;
     await dispatch({
-      command: { type: "DeleteEntity", id },
-      metadata: { authorship: "keyboard", timestamp: Date.now() },
+      command: {
+        type: "CreateEntity",
+        id: newId,
+        name: newName,
+        components: [],
+      },
+      metadata: { authorship: "user", timestamp: Date.now() },
     });
-    setSelectedEntityId(null);
-  }, [dispatch]);
+    setSelectedEntityId(newId);
+  }, [scene, dispatch]);
 
   // ── Multi-scene handlers ─────────────────────────────────────────────────
 
-  const handleTabClick = useCallback(async (id: string) => {
-    if (id === currentId) return;
-    const result = await sceneSwitch(id);
-    if (result.dirty_prompt_required) {
-      setPendingSwitchId(id);
-      setPendingSwitchSource(result.source_name);
-    }
-    // If no dirty prompt, the switch already happened server-side
-    await refresh();
-  }, [currentId, refresh]);
+  const handleTabClick = useCallback(
+    async (id: string) => {
+      if (id === currentId) return;
+      const result = await sceneSwitch(id);
+      if (result.dirty_prompt_required) {
+        setPendingSwitchId(id);
+        setPendingSwitchSource(result.source_name);
+      }
+      // If no dirty prompt, the switch already happened server-side
+      await refresh();
+    },
+    [currentId, refresh],
+  );
 
-  const handleNewScene = useCallback(async (name: string) => {
-    await sceneCreate(name);
-    await refreshScenes();
-  }, [refreshScenes]);
+  const handleNewScene = useCallback(
+    async (name: string) => {
+      await sceneCreate(name);
+      await refreshScenes();
+    },
+    [refreshScenes],
+  );
 
-  const handleDeleteScene = useCallback(async (id: string) => {
-    await sceneDelete(id);
-    await refreshScenes();
-  }, [refreshScenes]);
+  const handleDeleteScene = useCallback(
+    async (id: string) => {
+      await sceneDelete(id);
+      await refreshScenes();
+    },
+    [refreshScenes],
+  );
 
-  const handleRenameScene = useCallback(async (id: string, newName: string) => {
-    await sceneRename(id, newName);
-    await refreshScenes();
-  }, [refreshScenes]);
+  const handleRenameScene = useCallback(
+    async (id: string, newName: string) => {
+      await sceneRename(id, newName);
+      await refreshScenes();
+    },
+    [refreshScenes],
+  );
 
   const handleSaveAndSwitch = useCallback(async () => {
     if (!pendingSwitchId) return;
@@ -330,35 +437,35 @@ export default function App() {
       setActiveAssetLogicalPath(entry.logical_path);
       setEditorMode("asset-authoring");
     },
-    [assetEntries, openAsset]
+    [assetEntries, openAsset],
   );
 
   const handleAssetCreate = useCallback(
     async (name: string, role: string) => {
       await createAsset(name, role);
     },
-    [createAsset]
+    [createAsset],
   );
 
   const handleAssetRename = useCallback(
     async (assetId: string, newPath: string) => {
       await renameAsset(assetId, newPath);
     },
-    [renameAsset]
+    [renameAsset],
   );
 
   const handleAssetDuplicate = useCallback(
     async (assetId: string) => {
       await duplicateAsset(assetId);
     },
-    [duplicateAsset]
+    [duplicateAsset],
   );
 
   const handleAssetDelete = useCallback(
     async (assetId: string) => {
       await deleteAssetFn(assetId);
     },
-    [deleteAssetFn]
+    [deleteAssetFn],
   );
 
   // "Back to Scene" — check dirty BEFORE flipping mode (per D4)
@@ -426,7 +533,7 @@ export default function App() {
       };
       await dispatchAssetCommand(command);
     },
-    [dispatchAssetCommand]
+    [dispatchAssetCommand],
   );
 
   const handleAssetAddComponent = useCallback(
@@ -439,7 +546,7 @@ export default function App() {
       };
       await dispatchAssetCommand(command);
     },
-    [dispatchAssetCommand]
+    [dispatchAssetCommand],
   );
 
   const handleAssetRemoveComponent = useCallback(
@@ -451,7 +558,7 @@ export default function App() {
       };
       await dispatchAssetCommand(command);
     },
-    [dispatchAssetCommand]
+    [dispatchAssetCommand],
   );
 
   const handleAssetUndo = useCallback(async () => {
@@ -476,6 +583,57 @@ export default function App() {
     }
   }, [editorMode]);
 
+  // ── Drag-drop from ProjectAssetBrowser to canvas (Phase 3.1) ─────────────
+  // Listens for the custom `application/x-bevy-asset-id` MIME produced by
+  // ProjectAssetBrowser row dragstart and calls placeSceneInstance with a
+  // world-space translation computed from the drop cursor + current
+  // viewport zoom/pan.
+  const handleCanvasDragOver = useCallback((e: React.DragEvent) => {
+    // Only handle drags that carry our custom asset MIME — ignore unrelated
+    // drags (text selections, file drops from the OS, etc.).
+    if (
+      e.dataTransfer.types.includes("application/x-bevy-asset-id") ||
+      e.dataTransfer.types.includes("Files")
+    ) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+      setIsDragOverCanvas(true);
+    }
+  }, []);
+
+  const handleCanvasDragLeave = useCallback((e: React.DragEvent) => {
+    // Only clear if leaving the container itself (not a child)
+    if (
+      e.relatedTarget instanceof Node &&
+      e.currentTarget.contains(e.relatedTarget)
+    ) {
+      return;
+    }
+    setIsDragOverCanvas(false);
+  }, []);
+
+  const handleCanvasDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragOverCanvas(false);
+      const assetId = e.dataTransfer.getData("application/x-bevy-asset-id");
+      if (!assetId) return;
+      // Compute world-space cursor position by inverse-transforming the
+      // canvas-container's bounding rect (matches useCanvasViewport math).
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const translation = {
+        x: (e.clientX - rect.left - pan.x) / zoom,
+        y: (e.clientY - rect.top - pan.y) / zoom,
+      };
+      try {
+        await placeSceneInstance(assetId, translation);
+      } catch (err) {
+        addToast(`Drop failed: ${err}`, "error");
+      }
+    },
+    [pan.x, pan.y, zoom, addToast],
+  );
+
   useKeyboardShortcuts({
     enabled: editorMode !== "play",
     onUndo: editorMode === "scene" ? handleUndo : handleAssetUndo,
@@ -483,14 +641,246 @@ export default function App() {
     logState: editorMode === "scene" ? logState : assetLogState,
     selectedEntityId,
     onDeleteEntity: handleDeleteEntity,
+    onCreateEntity: editorMode === "scene" ? handleCreateEntity : undefined,
+    onOpenCommandPalette: () => setCommandPaletteOpen(true),
+    onOpenCheatSheet: () => setCheatSheetOpen(true),
+    onRenameSelected: () => setRenameRequestTick((t) => t + 1),
+    onFitViewport: () => fitToContent(),
   });
+
+  // ── Command palette catalog (Phase 3.2) ───────────────────────────────────
+  // Static list of >15 commands wired to existing App.tsx handlers. Built
+  // every render but only when one of the dependencies changes (the
+  // handlers are useCallback-wrapped so identity is stable).
+  const paletteCommands = useMemo<PaletteCommand[]>(
+    () => [
+      // File
+      {
+        id: "file.save",
+        label: "Save Scene",
+        shortcut: "Ctrl+S",
+        group: "File",
+        action: handleSave,
+      },
+      {
+        id: "file.load",
+        label: "Load Project",
+        group: "File",
+        action: handleLoad,
+      },
+      {
+        id: "file.export",
+        label: "Export Rust",
+        group: "File",
+        action: () => setExportRustOpen(true),
+      },
+      {
+        id: "file.new-scene",
+        label: "New Scene",
+        group: "File",
+        action: () => handleNewScene(`scene_${Date.now()}`),
+      },
+      // Edit
+      {
+        id: "edit.undo",
+        label: "Undo",
+        shortcut: "Ctrl+Z",
+        group: "Edit",
+        action: () => {
+          if (editorMode === "scene") void handleUndo();
+          else void handleAssetUndo();
+        },
+      },
+      {
+        id: "edit.redo",
+        label: "Redo",
+        shortcut: "Ctrl+Shift+Z",
+        group: "Edit",
+        action: () => {
+          if (editorMode === "scene") void handleRedo();
+          else void handleAssetRedo();
+        },
+      },
+      {
+        id: "edit.delete",
+        label: "Delete Selection",
+        shortcut: "Del",
+        group: "Edit",
+        action: () => {
+          if (selectedEntityId) void handleDeleteEntity(selectedEntityId);
+        },
+      },
+      {
+        id: "edit.new-entity",
+        label: "New Entity",
+        shortcut: "N",
+        group: "Edit",
+        action: () => {
+          if (editorMode === "scene") void handleCreateEntity();
+        },
+      },
+      {
+        id: "edit.rename",
+        label: "Rename Selected",
+        shortcut: "F2",
+        group: "Edit",
+        action: () => setRenameRequestTick((t) => t + 1),
+      },
+      // View
+      {
+        id: "view.toggle-ai",
+        label: "Toggle AI Panel",
+        group: "View",
+        action: handleToggleAI,
+      },
+      {
+        id: "view.toggle-validation",
+        label: "Toggle Validation Center",
+        group: "View",
+        action: handleToggleValidationCenter,
+      },
+      {
+        id: "view.toggle-tileset",
+        label: "Toggle Tileset",
+        group: "View",
+        action: handleToggleTileset,
+      },
+      {
+        id: "view.toggle-autolayer",
+        label: "Toggle Auto Layer",
+        group: "View",
+        action: handleToggleAutoLayer,
+      },
+      {
+        id: "view.reset-viewport",
+        label: "Reset Viewport",
+        group: "View",
+        action: () => resetViewport(),
+      },
+      {
+        id: "view.fit-viewport",
+        label: "Fit Viewport",
+        shortcut: "F",
+        group: "View",
+        action: () => fitToContent(),
+      },
+      {
+        id: "view.open-logic",
+        label: "Open Logic Editor",
+        group: "View",
+        action: handleOpenLogic,
+      },
+      {
+        id: "view.open-code",
+        label: "Open Code Editor",
+        group: "View",
+        action: handleOpenCode,
+      },
+      {
+        id: "view.open-browser",
+        label: "Open Project Browser",
+        group: "View",
+        action: () => setEditorMode("asset-authoring"),
+      },
+      // Assets
+      {
+        id: "assets.create",
+        label: "Create Scene Asset",
+        group: "Assets",
+        action: () => handleAssetCreate(`asset_${Date.now()}`, "actor"),
+      },
+      // Play
+      {
+        id: "play.toggle",
+        label: "Play / Stop",
+        group: "Play",
+        action: handleTogglePlay,
+      },
+      // Help
+      {
+        id: "help.cheatsheet",
+        label: "Show Cheat Sheet",
+        shortcut: "?",
+        group: "Help",
+        action: () => setCheatSheetOpen(true),
+      },
+    ],
+    [
+      editorMode,
+      selectedEntityId,
+      handleSave,
+      handleLoad,
+      handleNewScene,
+      handleUndo,
+      handleAssetUndo,
+      handleRedo,
+      handleAssetRedo,
+      handleDeleteEntity,
+      handleCreateEntity,
+      handleToggleAI,
+      handleToggleValidationCenter,
+      handleToggleTileset,
+      handleToggleAutoLayer,
+      resetViewport,
+      fitToContent,
+      handleOpenLogic,
+      handleOpenCode,
+      handleAssetCreate,
+      handleTogglePlay,
+    ],
+  );
+
+  // ── Cheat sheet shortcuts (Phase 3.3) ─────────────────────────────────────
+  const cheatSheetGroups = useMemo<CheatSheetGroup[]>(
+    () => [
+      {
+        title: "General",
+        entries: [
+          { keys: ["Ctrl", "K"], label: "Open command palette" },
+          { keys: ["?"], label: "Open cheat sheet" },
+        ],
+      },
+      {
+        title: "Editing",
+        entries: [
+          { keys: ["Ctrl", "Z"], label: "Undo" },
+          { keys: ["Ctrl", "Y"], label: "Redo" },
+          { keys: ["Ctrl", "Shift", "Z"], label: "Redo (alternate)" },
+          { keys: ["N"], label: "New entity" },
+          { keys: ["F2"], label: "Rename selected entity" },
+          { keys: ["Del"], label: "Delete selection" },
+          { keys: ["Backspace"], label: "Delete selection" },
+        ],
+      },
+      {
+        title: "Viewport",
+        entries: [
+          { keys: ["F"], label: "Fit viewport to content" },
+          { keys: ["Wheel"], label: "Zoom around cursor" },
+          { keys: ["Space", "+ Drag"], label: "Pan canvas" },
+        ],
+      },
+      {
+        title: "Play",
+        entries: [
+          {
+            keys: ["Space", "+ W/A/S/D"],
+            label: "Move (gamepad in play mode)",
+          },
+        ],
+      },
+    ],
+    [],
+  );
 
   return (
     <div className="app">
       <TopBar
         editorMode={editorMode}
         onOpenAssets={() => {}}
-        onBackToScene={editorMode === "asset-authoring" ? handleBackToScene : undefined}
+        onBackToScene={
+          editorMode === "asset-authoring" ? handleBackToScene : undefined
+        }
         onOpenLogic={editorMode === "scene" ? handleOpenLogic : undefined}
         onOpenCode={editorMode === "scene" ? handleOpenCode : undefined}
         logState={editorMode === "scene" ? logState : assetLogState}
@@ -508,28 +898,45 @@ export default function App() {
         onToggleAutoLayer={handleToggleAutoLayer}
         autoLayerPanelOpen={autoLayerPanelOpen}
         onTogglePlay={handleTogglePlay}
-        error={error || initError}
-        onDismissError={() => setError(null)}
       />
       {editorMode === "play" && <GameOverlay onStop={handleTogglePlay} />}
-      {editorMode === "scene" && (
-        <SceneTabs
-          scenes={scenes}
-          currentId={currentId}
-          onTabClick={handleTabClick}
-          onNewScene={handleNewScene}
-          onDeleteScene={handleDeleteScene}
-          onRenameScene={handleRenameScene}
-        />
-      )}
+      <SceneTabs
+        scenes={scenes}
+        currentId={currentId}
+        onTabClick={handleTabClick}
+        onNewScene={handleNewScene}
+        onDeleteScene={handleDeleteScene}
+        onRenameScene={handleRenameScene}
+      />
       {/* Canvas always mounted — AssetAuthoringView overlays .main content (C-4) */}
-      <div className="canvas-container">
+      <div
+        className={`canvas-container${isDragOverCanvas ? " canvas-drop-active" : ""}`}
+        data-testid="canvas-drop-target"
+        onDragOver={handleCanvasDragOver}
+        onDragLeave={handleCanvasDragLeave}
+        onDrop={handleCanvasDrop}
+      >
         {!ready && (
           <div style={{ padding: 16, color: "#888" }}>
             {initError ? `Error: ${initError}` : "Loading WASM..."}
           </div>
         )}
-        <canvas id="bevy-canvas" />
+        <div
+          className="canvas-transform"
+          style={{
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+          }}
+        >
+          <canvas id="bevy-canvas" />
+        </div>
+        {isDragOverCanvas && (
+          <div
+            className="canvas-drop-outline"
+            data-testid="canvas-drop-outline"
+            aria-hidden="true"
+          />
+        )}
+        <ViewportControls />
       </div>
       <div className="main">
         {editorMode === "logic" ? (
@@ -539,9 +946,9 @@ export default function App() {
         ) : editorMode === "code" ? (
           <>
             <CodeEditor
-            navigationTarget={pendingNavigation}
-            onEditorReady={() => setPendingNavigation(null)}
-          />
+              navigationTarget={pendingNavigation}
+              onEditorReady={() => setPendingNavigation(null)}
+            />
           </>
         ) : editorMode === "scene" ? (
           <>
@@ -582,6 +989,10 @@ export default function App() {
               onSelect={setSelectedEntityId}
               onRename={handleRename}
               instances={instances}
+              onCreateEntity={
+                editorMode === "scene" ? handleCreateEntity : undefined
+              }
+              renameRequest={renameRequestTick}
             />
             <InspectorPanel
               scene={scene}
@@ -609,20 +1020,22 @@ export default function App() {
               onOpen={handleOpenAsset}
               onPlaceInstance={placeInstance}
             />
-            {autoLayerPanelOpen && (
-              selectedAutoLayer ? (
-              <AutoLayerPanel
-                layer={selectedAutoLayer}
-                assetRef={activeAssetLogicalPath ?? ""}
-                onRegenerate={refresh}
-              />
-            ) : (
-              <div className="tileset-panel">
-                <h3>Auto Layer</h3>
-                <p style={{ fontSize: 12, color: '#666' }}>No auto layers in this asset. Open a level scene asset to edit auto layers.</p>
-              </div>
-            )
-            )}
+            {autoLayerPanelOpen &&
+              (selectedAutoLayer ? (
+                <AutoLayerPanel
+                  layer={selectedAutoLayer}
+                  assetRef={activeAssetLogicalPath ?? ""}
+                  onRegenerate={refresh}
+                />
+              ) : (
+                <div className="tileset-panel">
+                  <h3>Auto Layer</h3>
+                  <p style={{ fontSize: 12, color: "#666" }}>
+                    No auto layers in this asset. Open a level scene asset to
+                    edit auto layers.
+                  </p>
+                </div>
+              ))}
             {assetDoc && (
               <AssetAuthoringView
                 document={assetDoc}
@@ -643,7 +1056,18 @@ export default function App() {
           </>
         )}
       </div>
-      {exportRustOpen && <ExportRustModal onClose={() => setExportRustOpen(false)} />}
+      {exportRustOpen && (
+        <ExportRustModal onClose={() => setExportRustOpen(false)} />
+      )}
+      {saveModalOpen && (
+        <SaveSceneModal
+          defaultName={
+            scenes.find((s) => s.id === currentId)?.name ?? "level_01"
+          }
+          onSave={handleSaveConfirm}
+          onCancel={() => setSaveModalOpen(false)}
+        />
+      )}
       {pendingSwitchId !== null && pendingSwitchSource !== null && (
         <UnsavedChangesDialog
           sourceName={pendingSwitchSource}
@@ -661,6 +1085,24 @@ export default function App() {
           onCancel={handleAssetCancelBack}
         />
       )}
+      {commandPaletteOpen && (
+        <CommandPalette
+          commands={paletteCommands}
+          onClose={() => setCommandPaletteOpen(false)}
+        />
+      )}
+      {cheatSheetOpen && (
+        <CheatSheet
+          groups={cheatSheetGroups}
+          onClose={() => setCheatSheetOpen(false)}
+        />
+      )}
+      <OnboardingBanner
+        onCreateBlankScene={() => handleNewScene(`scene_${Date.now()}`)}
+        onOpenLogicEditor={handleOpenLogic}
+      />
+      <StatusBar />
+      <Toasts />
     </div>
   );
 }

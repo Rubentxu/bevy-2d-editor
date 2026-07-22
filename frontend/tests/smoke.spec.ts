@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 test.describe("Spike — Smoke Tests", () => {
   test("page loads with correct title", async ({ page }) => {
     await page.goto("/");
-    await expect(page).toHaveTitle("Bevy 2D Editor — Spike");
+    await expect(page).toHaveTitle("Bevy 2D Editor");
   });
 
   test("canvas element exists with correct id", async ({ page }) => {

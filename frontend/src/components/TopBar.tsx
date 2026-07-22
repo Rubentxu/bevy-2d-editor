@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { LogState } from "../hooks/useLogState";
 import { useHotReloadStatus } from "../hooks/useHotReloadStatus";
+import { useTheme } from "../hooks/useTheme";
+import ToolbarGroup from "./ToolbarGroup";
+import TooltipButton from "./TooltipButton";
 
 type EditorMode = "scene" | "asset-authoring" | "logic" | "code" | "play";
 
@@ -25,8 +28,6 @@ interface Props {
   onToggleAutoLayer: () => void;
   autoLayerPanelOpen: boolean;
   onTogglePlay?: () => void;
-  error: string | null;
-  onDismissError: () => void;
 }
 
 export default function TopBar({
@@ -50,13 +51,12 @@ export default function TopBar({
   onToggleAutoLayer,
   autoLayerPanelOpen,
   onTogglePlay,
-  error,
-  onDismissError,
 }: Props) {
   const isAssetAuthoring = editorMode === "asset-authoring";
   const isPlayMode = editorMode === "play";
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { lastReloadedAt, inFlightSaves, refresh } = useHotReloadStatus();
+  const { theme, toggleTheme } = useTheme();
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -69,132 +69,170 @@ export default function TopBar({
 
   return (
     <div className="topbar" data-testid="topbar">
-      <h1>Bevy 2D Editor</h1>
+      <h1>🎮 Bevy 2D Editor</h1>
+      <button
+        type="button"
+        className="theme-toggle-btn"
+        onClick={toggleTheme}
+        title={
+          theme === "dark" ? "Switch to light theme" : "Switch to dark theme"
+        }
+        aria-label={
+          theme === "dark" ? "Switch to light theme" : "Switch to dark theme"
+        }
+        data-testid="theme-toggle-btn"
+      >
+        {theme === "dark" ? "☀️" : "🌙"}
+      </button>
 
-      {/* Scene mode buttons — hidden in asset authoring mode */}
-      {!isAssetAuthoring && (
-        <>
-          <button
-            onClick={onOpenLogic}
-            data-testid="open-logic-btn"
-            title="Open Logic Graph Editor"
-          >
-            ⚡ Logic
-          </button>
-          <button
-            onClick={onOpenCode}
-            data-testid="open-code-btn"
-            title="Open Code Editor"
-          >
-            📝 Code
-          </button>
-          {/* Play/Stop button — only visible in scene and play modes */}
-          {(editorMode === "scene" || isPlayMode) && onTogglePlay && (
-            <button
-              onClick={onTogglePlay}
-              data-testid={isPlayMode ? "stop-btn" : "play-btn"}
-              title={isPlayMode ? "Stop preview and return to editor" : "Start preview"}
-            >
-              {isPlayMode ? "⏹ Stop" : "▶ Play"}
-            </button>
+      <div className="toolbar-groups">
+        <ToolbarGroup label="Mode" data-testid="toolbar-group-mode">
+          <TooltipButton
+            icon="▣ Scene"
+            label="Scene editor"
+            onClick={onBackToScene ?? (() => {})}
+            disabled={!onBackToScene && editorMode !== "scene"}
+            active={editorMode === "scene"}
+            testId="open-scene-btn"
+          />
+          <TooltipButton
+            icon="⚡ Logic"
+            label="Open Logic Graph Editor"
+            onClick={onOpenLogic ?? (() => {})}
+            disabled={!onOpenLogic}
+            active={editorMode === "logic"}
+            testId="open-logic-btn"
+          />
+          <TooltipButton
+            icon="📝 Code"
+            label="Open Code Editor"
+            onClick={onOpenCode ?? (() => {})}
+            disabled={!onOpenCode}
+            active={editorMode === "code"}
+            testId="open-code-btn"
+          />
+          {isAssetAuthoring && (
+            <TooltipButton
+              icon="← Back to Scene"
+              label="Return to scene editor"
+              onClick={onBackToScene ?? (() => {})}
+              disabled={!onBackToScene}
+              testId="back-to-scene-btn"
+            />
           )}
-          {!isAssetAuthoring && lastReloadedAt != null && (
-            <span data-testid="hot-reload-badge">
-              Hot-reload: {lastReloadedAt.toLocaleTimeString()}
-            </span>
-          )}
-          {!isAssetAuthoring && (
-            <button
-              onClick={handleRefresh}
-              disabled={inFlightSaves > 0 || isRefreshing}
-              data-testid="topbar-refresh"
-              title="Force hot-reload"
-            >
-              ↻
-            </button>
-          )}
-          <button
+        </ToolbarGroup>
+
+        <ToolbarGroup label="Edit" data-testid="toolbar-group-edit">
+          <TooltipButton
+            icon="↶ Undo"
+            label="Undo"
+            shortcut="Ctrl+Z"
             onClick={onUndo}
             disabled={!logState.can_undo}
-            data-testid="undo-btn"
-            title="Undo (Ctrl+Z)"
-          >
-            ↶ Undo
-          </button>
-          <button
+            testId="undo-btn"
+          />
+          <TooltipButton
+            icon="↷ Redo"
+            label="Redo"
+            shortcut="Ctrl+Shift+Z"
             onClick={onRedo}
             disabled={!logState.can_redo}
-            data-testid="redo-btn"
-            title="Redo (Ctrl+Shift+Z)"
-          >
-            ↷ Redo
-          </button>
-          <button onClick={onSave} data-testid="save-btn" title="Save scene">
-            Save
-          </button>
-          <button onClick={onLoad} data-testid="load-btn" title="Load project (restores scenes + schemas)">
-            Load Project
-          </button>
-          <button onClick={onExportRust} data-testid="export-rs-btn" title="Export scene as Rust code">
-            📥 Export .rs
-          </button>
-          <button
+            testId="redo-btn"
+          />
+          <TooltipButton
+            icon="Save"
+            label={isAssetAuthoring ? "Save asset" : "Save scene"}
+            shortcut="Ctrl+S"
+            onClick={onSave}
+            testId="save-btn"
+          />
+          <TooltipButton
+            icon="Load Project"
+            label="Load project"
+            shortcut="Ctrl+O"
+            onClick={onLoad}
+            testId="load-btn"
+          />
+          <TooltipButton
+            icon="📥 Export .rs"
+            label="Export scene as Rust code"
+            shortcut="Ctrl+E"
+            onClick={onExportRust}
+            testId="export-rs-btn"
+          />
+        </ToolbarGroup>
+
+        <ToolbarGroup label="Tools" data-testid="toolbar-group-tools">
+          <TooltipButton
+            icon={isRefreshing ? "…" : "↻"}
+            label="Force hot-reload"
+            shortcut="Ctrl+R"
+            onClick={handleRefresh}
+            disabled={inFlightSaves > 0 || isRefreshing}
+            testId="topbar-refresh"
+          />
+          <TooltipButton
+            icon="✨ AI"
+            label="AI panel"
             onClick={onToggleAI}
-            data-testid="ai-panel-btn"
-            title={aiPanelOpen ? "Close AI panel" : "Open AI panel"}
-            className={aiPanelOpen ? "ai-btn active" : "ai-btn"}
-          >
-            ✨ AI
-          </button>
-          <button
+            active={aiPanelOpen}
+            testId="ai-panel-btn"
+          />
+          <TooltipButton
+            icon="✅ Validation"
+            label="Validation Center"
+            shortcut="Ctrl+;"
             onClick={onToggleValidationCenter}
-            data-testid="validation-center-btn"
-            title={validationCenterOpen ? "Close Validation Center" : "Open Validation Center"}
-            className={validationCenterOpen ? "vc-btn active" : "vc-btn"}
-          >
-            ✅ Validation
-          </button>
-          <button
+            active={validationCenterOpen}
+            testId="validation-center-btn"
+          />
+          <TooltipButton
+            icon="🏠 Tileset"
+            label="Tileset Panel"
+            shortcut="Ctrl+T"
             onClick={onToggleTileset}
-            data-testid="tileset-panel-btn"
-            title={tilesetPanelOpen ? "Close Tileset Panel" : "Open Tileset Panel"}
-            className={tilesetPanelOpen ? "tileset-btn active" : "tileset-btn"}
-          >
-            🏠 Tileset
-          </button>
-          <button
+            active={tilesetPanelOpen}
+            testId="tileset-panel-btn"
+          />
+          <TooltipButton
+            icon="🔄 Auto Layer"
+            label="Auto Layer Panel"
+            shortcut="Ctrl+L"
             onClick={onToggleAutoLayer}
-            data-testid="auto-layer-panel-btn"
-            title={autoLayerPanelOpen ? "Close Auto Layer Panel" : "Open Auto Layer Panel"}
-            className={autoLayerPanelOpen ? "auto-layer-btn active" : "auto-layer-btn"}
-          >
-            🔄 Auto Layer
-          </button>
-        </>
-      )}
+            active={autoLayerPanelOpen}
+            testId="auto-layer-panel-btn"
+          />
+          {onOpenAssets && (
+            <TooltipButton
+              icon="Assets"
+              label="Open asset browser"
+              onClick={onOpenAssets}
+              testId="open-assets-btn"
+            />
+          )}
+        </ToolbarGroup>
 
-      {/* Asset authoring mode buttons */}
-      {isAssetAuthoring && (
-        <>
-          <button
-            onClick={onBackToScene}
-            data-testid="back-to-scene-btn"
-            title="Return to scene editor"
-          >
-            ← Back to Scene
-          </button>
-        </>
-      )}
+        <ToolbarGroup label="Run" data-testid="toolbar-group-run">
+          {(editorMode === "scene" || isPlayMode) && onTogglePlay && (
+            <TooltipButton
+              icon={isPlayMode ? "⏹ Stop" : "▶ Play"}
+              label={
+                isPlayMode
+                  ? "Stop preview and return to editor"
+                  : "Start preview"
+              }
+              shortcut="Ctrl+P"
+              onClick={onTogglePlay}
+              active={isPlayMode}
+              testId={isPlayMode ? "stop-btn" : "play-btn"}
+            />
+          )}
+        </ToolbarGroup>
+      </div>
 
-      {/* Always visible */}
-      {error && (
-        <span
-          className="error"
-          onClick={onDismissError}
-          title="Click to dismiss"
-          data-testid="topbar-error"
-        >
-          {error}
+      {lastReloadedAt != null && (
+        <span data-testid="hot-reload-badge">
+          Hot-reload: {lastReloadedAt.toLocaleTimeString()}
         </span>
       )}
       <span className="status" data-testid="log-status">

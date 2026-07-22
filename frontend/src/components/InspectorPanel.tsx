@@ -24,13 +24,21 @@ interface Props {
   scene: SceneDocument | null;
   selectedId: string | null;
   onRename: (entityId: string, newName: string) => void;
-  onSetField: (entityId: string, typeId: string, fieldPath: string, value: any) => void;
+  onSetField: (
+    entityId: string,
+    typeId: string,
+    fieldPath: string,
+    value: any,
+  ) => void;
   onRemoveComponent: (entityId: string, typeId: string) => void;
   onAddComponent: (entityId: string, typeId: string) => void;
   // Scene Instance operations (PR3)
   instances?: Record<string, SceneInstance>;
   onRemoveInstance?: (instanceId: string) => Promise<void>;
-  onReplaceInstanceAsset?: (instanceId: string, newAssetId: string) => Promise<void>;
+  onReplaceInstanceAsset?: (
+    instanceId: string,
+    newAssetId: string,
+  ) => Promise<void>;
   assetEntries?: Array<{ asset_id: string; logical_path: string }>;
   // Jump to source (rust-source-integration)
   onJumpToSource?: (typeId: string) => void;
@@ -57,10 +65,16 @@ function InstanceRow({
       className={`instance-row ${isBroken ? "instance-broken" : ""}`}
       data-testid={`instance-row-${instance.instance_id}`}
     >
-      <span className="instance-id" data-testid={`instance-id-${instance.instance_id}`}>
+      <span
+        className="instance-id"
+        data-testid={`instance-id-${instance.instance_id}`}
+      >
         {instance.instance_id.slice(0, 12)}...
       </span>
-      <span className="instance-asset" data-testid={`instance-asset-${instance.instance_id}`}>
+      <span
+        className="instance-asset"
+        data-testid={`instance-asset-${instance.instance_id}`}
+      >
         {instance.asset_ref}
       </span>
       {isBroken && (
@@ -109,14 +123,21 @@ export default function InspectorPanel({
 }: Props) {
   const entity = scene?.entities.find((e) => e.id === selectedId) ?? null;
   const [nameDraft, setNameDraft] = useState(entity?.name ?? "");
+  const [componentQuery, setComponentQuery] = useState("");
   const [showSchemaPanel, setShowSchemaPanel] = useState(false);
   const [schemaRefreshKey, setSchemaRefreshKey] = useState(0);
   const [overrideIssues, setOverrideIssues] = useState<OverrideIssue[]>([]);
-  const [resyncReports, setResyncReports] = useState<Array<[string, ResyncReport]>>([]);
+  const [resyncReports, setResyncReports] = useState<
+    Array<[string, ResyncReport]>
+  >([]);
   const [showOverrideDetails, setShowOverrideDetails] = useState(false);
   // Phase 6: Effective values + override indicators for instance entities
-  const [resolvedEntity, setResolvedEntity] = useState<ResolvedEntity | null>(null);
-  const [fieldOverrideIndex, setFieldOverrideIndex] = useState<FieldOverrideEntry[]>([]);
+  const [resolvedEntity, setResolvedEntity] = useState<ResolvedEntity | null>(
+    null,
+  );
+  const [fieldOverrideIndex, setFieldOverrideIndex] = useState<
+    FieldOverrideEntry[]
+  >([]);
 
   // Load override issues, resync reports, effective values, and field override status
   // when a scene instance entity is selected (Phase 6.2, 6.3)
@@ -166,7 +187,10 @@ export default function InspectorPanel({
    * All callers pass `instance` and `localId`; the helper handles the
    * fetchAssetForInstance + null-check + per-call setState cascade.
    */
-  const refreshInstanceState = async (instance: SceneInstance, localId: string) => {
+  const refreshInstanceState = async (
+    instance: SceneInstance,
+    localId: string,
+  ) => {
     const asset = await fetchAssetForInstance(instance);
     if (!asset) {
       setOverrideIssues([]);
@@ -210,7 +234,7 @@ export default function InspectorPanel({
   const handleRemoveInstance = async (instanceId: string) => {
     if (!onRemoveInstance) return;
     const confirmed = window.confirm(
-      `Remove this Scene Instance? This cannot be undone.`
+      `Remove this Scene Instance? This cannot be undone.`,
     );
     if (!confirmed) return;
     try {
@@ -225,7 +249,7 @@ export default function InspectorPanel({
     const newAssetId = window.prompt(
       `Replace with which asset?\n\nAvailable assets:\n${assetEntries
         .map((e) => `${e.asset_id}: ${e.logical_path}`)
-        .join("\n")}\n\nEnter asset_id:`
+        .join("\n")}\n\nEnter asset_id:`,
     );
     if (!newAssetId || !newAssetId.trim()) return;
     // Validate that the asset exists
@@ -254,8 +278,11 @@ export default function InspectorPanel({
   const showInstanceList = instanceList.length > 0 || !entity;
 
   // Extract selected instance ID if entity is a scene instance child
-  const selectedInstanceId = parseInstanceChild(entity?.id ?? "")?.instance_id ?? null;
-  const selectedInstance = selectedInstanceId ? instances[selectedInstanceId] : null;
+  const selectedInstanceId =
+    parseInstanceChild(entity?.id ?? "")?.instance_id ?? null;
+  const selectedInstance = selectedInstanceId
+    ? instances[selectedInstanceId]
+    : null;
 
   // Build per-field override status map from fieldOverrideIndex (Phase 6.3)
   // Key: "component_type_id:field_name", Value: ComponentOverrideStatus
@@ -272,7 +299,9 @@ export default function InspectorPanel({
     const localId = parseInstanceChild(entity.id)?.local_id;
     if (!localId) return;
     try {
-      await revertOverride(selectedInstance.instance_id, localId, typeId, [fieldPath]);
+      await revertOverride(selectedInstance.instance_id, localId, typeId, [
+        fieldPath,
+      ]);
       // Re-use the same 4-step pipeline as the initial-load useEffect (W-N3 dup fix).
       await refreshInstanceState(selectedInstance, localId);
     } catch (e) {
@@ -283,32 +312,60 @@ export default function InspectorPanel({
   // Compute override status summary
   const overrideCounts = selectedInstance
     ? {
-        active: selectedInstance.component_overrides.filter((p) => p.status === "active").length,
-        stale: selectedInstance.component_overrides.filter((p) => p.status === "stale").length,
-        orphaned: selectedInstance.component_overrides.filter((p) => p.status === "orphaned").length
-          + selectedInstance.orphaned_component_overrides.filter((p) => p.status === "orphaned").length,
-        conflict: selectedInstance.component_overrides.filter((p) => p.status === "conflict").length
-          + selectedInstance.orphaned_component_overrides.filter((p) => p.status === "conflict").length,
+        active: selectedInstance.component_overrides.filter(
+          (p) => p.status === "active",
+        ).length,
+        stale: selectedInstance.component_overrides.filter(
+          (p) => p.status === "stale",
+        ).length,
+        orphaned:
+          selectedInstance.component_overrides.filter(
+            (p) => p.status === "orphaned",
+          ).length +
+          selectedInstance.orphaned_component_overrides.filter(
+            (p) => p.status === "orphaned",
+          ).length,
+        conflict:
+          selectedInstance.component_overrides.filter(
+            (p) => p.status === "conflict",
+          ).length +
+          selectedInstance.orphaned_component_overrides.filter(
+            (p) => p.status === "conflict",
+          ).length,
       }
     : null;
 
   // Phase 6.4: Use resolvedEntity.components when instance entity selected
-  const componentsToRender = isInstanceEntity && resolvedEntity
-    ? resolvedEntity.components
-    : entity?.components ?? [];
+  const componentsToRender =
+    isInstanceEntity && resolvedEntity
+      ? resolvedEntity.components
+      : (entity?.components ?? []);
+  const normalizedComponentQuery = componentQuery.trim().toLowerCase();
+  const visibleComponents = componentsToRender.filter((component) =>
+    component.type_id.toLowerCase().includes(normalizedComponentQuery),
+  );
 
   // Phase 6.6: Check if resync warning banner should be shown
   const showResyncWarning = resyncReports.some(
-    ([, report]) => report.stale > 0 || report.conflict > 0
+    ([, report]) => report.stale > 0 || report.conflict > 0,
   );
   const totalProblemCount = resyncReports.reduce(
     (sum, [, report]) => sum + report.stale + report.conflict,
-    0
+    0,
   );
 
   return (
     <div className="panel inspector" data-testid="inspector-panel">
       <h2>Inspector</h2>
+      <input
+        type="search"
+        className="panel-search"
+        data-testid="inspector-search"
+        placeholder="Search components…"
+        aria-label="Search components"
+        value={componentQuery}
+        onChange={(event) => setComponentQuery(event.target.value)}
+      />
       {entity && (
         <>
           <input
@@ -328,13 +385,22 @@ export default function InspectorPanel({
             }}
             data-testid={`entity-name-${entity.id}`}
           />
-          {componentsToRender.length === 0 && (
-            <div className="panel-empty">No components</div>
+          {visibleComponents.length === 0 && (
+            <div className="panel-empty">
+              {componentsToRender.length === 0
+                ? "No components"
+                : "No matching components"}
+            </div>
           )}
-          {componentsToRender.map((c) => {
+          {visibleComponents.map((c) => {
             // Build per-component field override status lookup for this component
-            const componentFieldStatus: Record<string, ComponentOverrideStatus> = {};
-            for (const [key, status] of Object.entries(fieldOverrideStatusMap)) {
+            const componentFieldStatus: Record<
+              string,
+              ComponentOverrideStatus
+            > = {};
+            for (const [key, status] of Object.entries(
+              fieldOverrideStatusMap,
+            )) {
               const [typeId, fieldName] = key.split(":");
               if (typeId === c.type_id) {
                 componentFieldStatus[fieldName] = status;
@@ -345,15 +411,29 @@ export default function InspectorPanel({
                 key={c.type_id}
                 component={c}
                 entityId={entity.id}
-                onCommit={(fieldPath, value) => onSetField(entity.id, c.type_id, fieldPath, value)}
+                onCommit={(fieldPath, value) =>
+                  onSetField(entity.id, c.type_id, fieldPath, value)
+                }
                 onRemove={() => onRemoveComponent(entity.id, c.type_id)}
-                fieldOverrideStatus={isInstanceEntity ? componentFieldStatus : undefined}
-                onRevertField={isInstanceEntity ? (fieldPath) => handleRevertField(c.type_id, fieldPath) : undefined}
-                onJumpToSource={onJumpToSource ? () => onJumpToSource(c.type_id) : undefined}
+                fieldOverrideStatus={
+                  isInstanceEntity ? componentFieldStatus : undefined
+                }
+                onRevertField={
+                  isInstanceEntity
+                    ? (fieldPath) => handleRevertField(c.type_id, fieldPath)
+                    : undefined
+                }
+                onJumpToSource={
+                  onJumpToSource ? () => onJumpToSource(c.type_id) : undefined
+                }
               />
             );
           })}
-          <AddComponentButton key={schemaRefreshKey} entityId={entity.id} onAdd={(typeId) => onAddComponent(entity.id, typeId)} />
+          <AddComponentButton
+            key={schemaRefreshKey}
+            entityId={entity.id}
+            onAdd={(typeId) => onAddComponent(entity.id, typeId)}
+          />
           <div className="inspector-actions">
             <button
               type="button"
@@ -369,10 +449,14 @@ export default function InspectorPanel({
               revert button) is the current resolution path. Tracked as future
               enhancement for a full workbench UX. */}
           {isInstanceEntity && showResyncWarning && (
-            <div className="resync-warning-banner" data-testid="resync-warning-banner">
+            <div
+              className="resync-warning-banner"
+              data-testid="resync-warning-banner"
+            >
               <span className="resync-warning-icon">⚠️</span>
               <span className="resync-warning-text">
-                {totalProblemCount} override{totalProblemCount !== 1 ? "s" : ""} need review (use per-field revert)
+                {totalProblemCount} override{totalProblemCount !== 1 ? "s" : ""}{" "}
+                need review (use per-field revert)
               </span>
             </div>
           )}
@@ -383,22 +467,34 @@ export default function InspectorPanel({
               <h4 className="overrides-section-header">Overrides</h4>
               <div className="override-counts">
                 {overrideCounts.active > 0 && (
-                  <span className="override-count active" title="Active component overrides">
+                  <span
+                    className="override-count active"
+                    title="Active component overrides"
+                  >
                     {overrideCounts.active} active
                   </span>
                 )}
                 {overrideCounts.stale > 0 && (
-                  <span className="override-count stale" title="Component overrides on renamed/removed fields">
+                  <span
+                    className="override-count stale"
+                    title="Component overrides on renamed/removed fields"
+                  >
                     {overrideCounts.stale} stale
                   </span>
                 )}
                 {overrideCounts.orphaned > 0 && (
-                  <span className="override-count orphaned" title="Orphaned component overrides — entity removed from asset">
+                  <span
+                    className="override-count orphaned"
+                    title="Orphaned component overrides — entity removed from asset"
+                  >
                     {overrideCounts.orphaned} orphaned
                   </span>
                 )}
                 {overrideCounts.conflict > 0 && (
-                  <span className="override-count conflict" title="Type conflict component overrides">
+                  <span
+                    className="override-count conflict"
+                    title="Type conflict component overrides"
+                  >
                     {overrideCounts.conflict} conflict
                   </span>
                 )}
@@ -408,8 +504,13 @@ export default function InspectorPanel({
                 <div className="resync-reports">
                   <span className="resync-label">Resync:</span>
                   {resyncReports.map(([id, report]) => (
-                    <span key={id} className="resync-report" data-testid={`resync-${id}`}>
-                      {report.active}a {report.stale}s {report.orphaned}o {report.conflict}c
+                    <span
+                      key={id}
+                      className="resync-report"
+                      data-testid={`resync-${id}`}
+                    >
+                      {report.active}a {report.stale}s {report.orphaned}o{" "}
+                      {report.conflict}c
                     </span>
                   ))}
                 </div>
@@ -421,12 +522,16 @@ export default function InspectorPanel({
                   className="override-issues-toggle"
                   onClick={() => setShowOverrideDetails(!showOverrideDetails)}
                 >
-                  {overrideIssues.length} issue{overrideIssues.length !== 1 ? "s" : ""}{" "}
+                  {overrideIssues.length} issue
+                  {overrideIssues.length !== 1 ? "s" : ""}{" "}
                   {showOverrideDetails ? "▲" : "▼"}
                 </button>
               )}
               {showOverrideDetails && overrideIssues.length > 0 && (
-                <ul className="override-issues-list" data-testid="override-issues-list">
+                <ul
+                  className="override-issues-list"
+                  data-testid="override-issues-list"
+                >
                   {overrideIssues.map((issue, i) => (
                     <li
                       key={i}
@@ -434,7 +539,9 @@ export default function InspectorPanel({
                       data-testid={`override-issue-${i}`}
                     >
                       <code className="override-issue-code">{issue.code}</code>
-                      <span className="override-issue-message">{issue.message}</span>
+                      <span className="override-issue-message">
+                        {issue.message}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -444,7 +551,15 @@ export default function InspectorPanel({
         </>
       )}
       {!entity && (
-        <div className="panel-empty">Select an entity</div>
+        <div
+          className="panel-empty panel-empty-cta"
+          data-testid="inspector-empty-cta"
+        >
+          <div className="panel-empty-title">No entity selected</div>
+          <div className="panel-empty-subtitle">
+            Click an entity in the Hierarchy to inspect it
+          </div>
+        </div>
       )}
       {showSchemaPanel && (
         <SchemaAuthoringPanel
