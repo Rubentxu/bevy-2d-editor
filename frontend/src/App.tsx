@@ -698,7 +698,10 @@ function AppInner() {
     [dock],
   );
   const handleResizeStatusBar = useCallback(
-    (delta: number) => dock.setStatusBarHeight(dock.prefs.statusBar.height + delta),
+    // Dragging the divider UP (negative screen delta) should grow the
+    // status bar; same convention as the bottom-dock divider (which is
+    // `height - delta` because dragging down shrinks it).
+    (delta: number) => dock.setStatusBarHeight(dock.prefs.statusBar.height - delta),
     [dock],
   );
   const handleResizeRightSplit = useCallback(
