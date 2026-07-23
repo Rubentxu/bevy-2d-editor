@@ -26,6 +26,13 @@
  * the latest prefs synchronously so a rapid reload never races the
  * 500 ms debounce.
  *
+ * v0.82 P2 (floating panels, ADR-0025) adds `floats` — a per-panel
+ * `FloatingPanelState` (`{ x, y, width, height, last_floated_at }`) for
+ * panels that have been lifted out of the CSS-Grid layout into a
+ * free-positioned portal overlay. `schemaVersion` bumps from `2` to `3`;
+ * `migratePrefs` performs a lossless v2 → v3 migration by filling
+ * `floats = {}` for users upgrading from v0.82 P1.
+ *
  * Persistence is best-effort: errors are logged but never thrown so a
  * broken OPFS layer cannot crash the editor.
  */
@@ -43,10 +50,11 @@ const DOCK_PREFS_PATH = "dock-prefs.json";
 /**
  * localStorage key holding the synchronous write-through cache of the
  * critical subset of `DockPrefs` that must survive a rapid reload even
- * when the OPFS async write hasn't flushed yet (ADR-0024 §Consequences).
- * The payload is intentionally small — just the `panelRegions` map — to
- * keep localStorage usage minimal and avoid duplicating the larger
- * workspace state held in OPFS.
+ * when the OPFS async write hasn't flushed yet (ADR-0024 §Consequences,
+ * extended in ADR-0025 to also cover the new `floats` slice). The payload
+ * is intentionally small — just the `panelRegions` map plus the `floats`
+ * map — to keep localStorage usage minimal and avoid duplicating the
+ * larger workspace state held in OPFS.
  */
 const DOCK_PREFS_LS_KEY = "bevy-2d-editor:dock-panel-regions";
 const DEBOUNCE_MS = 500;
@@ -54,9 +62,28 @@ const DEBOUNCE_MS = 500;
 /**
  * Bump this whenever a new top-level key is added to `DockPrefs` so old prefs
  * files can be migrated gracefully (see `migratePrefs` below). v0.81 ships
- * v1; v0.82 P1 bumps to v2 (ADR-0024) to add `panelRegions`.
+ * v1; v0.82 P1 bumps to v2 (ADR-0024) to add `panelRegions`; v0.82 P2
+ * bumps to v3 (ADR-0025) to add `floats`.
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
+
+/**
+ * Persisted state for a single floating panel — the panel's last-known
+ * `position: fixed` rect plus the timestamp at which it was most recently
+ * floated. The frontend (`FloatingPanel.tsx`, ADR-0025) writes new
+ * values here on every drag-drop / dock-toggle interaction; the loader
+ * picks them up on next mount.
+ */
+export interface FloatingPanelState {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** Epoch millis when the panel was last floated (or its float rect was
+   * last updated). Used by the frontend to surface a "last floated"
+   * indicator in the panel header; does not gate any logic. */
+  last_floated_at: number;
+}
 
 /**
  * Canonical panel identifiers carried in `DockPrefs.panelRegions` and over
@@ -119,6 +146,18 @@ export interface DockPrefs {
    * pass — readers do not need to tolerate missing or invalid entries.
    */
   panelRegions: Record<PanelId, DockableRegion>;
+  /**
+   * Per-panel floating state (ADR-0025). A panel id appears here only
+   * while that panel is *floating* — i.e. lifted out of the CSS-Grid
+   * layout into a `createPortal(…, document.body)` overlay. The
+   * presence of an entry corresponds to "this panel is currently
+   * floating" in `App.tsx`'s `floatingPanelIds` set; the entry's
+   * payload holds the rect to restore on reload.
+   *
+   * Migrated from v2 to v3 by filling `floats = {}` (no panels float
+   * by default for users upgrading from v0.82 P1).
+   */
+  floats: Partial<Record<PanelId, FloatingPanelState>>;
   /** User-defined presets keyed by id. Built-ins are not stored here. */
   presets?: Record<string, UserPresetRecord>;
 }
@@ -139,6 +178,7 @@ export const DEFAULT_DOCK_PREFS: DockPrefs = {
   },
   bottom: { height: 240, visible: true },
   panelRegions: { ...DEFAULT_PANEL_REGIONS },
+  floats: {},
   presets: {},
 };
 
@@ -206,6 +246,11 @@ export function movePanel(
  * - Old schemaVersion → log a one-time warning so developers can spot drift.
  * - Invalid `panelRegions` entries (`"center"`, unknown ids, mismatched
  *   types) → discard and fall back to defaults per ADR-0024 §Consequences.
+ * - Missing / invalid `floats` entries → drop (a panel whose entry is
+ *   malformed is treated as docked — only well-formed entries restore a
+ *   floating overlay). Per ADR-0025 §Decision 5, this branch runs for
+ *   users upgrading from v0.82 P1 (no `floats` key on disk) and any
+ *   malformed entries written by older experimental builds.
  *
  * Always returns a valid `DockPrefs` (never throws). Callers don't need to
  * know about versioning — `load()` calls this internally.
@@ -263,6 +308,40 @@ export function migratePrefs(parsed: unknown): DockPrefs {
     // Invalid candidate → keep the default already in `panelRegions[id]`.
   }
 
+  // Build `floats` defensively per ADR-0025 §Decision 5. v2 files have
+  // no `floats` key, so we start empty; v3 files contribute any persisted
+  // entries, but every entry must have positive numeric x/y/width/height
+  // and a numeric `last_floated_at` — malformed entries are dropped.
+  const floats: Partial<Record<PanelId, FloatingPanelState>> = {};
+  const rawFloats =
+    typeof obj.floats === "object" && obj.floats !== null
+      ? (obj.floats as Record<string, unknown>)
+      : {};
+  for (const id of Object.keys(rawFloats) as PanelId[]) {
+    const candidate = rawFloats[id];
+    if (!candidate || typeof candidate !== "object") continue;
+    const c = candidate as Record<string, unknown>;
+    if (
+      typeof c.x === "number" &&
+      typeof c.y === "number" &&
+      typeof c.width === "number" &&
+      typeof c.height === "number" &&
+      typeof c.last_floated_at === "number" &&
+      // Width/height must be positive so the panel can be rendered.
+      c.width > 0 &&
+      c.height > 0
+    ) {
+      floats[id] = {
+        x: c.x,
+        y: c.y,
+        width: c.width,
+        height: c.height,
+        last_floated_at: c.last_floated_at,
+      };
+    }
+    // Malformed entry → skip; the panel stays docked.
+  }
+
   return {
     schemaVersion: SCHEMA_VERSION,
     left,
@@ -271,6 +350,7 @@ export function migratePrefs(parsed: unknown): DockPrefs {
     statusBar,
     activePreset,
     panelRegions,
+    floats,
     presets,
   };
 }
@@ -308,28 +388,55 @@ export function useDockPrefs() {
 
   /**
    * Read the synchronous localStorage fallback holding the most recent
-   * `panelRegions` snapshot. Used to recover from the rapid-reload race
-   * where the OPFS async write hasn't completed before the page tears
-   * down (ADR-0024 §Consequences). Returns null when localStorage is
+   * `panelRegions` + `floats` snapshot. Used to recover from the
+   * rapid-reload race where the OPFS async write hasn't completed
+   * before the page tears down (ADR-0024 §Consequences, extended in
+   * ADR-0025 to also cover `floats`). Returns null when localStorage is
    * unavailable or no snapshot exists yet.
    */
-  const loadFromLocalStorage = useCallback((): Partial<DockPrefs> | null => {
+  const loadFromLocalStorage = useCallback((): {
+    panelRegions?: DockPrefs["panelRegions"];
+    floats?: DockPrefs["floats"];
+  } | null => {
     try {
       if (typeof localStorage === "undefined") return null;
       const raw = localStorage.getItem(DOCK_PREFS_LS_KEY);
       if (!raw) return null;
       const parsed = JSON.parse(raw);
-      if (
-        parsed &&
-        typeof parsed === "object" &&
-        parsed.panelRegions &&
-        typeof parsed.panelRegions === "object"
-      ) {
-        return {
-          panelRegions: parsed.panelRegions as DockPrefs["panelRegions"],
-        };
+      if (!parsed || typeof parsed !== "object") return null;
+      const out: {
+        panelRegions?: DockPrefs["panelRegions"];
+        floats?: DockPrefs["floats"];
+      } = {};
+      if (parsed.panelRegions && typeof parsed.panelRegions === "object") {
+        out.panelRegions = parsed.panelRegions as DockPrefs["panelRegions"];
       }
-      return null;
+      if (parsed.floats && typeof parsed.floats === "object") {
+        // Validate each entry — drop malformed entries defensively.
+        const floats: Partial<Record<PanelId, FloatingPanelState>> = {};
+        for (const id of Object.keys(parsed.floats)) {
+          const c = (parsed.floats as Record<string, unknown>)[id];
+          if (
+            c &&
+            typeof c === "object" &&
+            typeof (c as { width?: unknown }).width === "number" &&
+            typeof (c as { height?: unknown }).height === "number" &&
+            (c as { width: number }).width > 0 &&
+            (c as { height: number }).height > 0
+          ) {
+            const cc = c as FloatingPanelState;
+            floats[id as PanelId] = {
+              x: cc.x,
+              y: cc.y,
+              width: cc.width,
+              height: cc.height,
+              last_floated_at: cc.last_floated_at,
+            };
+          }
+        }
+        out.floats = floats;
+      }
+      return out.panelRegions || out.floats ? out : null;
     } catch {
       return null;
     }
@@ -340,8 +447,9 @@ export function useDockPrefs() {
       const result = await opfsLoadFile(DOCK_PREFS_PATH);
       if (!result.ok || !result.value) {
         // OPFS is empty (first-run or recently cleared). Fall back to the
-        // localStorage write-through cache so a previous swap survives
-        // a rapid reload even when the OPFS file wasn't yet flushed.
+        // localStorage write-through cache so a previous swap or float
+        // survives a rapid reload even when the OPFS file wasn't yet
+        // flushed.
         const fallback = loadFromLocalStorage();
         if (fallback) {
           return migratePrefs({
@@ -359,8 +467,14 @@ export function useDockPrefs() {
       // Layer the localStorage snapshot on top to win any race where
       // the OPFS write hadn't yet completed when the page reloaded.
       const lsFallback = loadFromLocalStorage();
-      if (lsFallback?.panelRegions) {
-        return { ...migrated, panelRegions: lsFallback.panelRegions };
+      if (lsFallback?.panelRegions || lsFallback?.floats) {
+        return {
+          ...migrated,
+          ...(lsFallback.panelRegions
+            ? { panelRegions: lsFallback.panelRegions }
+            : {}),
+          ...(lsFallback.floats ? { floats: lsFallback.floats } : {}),
+        };
       }
       return migrated;
     } catch (e) {
@@ -377,11 +491,18 @@ export function useDockPrefs() {
       // page tear-down; localStorage is synchronous and reliable. On
       // next mount, `load()` falls back to the localStorage snapshot
       // when OPFS hasn't yet flushed.
+      //
+      // v0.82 P2 (ADR-0025) extends the payload to also mirror the
+      // `floats` slice — a floating panel's position is critical to
+      // surviving a reload (otherwise the user has to re-float).
       try {
         if (typeof localStorage !== "undefined") {
           localStorage.setItem(
             DOCK_PREFS_LS_KEY,
-            JSON.stringify({ panelRegions: prefs.panelRegions }),
+            JSON.stringify({
+              panelRegions: prefs.panelRegions,
+              floats: prefs.floats,
+            }),
           );
         }
       } catch {
@@ -495,6 +616,38 @@ export function useDockPrefs() {
     [],
   );
 
+  /**
+   * Update the floating rect for a single panel. Pure helper — returns a
+   * new `DockPrefs` snapshot; the caller (`App.tsx`) is responsible for
+   * re-rendering and re-issuing `save()`. v0.82 P2 (ADR-0025).
+   */
+  const setFloatRect = useCallback(
+    (
+      prefs: DockPrefs,
+      panelId: PanelId,
+      rect: FloatingPanelState,
+    ): DockPrefs => ({
+      ...prefs,
+      floats: { ...prefs.floats, [panelId]: rect },
+    }),
+    [],
+  );
+
+  /**
+   * Remove a panel from the floats map (i.e. dock it back into the grid).
+   * Pure helper — returns the prefs unchanged when the panel is not in the
+   * floats map. v0.82 P2 (ADR-0025).
+   */
+  const removeFloat = useCallback(
+    (prefs: DockPrefs, panelId: PanelId): DockPrefs => {
+      if (!(panelId in prefs.floats)) return prefs;
+      const next = { ...prefs.floats };
+      delete next[panelId];
+      return { ...prefs, floats: next };
+    },
+    [],
+  );
+
   return {
     load,
     save,
@@ -504,5 +657,7 @@ export function useDockPrefs() {
     applyPreset,
     saveCurrentAsPreset,
     deleteUserPreset,
+    setFloatRect,
+    removeFloat,
   };
 }

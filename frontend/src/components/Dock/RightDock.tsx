@@ -15,6 +15,13 @@
  * properties header. The reducer treats both as a swap of the whole
  * right slot for the purposes of `panelRegions`, and the keyboard `Move
  * →` menu on either half dispatches the same `onMove(target)` setter.
+ *
+ * v0.82 P2 (ADR-0025): adds `onFloatToggleOutline` /
+ * `onFloatToggleProperties` + `outlineFloating` / `propertiesFloating`.
+ * Each sub-panel can be lifted into its own FloatingPanel portal —
+ * independently. The parent (`App.tsx`) gates render: when a sub-panel
+ * is floating, RightDock simply omits that section from the dock grid
+ * and the FloatingPanel portal takes over.
  */
 
 import type { DragEvent, ReactNode } from "react";
@@ -47,6 +54,11 @@ interface Props {
    * perspective, so a single shared setter applies to the whole pair.
    */
   onMove?: (target: DockableRegion) => void;
+  /** v0.82 P2 (ADR-0025): float-toggle per sub-panel. */
+  onFloatToggleOutline?: () => void;
+  onFloatToggleProperties?: () => void;
+  outlineFloating?: boolean;
+  propertiesFloating?: boolean;
 }
 
 export default function RightDock({
@@ -66,6 +78,10 @@ export default function RightDock({
   onResetSplit,
   onOpen,
   onMove,
+  onFloatToggleOutline,
+  onFloatToggleProperties,
+  outlineFloating,
+  propertiesFloating,
 }: Props) {
   // Tier 1c + v0.82 P1: stamp canonical panel ids. The DOM-rooted
   // `data-panel-id` selectors (`right-outline`, `right-properties`) stay
@@ -103,7 +119,7 @@ export default function RightDock({
       data-testid="dock-right"
       data-panel-id="right"
     >
-      {outlineVisible && (
+      {outlineVisible && !outlineFloating && (
         <>
           <div
             className="dock dock-right-top"
@@ -120,6 +136,8 @@ export default function RightDock({
               onToggleCollapse={onToggleCollapseOutline}
               onClose={onCloseOutline}
               onMove={onMove}
+              onFloatToggle={onFloatToggleOutline}
+              floating={outlineFloating}
             />
             {!outlineCollapsed && (
               <DockBody testId="dock-right-outline-body">{outline}</DockBody>
@@ -135,7 +153,7 @@ export default function RightDock({
           )}
         </>
       )}
-      {propertiesVisible && (
+      {propertiesVisible && !propertiesFloating && (
         <div
           className="dock dock-right-bottom"
           style={{ flexBasis: `${100 - topHeightPct}%` }}
@@ -151,6 +169,8 @@ export default function RightDock({
             onToggleCollapse={onToggleCollapseProperties}
             onClose={onCloseProperties}
             onMove={onMove}
+            onFloatToggle={onFloatToggleProperties}
+            floating={propertiesFloating}
           />
           {!propertiesCollapsed && (
             <DockBody testId="dock-right-properties-body">
