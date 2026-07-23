@@ -42,6 +42,9 @@ export interface MenuBarProps {
   onTogglePropertiesDock?: () => void;
   onToggleFullscreen?: () => void;
   onResetLayout?: () => void;
+  // v0.81 Tier 1b — Workspace preset menu wiring.
+  onApplyPreset?: (presetId: string) => void;
+  onSaveWorkspacePreset?: () => void;
 }
 
 export default function MenuBar({
@@ -71,6 +74,8 @@ export default function MenuBar({
   onTogglePropertiesDock,
   onToggleFullscreen,
   onResetLayout,
+  onApplyPreset,
+  onSaveWorkspacePreset,
 }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const { scenes } = useScenes();
@@ -105,6 +110,8 @@ export default function MenuBar({
         handleTogglePropertiesDock: onTogglePropertiesDock,
         handleToggleFullscreen: onToggleFullscreen,
         handleResetLayout: onResetLayout,
+        handleApplyPreset: onApplyPreset,
+        handleSaveWorkspacePreset: onSaveWorkspacePreset,
         setTheme,
         selectedEntityId,
         editorMode,
@@ -133,6 +140,8 @@ export default function MenuBar({
       onTogglePropertiesDock,
       onToggleFullscreen,
       onResetLayout,
+      onApplyPreset,
+      onSaveWorkspacePreset,
       selectedEntityId,
       setTheme,
     ],

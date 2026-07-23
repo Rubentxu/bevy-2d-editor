@@ -12,7 +12,12 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useDockPrefs, DEFAULT_DOCK_PREFS, type DockPrefs } from "./useDockPrefs";
+import {
+  useDockPrefs,
+  DEFAULT_DOCK_PREFS,
+  type DockPrefs,
+} from "./useDockPrefs";
+import { BUILTIN_PRESETS } from "../data/workspacePresets";
 
 const CSS_VAR_LEFT = "--dock-left-w";
 const CSS_VAR_RIGHT = "--dock-right-w";
@@ -38,7 +43,13 @@ function applyCssVar(name: string, value: string): void {
 }
 
 export function useDockResize() {
-  const { load, scheduleSave } = useDockPrefs();
+  const {
+    load,
+    scheduleSave,
+    applyPreset: applyPresetPrefs,
+    saveCurrentAsPreset: saveCurrentAsPresetPrefs,
+    deleteUserPreset: deleteUserPresetPrefs,
+  } = useDockPrefs();
   const [prefs, setPrefs] = useState<DockPrefs>(DEFAULT_DOCK_PREFS);
   // Track whether the initial load has completed so we don't fight the default.
   const [hydrated, setHydrated] = useState(false);
@@ -168,6 +179,40 @@ export function useDockResize() {
     setPrefs(DEFAULT_DOCK_PREFS);
   }, []);
 
+  // ── Workspace presets (v0.81 Tier 1b) ──────────────────────────────────
+  // These three methods forward to the useDockPrefs service layer. They
+  // mutate the local React state so the dock reflects the new layout
+  // immediately; the existing `scheduleSave` effect will persist to OPFS
+  // on its normal 500ms debounce.
+  const applyPreset = useCallback(
+    (presetId: string) => {
+      setPrefs((prev) => applyPresetPrefs(prev, presetId));
+    },
+    [applyPresetPrefs],
+  );
+
+  const saveCurrentAsPreset = useCallback(
+    (name: string) => {
+      // Read the latest prefs from the ref so we capture the user's most
+      // recent tweaks (those that haven't been debounced into state yet).
+      let createdId = "";
+      setPrefs((prev) => {
+        const { next, id } = saveCurrentAsPresetPrefs(prev, name);
+        createdId = id;
+        return next;
+      });
+      return createdId;
+    },
+    [saveCurrentAsPresetPrefs],
+  );
+
+  const deleteUserPreset = useCallback(
+    (presetId: string) => {
+      setPrefs((prev) => deleteUserPresetPrefs(prev, presetId));
+    },
+    [deleteUserPresetPrefs],
+  );
+
   return {
     prefs,
     hydrated,
@@ -181,5 +226,9 @@ export function useDockResize() {
     toggleOutline,
     toggleProperties,
     reset,
+    applyPreset,
+    saveCurrentAsPreset,
+    deleteUserPreset,
+    builtinPresets: BUILTIN_PRESETS,
   };
 }

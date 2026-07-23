@@ -977,6 +977,17 @@ function AppInner() {
               onTogglePropertiesDock={dock.toggleProperties}
               onToggleFullscreen={fullscreen.toggle}
               onResetLayout={dock.reset}
+              onApplyPreset={dock.applyPreset}
+              onSaveWorkspacePreset={() => {
+                // `window.prompt` keeps v0.81 Tier 1b dependency-free; a
+                // dedicated modal can replace this once Tier 1c lands.
+                const name = window.prompt(
+                  "Save workspace as (e.g. 'level-design'):",
+                  "",
+                );
+                if (!name) return;
+                dock.saveCurrentAsPreset(name);
+              }}
             />
             {editorMode === "play" && <GameOverlay onStop={handleTogglePlay} />}
           </>
