@@ -72,4 +72,61 @@ test.describe("Asset Pipeline", () => {
     expect(hasImportAssetFile).toBe(true);
     expect(hasDeleteAssetFile).toBe(true);
   });
+
+  /**
+   * Read-after-write gate for the OPFS catalog (ADR-0019).
+   *
+   * Creates a Scene Asset and asserts the catalog JSON reflects the new
+   * entry. The `create_scene_asset` bridge is awaited so by the time the
+   * Promise resolves both the in-memory catalog and the project.json write
+   * have completed (ADR-0019). A regression in either ordering — most
+   * commonly a missing `update_project_metadata_for_asset` await — would
+   * cause the polled catalog to never contain the new id and the gate
+   * would time out cleanly here.
+   *
+   * Uses the same `waitForFunction` gate as `seedOneAsset` in
+   * scene-component-authoring.spec.ts — that pattern was proven
+   * deterministic across the OPFS flake-fix cycle.
+   */
+  test("opfs_read_after_write: project.json round-trip preserves catalog entry", async ({
+    page,
+  }) => {
+    await page.waitForFunction(
+      () =>
+        typeof (window as any).create_scene_asset === "function" &&
+        typeof (window as any).get_scene_asset_catalog_json === "function",
+      { timeout: WASM_LOAD_TIMEOUT },
+    );
+
+    const assetName = `Pr1Raw_${Date.now()}`;
+    // Awaited write — `create_scene_asset` returns once both the
+    // in-memory catalog and project.json are durably updated.
+    const entryJson = await page.evaluate(
+      async (n: string) =>
+        await (window as any).create_scene_asset(n, "actor"),
+      assetName,
+    );
+    const entry = JSON.parse(entryJson);
+
+    // Polled read-after-write: the catalog JSON must contain the entry.
+    // Bounded by 5s — fast in green runs; surfaces a concrete failure if
+    // the await ordering regresses.
+    await page.waitForFunction(
+      (id) => {
+        const raw =
+          (window as any).get_scene_asset_catalog_json?.() ?? "[]";
+        const arr = typeof raw === "string" ? JSON.parse(raw) : raw;
+        return Array.isArray(arr) && arr.some((e: any) => e.asset_id === id);
+      },
+      entry.asset_id,
+      { timeout: 5_000 },
+    );
+
+    const listAfter = await page.evaluate(() =>
+      (window as any).get_scene_asset_catalog_json(),
+    );
+    const arrAfter =
+      typeof listAfter === "string" ? JSON.parse(listAfter) : listAfter;
+    expect(arrAfter.some((e: any) => e.asset_id === entry.asset_id)).toBe(true);
+  });
 });
