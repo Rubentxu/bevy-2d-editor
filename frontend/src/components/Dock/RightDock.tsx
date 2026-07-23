@@ -5,13 +5,24 @@
  * The vertical split ratio lives in `topHeightPct` (default 60%) so the user
  * can drag the divider to resize the two sections independently from the
  * outer right-dock width.
+ *
+ * v0.82 P1 (ADR-0024): the right region is treated as one swap unit. The
+ * outline and properties sub-panels share a single drag source: dragging
+ * EITHER header moves the whole right-region pair to the destination.
+ * Because the v0.82 P1 spec scopes the swap to "active panels" and `data-
+ * panel-id` is unchanged for the E2E selectors, we publish the canonical
+ * id `"outline"` on the outline header and `"properties"` on the
+ * properties header. The reducer treats both as a swap of the whole
+ * right slot for the purposes of `panelRegions`, and the keyboard `Move
+ * →` menu on either half dispatches the same `onMove(target)` setter.
  */
 
 import type { DragEvent, ReactNode } from "react";
 import DockHeader from "./DockHeader";
 import DockBody from "./DockBody";
 import DockDivider from "./DockDivider";
-import { DOCK_PANEL_MIME } from "./DockPanel";
+import { stampDockPanelDrag } from "./drag-payload";
+import type { DockableRegion } from "../../hooks/useDockPrefs";
 
 interface Props {
   visible: boolean;
@@ -29,6 +40,13 @@ interface Props {
   onResizeSplit: (deltaPx: number) => void;
   onResetSplit: () => void;
   onOpen: () => void;
+  /**
+   * Optional keyboard-equivalent for the v0.82 P1 `Move →` menu. Either
+   * header accepts the same target value — both `outline` and
+   * `properties` live in the right region from the `panelRegions`
+   * perspective, so a single shared setter applies to the whole pair.
+   */
+  onMove?: (target: DockableRegion) => void;
 }
 
 export default function RightDock({
@@ -47,18 +65,17 @@ export default function RightDock({
   onResizeSplit,
   onResetSplit,
   onOpen,
+  onMove,
 }: Props) {
-  // Tier 1c: stamp each half-panel id into the dataTransfer so the future
-  // region-swap hook (v0.82) knows which panel the user picked up.
+  // Tier 1c + v0.82 P1: stamp canonical panel ids. The DOM-rooted
+  // `data-panel-id` selectors (`right-outline`, `right-properties`) stay
+  // for legacy tests; the dataTransfer payload is the canonical id
+  // matching the `panelRegions` key.
   const handleOutlineDragStart = (e: DragEvent<HTMLDivElement>) => {
-    e.dataTransfer.setData(DOCK_PANEL_MIME, "outline");
-    e.dataTransfer.setData("text/plain", "outline");
-    e.dataTransfer.effectAllowed = "move";
+    stampDockPanelDrag(e.dataTransfer, "outline");
   };
   const handlePropertiesDragStart = (e: DragEvent<HTMLDivElement>) => {
-    e.dataTransfer.setData(DOCK_PANEL_MIME, "properties");
-    e.dataTransfer.setData("text/plain", "properties");
-    e.dataTransfer.effectAllowed = "move";
+    stampDockPanelDrag(e.dataTransfer, "properties");
   };
 
   if (!visible) {
@@ -81,7 +98,11 @@ export default function RightDock({
   }
 
   return (
-    <div className="dock dock-right" data-testid="dock-right" data-panel-id="right">
+    <div
+      className="dock dock-right"
+      data-testid="dock-right"
+      data-panel-id="right"
+    >
       {outlineVisible && (
         <>
           <div
@@ -98,6 +119,7 @@ export default function RightDock({
               onDragStart={handleOutlineDragStart}
               onToggleCollapse={onToggleCollapseOutline}
               onClose={onCloseOutline}
+              onMove={onMove}
             />
             {!outlineCollapsed && (
               <DockBody testId="dock-right-outline-body">{outline}</DockBody>
@@ -128,9 +150,12 @@ export default function RightDock({
             onDragStart={handlePropertiesDragStart}
             onToggleCollapse={onToggleCollapseProperties}
             onClose={onCloseProperties}
+            onMove={onMove}
           />
           {!propertiesCollapsed && (
-            <DockBody testId="dock-right-properties-body">{properties}</DockBody>
+            <DockBody testId="dock-right-properties-body">
+              {properties}
+            </DockBody>
           )}
         </div>
       )}

@@ -15,7 +15,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   useDockPrefs,
   DEFAULT_DOCK_PREFS,
+  movePanel as movePanelReducer,
   type DockPrefs,
+  type DockableRegion,
+  type PanelId,
 } from "./useDockPrefs";
 import { BUILTIN_PRESETS } from "../data/workspacePresets";
 
@@ -49,6 +52,7 @@ export function useDockResize() {
   const {
     load,
     scheduleSave,
+    flushSave,
     applyPreset: applyPresetPrefs,
     saveCurrentAsPreset: saveCurrentAsPresetPrefs,
     deleteUserPreset: deleteUserPresetPrefs,
@@ -96,6 +100,22 @@ export function useDockResize() {
     if (!hydrated) return;
     scheduleSave(prefs);
   }, [prefs, hydrated, scheduleSave]);
+
+  // Rapid-reload race guard (ADR-0024 §Consequences): flush the pending
+  // debounce synchronously on `beforeunload` so an immediate reload after a
+  // `movePanel` (and the resulting "clear preset" state) cannot race the
+  // 500 ms debounce window. The listener is bound once and cleaned up on
+  // unmount.
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handler = () => {
+      flushSave();
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => {
+      window.removeEventListener("beforeunload", handler);
+    };
+  }, [flushSave]);
 
   const setLeftWidth = useCallback((w: number) => {
     setPrefs((prev) => ({
@@ -244,6 +264,18 @@ export function useDockResize() {
     [deleteUserPresetPrefs],
   );
 
+  // ── Drag-and-dock region swap (v0.82 P1, ADR-0024) ─────────────────────
+  // Single setter invoked by both pointer drop (DockLayout) and the
+  // keyboard `Move →` menu (DockHeader). The reducer in `useDockPrefs`
+  // implements the atomic-swap rule (same region → no-op, collision →
+  // exchange, empty destination → re-home) and always clears
+  // `activePreset` to surface the manual-customization state. The
+  // existing `scheduleSave` effect debounces the OPFS write to 500 ms;
+  // `beforeunload` (above) flushes the pending write synchronously.
+  const movePanel = useCallback((panelId: PanelId, target: DockableRegion) => {
+    setPrefs((prev) => movePanelReducer(prev, panelId, target));
+  }, []);
+
   return {
     prefs,
     hydrated,
@@ -263,6 +295,7 @@ export function useDockResize() {
     applyPreset,
     saveCurrentAsPreset,
     deleteUserPreset,
+    movePanel,
     builtinPresets: BUILTIN_PRESETS,
   };
 }

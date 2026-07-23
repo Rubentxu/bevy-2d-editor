@@ -1,14 +1,43 @@
+/**
+ * BottomDock — tabbed tools dock (Phase B + tier 2c).
+ *
+ * Hosts console / search / output / problems tabs. The active tab lives in
+ * local component state because in-page tab selection is short-lived and
+ * not worth a row in `DockPrefs.panelRegions`. The `panelRegions` model
+ * sees the whole bottom dock as one swap unit: drag of the tab strip
+ * header publishes the canonical `"bottom"` id, matching the v0.82 P1
+ * reducer and the `Move →` menu dispatched by App. The internal tab
+ * state is orthogonal — a swap puts a different panel id at the bottom
+ * slot, the user's previous tab stickiness still controls what they see
+ * when a future swap returns `bottom` to its original slot.
+ */
+
 import { useState, type DragEvent } from "react";
 import ConsoleTab from "../ConsoleTab";
 import OutputTab from "../OutputTab";
 import ProblemsTab from "../ProblemsTab";
 import SearchTab from "../SearchTab";
-import { DOCK_PANEL_MIME } from "./DockPanel";
+import { stampDockPanelDrag } from "./drag-payload";
+import type { DockableRegion } from "../../hooks/useDockPrefs";
 
 interface Props {
   visible: boolean;
   onToggle: () => void;
   onClose: () => void;
+  /**
+   * v0.82 P1 keyboard-equivalent (ADR-0024). Fires the same `movePanel`
+   * setter pointer drops invoke, plus the heading announcer in
+   * `DockHeader`. The bottom dock currently does not render a DockHeader
+   * (it owns its own `<header class="bottom-dock-header">`) so the menu
+   * lives on the dedicated `Move →` button below.
+   */
+  onMove?: (target: DockableRegion) => void;
+  /**
+   * Friendly name announced when the user moves the panel via the
+   * keyboard menu (defaults to "Tools" — same string used in the
+   * existing `aria-label`).
+   */
+  panelTitle?: string;
 }
 
 type BottomDockTab = "console" | "search" | "output" | "problems";
@@ -25,15 +54,21 @@ const TABS: {
   { id: "problems", label: "Problems", icon: "⚠", count: 0 },
 ];
 
-export default function BottomDock({ visible, onToggle, onClose }: Props) {
+export default function BottomDock({
+  visible,
+  onToggle,
+  onClose,
+  onMove,
+  panelTitle = "Tools",
+}: Props) {
   const [activeTab, setActiveTab] = useState<BottomDockTab>("console");
 
-  // Tier 1c: when the user grabs the tab strip, stamp the active tab id so
-  // the region-swap hook (v0.82) can decide which bottom panel to relocate.
+  // v0.82 P1: stamp the canonical bottom-panel id rather than the legacy
+  // `bottom-${activeTab}` shape. The `panelRegions` model treats the
+  // bottom dock as one swap unit; per-tab granularity is out of scope
+  // (ADR-0024 §Consequences).
   const handleDragStart = (e: DragEvent<HTMLDivElement>) => {
-    e.dataTransfer.setData(DOCK_PANEL_MIME, `bottom-${activeTab}`);
-    e.dataTransfer.setData("text/plain", `bottom-${activeTab}`);
-    e.dataTransfer.effectAllowed = "move";
+    stampDockPanelDrag(e.dataTransfer, "bottom");
   };
 
   if (!visible) return null;
@@ -75,6 +110,57 @@ export default function BottomDock({ visible, onToggle, onClose }: Props) {
             </button>
           ))}
         </div>
+        {onMove && (
+          <div className="bottom-dock-move">
+            <button
+              type="button"
+              className="bottom-dock-action bottom-dock-action-move"
+              data-testid="dock-bottom-move"
+              aria-label={`Move ${panelTitle}`}
+              aria-haspopup="menu"
+              onClick={(e) => {
+                // Tiny inline menu so the bottom dock (which renders its
+                // own `<header>` and does not use `DockHeader`) still
+                // exposes the same destinations. Avoids a separate
+                // popover component for a 3-item list.
+                e.stopPropagation();
+                const wrap = e.currentTarget.parentElement;
+                const menu = wrap?.querySelector<HTMLElement>(
+                  ".bottom-dock-move-menu",
+                );
+                if (!menu) return;
+                const isOpen = menu.getAttribute("data-open") === "true";
+                menu.setAttribute("data-open", isOpen ? "false" : "true");
+              }}
+            >
+              Move ▾
+            </button>
+            <div
+              className="bottom-dock-move-menu"
+              role="menu"
+              data-open="false"
+              data-testid="dock-bottom-move-menu"
+            >
+              {(
+                [
+                  { value: "left" as const, label: "Move to Left" },
+                  { value: "right" as const, label: "Move to Right" },
+                ] satisfies { value: DockableRegion; label: string }[]
+              ).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  role="menuitem"
+                  className="bottom-dock-move-item"
+                  data-testid={`dock-bottom-move-${opt.value}`}
+                  onClick={() => onMove(opt.value)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <button
           className="bottom-dock-action"
           type="button"

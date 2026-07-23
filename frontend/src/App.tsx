@@ -33,6 +33,7 @@ import CheatSheet, {
 import OnboardingBanner from "./components/OnboardingBanner";
 import { useCanvasViewport } from "./hooks/useCanvasViewport";
 import { useDockResize } from "./hooks/useDockResize";
+import type { DockableRegion, PanelId } from "./hooks/useDockPrefs";
 import DockLayout from "./components/Dock/DockLayout";
 import LeftDock from "./components/Dock/LeftDock";
 import CenterDock from "./components/Dock/CenterDock";
@@ -645,6 +646,16 @@ function AppInner() {
 
   // ── Dock layout (Phase B) ──────────────────────────────────────────────────
   const dock = useDockResize();
+
+  // Drag-and-dock region swap setter (v0.82 P1, ADR-0024). Both pointer
+  // drops in DockLayout and the keyboard `Move →` menu in DockHeader /
+  // BottomDock funnel through this exact setter so the reducer in
+  // useDockResize stays the single source of truth.
+  const handleMovePanel = useCallback(
+    (panelId: PanelId, target: DockableRegion) =>
+      dock.movePanel(panelId, target),
+    [dock],
+  );
   // ── Fullscreen viewport (Phase E) ─────────────────────────────────────────
   const fullscreen = useFullscreen();
 
@@ -701,7 +712,8 @@ function AppInner() {
     // Dragging the divider UP (negative screen delta) should grow the
     // status bar; same convention as the bottom-dock divider (which is
     // `height - delta` because dragging down shrinks it).
-    (delta: number) => dock.setStatusBarHeight(dock.prefs.statusBar.height - delta),
+    (delta: number) =>
+      dock.setStatusBarHeight(dock.prefs.statusBar.height - delta),
     [dock],
   );
   const handleResizeRightSplit = useCallback(
@@ -944,6 +956,7 @@ function AppInner() {
   return (
     <div className="app">
       <DockLayout
+        onMovePanel={handleMovePanel}
         menu={
           <>
             <MenuBar
@@ -1026,6 +1039,7 @@ function AppInner() {
             collapsed={leftCollapsed}
             onToggleCollapse={() => setLeftCollapsed((v) => !v)}
             onClose={dock.toggleLeft}
+            onMove={(target) => dock.movePanel("assets", target)}
           />
         }
         center={
@@ -1209,6 +1223,7 @@ function AppInner() {
             onResizeSplit={handleResizeRightSplit}
             onResetSplit={() => dock.setRightTopHeight(60)}
             onOpen={dock.toggleRight}
+            onMove={(target) => dock.movePanel("outline", target)}
           />
         }
         bottom={
@@ -1216,6 +1231,7 @@ function AppInner() {
             visible={dock.prefs.bottom.visible && editorMode === "scene"}
             onToggle={dock.toggleBottom}
             onClose={dock.toggleBottom}
+            onMove={(target) => dock.movePanel("bottom", target)}
           />
         }
       />

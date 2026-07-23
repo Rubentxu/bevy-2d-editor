@@ -16,16 +16,21 @@
  * Region-swap behaviour is left to v0.82 — Tier 1c wires the dataflow
  * (panel id in transfer, drop handler callable) without actually moving
  * the panel DOM. Existing tests therefore keep passing unchanged.
+ *
+ * v0.82 P1 (ADR-0024): the MIME constant is now re-exported for legacy
+ * callers, but new code should import from `./drag-payload` (single
+ * source of truth). Kept here so the Tier 1c infrastructure doesn't
+ * break existing test imports.
  */
 
 import { useState, type DragEventHandler, type ReactNode } from "react";
 import DockHeader from "./DockHeader";
 import DockBody from "./DockBody";
+import { DOCK_PANEL_MIME, isDockPanelDrag } from "./drag-payload";
+
+export { DOCK_PANEL_MIME } from "./drag-payload";
 
 export type DockRegion = "left" | "center" | "right" | "bottom";
-
-/** MIME used to identify a dock panel payload during HTML5 drag. */
-export const DOCK_PANEL_MIME = "application/x-dock-panel";
 
 interface DockPanelProps {
   title: string;
@@ -62,7 +67,7 @@ export default function DockPanel({
   };
 
   const handleDragOver: DragEventHandler<HTMLElement> = (e) => {
-    if (!e.dataTransfer.types.includes(DOCK_PANEL_MIME)) return;
+    if (!isDockPanelDrag(e.dataTransfer.types)) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     if (!isDragOver) setIsDragOver(true);

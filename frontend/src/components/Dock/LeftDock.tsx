@@ -4,19 +4,28 @@
  * Renders a DockHeader "Assets" plus a DockBody that hosts AssetNavigator.
  * When the dock is collapsed the body is hidden and a slim icon strip is
  * shown so the toggle target stays reachable (per tasks.md §B.5).
+ *
+ * v0.82 P1 (ADR-0024): accepts an `onMove(target)` prop that the parent
+ * (`App`) wires into the keyboard-equivalent `Move →` menu. The
+ * dataTransfer payload published on HTML5 drag is the bare canonical
+ * panel id (`"assets"`) — not the regionalised `data-panel-id`
+ * (`"left-assets"`) — so the swap reducer and the keyboard menu stay
+ * aligned on a single identifier across every layer of the dock system.
  */
 
 import type { DragEvent } from "react";
 import DockHeader from "./DockHeader";
 import DockBody from "./DockBody";
 import AssetNavigator from "../AssetNavigator";
-import { DOCK_PANEL_MIME } from "./DockPanel";
+import { stampDockPanelDrag } from "./drag-payload";
+import type { DockableRegion } from "../../hooks/useDockPrefs";
 
 interface Props {
   visible: boolean;
   collapsed: boolean;
   onToggleCollapse: () => void;
   onClose: () => void;
+  onMove?: (target: DockableRegion) => void;
 }
 
 export default function LeftDock({
@@ -24,13 +33,13 @@ export default function LeftDock({
   collapsed,
   onToggleCollapse,
   onClose,
+  onMove,
 }: Props) {
-  // Tier 1c: tag the header so HTML5 dragstart can stamp the panel id
-  // into the dataTransfer without touching existing resize/collapse UX.
+  // Tier 1c + v0.82 P1: stamp the canonical panel id into the dataTransfer.
+  // The bare id (`"assets"`) is the `panelRegions` key — not the regional
+  // `data-panel-id` rendered on the DOM root (`"left-assets"`).
   const handleDragStart = (e: DragEvent<HTMLDivElement>) => {
-    e.dataTransfer.setData(DOCK_PANEL_MIME, "assets");
-    e.dataTransfer.setData("text/plain", "assets");
-    e.dataTransfer.effectAllowed = "move";
+    stampDockPanelDrag(e.dataTransfer, "assets");
   };
 
   if (!visible) {
@@ -66,6 +75,7 @@ export default function LeftDock({
         onDragStart={handleDragStart}
         onToggleCollapse={onToggleCollapse}
         onClose={onClose}
+        onMove={onMove}
       />
       {!collapsed && (
         <DockBody testId="dock-left-body">

@@ -11,11 +11,18 @@
  * The `applyPresetToDockPrefs` helper is pure: given a `DockPrefs` and a
  * preset, it returns a new `DockPrefs` with the preset's widths/visibilities
  * applied. This keeps the dock hook free of preset-specific branching.
+ *
+ * v0.82 P1 (ADR-0024): the preset state also captures
+ * `panelRegions`. A user who saves a layout with `outline` swapped into
+ * the left slot, and later applies that preset, expects the swap to be
+ * restored — not just the widths. `movePanel` in `useDockPrefs` clears
+ * `activePreset` automatically so manual edits don't get credited to a
+ * preset that didn't include them.
  */
 
-import type { DockPrefs } from "../hooks/useDockPrefs";
+import type { DockPrefs, PanelId, DockableRegion } from "../hooks/useDockPrefs";
 
-/** Snapshot of dock dimensions and visibility for one preset. */
+/** Snapshot of dock dimensions, visibility, and assignment for one preset. */
 export interface PresetDockState {
   leftWidth: number;
   rightWidth: number;
@@ -23,6 +30,12 @@ export interface PresetDockState {
   leftVisible: boolean;
   rightVisible: boolean;
   bottomVisible: boolean;
+  /**
+   * Panel-to-region map snapshot (v0.82 P1). Captured from
+   * `DockPrefs.panelRegions` when the preset is built and restored on
+   * apply so a user-saved layout round-trips with the swap positions.
+   */
+  panelRegions: Record<PanelId, DockableRegion>;
   /** Human-readable description shown in the menu and tooltip. */
   notes: string;
 }
@@ -40,6 +53,14 @@ export interface WorkspacePreset {
   builtin: boolean;
   state: PresetDockState;
 }
+
+/** Canonical v2 default panelRegions — used by the built-in presets. */
+const BUILTIN_PANEL_REGIONS: Record<PanelId, DockableRegion> = {
+  assets: "left",
+  outline: "right",
+  properties: "right",
+  bottom: "bottom",
+};
 
 /**
  * The three built-in "genre" presets specified in v0.81 Tier 1b, plus the
@@ -59,6 +80,7 @@ export const BUILTIN_PRESETS: readonly WorkspacePreset[] = [
       leftVisible: true,
       rightVisible: true,
       bottomVisible: true,
+      panelRegions: { ...BUILTIN_PANEL_REGIONS },
       notes: "Three-region layout. Balanced for most workflows.",
     },
   },
@@ -73,6 +95,7 @@ export const BUILTIN_PRESETS: readonly WorkspacePreset[] = [
       leftVisible: true,
       rightVisible: true,
       bottomVisible: true,
+      panelRegions: { ...BUILTIN_PANEL_REGIONS },
       notes: "Wider asset browser for sprite work; compact tools dock.",
     },
   },
@@ -87,6 +110,7 @@ export const BUILTIN_PRESETS: readonly WorkspacePreset[] = [
       leftVisible: true,
       rightVisible: true,
       bottomVisible: true,
+      panelRegions: { ...BUILTIN_PANEL_REGIONS },
       notes: "Larger Properties panel for tile/object editing.",
     },
   },
@@ -101,6 +125,7 @@ export const BUILTIN_PRESETS: readonly WorkspacePreset[] = [
       leftVisible: true,
       rightVisible: true,
       bottomVisible: true,
+      panelRegions: { ...BUILTIN_PANEL_REGIONS },
       notes: "Tall bottom dock for console + debug output.",
     },
   },
@@ -115,13 +140,14 @@ export const BUILTIN_PRESETS: readonly WorkspacePreset[] = [
       leftVisible: false,
       rightVisible: false,
       bottomVisible: false,
+      panelRegions: { ...BUILTIN_PANEL_REGIONS },
       notes: "All docks hidden. Full-screen viewport (F9).",
     },
   },
 ];
 
 /** A preset as serialized inside `DockPrefs.presets`. */
-export interface UserPresetRecord extends PresetDockState {}
+export type UserPresetRecord = PresetDockState;
 
 export interface ApplyPresetResult {
   /** The next DockPrefs with the preset applied; caller persists it. */
@@ -143,11 +169,17 @@ export function resolvePreset(
   if (builtin) return builtin;
   const user = prefs.presets?.[presetId];
   if (!user) return null;
+  // Older user-records (v0.81 / v0.82 P1 §Consequences) may omit
+  // `panelRegions`; fall back to the canonical default so an apply does
+  // not silently drop assignment-state from the live layout.
   return {
     id: presetId,
     name: presetId,
     builtin: false,
-    state: { ...user },
+    state: {
+      ...user,
+      panelRegions: user.panelRegions ?? { ...BUILTIN_PANEL_REGIONS },
+    },
   };
 }
 
@@ -155,6 +187,10 @@ export function resolvePreset(
  * Pure transformation: applies `presetId` to `prefs` and returns the new
  * DockPrefs. Preserves unrelated fields (e.g. `right.topHeight`) so we
  * don't clobber user customisations from `useDockResize`.
+ *
+ * v0.82 P1 (ADR-0024): also restores `panelRegions` from the preset
+ * record. Manual `movePanel` calls clear `activePreset` so this path is
+ * reached only when the user explicitly re-applies the saved preset.
  */
 export function applyPresetToDockPrefs(
   prefs: DockPrefs,
@@ -188,6 +224,7 @@ export function applyPresetToDockPrefs(
       height: state.bottomHeight ?? prefs.bottom.height,
       visible: state.bottomVisible,
     },
+    panelRegions: { ...state.panelRegions },
   };
   return { next, preset };
 }
@@ -196,6 +233,9 @@ export function applyPresetToDockPrefs(
  * Build the record written to `DockPrefs.presets[id]` from the current
  * prefs. The id is derived from `name` so the same prefix collapses to the
  * same row across renames.
+ *
+ * v0.82 P1: also captures `panelRegions` so user presets round-trip the
+ * drag-and-dock swap positions.
  */
 export function derivePresetId(name: string): string {
   return name
@@ -218,6 +258,7 @@ export function buildUserPresetRecord(
     // stay at their current sub-section values.
     rightVisible: prefs.right.visible,
     bottomVisible: prefs.bottom.visible,
+    panelRegions: { ...prefs.panelRegions },
     notes,
   };
 }
