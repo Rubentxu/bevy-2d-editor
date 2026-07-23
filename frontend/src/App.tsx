@@ -682,8 +682,9 @@ function AppInner() {
   // so we pass delta as-is. For the RIGHT divider the right dock grows when
   // delta is positive, so we pass -delta (drag-left widens the right column).
   const [leftCollapsed, setLeftCollapsed] = useState(false);
-  const [outlineCollapsed, setOutlineCollapsed] = useState(false);
-  const [propertiesCollapsed, setPropertiesCollapsed] = useState(false);
+  // Note: outlineCollapsed and propertiesCollapsed now live in DockPrefs
+  // (persisted to OPFS) instead of local useState so they survive reloads.
+  // See useDockPrefs.toggleOutlineCollapsed / togglePropertiesCollapsed.
   const handleResizeLeft = useCallback(
     (delta: number) => dock.setLeftWidth(dock.prefs.left.width + delta),
     [dock],
@@ -694,6 +695,13 @@ function AppInner() {
   );
   const handleResizeBottom = useCallback(
     (delta: number) => dock.setBottomHeight(dock.prefs.bottom.height - delta),
+    [dock],
+  );
+  const handleResizeStatusBar = useCallback(
+    // Dragging the divider UP (negative screen delta) should grow the
+    // status bar; same convention as the bottom-dock divider (which is
+    // `height - delta` because dragging down shrinks it).
+    (delta: number) => dock.setStatusBarHeight(dock.prefs.statusBar.height - delta),
     [dock],
   );
   const handleResizeRightSplit = useCallback(
@@ -1001,12 +1009,15 @@ function AppInner() {
         leftWidth={dock.prefs.left.width}
         rightWidth={dock.prefs.right.width}
         bottomHeight={dock.prefs.bottom.height}
+        statusBarHeight={dock.prefs.statusBar.height}
         onResizeLeft={handleResizeLeft}
         onResizeRight={handleResizeRight}
         onResizeBottom={handleResizeBottom}
+        onResizeStatusBar={handleResizeStatusBar}
         onResetLeft={() => dock.setLeftWidth(280)}
         onResetRight={() => dock.setRightWidth(320)}
         onResetBottom={() => dock.setBottomHeight(240)}
+        onResetStatusBar={() => dock.setStatusBarHeight(24)}
         leftVisible={dock.prefs.left.visible}
         bottomVisible={dock.prefs.bottom.visible && editorMode === "scene"}
         left={
@@ -1063,8 +1074,8 @@ function AppInner() {
             visible={dock.prefs.right.visible}
             outlineVisible={dock.prefs.right.outlineVisible}
             propertiesVisible={dock.prefs.right.propertiesVisible}
-            outlineCollapsed={outlineCollapsed}
-            propertiesCollapsed={propertiesCollapsed}
+            outlineCollapsed={dock.prefs.right.outlineCollapsed}
+            propertiesCollapsed={dock.prefs.right.propertiesCollapsed}
             topHeightPct={dock.prefs.right.topHeight}
             outline={
               <div className="dock-content dock-content-outline">
@@ -1191,8 +1202,8 @@ function AppInner() {
                   ))}
               </div>
             }
-            onToggleCollapseOutline={() => setOutlineCollapsed((v) => !v)}
-            onToggleCollapseProperties={() => setPropertiesCollapsed((v) => !v)}
+            onToggleCollapseOutline={dock.toggleOutlineCollapsed}
+            onToggleCollapseProperties={dock.togglePropertiesCollapsed}
             onCloseOutline={dock.toggleOutline}
             onCloseProperties={dock.toggleProperties}
             onResizeSplit={handleResizeRightSplit}
