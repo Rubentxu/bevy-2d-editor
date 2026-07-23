@@ -56,6 +56,12 @@
   --radius-lg: 10px;
 
   /* ── Z-index scale ─────────────────────────────────────────────────────── */
+  /* Floating panels (v0.82 P2, ADR-0025) sit *below* dropdowns so a
+   * dropdown menu opened from inside a floating panel can still occlude
+   * the panel chrome. The float pair stays adjacent so a single
+   * sibling-header click promotes the focused one. */
+  --z-floating-panel: 50;
+  --z-floating-panel-focused: 51;
   --z-dropdown: 100;
   --z-sticky: 200; /* toolbar, status bar, scene tabs */
   --z-modal-backdrop: 900;

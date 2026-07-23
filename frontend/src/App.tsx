@@ -33,10 +33,15 @@ import CheatSheet, {
 import OnboardingBanner from "./components/OnboardingBanner";
 import { useCanvasViewport } from "./hooks/useCanvasViewport";
 import { useDockResize } from "./hooks/useDockResize";
-import type { DockableRegion, PanelId } from "./hooks/useDockPrefs";
+import type {
+  DockableRegion,
+  FloatingPanelState,
+  PanelId,
+} from "./hooks/useDockPrefs";
 import DockLayout from "./components/Dock/DockLayout";
 import LeftDock from "./components/Dock/LeftDock";
 import CenterDock from "./components/Dock/CenterDock";
+import { FloatingPanel } from "./components/FloatingPanel/FloatingPanel";
 import RightDock from "./components/Dock/RightDock";
 import BottomDock from "./components/Dock/BottomDock";
 import AssetNavigator from "./components/AssetNavigator";
@@ -647,6 +652,70 @@ function AppInner() {
   // ── Dock layout (Phase B) ──────────────────────────────────────────────────
   const dock = useDockResize();
 
+  // v0.82 P2 (ADR-0025): floating panels — the set of panel ids currently
+  // lifted out of the CSS-Grid layout into a `createPortal(…)` overlay.
+  // Derived from `dock.prefs.floats` keys so persistence and runtime
+  // state are aligned. A `focusedFloatingPanel` (single id) drives the
+  // `--z-floating-panel-focused` z-index bump on the most recently
+  // clicked float header.
+  const floatingPanelIds = useMemo<Set<PanelId>>(
+    () => new Set(Object.keys(dock.prefs.floats) as PanelId[]),
+    [dock.prefs.floats],
+  );
+  const [focusedFloatingPanel, setFocusedFloatingPanel] =
+    useState<PanelId | null>(null);
+
+  /**
+   * Lift a docked panel into the floating state. Computes a sensible
+   * default rect anchored near the top-left of the viewport the first
+   * time a panel floats; subsequent toggles keep the previous rect.
+   */
+  const handleFloatPanel = useCallback(
+    (panelId: PanelId) => {
+      const existing = dock.prefs.floats[panelId];
+      if (existing) {
+        // Already floating — toggle off: dock it.
+        dock.removeFloat(panelId);
+        return;
+      }
+      // Seed rect sized per panel id: left/right regions are narrower
+      // (matching the canonical dock widths); outline/properties are
+      // mirrored widths; assets + bottom get wider defaults.
+      const width =
+        panelId === "bottom"
+          ? 720
+          : Math.max(
+              280,
+              dock.prefs.left.width || dock.prefs.right.width || 320,
+            );
+      const height = panelId === "bottom" ? 280 : 420;
+      const rect: FloatingPanelState = {
+        x:
+          typeof window === "undefined"
+            ? 64
+            : Math.max(0, Math.floor(window.innerWidth * 0.06)),
+        y:
+          typeof window === "undefined"
+            ? 64
+            : Math.max(0, Math.floor(window.innerHeight * 0.08)),
+        width,
+        height,
+        last_floated_at: Date.now(),
+      };
+      dock.setFloatRect(panelId, rect);
+      setFocusedFloatingPanel(panelId);
+    },
+    [dock],
+  );
+
+  const handleDockFloatingPanel = useCallback(
+    (panelId: PanelId) => {
+      dock.removeFloat(panelId);
+      if (focusedFloatingPanel === panelId) setFocusedFloatingPanel(null);
+    },
+    [dock, focusedFloatingPanel],
+  );
+
   // Drag-and-dock region swap setter (v0.82 P1, ADR-0024). Both pointer
   // drops in DockLayout and the keyboard `Move →` menu in DockHeader /
   // BottomDock funnel through this exact setter so the reducer in
@@ -1034,13 +1103,17 @@ function AppInner() {
         leftVisible={dock.prefs.left.visible}
         bottomVisible={dock.prefs.bottom.visible && editorMode === "scene"}
         left={
-          <LeftDock
-            visible={dock.prefs.left.visible}
-            collapsed={leftCollapsed}
-            onToggleCollapse={() => setLeftCollapsed((v) => !v)}
-            onClose={dock.toggleLeft}
-            onMove={(target) => dock.movePanel("assets", target)}
-          />
+          floatingPanelIds.has("assets") ? null : (
+            <LeftDock
+              visible={dock.prefs.left.visible}
+              collapsed={leftCollapsed}
+              onToggleCollapse={() => setLeftCollapsed((v) => !v)}
+              onClose={dock.toggleLeft}
+              onMove={(target) => dock.movePanel("assets", target)}
+              onFloatToggle={() => handleFloatPanel("assets")}
+              floating={false}
+            />
+          )
         }
         center={
           <CenterDock
@@ -1091,6 +1164,10 @@ function AppInner() {
             outlineCollapsed={dock.prefs.right.outlineCollapsed}
             propertiesCollapsed={dock.prefs.right.propertiesCollapsed}
             topHeightPct={dock.prefs.right.topHeight}
+            outlineFloating={floatingPanelIds.has("outline")}
+            propertiesFloating={floatingPanelIds.has("properties")}
+            onFloatToggleOutline={() => handleFloatPanel("outline")}
+            onFloatToggleProperties={() => handleFloatPanel("properties")}
             outline={
               <div className="dock-content dock-content-outline">
                 {editorMode === "scene" && (
@@ -1227,14 +1304,69 @@ function AppInner() {
           />
         }
         bottom={
-          <BottomDock
-            visible={dock.prefs.bottom.visible && editorMode === "scene"}
-            onToggle={dock.toggleBottom}
-            onClose={dock.toggleBottom}
-            onMove={(target) => dock.movePanel("bottom", target)}
-          />
+          floatingPanelIds.has("bottom") ? null : (
+            <BottomDock
+              visible={dock.prefs.bottom.visible && editorMode === "scene"}
+              onToggle={dock.toggleBottom}
+              onClose={dock.toggleBottom}
+              onMove={(target) => dock.movePanel("bottom", target)}
+              onFloatToggle={() => handleFloatPanel("bottom")}
+              floating={false}
+            />
+          )
         }
       />
+      {/* v0.82 P2 (ADR-0025) floating panels — render portals for any
+       * panel id whose entry lives in `dock.prefs.floats`. Each portal
+       * hosts a lightweight body that points the user back at the dock
+       * region it lifted from; filling the floating portal with the
+       * full docked content (Inspector / Hierarchy / AssetNavigator
+       * / BottomDock tabs) is the next iteration. */}
+      {Array.from(floatingPanelIds).map((panelId) => {
+        const rect = dock.prefs.floats[panelId];
+        if (!rect) return null;
+        const titles: Record<PanelId, string> = {
+          assets: "Assets",
+          outline: "Outline",
+          properties: "Properties",
+          bottom: "Tools",
+        };
+        return (
+          <FloatingPanel
+            key={panelId}
+            panelId={panelId}
+            title={titles[panelId]}
+            initialRect={rect}
+            focused={focusedFloatingPanel === panelId}
+            onFocus={() => setFocusedFloatingPanel(panelId)}
+            onDock={() => handleDockFloatingPanel(panelId)}
+            onPersistRect={(next) => dock.setFloatRect(panelId, next)}
+          >
+            <div
+              className="floating-panel-placeholder"
+              data-testid={`floating-panel-${panelId}-body`}
+              style={{
+                padding: 12,
+                color: "var(--color-ink-muted, #999)",
+                fontSize: 13,
+              }}
+            >
+              <p>
+                <strong>{titles[panelId]}</strong> panel — currently floating.
+              </p>
+              <p style={{ marginTop: 8 }}>
+                Drag this header to reposition, click the <kbd>×</kbd> in the
+                header to dock back into its grid cell, or press
+                <kbd> Shift+F </kbd> while this panel has focus.
+              </p>
+              <p style={{ marginTop: 8 }}>
+                Position: x=<code>{rect.x}</code>, y=<code>{rect.y}</code>, w=
+                <code>{rect.width}</code>, h=<code>{rect.height}</code>.
+              </p>
+            </div>
+          </FloatingPanel>
+        );
+      })}
       {exportRustOpen && (
         <ExportRustModal onClose={() => setExportRustOpen(false)} />
       )}

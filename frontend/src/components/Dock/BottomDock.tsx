@@ -38,6 +38,14 @@ interface Props {
    * existing `aria-label`).
    */
   panelTitle?: string;
+  /**
+   * v0.82 P2 (ADR-0025): float-toggle wiring. When set, an additional
+   * `Float` / `Dock` button is rendered next to the `Move` button on
+   * the bottom-dock header. When `floating` is true the dock renders
+   * nothing (`App.tsx` gates this via `floatingPanelIds`).
+   */
+  onFloatToggle?: () => void;
+  floating?: boolean;
 }
 
 type BottomDockTab = "console" | "search" | "output" | "problems";
@@ -60,6 +68,8 @@ export default function BottomDock({
   onClose,
   onMove,
   panelTitle = "Tools",
+  onFloatToggle,
+  floating,
 }: Props) {
   const [activeTab, setActiveTab] = useState<BottomDockTab>("console");
 
@@ -71,7 +81,7 @@ export default function BottomDock({
     stampDockPanelDrag(e.dataTransfer, "bottom");
   };
 
-  if (!visible) return null;
+  if (!visible || floating) return null;
 
   return (
     <aside
@@ -160,6 +170,19 @@ export default function BottomDock({
               ))}
             </div>
           </div>
+        )}
+        {onFloatToggle && (
+          <button
+            className="bottom-dock-action"
+            type="button"
+            data-testid="dock-bottom-float"
+            aria-label={`Float ${panelTitle} (Shift+F)`}
+            aria-pressed={floating ? "true" : "false"}
+            title="Float panel (Shift+F)"
+            onClick={onFloatToggle}
+          >
+            Float
+          </button>
         )}
         <button
           className="bottom-dock-action"

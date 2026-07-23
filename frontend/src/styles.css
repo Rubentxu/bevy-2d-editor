@@ -3331,6 +3331,32 @@
   margin-left: auto;
 }
 
+/* v0.82 P2 (ADR-0025): Float / Dock toggle button in dock headers. */
+.dock-header-float-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border-hi);
+  background: transparent;
+  color: var(--color-ink-muted);
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  margin-left: 6px;
+}
+.dock-header-float-toggle:hover,
+.dock-header-float-toggle:focus-visible {
+  background: var(--color-surface-hi);
+  color: var(--color-ink);
+}
+.dock-header-float-toggle[aria-pressed="true"] {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
 .dock-header-title {
   flex: 1;
   overflow: hidden;

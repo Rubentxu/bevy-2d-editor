@@ -17,6 +17,16 @@
  * would, plus emits an `aria-live="polite"` destination announcement for
  * screen-reader users. The menu is collapsed behind a single button to
  * avoid crowding the title bar.
+ *
+ * v0.82 P2 (floating panels, ADR-0025): adds an optional `Float / Dock`
+ * toggle button. When `onFloatToggle` is provided the header renders a
+ * single button whose label flips between "Float" (panel currently
+ * docked — click to lift into the floating overlay) and "Dock" (panel
+ * currently floating — click to snap back into its grid cell). The
+ * keyboard shortcut is `Shift+F` and the visual state is mirrored by
+ * the `floating` boolean prop so the menu label stays accurate even
+ * when the App-level floating state changes outside the header (e.g.
+ * via the floating panel's own `×` close button).
  */
 
 import { useEffect, useRef, useState, type DragEventHandler } from "react";
@@ -42,6 +52,15 @@ interface Props {
    * screen-reader users get the same feedback as sighted drop targets.
    */
   onMove?: (target: DockableRegion) => void;
+  /**
+   * Optional v0.82 P2 float toggle (ADR-0025). When provided, the header
+   * renders a `Float / Dock` button next to the `Move ▾` menu. The
+   * `floating` boolean controls the label; clicking invokes the
+   * callback so the parent (`App.tsx`) can update its floating state
+   * and persist the new rect.
+   */
+  onFloatToggle?: () => void;
+  floating?: boolean;
 }
 
 const MOVE_OPTIONS: { value: DockableRegion; label: string }[] = [
@@ -59,11 +78,15 @@ export default function DockHeader({
   draggable,
   onDragStart,
   onMove,
+  onFloatToggle,
+  floating,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [announcement, setAnnouncement] = useState<string>("");
   const menuRef = useRef<HTMLDivElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const floatBtnRef = useRef<HTMLButtonElement | null>(null);
+  const headerRef = useRef<HTMLDivElement | null>(null);
 
   // Dismiss the menu on outside-click and on Escape. Keeps keyboard focus
   // inside the panel header so the user can keep invoking menu items.
@@ -89,6 +112,29 @@ export default function DockHeader({
     };
   }, [menuOpen]);
 
+  // v0.82 P2 (ADR-0025): Shift+F toggles the floating state while the
+  // header (or any descendant) has focus. We listen on `keydown` only;
+  // the float button is also clickable for mouse users.
+  useEffect(() => {
+    if (!onFloatToggle) return undefined;
+    const root = headerRef.current ?? null;
+    const handler = (ev: KeyboardEvent) => {
+      if (!ev.shiftKey) return;
+      if (ev.key !== "F" && ev.key !== "f") return;
+      // Must come from focus inside the header element.
+      const tgt = ev.target as Node | null;
+      if (!root || !tgt || !root.contains(tgt)) return;
+      if (ev.altKey || ev.ctrlKey || ev.metaKey) return;
+      ev.preventDefault();
+      onFloatToggle();
+    };
+    // We attach to document so the shortcut works from anywhere inside
+    // the header subtree, including the panel content; the `root`
+    // contains() check keeps it scoped to this header.
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onFloatToggle]);
+
   const handleSelect = (target: DockableRegion) => {
     setMenuOpen(false);
     if (!onMove) return;
@@ -102,6 +148,7 @@ export default function DockHeader({
 
   return (
     <div
+      ref={headerRef}
       className="dock-header"
       data-testid={testId}
       draggable={draggable || undefined}
@@ -157,6 +204,25 @@ export default function DockHeader({
             </div>
           )}
         </div>
+      )}
+      {onFloatToggle && (
+        <button
+          ref={floatBtnRef}
+          type="button"
+          className="dock-header-float-toggle"
+          aria-label={
+            floating ? `Dock ${title} (Shift+F)` : `Float ${title} (Shift+F)`
+          }
+          aria-pressed={floating ? "true" : "false"}
+          title={floating ? "Dock panel (Shift+F)" : "Float panel (Shift+F)"}
+          data-testid={testId ? `${testId}-float` : undefined}
+          onClick={(e) => {
+            e.stopPropagation();
+            onFloatToggle();
+          }}
+        >
+          {floating ? "Dock" : "Float"}
+        </button>
       )}
       {onClose && (
         <button

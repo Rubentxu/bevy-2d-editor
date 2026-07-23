@@ -18,6 +18,7 @@ import {
   movePanel as movePanelReducer,
   type DockPrefs,
   type DockableRegion,
+  type FloatingPanelState,
   type PanelId,
 } from "./useDockPrefs";
 import { BUILTIN_PRESETS } from "../data/workspacePresets";
@@ -276,6 +277,33 @@ export function useDockResize() {
     setPrefs((prev) => movePanelReducer(prev, panelId, target));
   }, []);
 
+  // v0.82 P2 (ADR-0025): lift a docked panel into the floating state by
+  // seeding its `floats[panelId]` entry. The caller passes a
+  // `FloatingPanelState` (rect + timestamp); the existing debounced save
+  // persists it through `scheduleSave`.
+  const setFloatRect = useCallback(
+    (panelId: PanelId, rect: FloatingPanelState) => {
+      setPrefs((prev) => ({
+        ...prev,
+        floats: { ...prev.floats, [panelId]: rect },
+      }));
+    },
+    [],
+  );
+
+  // v0.82 P2 (ADR-0025): dock a previously-floating panel by removing its
+  // entry from `floats`. The panel reappears in its prior grid cell
+  // because `DockLayout` uses `floatingPanelIds` (driven by `floats` keys)
+  // to decide what NOT to render in the grid.
+  const removeFloat = useCallback((panelId: PanelId) => {
+    setPrefs((prev) => {
+      if (!(panelId in prev.floats)) return prev;
+      const next = { ...prev.floats };
+      delete next[panelId];
+      return { ...prev, floats: next };
+    });
+  }, []);
+
   return {
     prefs,
     hydrated,
@@ -296,6 +324,8 @@ export function useDockResize() {
     saveCurrentAsPreset,
     deleteUserPreset,
     movePanel,
+    setFloatRect,
+    removeFloat,
     builtinPresets: BUILTIN_PRESETS,
   };
 }

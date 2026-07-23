@@ -598,7 +598,7 @@ test.describe("Drag-and-Dock swap (v0.82 P1, ADR-0024)", () => {
     expect(announceText.toLowerCase()).toContain("right");
   });
 
-  test("v1 dock-prefs.json migrates to v2 with panelRegions defaults", async ({
+  test("v1 dock-prefs.json migrates through v2 → v3 with panelRegions defaults", async ({
     page,
   }) => {
     // Stage a v1 pref file under OPFS (no schemaVersion per legacy, or
@@ -635,18 +635,21 @@ test.describe("Drag-and-Dock swap (v0.82 P1, ADR-0024)", () => {
     // After hydration the React state should have the canonical layout.
     // Trigger a save by toggling something innocuous (e.g. via the
     // visibility toggle on the left dock) so the migration gets
-    // re-stamped as v2.
+    // re-stamped as the current schema version.
     const prefsBefore = (await loadDockPrefs(page)) as any;
     if (prefsBefore) {
       // Either the migration warning ran and we got v1 (still missing
-      // panelRegions) — that's acceptable; the next save stamps v2.
+      // panelRegions) — that's acceptable; the next save stamps the
+      // current schema version.
       // Either way the React state must accept the panel defaults so
       // an explicit move command works.
-      expect(prefsBefore.schemaVersion).toBeLessThanOrEqual(2);
+      // v0.82 P2 (ADR-0025) added a v2 → v3 migration that fills
+      // `floats = {}`, so the post-save schemaVersion is now 3, not 2.
+      expect(prefsBefore.schemaVersion).toBeLessThanOrEqual(3);
     }
 
     // Move outline → left via the keyboard menu (deterministic), then
-    // confirm v2 + panelRegions round-trip.
+    // confirm v3 + panelRegions round-trip.
     const moveBtn = page.locator(
       '[data-testid="dock-right-outline-header-move"]',
     );
@@ -657,7 +660,9 @@ test.describe("Drag-and-Dock swap (v0.82 P1, ADR-0024)", () => {
     await page.waitForTimeout(800);
 
     const prefsAfter = (await loadDockPrefs(page)) as any;
-    expect(prefsAfter.schemaVersion).toBe(2);
+    // Post-save schemaVersion reflects the current schema (v3 after
+    // the v2 → v3 migration in v0.82 P2 / ADR-0025).
+    expect(prefsAfter.schemaVersion).toBe(3);
     expect(prefsAfter.panelRegions).toBeTruthy();
     expect(prefsAfter.panelRegions.outline).toBe("left");
   });
