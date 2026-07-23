@@ -359,10 +359,7 @@ impl SceneRegistry {
             version: "0.1".to_string(),
             scene_id: format!(
                 "scene-{}",
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_nanos())
-                    .unwrap_or(0)
+                crate::time::now_nanos()
             ),
             name: name.to_string(),
             entities: Vec::new(),

@@ -72,10 +72,7 @@ pub fn create_scene_instance_layer_wasm(
     };
 
     // Generate a stable layer id.
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos() as u64)
-        .unwrap_or(0);
+    let now = crate::time::now_nanos();
     let new_id = LayerId::new(format!("lyr_{:x}", now));
 
     // Compute next order = max(order) + 1, falling back to 0.

@@ -37,6 +37,7 @@ pub mod bsn_import;
 pub mod preview_inspector;
 pub mod processor;
 pub mod scene_asset;
+pub mod time;
 pub mod scene_asset_catalog;
 pub mod scene_instance;
 pub mod scene_instance_overrides;
@@ -515,10 +516,7 @@ pub fn place_scene_instance(
     }
 
     // Step 4: Mint fresh instance_id
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos() as u64)
-        .unwrap_or(0);
+    let now = crate::time::now_nanos();
     let instance_id = crate::document::StableId::new(format!("inst_{:x}", now));
 
     // Step 5: Mint id_map entries with `inst_{iid}_{lid}` pattern
@@ -1793,10 +1791,7 @@ fn perform_scene_swap(old_id: &str, new_id: &str) {
                 version: "0.1".to_string(),
                 scene_id: format!(
                     "scratch-{}",
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| d.as_nanos())
-                        .unwrap_or(0)
+                    crate::time::now_nanos()
                 ),
                 name: old_id.to_string(),
                 entities: Vec::new(),
@@ -1962,10 +1957,7 @@ pub async fn load_project() -> Result<(), JsValue> {
                             version: "0.1".to_string(),
                             scene_id: format!(
                                 "loaded-{}",
-                                std::time::SystemTime::now()
-                                    .duration_since(std::time::UNIX_EPOCH)
-                                    .map(|d| d.as_nanos())
-                                    .unwrap_or(0)
+                                crate::time::now_nanos()
                             ),
                             name: scene_name.clone(),
                             entities: Vec::new(),
@@ -2396,10 +2388,7 @@ pub async fn create_scene_asset(name: &str, role: &str) -> Result<String, JsValu
         )));
     }
 
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0);
+    let now = crate::time::now_millis();
 
     let entry = scene_asset_catalog::SceneAssetCatalogEntry {
         asset_id: asset_id.clone(),
@@ -2536,10 +2525,7 @@ pub async fn rename_scene_asset(asset_id: &str, new_path: &str) -> Result<String
         let mut new_entry = old_entry.clone();
         new_entry.logical_path = new_path_normalized.clone();
         new_entry.current_version += 1;
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as u64)
-            .unwrap_or(0);
+        let now = crate::time::now_millis();
         new_entry.updated_at = now;
         cat.register(new_entry.clone()).map_err(|e| JsValue::from_str(&e.to_string()))?;
         Ok::<_, JsValue>(new_entry)
@@ -2587,10 +2573,7 @@ pub async fn duplicate_scene_asset(asset_id: &str) -> Result<String, JsValue> {
     let new_id = scene_asset_catalog::mint_asset_id();
     let new_path = derive_duplicate_path(&source_entry.logical_path);
 
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0);
+    let now = crate::time::now_millis();
 
     let new_entry = scene_asset_catalog::SceneAssetCatalogEntry {
         asset_id: new_id.clone(),
