@@ -1,7 +1,7 @@
 # Bevy 2D Editor User Guide
 
-> **Layout**: Defold-inspired 3-region dock + menu bar + status bar (v0.80.0).
-> See [`docs/adr/0021-defold-inspired-layout.md`](docs/adr/0021-defold-inspired-layout.md) for the full design rationale.
+> **Layout**: Defold-inspired 3-region dock + menu bar + status bar (v0.81.0).
+> See [`docs/adr/0021-defold-inspired-layout.md`](docs/adr/0021-defold-inspired-layout.md) for the full design rationale. v0.81 adds global search, workspace presets, drag-and-dock infrastructure, and per-panel state persistence.
 
 ![Editor overview — empty scene](docs/screenshots/02-empty-scene.png)
 

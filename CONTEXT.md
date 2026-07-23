@@ -215,3 +215,21 @@ _Avoid_: "spawn scene", "auto-instantiate" (use "auto-spawn" — matches the Rus
 **SceneComponent Command Set**:
 Three new `Command` variants added in Hito 4 Order 7: `CreateSceneComponent { schema }`, `UpdateSceneComponentFields { type_id, fields }`, `BindSceneToSchema { type_id, scene_asset_id }`. All three are in the OperationLog (full undo/redo). Per design decision DC5, the AI is allowed to emit these but is forbidden from `DeleteSceneComponent` and `RenameSceneComponent` (mirrors code-aware-ai D2 policy).
 _Avoid_: "scene command", "asset command" (use "SceneComponent command" for clarity)
+
+## Hito 6 Additions (defold-inspired-dock-polish, v0.81.0)
+
+**DockPrefs**:
+The OPFS-persisted layout envelope stored at `/bevy-2d-editor/dock-prefs.json`. Carries `schemaVersion`, `statusBar`, `left`, `right`, `bottom`, optional `activePreset`, and `presets`. All fields are normalised by `migratePrefs` on load; legacy files written before v0.81 upgrade in-place.
+_Avoid_: "layout config", "dock state", "preferences"
+
+**Workspace Preset**:
+A named `DockPrefs` snapshot (`UserPresetRecord`) keyed by preset id and switchable via the `activePreset` field. Built-in presets (Default · 2D Platformer · Top-Down RPG · FPS · Minimal) ship in v0.81.0; user-authored presets are stored under `DockPrefs.presets`.
+_Avoid_: "layout preset" (use "workspace preset" — Defold convention), "theme preset"
+
+**Global Search**:
+The bottom-dock `SearchTab` that federates indexable sources (scenes, scene assets, source files, asset files) and returns a unified result set. Opens via the Command Palette or `Ctrl+Shift+F`. The WASM-side index is rebuilt on save; in v1 it is in-memory only (no OPFS-backed persistence).
+_Avoid_: "command palette" (those are two separate surfaces), "find", "spotlight"
+
+**Drag-and-Dock**:
+The HTML5-draggable interaction pattern shipped in v0.81.0: dock headers carry `draggable="true"` + `data-panel-id`; the dataTransfer payload uses the `application/x-dock-panel` MIME with `{panelId, source}` JSON. v0.81 ships the visual drop feedback (`[data-drag-over="true"]` outline); the region-swap hook that mutates `DockPrefs` is deferred to v0.82.
+_Avoid_: "panel drag", "dock drag", "undock drag"

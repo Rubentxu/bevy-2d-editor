@@ -304,6 +304,61 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 
 **Next**: Hito 4 Order 6 (`code-aware-ai`). New SDDK cycle.
 
+---
+
+## Hito 5: Defold-Inspired Layout (`defold-inspired-redesign`)
+
+**Goal**: Replace the topbar + 3-panel squished layout with the Defold-grade 3-region spatial layout (Assets / Scene / Outline + Properties), each region independently toggleable, with a menu bar and 7-segment status bar. Produced as Phase A→E across one SDDK cycle.
+
+**Status**: ✅ DONE — v0.80.0 tagged (`85263c7`).
+
+**Normative reference**: [ADR-0021: Defold-Inspired Layout + F-Key Shortcuts](./adr/0021-defold-inspired-layout.md).
+
+| Phase | Scope | Commit |
+|-------|-------|--------|
+| A | MenuBar (6 dropdowns: File/Edit/View/Tools/Run/Help) + selector drift fix | `7df24f5` |
+| B | 3-region CSS Grid dock + drag-resizable dividers + OPFS-persisted prefs | `9ae4f86` |
+| C | Bottom dock (Console/Search/Output/Problems + F7 toggle) | `034eea0` |
+| D+E | Status bar 7 segments + F6/F8/F9 + Welcome overlay + Reset Layout | `c034dc4` |
+| Docs | Contributing trunk-based workflow + ADR-0021 + USER_GUIDE (9 screenshots) | `85263c7`, `e0e0283` |
+
+**F-Key shortcuts shipped**: F6 (Assets), F7 (Tools), F8 (Outline), Shift+F8 (Properties), F9 (fullscreen viewport).
+
+---
+
+## Hito 6: Dock Polish & UX Extensions (`v0.81.0`)
+
+**Goal**: Build on the v0.80.0 spatial layout with the highest-impact v0.81 UX candidates from `ROADMAP_addendum_v0.81.md` (`defold-inspired-redesign` cycle tail). Tier 1 candidates first (global search, workspace presets, drag-and-dock infra) and Tier 2 (panel polish: per-panel state persistence + drag-resizable status bar).
+
+**Status**: ✅ DONE — v0.81.0 tagged (`6d36768`). Stacked-to-main chain of 4 PRs in tier order.
+
+**Normative references**:
+- [ADR-0021: Defold-Inspired Layout + F-Key Shortcuts](./adr/0021-defold-inspired-layout.md) (extends dock schema)
+- [ADR-0019: OPFS Scene Asset Catalog Persistence Ordering](./adr/0019-opfs-scene-asset-catalog-persistence-ordering.md) (already shipped, touched by v0.81 cycle)
+
+| Order | PR | Change | Scope | Commit |
+|-------|-----|--------|-------|--------|
+| Tier 1 | [#113](https://github.com/Rubentxu/bevy-2d-editor/pull/113) | `feat(v0.81): global search` | `SearchTab` indexes scenes, scene assets, source files, asset files; wired to bottom dock | `854f1d7` |
+| Tier 1 | [#114](https://github.com/Rubentxu/bevy-2d-editor/pull/114) | `feat(v0.81): workspace presets` | Default · 2D Platformer · Top-Down RPG · FPS · Minimal; `activePreset` + `presets` fields + `mergeWithDefaults` helper | `26410e2` |
+| Tier 1 | [#115](https://github.com/Rubentxu/bevy-2d-editor/pull/115) | `feat(v0.81): drag-and-dock infra` | HTML5 `draggable` headers, `data-panel-id`, `application/x-dock-panel` MIME, drop visual feedback; region-swap logic deferred to v0.82 | `096a865` |
+| Tier 2 | [#112](https://github.com/Rubentxu/bevy-2d-editor/pull/112) | `feat(v0.81-tier2): panel polish` | `schemaVersion` + `statusBar` migration via `migratePrefs`, right-dock collapse flags persisted, status-bar drag-resize (20–48 px clamp), 7 new Playwright tests | `6d36768` |
+
+**Conflict resolution** (documented for trunk-based reuse):
+- `styles.css` — Global Search CSS (Tier 1) vs Drag-and-Dock CSS (Tier 1c): orthogonal DOM blocks, kept both.
+- `useDockPrefs.ts` — Workspace-presets `activePreset`/`presets`/`mergeWithDefaults` (Tier 1b) vs `schemaVersion`/`statusBar`/`migratePrefs` (Tier 2): unified on `migratePrefs` and removed `mergeWithDefaults`.
+
+**Bundle budget**: 348.78 KB gzip (target ≤ 350 KB). Playwright: 126 passed / 2 skipped. Rust: 638 passed.
+
+**Deferred to v0.82** (from `ROADMAP_addendum_v0.81.md`):
+- Floating panels (undock to free-floating window)
+- Inspector multi-select (`SetComponentFieldOnMultiple`)
+- Region-swap hook (clicks the drag-and-dock visual into action)
+- Tab groups inside docks
+- Asset browser thumbnails
+- Welcome tour step-through
+
+---
+
 ## Hito 7: scene-component-authoring UX follow-up
 
 **Goal**: Hardening of the SceneComponent authoring flow on top of the data-layer milestone (Hito 4 Order 7, v0.75.0). Three stacked PRs to `main`.
@@ -534,4 +589,4 @@ Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level
 
 ---
 
-*Last updated: v0.78.0 — 2026-07-21 (Hito 7 `scene-component-authoring-ux` COMPLETE via PR #93 (catalog picker + draft validation + ADR-0018), PR #94 (Place Instance helper + Asset Browser / Schema panel buttons + bridge exports) and PR #95 (focused Playwright coverage: S5 panel + S6 undo executable; S5 Asset Browser + S7 deferred per ADR-0017). Stacked-to-main, three merge commits `ed29230`/`4224957`/`8dbb520`. ADR-0018 records that `command_scene_component::apply_*` remain `CommandError::Unsupported` and the UX reuses direct WASM exports per ADR-0016. Code changes are TS-only; ADR-0012–0017 entries added to the ADR index. Pre-existing debt unchanged (cargo test fixtures missing `BsnIrNode.kind` and OPFS catalog-persistence flake per ADR-0017).)
+*Last updated: v0.81.0 — 2026-07-23 (Hito 6 `defold-inspired-dock-polish` COMPLETE. Four stacked-to-main PRs: #113 (global search), #114 (workspace presets), #115 (drag-and-dock infra), #112 (tier-2 panel polish: `schemaVersion` + `statusBar` migration via `migratePrefs`, right-dock collapse flags, status-bar drag-resize 20–48 px). Merge commits `854f1d7` / `26410e2` / `096a865` / `6d36768`. Tag `v0.81.0` anchored on `6d36768`. Bundle 348.78 KB gzip (budget 350 KB). Playwright 126 passed / 2 skipped. Rust 638 passed. Upstream transport stays the v0.78 Hito 7 baseline (`scene-component-authoring-ux` #93/#94/#95 → v0.78.0); two `test.skip()` blocks in `scene-component-authoring.spec.ts` for the OPFS catalog-persistence flake remain pre-existing debt per ADR-0017. v0.82 candidates: floating panels, inspector multi-select, drag-and-dock region-swap, tab groups, asset browser thumbnails, welcome tour step-through — see `ROADMAP_addendum_v0.81.md` last section. Pre-existing debt unchanged (cargo test fixtures missing `BsnIrNode.kind` and OPFS catalog-persistence flake per ADR-0017).)

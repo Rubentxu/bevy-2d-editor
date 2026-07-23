@@ -4,6 +4,14 @@
 
 Accepted (2026-07-22) — Hito 5 / `defold-inspired-redesign` cycle (v0.80.0)
 
+**Extended (2026-07-23)** — Hito 6 / `defold-inspired-dock-polish` cycle (v0.81.0)
+extends this ADR's dock schema with `schemaVersion`, `statusBar`, right-dock
+collapse flags, and HTML5 drag-and-dock infrastructure. See
+`ROADMAP_addendum_v0.81.md` and `docs/ROADMAP.md` §Hito 6 for the full
+sequence (PRs #113, #114, #115, #112). The schema migration lives in
+`frontend/src/hooks/useDockPrefs.ts::migratePrefs` (unified over the
+original `mergeWithDefaults` helper from the workspace-presets PR).
+
 ## Context
 
 After Phase 1-5 of the `ux-overhaul` cycle (commits cdff2e5..9303244, v0.78.0), the editor had:
@@ -195,12 +203,12 @@ if (dockPrefsJson) {
 
 ## Out of scope (defer)
 
-- Drag-and-drop docking between regions
-- Workspace presets (FPS / 2D Platformer / Top-Down)
-- Floating panels
-- Multi-window editor
-- Tab groups inside docks
-- Layout export/import
+- Drag-and-drop docking between regions — **infra shipped in v0.81.0** (PR #115); region-swap logic deferred to v0.82
+- Workspace presets (FPS / 2D Platformer / Top-Down) — **shipped in v0.81.0** (PR #114)
+- Floating panels — deferred to v0.82
+- Multi-window editor — deferred (no demand yet)
+- Tab groups inside docks — deferred (risky)
+- Layout export/import — deferred (workspace presets cover the use case)
 
 ## References
 

@@ -80,18 +80,42 @@ Start with **#3 (Global search)** since the Search tab is already in the bottom 
 
 ## v0.81 shipped status
 
-| Tier | Item | Status | PR |
-| --- | --- | --- | --- |
-| Tier 1 | #3 Global search | ✅ Shipped in v0.81.0 | PR1 |
-| Tier 1 | #2 Workspace presets | ✅ Shipped in v0.81.0 | PR2 |
-| Tier 1 | #1 Drag-and-dock infra | ✅ Shipped in v0.81.0 (region-swap in v0.82) | PR3 |
-| Tier 2 | #5 Per-panel state persistence | ✅ Shipped in v0.81.0 (collapse flags + OPFS schemaVersion) | PR4 |
-| Tier 2 | #10 Drag-to-resize status bar | ✅ Shipped in v0.81.0 (clamp 20–48 px) | PR4 |
-| Tier 2 | #4 Floating panels | 🔲 Deferred to v0.82 | — |
-| Tier 2 | #6 Inspector multi-select | 🔲 Deferred to v0.82 | — |
-| Tier 3 | #7 Tab groups | 🔲 Deferred | — |
-| Tier 3 | #8 Asset browser thumbnails | 🔲 Deferred | — |
-| Tier 3 | #9 Welcome tour step-through | 🔲 Deferred | — |
+| Tier | Item | Status | PR | Merge commit |
+| --- | --- | --- | --- | --- |
+| Tier 1 | #3 Global search | ✅ Shipped in v0.81.0 | [#113](https://github.com/Rubentxu/bevy-2d-editor/pull/113) | `854f1d7` |
+| Tier 1 | #2 Workspace presets | ✅ Shipped in v0.81.0 | [#114](https://github.com/Rubentxu/bevy-2d-editor/pull/114) | `26410e2` |
+| Tier 1 | #1 Drag-and-dock infra | ✅ Shipped in v0.81.0 (region-swap in v0.82) | [#115](https://github.com/Rubentxu/bevy-2d-editor/pull/115) | `096a865` |
+| Tier 2 | #5 Per-panel state persistence | ✅ Shipped in v0.81.0 (collapse flags + OPFS schemaVersion) | [#112](https://github.com/Rubentxu/bevy-2d-editor/pull/112) | `6d36768` |
+| Tier 2 | #10 Drag-to-resize status bar | ✅ Shipped in v0.81.0 (clamp 20–48 px) | [#112](https://github.com/Rubentxu/bevy-2d-editor/pull/112) | `6d36768` |
+| Tier 2 | #4 Floating panels | 🔲 Deferred to v0.82 | — | — |
+| Tier 2 | #6 Inspector multi-select | 🔲 Deferred to v0.82 | — | — |
+| Tier 3 | #7 Tab groups | 🔲 Deferred | — | — |
+| Tier 3 | #8 Asset browser thumbnails | 🔲 Deferred | — | — |
+| Tier 3 | #9 Welcome tour step-through | 🔲 Deferred | — | — |
+
+**Tag**: `v0.81.0` anchored on `6d36768` (merge commit of PR #112).
+**Bundle**: 348.78 KB gzip (target ≤ 350 KB).
+**Tests**: Playwright 126 passed / 2 skipped, Rust 638 passed.
+
+### Schema migration impact (PR #112)
+
+PR #112 added `schemaVersion` and `statusBar` to `DockPrefs`. The original
+Tier 1 PRs (#113, #114, #115) had independently evolved `useDockPrefs.ts`;
+during rebase the two schema-evolution paths were unified onto a single
+`migratePrefs` helper that also normalises `activePreset` and `presets`.
+The legacy `mergeWithDefaults` helper was removed (zero callers). All
+v0.80 OPFS `dock-prefs.json` files upgrade in-place on next load.
+
+## v0.82 candidates (carry-over)
+
+| Priority | Item | Effort | Why this order |
+|----------|------|--------|----------------|
+| 1 | Drag-and-dock region-swap (completes #1) | 1 week | v0.81 already shipped the HTML5 draggable primitives + drop visual; the swap hook is the missing runtime piece |
+| 2 | Floating panels (#4) | 1 week | Closes the React Portal + z-index work; enables the undock-to-window UX |
+| 3 | Inspector multi-select (#6) | 1 week | Requires `SetComponentFieldOnMultiple` command extension; useful for bulk property changes |
+| 4 | Tab groups inside docks (#7) | 1–2 weeks | Risky — may break the spatial stability principle; needs a UX spike |
+| 5 | Asset browser thumbnails (#8) | 3 days | Reads bytes via existing `read_asset_file_bytes`; small scope |
+| 6 | Welcome tour step-through (#9) | 1 week | Onboarding for first-time users; uses `react-joyride` or build minimal |
 
 
 Estimated total: 5-7 weeks for one dev, 3-5 weeks for two devs in parallel.
