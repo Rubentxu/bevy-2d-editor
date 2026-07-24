@@ -24,6 +24,9 @@ fn entry(
         tags: tags.into_iter().map(String::from).collect(),
         created_at,
         updated_at,
+        // ADR-0026: integration tests default to `None`; specific
+        // previews are set explicitly in the relevant test bodies.
+        preview_resource: None,
     }
 }
 

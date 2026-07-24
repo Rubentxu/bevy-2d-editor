@@ -9,6 +9,7 @@ import {
   StaleSceneComponentBindingError,
 } from "../services/scene-components";
 import { importBsnAssetFromFile } from "../services/bsnImport";
+import ThumbnailCell from "./ThumbnailCell";
 
 interface Props {
   entries: SceneAssetCatalogEntry[];
@@ -374,6 +375,7 @@ export default function ProjectAssetBrowser({
           <table className="asset-table" data-testid="asset-table">
             <thead>
               <tr>
+                <th>Preview</th>
                 <th>Name</th>
                 <th>Role</th>
                 <th>Version</th>
@@ -397,6 +399,12 @@ export default function ProjectAssetBrowser({
                     }
                   }}
                 >
+                  <td className="asset-preview">
+                    <ThumbnailCell
+                      assetId={entry.asset_id}
+                      resourcePath={entry.preview_resource ?? null}
+                    />
+                  </td>
                   <td className="asset-name">
                     {renamingId === entry.asset_id ? (
                       <input

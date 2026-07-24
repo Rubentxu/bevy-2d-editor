@@ -65,6 +65,17 @@ pub struct SceneAssetCatalogEntry {
     pub tags: Vec<String>,
     pub created_at: u64,
     pub updated_at: u64,
+    /// Optional OPFS `resources/<path>` reference used by the Asset
+    /// Browser to render an inline 64×64 preview. `None` when the
+    /// asset has no associated preview texture.
+    ///
+    /// `#[serde(default)]` covers deserialise: old JSON literals
+    /// without this field load as `None`.
+    /// `#[serde(skip_serializing_if = "Option::is_none")]` covers
+    /// serialise: most entries are `None` and the field is omitted
+    /// from the on-disk JSON.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preview_resource: Option<String>,
 }
 
 /// Errors produced by SceneAssetCatalog operations (insert, remove, update).
@@ -397,6 +408,7 @@ mod tests {
             tags: vec![],
             created_at: 1000,
             updated_at: 1000,
+            preview_resource: None,
         }
     }
 
@@ -422,5 +434,58 @@ mod tests {
         assert!(catalog.list_all().is_empty());
         assert!(catalog.list_by_role(SceneAssetRole::Actor).is_empty());
         assert!(catalog.validate_invariants().is_empty());
+    }
+
+    /// ADR-0026 S1.2 / D3.3: a catalog JSON literal that omits the new
+    /// `preview_resource` field (older catalog format) deserialises to
+    /// an entry with `preview_resource = None`, and re-serialising omits
+    /// the field. This is the back-compat contract for pre-v0.83.0
+    /// on-disk catalogs.
+    #[test]
+    fn catalog_without_preview_resource_round_trips() {
+        let json = r#"{"entries":{"id_x":{"asset_id":"id_x","logical_path":"actors/player","role":"actor","current_version":1,"tags":[],"created_at":1,"updated_at":1}}}"#;
+        let catalog: SceneAssetCatalog =
+            serde_json::from_str(json).expect("back-compat deserialize");
+        let entry = catalog.get("id_x").expect("entry should be present");
+        assert_eq!(entry.preview_resource, None);
+
+        let reserialized =
+            serde_json::to_string(&catalog).expect("re-serialize");
+        assert!(
+            !reserialized.contains("preview_resource"),
+            "preview_resource must be skipped when None: {}",
+            reserialized
+        );
+    }
+
+    /// ADR-0026 S1.2: when `preview_resource = Some("x.png")` is set,
+    /// it round-trips through serialise/deserialise losslessly.
+    #[test]
+    fn catalog_with_preview_resource_round_trips() {
+        let mut catalog = SceneAssetCatalog::new();
+        let mut e = entry("id_x", "actors/player", SceneAssetRole::Actor);
+        e.preview_resource = Some("textures/player.png".to_string());
+        catalog.register(e.clone()).expect("register should succeed");
+
+        let json = serde_json::to_string(&catalog).expect("serialize");
+        assert!(json.contains("preview_resource"));
+
+        let reparsed: SceneAssetCatalog =
+            serde_json::from_str(&json).expect("deserialize");
+        let entry = reparsed.get("id_x").expect("entry present");
+        assert_eq!(entry.preview_resource.as_deref(), Some("textures/player.png"));
+    }
+
+    /// ADR-0026 S1.2: an entry registered without setting
+    /// `preview_resource` (via the public Rust surface) ends up with
+    /// `None`. This is the structural test of `#[serde(default)]`.
+    #[test]
+    fn register_assigns_default_none() {
+        let mut catalog = SceneAssetCatalog::new();
+        let e = entry("id_x", "actors/player", SceneAssetRole::Actor);
+        assert_eq!(e.preview_resource, None);
+        catalog.register(e).expect("register should succeed");
+        let stored = catalog.get("id_x").expect("entry should be present");
+        assert_eq!(stored.preview_resource, None);
     }
 }

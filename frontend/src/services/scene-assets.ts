@@ -11,6 +11,16 @@ export interface SceneAssetCatalogEntry {
   logical_path: string;
   role: string;
   current_version: number;
+  /**
+   * Optional OPFS `resources/<path>` reference for the inline 64×64
+   * preview rendered by the Asset Browser. `null` when the asset has
+   * no associated preview texture; absent in older catalog JSON
+   * (back-compat — both decode to `null`/`undefined`).
+   *
+   * ADR-0026: opt-in field. No authoring UI exists yet to set it;
+   * every newly-created asset defaults to null.
+   */
+  preview_resource?: string | null;
 }
 
 export interface AssetLogState {
