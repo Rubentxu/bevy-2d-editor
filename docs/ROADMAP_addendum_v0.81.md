@@ -90,7 +90,7 @@ Start with **#3 (Global search)** since the Search tab is already in the bottom 
 | Tier 2 | #4 Floating panels | ✅ Shipped in v0.82.0 (ADR-0025) | [#117](https://github.com/Rubentxu/bevy-2d-editor/pull/117) | `abde2cb` |
 | Tier 2 | #6 Inspector multi-select | ✅ Shipped in v0.82.0 (ADR-0025) | [#118](https://github.com/Rubentxu/bevy-2d-editor/pull/118) | `364cc32` |
 | Tier 3 | #7 Tab groups | 🔲 Deferred | — | — |
-| Tier 3 | #8 Asset browser thumbnails | 🔲 Deferred | — | — |
+| Tier 3 | #8 Asset browser thumbnails | ✅ Shipped in v0.83.0 (ADR-0026) | [#119](https://github.com/Rubentxu/bevy-2d-editor/pull/119) | `9da7683` |
 | Tier 3 | #9 Welcome tour step-through | 🔲 Deferred | — | — |
 
 **Tag**: `v0.81.0` anchored on `6d36768` (merge commit of PR #112).
