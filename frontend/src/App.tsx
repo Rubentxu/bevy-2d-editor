@@ -79,7 +79,7 @@ export default function App() {
 function AppInner() {
   const [ready, setReady] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
-  const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
+
   const { addToast } = useToasts();
   const initGuard = (() => {
     let guard = false;
@@ -91,6 +91,120 @@ function AppInner() {
   })();
 
   const { scene, refresh, dispatch } = useSceneState();
+
+  // v0.82 P2 (ADR-0025): multi-select state. `selectedIds` is the
+  // authoritative selection; `selectedEntityId` (below) is a
+  // *derived* single-id view used for backward compat with the
+  // existing surface (toolbar, status bar, keyboard shortcuts).
+  // Placed AFTER `useSceneState()` so the modifier-aware click handler
+  // and the Esc / Ctrl+A effect can close over `scene` without a
+  // TDZ hazard.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(
+    () => new Set<string>(),
+  );
+  const [lastClickedId, setLastClickedId] = useState<string | null>(null);
+  const setSelectedEntityId = useCallback((id: string | null) => {
+    // Back-compat shim: a single id replaces; a non-null id selects
+    // exactly that id (matches the original "clicking a row selects it"
+    // semantics expected by existing tests).
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (id == null) next.clear();
+      else {
+        next.clear();
+        next.add(id);
+      }
+      return next;
+    });
+    setLastClickedId(id);
+  }, []);
+  // Derived single-id view: prefer `lastClickedId` ONLY when it is
+  // still in the active set. A Ctrl/Cmd+Click that toggles OFF the
+  // last-clicked id must clear the inspector's primary subject so
+  // the row's `selected` class disappears (matches macOS Finder /
+  // Figma semantics). Fall back to the lone id when the set has
+  // exactly one member.
+  const selectedEntityId =
+    (lastClickedId && selectedIds.has(lastClickedId)
+      ? lastClickedId
+      : null) ??
+    (selectedIds.size === 1 ? Array.from(selectedIds)[0] : null);
+
+  // v0.82 P2 (ADR-0025 §F7): modifier-aware hierarchy click handler.
+  //
+  //   "plain"   → replace selection with { id }
+  //   "range"   → extend to every entity between lastClickedId and id
+  //               in scene.entities iteration order (Shift+Click)
+  //   "toggle"  → add/remove id from the set (Ctrl/Cmd+Click)
+  const selectEntity = useCallback(
+    (id: string, modifier: "plain" | "range" | "toggle") => {
+      if (modifier === "range" && lastClickedId && scene?.entities) {
+        const ids = scene.entities.map((e) => e.id);
+        const fromIdx = ids.indexOf(lastClickedId);
+        const toIdx = ids.indexOf(id);
+        if (fromIdx === -1 || toIdx === -1) {
+          // Anchor missing — fall back to plain select so the user's
+          // intent (click on id) still takes effect.
+          setSelectedIds(new Set([id]));
+        } else {
+          const [lo, hi] =
+            fromIdx < toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx];
+          const next = new Set(selectedIds);
+          for (let i = lo; i <= hi; i++) next.add(ids[i]);
+          setSelectedIds(next);
+        }
+      } else if (modifier === "toggle") {
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+          return next;
+        });
+      } else {
+        setSelectedIds(new Set([id]));
+      }
+      setLastClickedId(id);
+    },
+    [lastClickedId, scene, selectedIds],
+  );
+
+  // v0.82 P2 (ADR-0025 §F8 + §F7): Esc clears selection; Ctrl/Cmd+A
+  // selects every entity. Both pass through when a text input or
+  // context menu is focused so we don't fight the user's editing.
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+    setLastClickedId(null);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t) {
+        const tag = (t.tagName ?? "").toLowerCase();
+        if (
+          tag === "input" ||
+          tag === "textarea" ||
+          t.isContentEditable ||
+          tag === "select"
+        ) {
+          return;
+        }
+      }
+      if (e.key === "Escape") {
+        if (selectedIds.size > 0 || lastClickedId) {
+          clearSelection();
+          e.preventDefault();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+        if (!scene?.entities?.length) return;
+        setSelectedIds(new Set(scene.entities.map((e) => e.id)));
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [clearSelection, selectedIds.size, lastClickedId, scene]);
+
   const logState = useLogState();
   const { zoom, pan, reset: resetViewport, fitToContent } = useCanvasViewport();
   const [isDragOverCanvas, setIsDragOverCanvas] = useState(false);
@@ -317,6 +431,47 @@ function AppInner() {
       addToast(`Remove component failed: ${result.error}`, "error");
   };
 
+  // v0.82 P2 (ADR-0025): apply the same field to the same component
+  // on every supplied entity in one atomic command. Rust fans the
+  // command out into a `Batch` of per-entity SetComponentFields, so a
+  // partial failure rolls back. The frontend filters out non-owners
+  // before dispatch so we never hit a ComponentNotFound at apply.
+  const handleSetFieldOnMultiple = async (
+    entityIds: string[],
+    typeId: string,
+    fieldPath: string,
+    value: unknown,
+  ) => {
+    if (entityIds.length === 0) return;
+    // Defence in depth: the Rust side also rejects empty arrays with
+    // CommandError::InvalidArgument, but a no-op call here keeps the
+    // OperationLog clean.
+    const owningIds = (scene?.entities ?? [])
+      .filter((e) => entityIds.includes(e.id))
+      .filter((e) => e.components.some((c) => c.type_id === typeId))
+      .map((e) => e.id);
+    if (owningIds.length === 0) {
+      addToast("No selected entities own that component.", "error");
+      return;
+    }
+    const result = await dispatch({
+      command: {
+        type: "SetComponentFieldOnMultiple",
+        entity_ids: owningIds,
+        type_id: typeId,
+        field_path: fieldPath,
+        value,
+      },
+      metadata: {
+        authorship: "user",
+        timestamp: Date.now(),
+        rationale: `Multi-edit ${typeId}.${fieldPath} on ${owningIds.length} entities`,
+      },
+    });
+    if (result.error)
+      addToast(`Set field on multiple failed: ${result.error}`, "error");
+  };
+
   const handleAddComponent = async (entityId: string, typeId: string) => {
     const result = await dispatch({
       command: {
@@ -341,6 +496,29 @@ function AppInner() {
       setSelectedEntityId(null);
     },
     [dispatch],
+  );
+
+  // v0.82 P2 (ADR-0025 §F11): multi-entity delete wraps N
+  // per-entity DeleteEntity commands into a single Batch so the
+  // OperationLog captures one entry with a descriptive label.
+  const handleDeleteEntities = useCallback(
+    async (ids: Iterable<string>) => {
+      const arr = Array.from(ids);
+      if (arr.length === 0) return;
+      await dispatch({
+        command: {
+          type: "Batch",
+          label: `Delete ${arr.length} entities`,
+          commands: arr.map((id) => ({
+            type: "DeleteEntity",
+            id,
+          })),
+        },
+        metadata: { authorship: "keyboard", timestamp: Date.now() },
+      });
+      clearSelection();
+    },
+    [dispatch, clearSelection],
   );
 
   // ── Create entity (Phase 1.4 — UX overhaul) ──────────────────────────────
@@ -743,6 +921,14 @@ function AppInner() {
     enabled: editorMode !== "play",
     onUndo: editorMode === "scene" ? handleUndo : handleAssetUndo,
     onRedo: editorMode === "scene" ? handleRedo : handleAssetRedo,
+    // v0.82 P2 (ADR-0025): route Delete/Backspace through the multi-
+    // delete sink when more than one id is selected. The hook keeps
+    // a single-id fallback for the legacy single-select flow.
+    onDeleteEntities:
+      editorMode === "scene" && selectedIds.size > 1
+        ? (ids) => void handleDeleteEntities(ids)
+        : undefined,
+    selectedIds,
     logState: editorMode === "scene" ? logState : assetLogState,
     selectedEntityId,
     onDeleteEntity: handleDeleteEntity,
@@ -1215,6 +1401,16 @@ function AppInner() {
                         editorMode === "scene" ? handleCreateEntity : undefined
                       }
                       renameRequest={renameRequestTick}
+                      // v0.82 P2 (ADR-0025): shift / ctrl-click fan-out
+                      // handled by the modifier callback. The Set is
+                      // forwarded so each row's `selected` class
+                      // reflects membership in multi-select.
+                      onSelectModifier={
+                        editorMode === "scene"
+                          ? (id, mod) => selectEntity(id, mod)
+                          : undefined
+                      }
+                      selectedIds={selectedIds}
                     />
                   </>
                 )}
@@ -1246,8 +1442,10 @@ function AppInner() {
                   <InspectorPanel
                     scene={scene}
                     selectedId={selectedEntityId}
+                    selectedIds={selectedIds}
                     onRename={handleRename}
                     onSetField={handleSetField}
+                    onSetFieldOnMultiple={handleSetFieldOnMultiple}
                     onRemoveComponent={handleRemoveComponent}
                     onAddComponent={handleAddComponent}
                     instances={instances}

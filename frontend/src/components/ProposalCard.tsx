@@ -34,6 +34,12 @@ function formatCommand(envelope: CommandEnvelope): string {
       const val = JSON.stringify((cmd as any).value ?? "");
       return `SetComponentField ${(cmd as any).type_id}.${fp} = ${val}`;
     }
+    case "SetComponentFieldOnMultiple": {
+      const fp = (cmd as any).field_path ?? "";
+      const val = JSON.stringify((cmd as any).value ?? "");
+      const n = ((cmd as any).entity_ids ?? []).length;
+      return `SetComponentFieldOnMultiple ${(cmd as any).type_id}.${fp} = ${val} (×${n})`;
+    }
     case "ReparentEntity":
       return `ReparentEntity ${((cmd as any).entity_id ?? "").slice(0, 8)}`;
     case "RenameEntity":

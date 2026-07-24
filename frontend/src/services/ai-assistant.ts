@@ -53,6 +53,19 @@ export type Command =
       field_path: FieldPath;
       value: JsonValue;
     }
+  // v0.82 P2 (ADR-0025): mirror of Rust
+  // `Command::SetComponentFieldOnMultiple` — applies the same field on
+  // the same component to many entities at once. The frontend
+  // dispatches one envelope; the Rust processor fans it out into a
+  // Batch of per-entity `SetComponentField`s so partial failures roll
+  // back atomically (ADR-0025 §D5).
+  | {
+      type: "SetComponentFieldOnMultiple";
+      entity_ids: StableId[];
+      type_id: string;
+      field_path: FieldPath;
+      value: JsonValue;
+    }
   | {
       type: "ReparentEntity";
       entity_id: StableId;

@@ -17,6 +17,7 @@ import {
 } from "../services/scene-assets";
 import ComponentCard from "./ComponentCard";
 import AddComponentButton from "./AddComponentButton";
+import ComponentEditor from "./ComponentEditor";
 import SchemaAuthoringPanel from "./SchemaAuthoringPanel";
 import RuntimePreviewInspector from "./RuntimePreviewInspector";
 
@@ -32,6 +33,21 @@ interface Props {
   ) => void;
   onRemoveComponent: (entityId: string, typeId: string) => void;
   onAddComponent: (entityId: string, typeId: string) => void;
+  // v0.82 P2 (ADR-0025): when more than one id is selected, the
+  // inspector swaps to a multi-edit view that calls this when a
+  // homogeneous field is committed. Without it, the multi-select view
+  // remains read-only (still useful for inspection / Mixed markers
+  // but no commits go through).
+  onSetFieldOnMultiple?: (
+    entityIds: string[],
+    typeId: string,
+    fieldPath: string,
+    value: any,
+  ) => void;
+  // v0.82 P2 (ADR-0025): authoritative multi-select set. When its
+  // size is > 1 the inspector renders the multi-edit view. When
+  // exactly 1, that id is treated as the primary subject.
+  selectedIds?: Set<string>;
   // Scene Instance operations (PR3)
   instances?: Record<string, SceneInstance>;
   onRemoveInstance?: (instanceId: string) => Promise<void>;
@@ -108,6 +124,285 @@ function InstanceRow({
   );
 }
 
+/**
+ * Serialize any value to a stable string for divergence detection.
+ * We deliberately ignore key order — JSON.stringify is fine because all
+ * component values are emitted by the Rust serializer with sorted keys
+ * (see editor-core `ComponentValue` ordering in v0.78). For arbitrary
+ * user input this is still adequate for an equality check, which is the
+ * only contract `aggregateField` relies on.
+ */
+function valueKey(v: any): string {
+  if (v === null || v === undefined) return "null";
+  if (typeof v === "number" || typeof v === "string" || typeof v === "boolean")
+    return JSON.stringify(v);
+  return JSON.stringify(v);
+}
+
+/**
+ * Compute aggregated state for a single field across N entities.
+ * Returns either a single homogeneous value or `{ kind: "mixed" }`.
+ */
+type FieldAggregate =
+  | { kind: "homogeneous"; value: any }
+  | { kind: "mixed"; sampleValues: any[] };
+
+function aggregateField(values: any[]): FieldAggregate {
+  if (values.length === 0) return { kind: "mixed", sampleValues: [] };
+  const first = values[0];
+  const k = valueKey(first);
+  for (let i = 1; i < values.length; i++) {
+    if (valueKey(values[i]) !== k) {
+      // Cap the sample list at 3 to keep the tooltip readable.
+      return {
+        kind: "mixed",
+        sampleValues: values.slice(0, 3),
+      };
+    }
+  }
+  return { kind: "homogeneous", value: first };
+}
+
+/**
+ * MultiInspector: ADR-0025 F10. Renders the inspector body when 2+
+ * entities are selected. For each component type that ALL selected
+ * entities own, render a card with aggregated fields. Homogeneous
+ * fields get the standard editor; divergent fields show a "— Mixed"
+ * pill that, when activated, opens an overwrite input which dispatches
+ * a single SetComponentFieldOnMultiple command.
+ */
+function MultiInspector({
+  scene,
+  selectedIds,
+  onSetFieldOnMultiple,
+}: {
+  scene: SceneDocument;
+  selectedIds: Set<string>;
+  onSetFieldOnMultiple?: (
+    entityIds: string[],
+    typeId: string,
+    fieldPath: string,
+    value: any,
+  ) => void;
+}) {
+  const ids = Array.from(selectedIds);
+  const entities = ids
+    .map((id) => scene.entities.find((e) => e.id === id))
+    .filter((e): e is NonNullable<typeof e> => e !== undefined);
+
+  // Component types that every selected entity owns (intersection).
+  const commonTypeIds = entities.length
+    ? entities[0].components
+        .map((c) => c.type_id)
+        .filter((typeId) =>
+          entities.every((e) => e.components.some((c) => c.type_id === typeId)),
+        )
+    : [];
+
+  return (
+    <section
+      className="inspector-multi"
+      data-testid="inspector-multi"
+      data-entity-count={entities.length}
+      data-common-components={commonTypeIds.length}
+    >
+      <header
+        className="inspector-multi-header"
+        data-testid="inspector-multi-header"
+      >
+        <span className="inspector-multi-title">
+          {entities.length} entities selected · {commonTypeIds.length}{" "}
+          {commonTypeIds.length === 1 ? "component" : "components"} in common
+        </span>
+        {!onSetFieldOnMultiple && (
+          <span
+            className="inspector-multi-readonly"
+            title="Multi-edit dispatcher not wired"
+          >
+            (read-only)
+          </span>
+        )}
+      </header>
+      {entities.length === 0 && (
+        <div className="panel-empty">No matching entities in current scene</div>
+      )}
+      {entities.length > 0 && commonTypeIds.length === 0 && (
+        <div
+          className="panel-empty panel-empty-cta"
+          data-testid="inspector-multi-no-common"
+        >
+          Selected entities share no components
+        </div>
+      )}
+      {commonTypeIds.map((typeId) => {
+        const comps = entities
+          .map((e) => e.components.find((c) => c.type_id === typeId)!)
+          .map((c) => c.values);
+        // Field key set = union of all fields across the entities
+        // (rarely different, but defensive). We render one row per
+        // field present on the first entity; entities missing the
+        // field would have been filtered by the commonTypeIds step
+        // anyway (the intersection is by component presence only).
+        const fieldSet = new Set<string>();
+        for (const values of comps) {
+          for (const k of Object.keys(values)) fieldSet.add(k);
+        }
+        const fields = Array.from(fieldSet);
+        return (
+          <div
+            key={typeId}
+            className="component-card multi"
+            data-testid={`component-${typeId}`}
+          >
+            <header>
+              <span className="type-id">{typeId}</span>
+              <span className="multi-entity-count" title="Entities sharing this component">
+                ×{entities.length}
+              </span>
+            </header>
+            {fields.map((fieldPath) => {
+              const valuesAcross = comps.map((v) => v[fieldPath]);
+              const agg = aggregateField(valuesAcross);
+              return (
+                <MultiFieldRow
+                  key={fieldPath}
+                  fieldPath={fieldPath}
+                  aggregate={agg}
+                  disabled={!onSetFieldOnMultiple}
+                  onCommit={(newValue) =>
+                    onSetFieldOnMultiple?.(ids, typeId, fieldPath, newValue)
+                  }
+                />
+              );
+            })}
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+/**
+ * MultiFieldRow: ADR-0025 F10. Per-field row inside a multi-inspector
+ * component card. If the field is homogeneous across the selection,
+ * renders the standard editor seeded with the common value. If
+ * divergent, shows a "— Mixed" pill; clicking it reveals a single
+ * overwrite input whose commit goes through onSetFieldOnMultiple.
+ *
+ * The editor is intentionally minimal here (number/text/checkbox/
+ * JSON fallback) — we don't try to splice in Vec2/Color/Anchor
+ * composite editors because the "Mixed" UX is meant to be a clear
+ * "overwrite-all" affordance, not a per-axis diff view. A future
+ * enhancement could split Vec2 axes into independent mixed markers.
+ */
+function MultiFieldRow({
+  fieldPath,
+  aggregate,
+  disabled,
+  onCommit,
+}: {
+  fieldPath: string;
+  aggregate: FieldAggregate;
+  disabled: boolean;
+  onCommit: (newValue: any) => void;
+}) {
+  const [overriding, setOverriding] = useState(false);
+  const [text, setText] = useState("");
+
+  if (aggregate.kind === "homogeneous" && !overriding) {
+    // Delegate to the standard editor for the common value.
+    return (
+      <div
+        className="field-row multi homogeneous"
+        data-testid={`field-row-${fieldPath}`}
+        data-field-state="homogeneous"
+      >
+        <ComponentEditor
+          fieldPath={fieldPath}
+          value={aggregate.value}
+          onCommit={disabled ? () => undefined : onCommit}
+        />
+      </div>
+    );
+  }
+
+  if (!overriding) {
+    // At this point we know the aggregate is mixed (the homogeneous
+    // case returned above), so the `mixed` branch is the only one
+    // that reaches here. Narrow explicitly so TS knows
+    // `sampleValues` exists on the union.
+    const sampleTooltip =
+      aggregate.kind === "mixed"
+        ? aggregate.sampleValues
+            .map((v: any) => valueKey(v))
+            .join(", ")
+        : "";
+    return (
+      <div
+        className="field-row multi mixed"
+        data-testid={`field-row-${fieldPath}`}
+        data-field-state="mixed"
+      >
+        <span className="field-label">{fieldPath}</span>
+        <button
+          type="button"
+          className="mixed-pill"
+          onClick={() => {
+            if (disabled) return;
+            setOverriding(true);
+            setText(
+              aggregate.kind === "homogeneous"
+                ? String(aggregate.value ?? "")
+                : "",
+            );
+          }}
+          title={sampleTooltip ? `Sample values: ${sampleTooltip}` : "Mixed"}
+          data-testid={`mixed-pill-${fieldPath}`}
+        >
+          — Mixed
+        </button>
+      </div>
+    );
+  }
+
+  // Overriding: let the user type a value to write to all selected entities.
+  return (
+    <div
+      className="field-row multi override"
+      data-testid={`field-row-${fieldPath}`}
+      data-field-state="overriding"
+    >
+      <span className="field-label">{fieldPath}</span>
+      <input
+        type="text"
+        className="multi-override-input"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => {
+          // Try JSON first; fall back to raw string.
+          let parsed: any = text;
+          try {
+            parsed = JSON.parse(text);
+          } catch {
+            // keep raw string
+          }
+          onCommit(parsed);
+          setOverriding(false);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            (e.target as HTMLInputElement).blur();
+          } else if (e.key === "Escape") {
+            setOverriding(false);
+          }
+        }}
+        autoFocus
+        data-testid={`multi-override-${fieldPath}`}
+      />
+    </div>
+  );
+}
+
 export default function InspectorPanel({
   scene,
   selectedId,
@@ -115,6 +410,8 @@ export default function InspectorPanel({
   onSetField,
   onRemoveComponent,
   onAddComponent,
+  onSetFieldOnMultiple,
+  selectedIds,
   instances = {},
   onRemoveInstance,
   onReplaceInstanceAsset,
@@ -549,6 +846,14 @@ export default function InspectorPanel({
             </div>
           )}
         </>
+      )}
+      {/* v0.82 P2 (ADR-0025 F10): multi-edit view when >1 ids selected */}
+      {scene && selectedIds && selectedIds.size > 1 && (
+        <MultiInspector
+          scene={scene}
+          selectedIds={selectedIds}
+          onSetFieldOnMultiple={onSetFieldOnMultiple}
+        />
       )}
       {!entity && (
         <div

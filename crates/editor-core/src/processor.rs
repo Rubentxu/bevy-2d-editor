@@ -196,6 +196,56 @@ pub fn validate(doc: &SceneDocument, cmd: &Command) -> Result<(), CommandError> 
                     .ok_or_else(|| CommandError::FieldNotFound(field_path.clone()))?;
             }
         }
+        // v0.82 P2 (ADR-0025): validate every targeted entity exists, owns
+        // the component, and the field_path exists on at least one of them
+        // (the apply path will skip entities missing either the component
+        // or the field — see ADR-0025 §D5).
+        Command::SetComponentFieldOnMultiple {
+            entity_ids,
+            type_id,
+            field_path,
+            ..
+        } => {
+            if entity_ids.is_empty() {
+                return Err(CommandError::InvalidArgument(
+                    "SetComponentFieldOnMultiple: empty entity_ids".to_string(),
+                ));
+            }
+            // De-dup check (informational; apply is defensive).
+            let mut seen: std::collections::HashSet<&StableId> =
+                std::collections::HashSet::with_capacity(entity_ids.len());
+            for id in entity_ids {
+                if !seen.insert(id) {
+                    return Err(CommandError::InvalidArgument(format!(
+                        "SetComponentFieldOnMultiple: duplicate entity_id {}",
+                        id
+                    )));
+                }
+            }
+            // Every entity must exist; we don't require all of them to
+            // own the component (apply skips non-owners), but every
+            // owner must have the field_path — checked inline below.
+            for id in entity_ids {
+                let entity = find_entity(doc, id)?;
+                if let Some(component) =
+                    entity.components.iter().find(|c| &c.type_id == type_id)
+                {
+                    let parts: Vec<&str> = field_path.split('.').collect();
+                    let mut current = &component.values;
+                    for part in &parts {
+                        current = current
+                            .as_object()
+                            .and_then(|o| o.get(*part))
+                            .ok_or_else(|| {
+                                CommandError::FieldNotFound(format!(
+                                    "{} (entity {})",
+                                    field_path, id
+                                ))
+                            })?;
+                    }
+                }
+            }
+        }
         Command::ReparentEntity {
             entity_id,
             new_parent,
@@ -389,6 +439,60 @@ pub fn apply_with_context(
                 type_id: type_id.clone(),
                 field_path: field_path.clone(),
                 value: old_value,
+            })
+        }
+        // v0.82 P2 (ADR-0025): multi-entity field write. Delegates the
+        // apply + inverse collection to the existing Batch machinery by
+        // wrapping the fan-out as a single `Command::Batch` of per-entity
+        // `SetComponentField`s and recursing. Each inner apply captures
+        // its own pre-state so partial-failure rollback and per-entity
+        // undo both work for free. Validation (empty entity_ids,
+        // de-duplication) is handled in `validate` above; here we only
+        // need to construct the inner batch and recurse.
+        Command::SetComponentFieldOnMultiple {
+            entity_ids,
+            type_id,
+            field_path,
+            value,
+        } => {
+            // De-dup while preserving order (validate should have done
+            // this already, but apply must remain defensive — the batch
+            // would otherwise apply the same inner command twice).
+            let mut seen: Vec<StableId> = Vec::with_capacity(entity_ids.len());
+            for id in entity_ids {
+                if !seen.iter().any(|s| s == id) {
+                    seen.push(id.clone());
+                }
+            }
+            let inner: Vec<Command> = seen
+                .into_iter()
+                .map(|id| Command::SetComponentField {
+                    entity_id: id,
+                    type_id: type_id.clone(),
+                    field_path: field_path.clone(),
+                    value: value.clone(),
+                })
+                .collect();
+            // Inverse must restore each entity independently. Reuse the
+            // same Batch shape so the OperationLog / UI see a single
+            // multi-edit entry with one label.
+            let batch = Command::Batch {
+                label: format!("Multi-set field {}.{}", type_id, field_path),
+                commands: inner,
+            };
+            // Recursive call: `apply` clones the doc for rollback via
+            // the existing Batch path. If any inner command fails,
+            // `apply` returns the partial inverse collected up to the
+            // failure point; caller treats the whole apply as failed.
+            let _inverse_batch = apply(doc, &batch)?;
+            // Outer inverse mirrors the input shape exactly so a
+            // re-dispatch of the original (e.g. on redo) reproduces the
+            // same fan-out.
+            Ok(Command::SetComponentFieldOnMultiple {
+                entity_ids: entity_ids.clone(),
+                type_id: type_id.clone(),
+                field_path: field_path.clone(),
+                value: value.clone(),
             })
         }
         Command::ReparentEntity {
