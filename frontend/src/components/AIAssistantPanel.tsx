@@ -28,8 +28,6 @@ interface Props {
   contextStats?: PerSourceStats[];
   contextBudgetChars?: number;
   contextUsedChars?: number;
-  onToggleContextSource?: (sourceName: string, enabled: boolean) => void;
-  disabledContextSources?: Set<string>;
 }
 
 export default function AIAssistantPanel({
@@ -43,8 +41,6 @@ export default function AIAssistantPanel({
   contextStats = [],
   contextBudgetChars = 40000,
   contextUsedChars = 0,
-  onToggleContextSource,
-  disabledContextSources,
 }: Props) {
   return (
     <div className="ai-assistant-panel">
@@ -98,8 +94,6 @@ export default function AIAssistantPanel({
             stats={contextStats}
             totalBudgetChars={contextBudgetChars}
             totalUsedChars={contextUsedChars}
-            onToggle={onToggleContextSource}
-            disabledSources={disabledContextSources}
           />
         )}
 

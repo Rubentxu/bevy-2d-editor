@@ -15,6 +15,7 @@ use crate::context::sources::{
 };
 use crate::context::{ContextBuilder, SchemaFetcher};
 use crate::error::AppError;
+use crate::openai::filter_forbidden_commands;
 use crate::openai::OpenAIClient;
 
 /// Application state shared across handlers.
@@ -150,6 +151,19 @@ pub async fn propose_handler(
             endpoint = "/v1/propose",
             model = %model,
             "OpenAI returned no commands"
+        );
+    }
+
+    // D2 security: filter out commands the AI is forbidden to emit
+    // (DeleteSourceFile, RenameSourceFile, DeleteSceneComponent,
+    // RenameSceneComponent). Per ADR-0015 §Decision D2 and ADR-0016.
+    let (envelopes, rejected) = filter_forbidden_commands(envelopes);
+    if !rejected.is_empty() {
+        warn!(
+            endpoint = "/v1/propose",
+            model = %model,
+            rejected = ?rejected,
+            "filtered forbidden AI commands server-side"
         );
     }
 

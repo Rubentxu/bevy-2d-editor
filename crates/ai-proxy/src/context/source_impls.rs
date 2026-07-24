@@ -91,8 +91,11 @@ impl ContextSource for SourceFilesSource {
             // Consume up to remaining chars; if content is shorter, take all.
             let take = f.content.len().min(remaining);
             let actual = budget.consume_up_to(take);
-            out.push_str(&f.content[..actual]);
-            if actual < f.content.len() {
+            // H2 fix: floor to a UTF-8 char boundary to avoid panic on
+            // multibyte content (e.g. non-ASCII comments/strings in Rust).
+            let safe_end = floor_char_boundary(&f.content, actual);
+            out.push_str(&f.content[..safe_end]);
+            if safe_end < f.content.len() {
                 out.push_str("\n[truncated]\n");
             }
             out.push('\n');
@@ -181,8 +184,10 @@ impl ContextSource for SceneAssetSource {
             out.push_str("\n### Selected Asset Body\n");
             let take = body.len().min(budget.remaining());
             let actual = budget.consume_up_to(take);
-            out.push_str(&body[..actual]);
-            if actual < body.len() {
+            // H2 fix: floor to a UTF-8 char boundary (same as SourceFilesSource).
+            let safe_end = floor_char_boundary(body, actual);
+            out.push_str(&body[..safe_end]);
+            if safe_end < body.len() {
                 out.push_str("\n[truncated]\n");
             }
         }
@@ -222,6 +227,23 @@ impl ContextSource for SelectedEntitySource {
         }
         out
     }
+}
+
+/// Floor `idx` to the nearest UTF-8 char boundary at or before `idx`.
+///
+/// Rust string slicing (`&s[..idx]`) panics if `idx` falls inside a
+/// multibyte code point. This helper walks backward from `idx` until it
+/// hits a valid boundary, ensuring safe slicing of content that may
+/// contain non-ASCII characters (e.g. Unicode comments/strings in Rust
+/// source files).
+fn floor_char_boundary(s: &str, mut idx: usize) -> usize {
+    if idx >= s.len() {
+        return s.len();
+    }
+    while !s.is_char_boundary(idx) {
+        idx -= 1;
+    }
+    idx
 }
 
 #[cfg(test)]
@@ -369,5 +391,58 @@ mod tests {
         let mut b = TokenBudget::new(100);
         let out = s.assemble(&mut b);
         assert!(!out.is_empty());
+    }
+
+    #[test]
+    fn source_files_multibyte_content_does_not_panic() {
+        // H2 fix: content with multibyte UTF-8 (emoji + accented chars in
+        // a Rust comment) must not panic when truncated mid-codepoint.
+        let content = "fn main() {\n    // ¡Hola! 🦀 émoji test — ¿qué tal?\n}\n".repeat(20);
+        let s = SourceFilesSource {
+            files: vec![SourceFileRef {
+                id: "x".to_string(),
+                path: "src/x.rs".to_string(),
+                content,
+            }],
+        };
+        // Tight budget that forces truncation mid-multibyte sequence.
+        let mut b = TokenBudget::new(150);
+        let out = s.assemble(&mut b);
+        assert!(out.contains("[truncated]"));
+        // If we reach here, no panic occurred — the fix works.
+    }
+
+    #[test]
+    fn scene_assets_multibyte_body_does_not_panic() {
+        // H2 fix: selected_body with multibyte content must not panic.
+        let body = "/// Documentation: emojis 🎮🚀 and accents àéîõü\n".repeat(30);
+        let s = SceneAssetSource {
+            ctx: SceneAssetContext {
+                catalog: vec![],
+                selected_body: Some(body),
+            },
+        };
+        let mut b = TokenBudget::new(120);
+        let out = s.assemble(&mut b);
+        assert!(out.contains("[truncated]"));
+    }
+
+    #[test]
+    fn floor_char_boundary_handles_ascii() {
+        assert_eq!(floor_char_boundary("hello world", 5), 5);
+        assert_eq!(floor_char_boundary("hello", 100), 5);
+        assert_eq!(floor_char_boundary("", 0), 0);
+    }
+
+    #[test]
+    fn floor_char_boundary_floors_multibyte() {
+        // 🦀 is 4 bytes. If idx lands at byte 1-3 inside it, floor to 0.
+        let s = "🦀abc";
+        assert_eq!(floor_char_boundary(s, 0), 0);
+        assert_eq!(floor_char_boundary(s, 1), 0); // inside 🦀 → floor to 0
+        assert_eq!(floor_char_boundary(s, 2), 0); // inside 🦀 → floor to 0
+        assert_eq!(floor_char_boundary(s, 3), 0); // inside 🦀 → floor to 0
+        assert_eq!(floor_char_boundary(s, 4), 4); // at 'a'
+        assert_eq!(floor_char_boundary(s, 5), 5); // at 'b'
     }
 }

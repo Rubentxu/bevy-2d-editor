@@ -327,8 +327,17 @@ mod tests {
             }])
             .with_token_threshold(60);
         let prompt = builder.build();
-        // Scene is always present (highest priority); source file should be
-        // truncated or dropped when budget is tight.
+        // Scene is always present (highest priority).
         assert!(prompt.contains("Scene Snapshot"));
+        // M6 fix: actually verify that the low-priority source file content
+        // was dropped or truncated under budget pressure. Previously this
+        // test only asserted the scene was present — which is trivially true
+        // regardless of whether priority ordering works.
+        assert!(
+            !prompt.contains("fn drop_me()"),
+            "source file content must be dropped/truncated under tight budget; \
+             prompt was {} chars",
+            prompt.len()
+        );
     }
 }
