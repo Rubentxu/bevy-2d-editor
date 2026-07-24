@@ -30,6 +30,8 @@ fn entry(
         tags: vec![],
         created_at: now,
         updated_at: now,
+        // ADR-0026: no preview by default in tests.
+        preview_resource: None,
     }
 }
 

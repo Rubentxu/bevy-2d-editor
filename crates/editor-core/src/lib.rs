@@ -2398,6 +2398,9 @@ pub async fn create_scene_asset(name: &str, role: &str) -> Result<String, JsValu
         tags: vec![],
         created_at: now,
         updated_at: now,
+        // ADR-0026: no authoring UI for `preview_resource` yet;
+        // every newly-created asset defaults to None.
+        preview_resource: None,
     };
 
     // Create empty document
@@ -2583,6 +2586,10 @@ pub async fn duplicate_scene_asset(asset_id: &str) -> Result<String, JsValue> {
         tags: vec![],
         created_at: now,
         updated_at: now,
+        // ADR-0026: duplicating an asset never inherits the source's
+        // preview_resource — a duplicated asset has no preview until
+        // an authoring flow (future cycle) sets one explicitly.
+        preview_resource: None,
     };
 
     // Write new body file

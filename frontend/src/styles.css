@@ -4163,3 +4163,33 @@ button.status-segment:last-of-type,
 .bottom-dock-header[draggable="true"]:active {
   cursor: grabbing;
 }
+
+/* ── Asset Browser thumbnails (ADR-0026) ───────────────────────────────── */
+
+.asset-preview {
+  width: 72px;
+  padding: 4px;
+  vertical-align: middle;
+}
+
+.thumb-placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  background: var(--surface-2, #2a2a2a);
+  border: 1px dashed var(--border, #444);
+  font-size: 24px;
+  color: var(--text-muted, #888);
+  user-select: none;
+}
+
+.thumb-img {
+  display: block;
+  object-fit: contain;
+  background: var(--surface-1, #1a1a1a);
+  border: 1px solid var(--border, #444);
+  width: 64px;
+  height: 64px;
+}

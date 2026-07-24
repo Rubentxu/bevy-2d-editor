@@ -326,6 +326,8 @@ export async function initEngine(
   (window as any).opfs_list_files = opfs.opfsListFiles;
   (window as any).opfs_exists = opfs.opfsExists;
   (window as any).opfs_delete_file = opfs.opfsDeleteFile;
+  (window as any).opfs_save_binary = opfs.opfsSaveBinary;
+  (window as any).opfs_load_binary = opfs.opfsLoadBinary;
 
   // Step 1: Create buses BEFORE starting engine
   wasm.create_buses();
