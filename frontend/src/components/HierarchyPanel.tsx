@@ -16,6 +16,16 @@ interface Props {
    * keyboard handler.
    */
   renameRequest?: number;
+  // v0.82 P2 (ADR-0025): modifier-aware multi-select entry point. When
+  // supplied, Shift/Ctrl clicks are routed here so the parent can
+  // extend or toggle the selection. Without it, HierarchyPanel falls
+  // back to the legacy single-id `onSelect` behaviour.
+  onSelectModifier?: (id: string, modifier: "range" | "toggle") => void;
+  // Optional set of currently selected ids — when supplied, the
+  // selected class is applied to every matching row, not just the
+  // primary `selectedId` (which is the most-recently-clicked single
+  // id used for the inspector fallback).
+  selectedIds?: Set<string>;
 }
 
 /**
@@ -75,6 +85,8 @@ export default function HierarchyPanel({
   instances = {},
   onCreateEntity,
   renameRequest = 0,
+  onSelectModifier,
+  selectedIds,
 }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -231,7 +243,13 @@ export default function HierarchyPanel({
           )
           .map((entity) => {
             const depth = entityDepth(entity, scene.entities);
-            const isSelected = selectedId === entity.id;
+            // v0.82 P2 (ADR-0025): row is "selected" if it's the
+            // current selection's anchor (single-id primary) OR a
+            // member of the multi-select set. The Set is preferred so
+            // Shift/Ctrl selections immediately show their highlight.
+            const isSelected =
+              (selectedIds?.has(entity.id) ?? false) ||
+              selectedId === entity.id;
             return (
               <div
                 key={entity.id}
@@ -251,7 +269,19 @@ export default function HierarchyPanel({
                 draggable
                 onClick={(e) => {
                   e.stopPropagation();
-                  onSelect(entity.id);
+                  // v0.82 P2 (ADR-0025 §F7): Shift+Click extends the
+                  // range; Ctrl/Cmd+Click toggles membership. Plain
+                  // clicks fall through to the legacy single-id
+                  // selector for back-compat. We only dispatch the
+                  // modifier variant when the parent wired a handler
+                  // so non-upgraded callers still get single-select.
+                  if (e.shiftKey && onSelectModifier) {
+                    onSelectModifier(entity.id, "range");
+                  } else if ((e.ctrlKey || e.metaKey) && onSelectModifier) {
+                    onSelectModifier(entity.id, "toggle");
+                  } else {
+                    onSelect(entity.id);
+                  }
                 }}
                 onDragStart={(e) => {
                   setDraggedId(entity.id);

@@ -10,6 +10,12 @@ interface UseKeyboardShortcutsOptions {
   };
   selectedEntityId: string | null;
   onDeleteEntity: (id: string) => void;
+  // v0.82 P2 (ADR-0025): optional multi-delete sink. When supplied and
+  // more than one entity is selected, Delete/Backspace routes here
+  // instead of `onDeleteEntity(selectedEntityId)` so the OperationLog
+  // captures a single Batch entry.
+  onDeleteEntities?: (ids: string[]) => void;
+  selectedIds?: Set<string>;
   onCreateEntity?: () => void;
   // Phase 3 — additional shortcuts (Ctrl+K, ?, F2, F). Handlers are
   // optional so the hook stays compatible with phases that haven't
@@ -49,6 +55,8 @@ export function useKeyboardShortcuts({
   logState,
   selectedEntityId,
   onDeleteEntity,
+  onDeleteEntities,
+  selectedIds,
   onCreateEntity,
   onOpenCommandPalette,
   onOpenCheatSheet,
@@ -95,7 +103,14 @@ export function useKeyboardShortcuts({
         // Bare keys
         if (e.key === "Delete" || e.key === "Backspace") {
           e.preventDefault();
-          if (selectedEntityId) {
+          // v0.82 P2 (ADR-0025): when the multi-select sink is wired
+          // and more than one id is selected, dispatch a single
+          // batch delete. Fall back to the legacy single-id path when
+          // there's only one (or zero, in which case we still leave
+          // the single-id routing intact for back-compat tests).
+          if (onDeleteEntities && selectedIds && selectedIds.size > 1) {
+            onDeleteEntities(Array.from(selectedIds));
+          } else if (selectedEntityId) {
             onDeleteEntity(selectedEntityId);
           }
         } else if ((e.key === "n" || e.key === "N") && onCreateEntity) {
@@ -146,6 +161,8 @@ export function useKeyboardShortcuts({
     logState.can_redo,
     selectedEntityId,
     onDeleteEntity,
+    onDeleteEntities,
+    selectedIds,
     onCreateEntity,
     onOpenCommandPalette,
     onOpenCheatSheet,
