@@ -28,6 +28,10 @@ ADR numbering is monotonic and never reused. Superseded decisions keep their ori
 | [ADR-0016](./0016-scene-component-authoring.md) | Scene-Component Authoring | Accepted (2026-07-19) — Hito 4 Order 7 (`scene-component-authoring`) |
 | [ADR-0017](./0017-e2e-test-failure-root-cause.md) | E2E Test Failure Root Cause (Hito 4 final cleanup) | Investigation complete (2026-07-19) |
 | [ADR-0018](./0018-deferred-scene-component-command-handlers-keep-unsupported.md) | Deferred SceneComponent command handlers remain Unsupported | Accepted (2026-07-20) — Hito 7 (`scene-component-authoring-ux`) |
+| [ADR-0019](./0019-opfs-scene-asset-catalog-persistence-ordering.md) | OPFS Scene-Asset Catalog Persistence Ordering | Accepted (2026-07-21) — Hito 7 (`scene-component-authoring-ux`) |
+| [ADR-0021](./0021-defold-inspired-layout.md) | Defold-Inspired Layout for Docks | Accepted — Hito 6 (`defold-inspired-dock-polish`) |
+| [ADR-0024](./0024-drag-dock-swap.md) | Drag-and-Dock Region Swap | Accepted — Hito 6 (`defold-inspired-dock-polish`) |
+| [ADR-0025](./0025-floating-panels-multi-select.md) | Floating Panels + Inspector Multi-Select | Accepted (2026-07-23) — v0.82 (`v0.82-p2-floating-multi-select`) |
 
 ## Related Documents
 

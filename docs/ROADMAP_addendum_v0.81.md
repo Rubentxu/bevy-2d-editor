@@ -87,8 +87,8 @@ Start with **#3 (Global search)** since the Search tab is already in the bottom 
 | Tier 1 | #1 Drag-and-dock infra | ✅ Shipped in v0.81.0 (region-swap in v0.82) | [#115](https://github.com/Rubentxu/bevy-2d-editor/pull/115) | `096a865` |
 | Tier 2 | #5 Per-panel state persistence | ✅ Shipped in v0.81.0 (collapse flags + OPFS schemaVersion) | [#112](https://github.com/Rubentxu/bevy-2d-editor/pull/112) | `6d36768` |
 | Tier 2 | #10 Drag-to-resize status bar | ✅ Shipped in v0.81.0 (clamp 20–48 px) | [#112](https://github.com/Rubentxu/bevy-2d-editor/pull/112) | `6d36768` |
-| Tier 2 | #4 Floating panels | 🔲 Deferred to v0.82 | — | — |
-| Tier 2 | #6 Inspector multi-select | 🔲 Deferred to v0.82 | — | — |
+| Tier 2 | #4 Floating panels | ✅ Shipped in v0.82.0 (ADR-0025) | [#117](https://github.com/Rubentxu/bevy-2d-editor/pull/117) | `abde2cb` |
+| Tier 2 | #6 Inspector multi-select | ✅ Shipped in v0.82.0 (ADR-0025) | [#118](https://github.com/Rubentxu/bevy-2d-editor/pull/118) | `364cc32` |
 | Tier 3 | #7 Tab groups | 🔲 Deferred | — | — |
 | Tier 3 | #8 Asset browser thumbnails | 🔲 Deferred | — | — |
 | Tier 3 | #9 Welcome tour step-through | 🔲 Deferred | — | — |
