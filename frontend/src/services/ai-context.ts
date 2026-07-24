@@ -166,13 +166,39 @@ export function assembleMultiSourceContext(
       enabledSources.add(src.name);
       remaining -= includedChars;
     }
-    // Apply the per-source effect (simplified: full source if not truncated;
-    // for source_files / logic_graphs we keep the full files even when text
-    // is truncated because individual files are small).
+    // H3 fix: when a source is truncated, actually reduce what we keep
+    // to fit the budget. Previously this pushed the full unfiltered list,
+    // causing the FE budget calculation to diverge from what the proxy
+    // actually receives and truncates server-side.
     if (src.name === "source_files") {
-      keptSourceFiles.push(...sourceFiles);
+      if (!truncated) {
+        // Full budget available — keep all files.
+        keptSourceFiles.push(...sourceFiles);
+      } else {
+        // Budget pressure — keep files greedily until we've consumed
+        // includedChars worth of content. Each file contributes its
+        // content length + a small header overhead.
+        let consumed = 0;
+        for (const sf of sourceFiles) {
+          const fileCost = sf.content.length + sf.path.length + 16;
+          if (consumed + fileCost > includedChars && keptSourceFiles.length > 0) {
+            break; // stop when adding the next file would exceed budget
+          }
+          keptSourceFiles.push(sf);
+          consumed += fileCost;
+        }
+      }
     } else if (src.name === "logic_graphs") {
-      keptLogicGraphs.push(...logicGraphs);
+      if (!truncated) {
+        keptLogicGraphs.push(...logicGraphs);
+      } else {
+        let consumed = 0;
+        for (const lg of logicGraphs) {
+          if (consumed > includedChars && keptLogicGraphs.length > 0) break;
+          keptLogicGraphs.push(lg);
+          consumed += lg.asset_id.length + 64 + lg.nodes.length * 32 + lg.edges.length * 48;
+        }
+      }
     } else if (src.name === "selected_entity") {
       keptSelectedEntity = selectedEntity;
     } else if (src.name === "scene_assets_selected") {

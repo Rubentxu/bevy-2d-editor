@@ -3,7 +3,10 @@
  *
  * Collapsible section in the AI Assistant Panel that shows what context
  * is being sent to the AI proxy. Per source: token count, included chars,
- * truncation marker, and a per-source toggle to include/exclude.
+ * truncation marker.
+ *
+ * M1 fix: the per-source toggle checkboxes were removed — the
+ * `onToggle` handler was never wired in `App.tsx`, making them dead UI.
  *
  * Hidden by default (collapsed) to avoid cluttering the panel.
  *
@@ -21,10 +24,6 @@ interface Props {
   totalBudgetChars: number;
   /** Total chars actually consumed in the last assembly. */
   totalUsedChars: number;
-  /** Optional callback when the user toggles a source on/off. */
-  onToggle?: (sourceName: string, enabled: boolean) => void;
-  /** Set of source names currently disabled by the user. */
-  disabledSources?: Set<string>;
 }
 
 function formatTokenCount(chars: number): string {
@@ -39,8 +38,6 @@ export function ContextDebugSection({
   stats,
   totalBudgetChars,
   totalUsedChars,
-  onToggle,
-  disabledSources = new Set(),
 }: Props) {
   const [expanded, setExpanded] = useState(false);
 
@@ -84,14 +81,12 @@ export function ContextDebugSection({
                   <th>Included</th>
                   <th>Total</th>
                   <th>Status</th>
-                  <th>Enabled</th>
                 </tr>
               </thead>
               <tbody>
                 {stats.map((s) => {
                   const includedTokens = formatTokenCount(s.included_chars);
                   const totalTokens = formatTokenCount(s.total_chars);
-                  const isDisabled = disabledSources.has(s.name);
                   return (
                     <tr key={s.name} data-testid={`context-row-${s.name}`}>
                       <td>{s.name}</td>
@@ -105,15 +100,6 @@ export function ContextDebugSection({
                         ) : (
                           <span style={{ color: "#0a0" }}>ok</span>
                         )}
-                      </td>
-                      <td>
-                        <input
-                          type="checkbox"
-                          checked={!isDisabled}
-                          disabled={!onToggle || s.total_chars === 0}
-                          onChange={(e) => onToggle?.(s.name, e.target.checked)}
-                          data-testid={`context-toggle-${s.name}`}
-                        />
                       </td>
                     </tr>
                   );

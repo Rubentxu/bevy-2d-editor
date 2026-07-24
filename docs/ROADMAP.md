@@ -218,7 +218,7 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 | 3 | `asset-pipeline` | v0.46.0 (PR #50 + #51 + #52) | ✅ DONE |
 | 4 | `build-and-run-loop` | v0.47.0 (PR #53) | ✅ DONE |
 | 5 | `hot-reload` | v0.48.0 (PRs #56 + #57) | ✅ DONE — data-only (logic graphs + BSN scene components + source files); texture hot-reload deferred per ADR-0014 §Deferred |
-| 6 | `code-aware-ai` | — | 🔲 Planned |
+| 6 | `code-aware-ai` | v0.72.0 (PRs #83 + #84 + #85) | ✅ DONE |
 | 7 | `scene-component-authoring` (data + UX) | v0.75.0 (PRs #86 #87 #88) + v0.78.0 (PRs #93 #94 #95) | ✅ DONE |
 | 8 | `animation-graph-editor` (deferred) | — | 🔲 Planned |
 
@@ -302,7 +302,7 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 - Subsecond-based native hot-patching — only relevant if/when remote build server ships per ADR-0013 v2
 - WASM module re-instantiation — architecturally undesirable (would reset Bevy App state)
 
-**Next**: Hito 4 Order 6 (`code-aware-ai`). New SDDK cycle.
+**Hito 4 Order 6** (`code-aware-ai`): ✅ Shipped v0.72.0 (PRs #83 + #84 + #85). Multi-source context composition for the AI proxy per ADR-0015.
 
 ---
 

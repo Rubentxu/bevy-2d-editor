@@ -81,9 +81,9 @@ context::ContextBuilder:
 3. **AI commands limited to Create/Write on source files.** Per design
    decision D2 (security): the AI cannot delete or rename source files
    in v1. The `FORBIDDEN_AI_COMMANDS` constant + `filter_forbidden_commands`
-   function in `function_calling.rs` enforces this server-side, and the
-   `propose_commands_schema` only advertises the allowed 10 commands
-   (was 8 + 2 new source-file commands).
+   function in `function_calling.rs` enforces this server-side (wired into
+   `propose_handler` since the `code-aware-ai-debt` fix cycle), and the
+   `propose_commands_schema` only advertises the allowed commands.
 
 4. **Greedy priority fill over explicit budgeting.** The source with the
    highest priority gets as much of the budget as it can use; the next
@@ -102,9 +102,10 @@ context::ContextBuilder:
 
 7. **Hot-reload seam handoff with Order 5.** Source-file writes already
    emit `hot-reload-source` events (ADR-0014). The frontend AI service
-   subscribes to these events to invalidate its cached source-files
-   context; no new `HotReloadRequest::Reindex` needed (decision
-   resolved in SDDK explore).
+   subscribes to these events as an invalidation signal. Note: in v1 the
+   subscription is observability-only (the hook re-fetches source files
+   on every propose call rather than caching); a real caching layer is
+   deferred to a future cycle.
 
 ## Consequences
 
@@ -123,8 +124,10 @@ context::ContextBuilder:
   budgets.
 - The 10k char heuristic is approximate. ±20% is acceptable per existing
   ADR.
-- `EDITOR_DOMAIN` will grow as more source types are added. Currently
-  ~1.5k chars; flag if it exceeds 3k.
+- `EDITOR_DOMAIN` will grow as more source types are added. Was ~1.5k chars
+  at v0.72.0; has grown to ~2.9k chars after ADR-0016 added SceneComponent
+  commands. Flagged at the 3k ceiling — should be split or externalized
+  in a future cycle.
 
 ## Implementation
 
@@ -135,7 +138,8 @@ See:
 - `crates/ai-proxy/src/handlers/propose.rs` — extended ProposeRequest
 - `crates/ai-proxy/src/openai/function_calling.rs` — extended schema +
   FORBIDDEN_AI_COMMANDS
-- `frontend/tests/fixtures/mock-ai-proxy.mjs` — 4 new patterns
+- `frontend/tests/fixtures/mock-ai-proxy.mjs` — patterns for source-file
+  commands (later extended by ADR-0016 with scene-component patterns)
 - `frontend/src/services/ai-context.ts` (PR2) — frontend orchestrator
 
 ## References

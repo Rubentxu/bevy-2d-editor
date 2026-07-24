@@ -69,8 +69,10 @@ list_scene_component_schemas() -> JSON array
 
 4. **AI can Create/Bind/Update. Not Delete/Rename.** Mirrors the code-aware-ai
    D2 policy. `FORBIDDEN_AI_COMMANDS` extended with
-   `DeleteSceneComponent` + `RenameSceneComponent`. Server-side filter
-   enforced via `filter_forbidden_commands`.
+   `DeleteSceneComponent` + `RenameSceneComponent`. The server-side filter
+   (`filter_forbidden_commands`) was wired into `propose_handler` in the
+   `code-aware-ai-debt` fix cycle (post-v0.83.0); before that it was
+   defined but not called in the request path.
 
 5. **Schema JSON loaded from file** (Hito 4 Order 7). To avoid the
    `serde_json::json!` macro recursion limit (13 commands), the
