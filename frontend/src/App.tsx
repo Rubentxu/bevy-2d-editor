@@ -6,9 +6,10 @@ import { useLogState } from "./hooks/useLogState";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useAIAssistant } from "./hooks/useAIAssistant";
 import MenuBar from "./components/MenuBar";
+import AppHeader from "./components/AppHeader";
 import HierarchyPanel from "./components/HierarchyPanel";
 import InspectorPanel from "./components/InspectorPanel";
-import AIAssistantPanel from "./components/AIAssistantPanel";
+import AIAssistantPanel, { type TaskMode } from "./components/AIAssistantPanel";
 import ExportRustModal from "./components/ExportRustModal";
 import ValidationCenter from "./components/ValidationCenter";
 import SaveSceneModal from "./components/SaveSceneModal";
@@ -222,6 +223,9 @@ function AppInner() {
   const [cheatSheetOpen, setCheatSheetOpen] = useState(false);
   const [renameRequestTick, setRenameRequestTick] = useState(0);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  // v2 AI task mode + context source toggles (PR4 correction)
+  const [taskMode, setTaskMode] = useState<TaskMode>("ask");
+  const [enabledSources, setEnabledSources] = useState<Set<string>>(new Set());
   const [validationCenterOpen, setValidationCenterOpen] = useState(false);
   const [tilesetPanelOpen, setTilesetPanelOpen] = useState(false);
   const [selectedTilesetId, setSelectedTilesetId] = useState<string | null>(
@@ -253,6 +257,8 @@ function AppInner() {
     (window as any).__setEditorMode = (mode: EditorMode) => setEditorMode(mode);
     // Phase B T2.5: exposed for SearchTab entity focus action
     (window as any).__setSelectedEntityId = (id: string | null) => setSelectedEntityId(id);
+    // PR4 correction: exposed for Playwright tests that need to open AI panel before assertions
+    (window as any).__openAIPanel = () => setAiPanelOpen(true);
   }
   const [activeAssetLogicalPath, setActiveAssetLogicalPath] = useState<
     string | null
@@ -365,6 +371,19 @@ function AppInner() {
 
   const handleToggleAI = useCallback(() => {
     setAiPanelOpen((prev) => !prev);
+  }, []);
+
+  // v2 context source toggle — updates the enabledSources Set.
+  const handleContextToggle = useCallback((sourceName: string, enabled: boolean) => {
+    setEnabledSources((prev) => {
+      const next = new Set(prev);
+      if (enabled) {
+        next.add(sourceName);
+      } else {
+        next.delete(sourceName);
+      }
+      return next;
+    });
   }, []);
 
   const handleToggleValidationCenter = useCallback(() => {
@@ -632,6 +651,47 @@ function AppInner() {
     },
     [dispatch, clearSelection],
   );
+
+  // ── Logic Workflow v2 handlers (PR4 correction) ───────────────────────────
+  // Opens the attach-logic dialog or navigates to logic mode for the entity.
+  const handleAttachLogic = useCallback(
+    async (instanceId: string) => {
+      console.log("[App] handleAttachLogic called for instance:", instanceId);
+      // TODO: wire to the attach-logic dialog / logic authoring workflow
+      setEditorMode("logic");
+    },
+    [],
+  );
+
+  // Delegates to the existing handleOpenLogic with the bound asset id.
+  const handleOpenBoundLogic = useCallback(
+    async (entityId: string) => {
+      console.log("[App] handleOpenBoundLogic called for entity:", entityId);
+      // TODO: wire to bound asset loader
+      setEditorMode("logic");
+      // openLogicGraphAsset(assetId) — deferred; needs bound asset id from instance
+    },
+    [],
+  );
+
+  // Navigates to the RecipePicker in logic mode (no parameters — uses selected entity).
+  const handleCreateFromRecipe = useCallback(() => {
+    console.log("[App] handleCreateFromRecipe called");
+    // TODO: wire to recipe picker / create-from-recipe workflow
+    setEditorMode("logic");
+  }, []);
+
+  // Switches to logic mode to inspect the selected entity's runtime logic state.
+  const handleInspectRuntimeLogic = useCallback(() => {
+    console.log("[App] handleInspectRuntimeLogic called");
+    // TODO: wire to runtime logic inspector
+    setEditorMode("logic");
+  }, []);
+
+  // Sets editorMode to "logic".
+  const handleSwitchToLogicMode = useCallback(() => {
+    setEditorMode("logic");
+  }, []);
 
   // ── Create entity (Phase 1.4 — UX overhaul) ──────────────────────────────
   // Counter + suffix derivation lives here so button + N shortcut stay in sync.
@@ -1313,6 +1373,24 @@ function AppInner() {
     (window as any).__openSceneAssetFromSearch = async (assetId: string) => {
       await openAsset(assetId);
     };
+    // PR3: logic-graph search opens the graph in logic mode.
+    (window as any).__openLogicGraphFromSearch = async (assetId: string) => {
+      await openLogicGraphAsset(assetId);
+    };
+    // PR3: schema search opens the schema authoring panel filtered to that schema.
+    (window as any).__focusSchemaFromSearch = (typeId: string) => {
+      setEditorMode("asset-authoring");
+      // SchemaAuthoringPanel reads __focusedSchemaId and scrolls/filters to it.
+      (window as any).__focusedSchemaId = typeId;
+    };
+    // PR3: validation-issue search opens the Validation Center.
+    (window as any).__openValidationCenter = () => {
+      setValidationCenterOpen(true);
+    };
+    // PR3: navigation to a specific validation issue (highlights the issue).
+    (window as any).__navigateToValidationIssue = (issueId: string) => {
+      (window as any).__focusedValidationIssueId = issueId;
+    };
   }
 
   // ── Cheat sheet shortcuts (Phase 3.3) ─────────────────────────────────────
@@ -1386,6 +1464,10 @@ function AppInner() {
                 applyingIds={applyingIds}
                 contextStats={contextStats}
                 contextUsedChars={contextUsedChars}
+                taskMode={taskMode}
+                onTaskModeChange={setTaskMode}
+                enabledSources={enabledSources}
+                onContextToggle={handleContextToggle}
               />
             )}
             {validationCenterOpen && (
@@ -1418,6 +1500,10 @@ function AppInner() {
                   : undefined
               }
               selectedIds={selectedIds}
+              onAttachLogic={handleAttachLogic}
+              onOpenBoundLogic={handleOpenBoundLogic}
+              onCreateFromRecipe={handleCreateFromRecipe}
+              onInspectRuntimeLogic={handleInspectRuntimeLogic}
             />
           </>
         )}
@@ -1480,6 +1566,11 @@ function AppInner() {
             onReplaceInstanceAsset={replaceInstanceAsset}
             assetEntries={assetEntries}
             onJumpToSource={handleJumpToSource}
+            onAttachLogic={handleAttachLogic}
+            onOpenBoundLogic={handleOpenBoundLogic}
+            onCreateFromRecipe={handleCreateFromRecipe}
+            onInspectRuntimeLogic={handleInspectRuntimeLogic}
+            onSwitchToLogicMode={handleSwitchToLogicMode}
           />
         )}
         {editorMode === "asset-authoring" && assetDoc && (
@@ -1545,7 +1636,7 @@ function AppInner() {
         onMovePanel={handleMovePanel}
         menu={
           <>
-            <MenuBar
+            <AppHeader
               editorMode={editorMode}
               onOpenAssets={() => {}}
               onBackToScene={
@@ -1589,6 +1680,20 @@ function AppInner() {
               onSaveWorkspacePreset={() => {
                 setSaveWorkspacePresetOpen(true);
               }}
+              // ModeContextBar props
+              currentSceneName={
+                scenes.find((s) => s.id === currentId)?.name ?? null
+              }
+              activeAssetPath={activeAssetLogicalPath}
+              assetDirty={assetDirty}
+              sceneDirty={logState.size > 0}
+              activeLogicGraphId={activeLogicGraph?.logical_path ?? null}
+              activeCodeFileName={pendingNavigation?.fileId ?? null}
+              isPlaying={editorMode === "play"}
+              canUndo={logState.can_undo}
+              canRedo={logState.can_redo}
+              assetCanUndo={assetLogState.can_undo}
+              assetCanRedo={assetLogState.can_redo}
             />
             {editorMode === "play" && <GameOverlay onStop={handleTogglePlay} />}
           </>

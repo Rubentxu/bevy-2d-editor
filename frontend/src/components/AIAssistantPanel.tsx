@@ -3,18 +3,23 @@
  *
  * Renders to the left of the HierarchyPanel. Contains:
  * - Header with title and close button
+ * - Task mode selector (Ask / Propose / Fix / Generate / Review)
+ * - Context control chips (toggle which sources are included)
  * - Prompt textarea + Submit button
  * - Loading spinner during LLM call
- * - Stack of ProposalCards (pending proposals)
+ * - Stack of ProposalCards (pending proposals) with risk + validation impact preview
  * - Empty state when no proposals
  * - Inline error display
  * - ContextDebugSection (Hito 4 Order 6) showing per-source token counts
  */
 
+import { useState } from "react";
 import { AIAssistantState, Proposal } from "../hooks/useAIAssistant";
 import ProposalCard from "./ProposalCard";
 import { ContextDebugSection } from "./ContextDebugSection";
 import type { PerSourceStats } from "../types/ai";
+
+export type TaskMode = "ask" | "propose" | "fix" | "generate" | "review";
 
 interface Props {
   aiState: AIAssistantState;
@@ -28,7 +33,21 @@ interface Props {
   contextStats?: PerSourceStats[];
   contextBudgetChars?: number;
   contextUsedChars?: number;
+  // v2: task mode
+  taskMode?: TaskMode;
+  onTaskModeChange?: (mode: TaskMode) => void;
+  // v2: context source toggles — each source can be enabled/disabled
+  enabledSources?: Set<string>;
+  onContextToggle?: (sourceName: string, enabled: boolean) => void;
 }
+
+const TASK_MODES: { value: TaskMode; label: string }[] = [
+  { value: "ask", label: "Ask" },
+  { value: "propose", label: "Propose" },
+  { value: "fix", label: "Fix" },
+  { value: "generate", label: "Generate" },
+  { value: "review", label: "Review" },
+];
 
 export default function AIAssistantPanel({
   aiState,
@@ -41,7 +60,13 @@ export default function AIAssistantPanel({
   contextStats = [],
   contextBudgetChars = 40000,
   contextUsedChars = 0,
+  taskMode = "ask",
+  onTaskModeChange,
+  enabledSources = new Set<string>(),
+  onContextToggle,
 }: Props) {
+  const [showContextControls, setShowContextControls] = useState(false);
+
   return (
     <div className="ai-assistant-panel">
       <div className="ai-panel-header">
@@ -57,10 +82,72 @@ export default function AIAssistantPanel({
       </div>
 
       <div className="ai-panel-body">
+        {/* Task mode selector (Ask / Propose / Fix / Generate / Review) */}
+        {onTaskModeChange && (
+          <div className="ai-task-mode-selector" data-testid="ai-task-mode-selector" role="group" aria-label="Task mode">
+            {TASK_MODES.map((mode) => (
+              <button
+                key={mode.value}
+                type="button"
+                className={`ai-task-mode-btn ${taskMode === mode.value ? "active" : ""}`}
+                onClick={() => onTaskModeChange(mode.value)}
+                data-testid={`ai-task-mode-${mode.value}`}
+                aria-pressed={taskMode === mode.value}
+              >
+                {mode.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Context control chips */}
+        {onContextToggle && contextStats.length > 0 && (
+          <div className="ai-context-controls">
+            <button
+              type="button"
+              className="ai-context-toggle-btn"
+              onClick={() => setShowContextControls((v) => !v)}
+              data-testid="ai-context-toggle-btn"
+              title="Toggle context sources"
+            >
+              {showContextControls ? "▼" : "▶"} Context
+            </button>
+            {showContextControls && (
+              <div className="ai-context-chips" data-testid="ai-context-chips">
+                {contextStats.map((stat) => (
+                  <button
+                    key={stat.name}
+                    type="button"
+                    className={`ai-context-chip ${enabledSources.has(stat.name) ? "active" : ""}`}
+                    onClick={() =>
+                      onContextToggle(stat.name, !enabledSources.has(stat.name))
+                    }
+                    data-testid={`ai-context-chip-${stat.name}`}
+                    title={`${stat.name}: ${stat.included_chars} / ${stat.total_chars} chars`}
+                  >
+                    {stat.name}
+                    {stat.truncated && <span className="chip-truncated">*</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Prompt area */}
         <textarea
           className="ai-prompt-input"
-          placeholder="Describe what you want to create or change…"
+          placeholder={
+            taskMode === "ask"
+              ? "Ask a question about the scene…"
+              : taskMode === "propose"
+                ? "Describe what you want to change…"
+                : taskMode === "fix"
+                  ? "Describe what to fix…"
+                  : taskMode === "generate"
+                    ? "Describe what to generate…"
+                    : "Describe what to review…"
+          }
           value={aiState.prompt}
           onChange={(e) => onPromptChange(e.target.value)}
           onKeyDown={(e) => {
@@ -133,6 +220,7 @@ export default function AIAssistantPanel({
                 onApply={() => onApply(proposal.id)}
                 onDiscard={() => onDiscard(proposal.id)}
                 applying={applyingIds.has(proposal.id)}
+                taskMode={taskMode}
               />
             ))}
           </div>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
   Background,
@@ -13,6 +13,7 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import { useLogicGraph, toRFNodes, toRFEdges } from "../hooks/useLogicGraph";
+import RecipePicker from "./RecipePicker";
 
 interface LogicGraphEditorProps {
   editorMode: "scene" | "asset-authoring" | "logic";
@@ -38,19 +39,35 @@ interface PaletteItem {
 export default function LogicGraphEditor({
   editorMode,
 }: LogicGraphEditorProps) {
-  const { graph, descriptors, dispatch, createDefault } = useLogicGraph();
+  const { graph, descriptors, dispatch, createDefault, open, refresh } = useLogicGraph();
 
   const [nodes, setNodes, onNodesChange] = useNodesState([] as Node[]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([] as Edge[]);
 
-  // Auto-create default graph when entering logic mode with no graph
-  const hasAutoCreatedRef = useRef(false);
-  useEffect(() => {
-    if (editorMode === "logic" && !graph && !hasAutoCreatedRef.current) {
-      hasAutoCreatedRef.current = true;
-      createDefault();
-    }
-  }, [editorMode, graph, createDefault]);
+  // RecipePicker state: show picker first until a recipe or blank is chosen
+  const [pickerDone, setPickerDone] = useState(false);
+
+  const handleRecipeSelect = useCallback(
+    async (assetId: string | null) => {
+      if (assetId !== null) {
+        // Load the selected recipe graph
+        await open(assetId);
+      } else {
+        // Blank graph — create default
+        await createDefault();
+      }
+      await refresh();
+      setPickerDone(true);
+    },
+    [open, createDefault, refresh],
+  );
+
+  const handleStartBlank = useCallback(async () => {
+    // Opt-in blank graph: create default and advance
+    await createDefault();
+    await refresh();
+    setPickerDone(true);
+  }, [createDefault, refresh]);
 
   // Sync from WASM whenever graph changes — this implements RF1 and RF3
   useEffect(() => {
@@ -132,8 +149,19 @@ export default function LogicGraphEditor({
     [dispatch],
   );
 
+  // Not in logic mode — render nothing
   if (editorMode !== "logic") {
     return null;
+  }
+
+  // Show RecipePicker first — "Start from blank graph" is opt-in
+  if (!pickerDone) {
+    return (
+      <RecipePicker
+        onSelect={handleRecipeSelect}
+        onStartBlank={handleStartBlank}
+      />
+    );
   }
 
   return (

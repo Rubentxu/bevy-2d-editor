@@ -26,6 +26,11 @@ interface Props {
   // primary `selectedId` (which is the most-recently-clicked single
   // id used for the inspector fallback).
   selectedIds?: Set<string>;
+  // Logic Workflow v2 actions (PR4)
+  onAttachLogic?: (instanceId: string) => void;
+  onOpenBoundLogic?: (entityId: string) => void;
+  onCreateFromRecipe?: () => void;
+  onInspectRuntimeLogic?: () => void;
 }
 
 /**
@@ -77,6 +82,79 @@ function entityIcon(entity: SceneDocument["entities"][number]): string {
   return "📦";
 }
 
+// ── Row Badges (Phase 2.3) ──────────────────────────────────────────────────
+
+interface BadgeProps {
+  className?: string;
+  title?: string;
+  testId?: string;
+  children?: React.ReactNode;
+}
+
+/** InstanceBadge — marks entities that are children of a Scene Instance. */
+function InstanceBadge({ title, testId, children }: BadgeProps) {
+  return (
+    <span
+      className="badge badge-instance"
+      data-testid={testId}
+      title={title ?? "Scene Instance child"}
+    >
+      {children}
+    </span>
+  );
+}
+
+/** LogicBadge — marks entities bound to a LogicInstance. */
+function LogicBadge({ title, testId, children }: BadgeProps) {
+  return (
+    <span
+      className="badge badge-logic"
+      data-testid={testId}
+      title={title ?? "Logic-bound entity"}
+    >
+      {children}
+    </span>
+  );
+}
+
+/** OverrideBadge — marks entities with component override status. */
+function OverrideBadge({
+  status,
+  testId,
+}: {
+  status: "active" | "stale" | "conflict" | "orphaned";
+  testId?: string;
+}) {
+  const labels: Record<string, string> = {
+    active: "A",
+    stale: "S",
+    conflict: "C",
+    orphaned: "O",
+  };
+  return (
+    <span
+      className={`badge badge-override badge-override-${status}`}
+      data-testid={testId}
+      title={`Override: ${status}`}
+    >
+      {labels[status] ?? "?"}
+    </span>
+  );
+}
+
+/** WarningBadge — marks entities in a warning state. */
+function WarningBadge({ title, testId, children }: BadgeProps) {
+  return (
+    <span
+      className="badge badge-warning"
+      data-testid={testId}
+      title={title ?? "Warning"}
+    >
+      {children ?? "⚠"}
+    </span>
+  );
+}
+
 export default function HierarchyPanel({
   scene,
   selectedId,
@@ -87,6 +165,10 @@ export default function HierarchyPanel({
   renameRequest = 0,
   onSelectModifier,
   selectedIds,
+  onAttachLogic,
+  onOpenBoundLogic,
+  onCreateFromRecipe,
+  onInspectRuntimeLogic,
 }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -215,6 +297,30 @@ export default function HierarchyPanel({
             title="Create new entity (N)"
           >
             + Add Entity <span className="kbd-hint">(N)</span>
+          </button>
+        )}
+        {/* Logic Workflow v2: Create from Recipe */}
+        {onCreateFromRecipe && (
+          <button
+            type="button"
+            className="hierarchy-create-from-recipe-btn"
+            onClick={onCreateFromRecipe}
+            data-testid="hierarchy-create-from-recipe-btn"
+            title="Create a new logic graph from a recipe"
+          >
+            + From Recipe
+          </button>
+        )}
+        {/* Logic Workflow v2: Inspect Runtime Logic State */}
+        {onInspectRuntimeLogic && (
+          <button
+            type="button"
+            className="hierarchy-inspect-runtime-btn"
+            onClick={onInspectRuntimeLogic}
+            data-testid="hierarchy-inspect-runtime-btn"
+            title="Inspect runtime logic state"
+          >
+            Logic State
           </button>
         )}
       </div>
@@ -351,31 +457,74 @@ export default function HierarchyPanel({
                   </span>
                 )}
                 {entity.id.startsWith("inst_") && (
-                  <span
-                    className="scene-instance-badge"
-                    data-testid={`instance-badge-${entity.id}`}
-                    title="Scene Instance child"
+                  <InstanceBadge
+                    testId={`instance-badge-${entity.id}`}
                   >
-                    [I]
-                  </span>
+                    I
+                  </InstanceBadge>
                 )}
+                {/* LogicBadge: entity is logic-bound via a LogicInstance.
+                    Detection: entity carries a component whose type_id starts
+                    with "LogicBridge" or contains "LogicNode". The definitive
+                    marker is the presence of a logic-related component; this
+                    is a present/future extension point. */}
+                {entity.components.some((c) =>
+                  c.type_id.startsWith("LogicBridge") ||
+                  c.type_id.startsWith("LogicNode"),
+                ) && (
+                  <>
+                    <LogicBadge testId={`logic-badge-${entity.id}`}>
+                      L
+                    </LogicBadge>
+                    {onOpenBoundLogic && (
+                      <button
+                        type="button"
+                        className="hierarchy-open-logic-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenBoundLogic(entity.id);
+                        }}
+                        data-testid={`hierarchy-open-logic-btn-${entity.id}`}
+                        title="Open bound logic graph"
+                      >
+                        Open Logic
+                      </button>
+                    )}
+                  </>
+                )}
+                {/* OverrideBadge: show dominant override status as a coloured badge. */}
                 {(() => {
                   const instId =
                     parseInstanceChild(entity.id)?.instance_id ?? null;
                   if (!instId) return null;
                   const inst = instances[instId];
                   if (!inst) return null;
-                  const color = overrideStatusColor(inst);
-                  if (!color) return null;
+                  const allPatches = [
+                    ...inst.component_overrides,
+                    ...inst.orphaned_component_overrides,
+                  ];
+                  if (allPatches.length === 0) return null;
+                  // Dominant status for badge: conflict > orphaned > stale > active.
+                  const status: "active" | "stale" | "conflict" | "orphaned" =
+                    allPatches.some((p) => p.status === "conflict")
+                      ? "conflict"
+                      : allPatches.some((p) => p.status === "orphaned")
+                        ? "orphaned"
+                        : allPatches.some((p) => p.status === "stale")
+                          ? "stale"
+                          : "active";
                   return (
-                    <span
-                      className="override-status-dot"
-                      data-testid={`override-dot-${entity.id}`}
-                      title="Override status"
-                      style={{ backgroundColor: color }}
+                    <OverrideBadge
+                      status={status}
+                      testId={`override-badge-${entity.id}`}
                     />
                   );
                 })()}
+                {/* WarningBadge: future warning conditions (asset version mismatch,
+                    missing required component, etc.) can be surfaced here. */}
+                {entity.components.some((c) => c.type_id.endsWith("Broken")) && (
+                  <WarningBadge testId={`warning-badge-${entity.id}`} />
+                )}
                 <span className="id">{entity.id.slice(0, 8)}</span>
               </div>
             );

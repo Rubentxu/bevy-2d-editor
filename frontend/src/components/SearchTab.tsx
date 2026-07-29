@@ -111,6 +111,31 @@ export default function SearchTab({ onSourceNavigate }: SearchTabProps) {
         break;
       }
 
+      case "logic-graph": {
+        // Switch to logic mode and open the logic graph asset.
+        (window as any).__setEditorMode?.("logic");
+        try {
+          await (window as any).__openLogicGraphFromSearch?.(result.id);
+        } catch (e) {
+          console.warn("[SearchTab] open logic graph failed:", e);
+        }
+        break;
+      }
+
+      case "schema": {
+        // Switch to asset-authoring mode and focus the schema in the registry.
+        (window as any).__setEditorMode?.("asset-authoring");
+        (window as any).__focusSchemaFromSearch?.(result.id);
+        break;
+      }
+
+      case "validation-issue": {
+        // Open the Validation Center and navigate to the specific issue.
+        (window as any).__openValidationCenter?.();
+        (window as any).__navigateToValidationIssue?.(result.id);
+        break;
+      }
+
       case "command":
         if (result.onClick) result.onClick();
         break;

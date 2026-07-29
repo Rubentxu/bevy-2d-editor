@@ -14,8 +14,11 @@ const TYPE_ICONS: Record<GlobalSearchResult["type"], string> = {
   scene: "🎬",
   entity: "🧩",
   "scene-asset": "🎨",
+  "logic-graph": "🔗",
   "source-file": "📄",
   "asset-file": "🖼️",
+  schema: "📋",
+  "validation-issue": "⚠️",
   command: "⚙️",
 };
 

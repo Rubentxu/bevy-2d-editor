@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { SceneDocument } from "../hooks/useSceneState";
+import { useMultiSelectSummary } from "../hooks/useMultiSelectSummary";
 import {
   SceneInstance,
   OverrideIssue,
@@ -20,6 +21,7 @@ import AddComponentButton from "./AddComponentButton";
 import ComponentEditor from "./ComponentEditor";
 import SchemaAuthoringPanel from "./SchemaAuthoringPanel";
 import RuntimePreviewInspector from "./RuntimePreviewInspector";
+import InspectorSection from "./InspectorSection";
 
 interface Props {
   scene: SceneDocument | null;
@@ -58,6 +60,12 @@ interface Props {
   assetEntries?: Array<{ asset_id: string; logical_path: string }>;
   // Jump to source (rust-source-integration)
   onJumpToSource?: (typeId: string) => void;
+  // Logic Workflow v2 actions (PR4)
+  onAttachLogic?: (instanceId: string) => void;
+  onOpenBoundLogic?: (entityId: string) => void;
+  onCreateFromRecipe?: () => void;
+  onInspectRuntimeLogic?: () => void;
+  onSwitchToLogicMode?: () => void;
 }
 
 /**
@@ -68,11 +76,13 @@ function InstanceRow({
   onRemove,
   onReplace,
   assetEntries,
+  onAttachLogic,
 }: {
   instance: SceneInstance;
   onRemove: () => void;
   onReplace: () => void;
   assetEntries?: Array<{ asset_id: string; logical_path: string }>;
+  onAttachLogic?: (instanceId: string) => void;
 }) {
   const isBroken = instance.asset_version_seen === 0;
   return (
@@ -103,6 +113,15 @@ function InstanceRow({
         </span>
       )}
       <div className="instance-actions">
+        {onAttachLogic && (
+          <button
+            onClick={() => onAttachLogic(instance.instance_id)}
+            data-testid={`instance-attach-logic-btn-${instance.instance_id}`}
+            title="Attach a logic graph to this instance"
+          >
+            Attach Logic
+          </button>
+        )}
         <button
           onClick={onReplace}
           data-testid={`instance-replace-btn-${instance.instance_id}`}
@@ -185,6 +204,7 @@ function MultiInspector({
     value: any,
   ) => void;
 }) {
+  const summary = useMultiSelectSummary(scene, selectedIds);
   const ids = Array.from(selectedIds);
   const entities = ids
     .map((id) => scene.entities.find((e) => e.id === id))
@@ -205,14 +225,16 @@ function MultiInspector({
       data-testid="inspector-multi"
       data-entity-count={entities.length}
       data-common-components={commonTypeIds.length}
+      data-has-mixed-fields={summary?.hasMixedFields ?? false}
     >
       <header
         className="inspector-multi-header"
         data-testid="inspector-multi-header"
       >
+        {/* Phase 2.3: enriched header using useMultiSelectSummary */}
         <span className="inspector-multi-title">
-          {entities.length} entities selected · {commonTypeIds.length}{" "}
-          {commonTypeIds.length === 1 ? "component" : "components"} in common
+          {summary?.headerLabel ??
+            `${entities.length} entities · ${commonTypeIds.length} shared`}
         </span>
         {!onSetFieldOnMultiple && (
           <span
@@ -417,6 +439,11 @@ export default function InspectorPanel({
   onReplaceInstanceAsset,
   assetEntries = [],
   onJumpToSource,
+  onAttachLogic,
+  onOpenBoundLogic,
+  onCreateFromRecipe,
+  onInspectRuntimeLogic,
+  onSwitchToLogicMode,
 }: Props) {
   const entity = scene?.entities.find((e) => e.id === selectedId) ?? null;
   const [nameDraft, setNameDraft] = useState(entity?.name ?? "");
@@ -665,186 +692,312 @@ export default function InspectorPanel({
       />
       {entity && (
         <>
-          <input
-            type="text"
-            className="entity-name"
-            value={nameDraft}
-            onChange={(e) => setNameDraft(e.target.value)}
-            onBlur={() => {
-              if (nameDraft !== entity.name) {
-                onRename(entity.id, nameDraft);
-              }
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                (e.target as HTMLInputElement).blur();
-              }
-            }}
-            data-testid={`entity-name-${entity.id}`}
-          />
-          {visibleComponents.length === 0 && (
-            <div className="panel-empty">
-              {componentsToRender.length === 0
-                ? "No components"
-                : "No matching components"}
-            </div>
-          )}
-          {visibleComponents.map((c) => {
-            // Build per-component field override status lookup for this component
-            const componentFieldStatus: Record<
-              string,
-              ComponentOverrideStatus
-            > = {};
-            for (const [key, status] of Object.entries(
-              fieldOverrideStatusMap,
-            )) {
-              const [typeId, fieldName] = key.split(":");
-              if (typeId === c.type_id) {
-                componentFieldStatus[fieldName] = status;
-              }
-            }
-            return (
-              <ComponentCard
-                key={c.type_id}
-                component={c}
-                entityId={entity.id}
-                onCommit={(fieldPath, value) =>
-                  onSetField(entity.id, c.type_id, fieldPath, value)
-                }
-                onRemove={() => onRemoveComponent(entity.id, c.type_id)}
-                fieldOverrideStatus={
-                  isInstanceEntity ? componentFieldStatus : undefined
-                }
-                onRevertField={
-                  isInstanceEntity
-                    ? (fieldPath) => handleRevertField(c.type_id, fieldPath)
-                    : undefined
-                }
-                onJumpToSource={
-                  onJumpToSource ? () => onJumpToSource(c.type_id) : undefined
-                }
+          {/* Zone 1 — Identity / Provenance */}
+          <InspectorSection id="identity" title="Identity" defaultCollapsed={false}>
+            <div className="zone-identity">
+              <input
+                type="text"
+                className="entity-name"
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onBlur={() => {
+                  if (nameDraft !== entity.name) {
+                    onRename(entity.id, nameDraft);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }}
+                data-testid={`entity-name-${entity.id}`}
               />
-            );
-          })}
-          <AddComponentButton
-            key={schemaRefreshKey}
-            entityId={entity.id}
-            onAdd={(typeId) => onAddComponent(entity.id, typeId)}
-          />
-          <div className="inspector-actions">
-            <button
-              type="button"
-              className="new-schema-btn"
-              onClick={() => setShowSchemaPanel(true)}
-            >
-              + New Schema
-            </button>
-          </div>
-          {/* Phase 6.6: Resync warning banner.
-              The button previously opened a dedicated Override/Resync Workbench
-              which was never implemented. Per-field revert (via ComponentCard's
-              revert button) is the current resolution path. Tracked as future
-              enhancement for a full workbench UX. */}
-          {isInstanceEntity && showResyncWarning && (
-            <div
-              className="resync-warning-banner"
-              data-testid="resync-warning-banner"
-            >
-              <span className="resync-warning-icon">⚠️</span>
-              <span className="resync-warning-text">
-                {totalProblemCount} override{totalProblemCount !== 1 ? "s" : ""}{" "}
-                need review (use per-field revert)
+              <span className="entity-id-label" data-testid={`entity-id-display-${entity.id}`}>
+                {entity.id}
               </span>
-            </div>
-          )}
-          {/* Component Override Summary (override-resync-workbench) */}
-          {overrideCounts && (
-            <div className="override-summary" data-testid="override-summary">
-              {/* Phase 6.4: Normalized "Overrides" section header with badges */}
-              <h4 className="overrides-section-header">Overrides</h4>
-              <div className="override-counts">
-                {overrideCounts.active > 0 && (
-                  <span
-                    className="override-count active"
-                    title="Active component overrides"
-                  >
-                    {overrideCounts.active} active
-                  </span>
-                )}
-                {overrideCounts.stale > 0 && (
-                  <span
-                    className="override-count stale"
-                    title="Component overrides on renamed/removed fields"
-                  >
-                    {overrideCounts.stale} stale
-                  </span>
-                )}
-                {overrideCounts.orphaned > 0 && (
-                  <span
-                    className="override-count orphaned"
-                    title="Orphaned component overrides — entity removed from asset"
-                  >
-                    {overrideCounts.orphaned} orphaned
-                  </span>
-                )}
-                {overrideCounts.conflict > 0 && (
-                  <span
-                    className="override-count conflict"
-                    title="Type conflict component overrides"
-                  >
-                    {overrideCounts.conflict} conflict
-                  </span>
-                )}
-              </div>
-              {/* Resync reports for this instance */}
-              {resyncReports.length > 0 && (
-                <div className="resync-reports">
-                  <span className="resync-label">Resync:</span>
-                  {resyncReports.map(([id, report]) => (
-                    <span
-                      key={id}
-                      className="resync-report"
-                      data-testid={`resync-${id}`}
-                    >
-                      {report.active}a {report.stale}s {report.orphaned}o{" "}
-                      {report.conflict}c
-                    </span>
-                  ))}
-                </div>
-              )}
-              {/* Component override issues details */}
-              {overrideIssues.length > 0 && (
+              {/* Logic Workflow v2: Open Bound Logic for logic-bound entities */}
+              {entity.components.some(
+                (c) =>
+                  c.type_id.startsWith("LogicBridge") ||
+                  c.type_id.startsWith("LogicNode"),
+              ) && onOpenBoundLogic && (
                 <button
                   type="button"
-                  className="override-issues-toggle"
-                  onClick={() => setShowOverrideDetails(!showOverrideDetails)}
+                  className="open-bound-logic-btn"
+                  onClick={() => onOpenBoundLogic(entity.id)}
+                  data-testid={`open-bound-logic-btn-${entity.id}`}
                 >
-                  {overrideIssues.length} issue
-                  {overrideIssues.length !== 1 ? "s" : ""}{" "}
-                  {showOverrideDetails ? "▲" : "▼"}
+                  Open Bound Logic
                 </button>
               )}
-              {showOverrideDetails && overrideIssues.length > 0 && (
-                <ul
-                  className="override-issues-list"
-                  data-testid="override-issues-list"
+            </div>
+          </InspectorSection>
+
+          {/* Zone 2 — Core placement (Transform2D separated for quick access) */}
+          {(() => {
+            const core = visibleComponents.filter((c) =>
+              c.type_id.endsWith("Transform2D"),
+            );
+            const others = visibleComponents.filter(
+              (c) => !c.type_id.endsWith("Transform2D"),
+            );
+            // Helper to extract per-component override status from the
+            // flat "typeId:fieldName" map that fieldOverrideStatusMap uses.
+            const buildFieldStatus = (
+              typeId: string,
+            ): Record<string, ComponentOverrideStatus> | undefined => {
+              if (!isInstanceEntity) return undefined;
+              const result: Record<string, ComponentOverrideStatus> = {};
+              for (const [key, status] of Object.entries(fieldOverrideStatusMap)) {
+                const [tid, fieldName] = key.split(":");
+                if (tid === typeId) result[fieldName] = status;
+              }
+              return Object.keys(result).length > 0 ? result : undefined;
+            };
+            return (
+              <>
+                {core.length > 0 && (
+                  <InspectorSection
+                    id="core"
+                    title="Core"
+                    defaultCollapsed={false}
+                    badge={core.length}
+                  >
+                    {core.map((c) => (
+                      <ComponentCard
+                        key={c.type_id}
+                        component={c}
+                        entityId={entity.id}
+                        onCommit={(fieldPath, value) =>
+                          onSetField(entity.id, c.type_id, fieldPath, value)
+                        }
+                        onRemove={() =>
+                          onRemoveComponent(entity.id, c.type_id)
+                        }
+                        fieldOverrideStatus={buildFieldStatus(c.type_id)}
+                        onRevertField={
+                          isInstanceEntity
+                            ? (fieldPath) =>
+                                handleRevertField(c.type_id, fieldPath)
+                            : undefined
+                        }
+                        onJumpToSource={
+                          onJumpToSource
+                            ? () => onJumpToSource(c.type_id)
+                            : undefined
+                        }
+                      />
+                    ))}
+                  </InspectorSection>
+                )}
+
+                {/* Zone 3 — Components */}
+                <InspectorSection
+                  id="components"
+                  title="Components"
+                  defaultCollapsed={false}
+                  badge={
+                    others.length > 0
+                      ? others.length
+                      : undefined
+                  }
                 >
-                  {overrideIssues.map((issue, i) => (
-                    <li
-                      key={i}
-                      className={`override-issue override-issue-${issue.code}`}
-                      data-testid={`override-issue-${i}`}
+                  {others.length === 0 && visibleComponents.length === 0 && (
+                    <div className="panel-empty">
+                      {componentsToRender.length === 0
+                        ? "No components"
+                        : "No matching components"}
+                    </div>
+                  )}
+                  {others.map((c) => (
+                      <ComponentCard
+                        key={c.type_id}
+                        component={c}
+                        entityId={entity.id}
+                        onCommit={(fieldPath, value) =>
+                          onSetField(entity.id, c.type_id, fieldPath, value)
+                        }
+                        onRemove={() =>
+                          onRemoveComponent(entity.id, c.type_id)
+                        }
+                        fieldOverrideStatus={buildFieldStatus(c.type_id)}
+                        onRevertField={
+                          isInstanceEntity
+                            ? (fieldPath) =>
+                                handleRevertField(c.type_id, fieldPath)
+                            : undefined
+                        }
+                        onJumpToSource={
+                          onJumpToSource
+                            ? () => onJumpToSource(c.type_id)
+                            : undefined
+                        }
+                      />
+                    ))}
+                  <AddComponentButton
+                    key={schemaRefreshKey}
+                    entityId={entity.id}
+                    onAdd={(typeId) => onAddComponent(entity.id, typeId)}
+                  />
+                </InspectorSection>
+              </>
+            );
+          })()}
+
+          {/* Zone 4 — Overrides */}
+          <InspectorSection
+            id="overrides"
+            title="Overrides"
+            defaultCollapsed={true}
+            badge={
+              overrideCounts
+                ? (overrideCounts.active +
+                    overrideCounts.stale +
+                    overrideCounts.orphaned +
+                    overrideCounts.conflict) ||
+                  undefined
+                : undefined
+            }
+          >
+            {/* Phase 6.6: Resync warning banner. */}
+            {isInstanceEntity && showResyncWarning && (
+              <div
+                className="resync-warning-banner"
+                data-testid="resync-warning-banner"
+              >
+                <span className="resync-warning-icon">⚠️</span>
+                <span className="resync-warning-text">
+                  {totalProblemCount} override
+                  {totalProblemCount !== 1 ? "s" : ""} need review
+                </span>
+              </div>
+            )}
+            {/* Override counts summary */}
+            {overrideCounts && (
+              <div className="override-summary" data-testid="override-summary">
+                <div className="override-counts">
+                  {overrideCounts.active > 0 && (
+                    <span
+                      className="override-count active"
+                      title="Active component overrides"
                     >
-                      <code className="override-issue-code">{issue.code}</code>
-                      <span className="override-issue-message">
-                        {issue.message}
+                      {overrideCounts.active} active
+                    </span>
+                  )}
+                  {overrideCounts.stale > 0 && (
+                    <span
+                      className="override-count stale"
+                      title="Component overrides on renamed/removed fields"
+                    >
+                      {overrideCounts.stale} stale
+                    </span>
+                  )}
+                  {overrideCounts.orphaned > 0 && (
+                    <span
+                      className="override-count orphaned"
+                      title="Orphaned component overrides — entity removed from asset"
+                    >
+                      {overrideCounts.orphaned} orphaned
+                    </span>
+                  )}
+                  {overrideCounts.conflict > 0 && (
+                    <span
+                      className="override-count conflict"
+                      title="Type conflict component overrides"
+                    >
+                      {overrideCounts.conflict} conflict
+                    </span>
+                  )}
+                </div>
+                {/* Resync reports for this instance */}
+                {resyncReports.length > 0 && (
+                  <div className="resync-reports">
+                    <span className="resync-label">Resync:</span>
+                    {resyncReports.map(([id, report]) => (
+                      <span
+                        key={id}
+                        className="resync-report"
+                        data-testid={`resync-${id}`}
+                      >
+                        {report.active}a {report.stale}s {report.orphaned}o{" "}
+                        {report.conflict}c
                       </span>
-                    </li>
-                  ))}
-                </ul>
+                    ))}
+                  </div>
+                )}
+                {/* Component override issues details */}
+                {overrideIssues.length > 0 && (
+                  <button
+                    type="button"
+                    className="override-issues-toggle"
+                    onClick={() =>
+                      setShowOverrideDetails(!showOverrideDetails)
+                    }
+                  >
+                    {overrideIssues.length} issue
+                    {overrideIssues.length !== 1 ? "s" : ""}{" "}
+                    {showOverrideDetails ? "▲" : "▼"}
+                  </button>
+                )}
+                {showOverrideDetails && overrideIssues.length > 0 && (
+                  <ul
+                    className="override-issues-list"
+                    data-testid="override-issues-list"
+                  >
+                    {overrideIssues.map((issue, i) => (
+                      <li
+                        key={i}
+                        className={`override-issue override-issue-${issue.code}`}
+                        data-testid={`override-issue-${i}`}
+                      >
+                        <code className="override-issue-code">
+                          {issue.code}
+                        </code>
+                        <span className="override-issue-message">
+                          {issue.message}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </InspectorSection>
+
+          {/* Zone 6 — AI Actions (zone 5 = Runtime Preview rendered separately below) */}
+          <InspectorSection id="ai-actions" title="AI Actions" defaultCollapsed={true}>
+            <div className="inspector-actions">
+              <button
+                type="button"
+                className="new-schema-btn"
+                onClick={() => setShowSchemaPanel(true)}
+              >
+                + New Schema
+              </button>
+              {/* Logic Workflow v2: Create from Recipe */}
+              {onCreateFromRecipe && (
+                <button
+                  type="button"
+                  className="create-from-recipe-btn"
+                  onClick={onCreateFromRecipe}
+                  data-testid="inspector-create-from-recipe-btn"
+                >
+                  Create from Recipe
+                </button>
+              )}
+              {/* Logic Workflow v2: Inspect Runtime Logic State */}
+              {onInspectRuntimeLogic && (
+                <button
+                  type="button"
+                  className="inspect-runtime-logic-btn"
+                  onClick={onInspectRuntimeLogic}
+                  data-testid="inspector-inspect-runtime-logic-btn"
+                >
+                  Inspect Runtime Logic
+                </button>
               )}
             </div>
-          )}
+          </InspectorSection>
         </>
       )}
       {/* v0.82 P2 (ADR-0025 F10): multi-edit view when >1 ids selected */}
@@ -890,6 +1043,7 @@ export default function InspectorPanel({
                 onRemove={() => handleRemoveInstance(inst.instance_id)}
                 onReplace={() => handleReplaceInstance(inst.instance_id)}
                 assetEntries={assetEntries}
+                onAttachLogic={onAttachLogic ? (id) => onAttachLogic(inst.instance_id) : undefined}
               />
             ))
           )}
@@ -898,7 +1052,7 @@ export default function InspectorPanel({
 
       {/* Runtime Preview tab — live Bevy preview inspection */}
       <div className="preview-tab-section" data-testid="preview-tab-section">
-        <RuntimePreviewInspector />
+        <RuntimePreviewInspector onJumpToSource={onJumpToSource} />
       </div>
     </div>
   );
