@@ -9,17 +9,11 @@ import {
 } from "../services/scene-assets";
 import { useHotReloadStatus } from "../hooks/useHotReloadStatus";
 import type { HotReloadEvent } from "../services/hot-reload";
+import { useLogicActivation } from "../hooks/useLogicActivation";
 
 interface Props {
   /** Optional callback to jump back to the source scene/asset for a given stable ID. */
   onJumpToSource?: (stableId: string) => void;
-}
-
-interface LogicLogState {
-  size: number;
-  can_undo: boolean;
-  can_redo: boolean;
-  cursor: number;
 }
 
 /** In-memory ring buffer for hot-reload events (last 20). */
@@ -45,7 +39,8 @@ export default function RuntimePreviewInspector({ onJumpToSource }: Props) {
     stableId: string;
     data: PreviewProvenance;
   } | null>(null);
-  const [logicLog, setLogicLog] = useState<LogicLogState | null>(null);
+  // PR4 correction: use useLogicActivation hook instead of inline (window as any) cast
+  const { snapshot: logicLog } = useLogicActivation({ pollIntervalMs: 500 });
   const [hotReloadEvents, setHotReloadEvents] = useState<HotReloadEvent[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [showTimeline, setShowTimeline] = useState(false);
@@ -78,25 +73,11 @@ export default function RuntimePreviewInspector({ onJumpToSource }: Props) {
     }
   }, []);
 
-  const refreshLogicLog = useCallback(async () => {
-    try {
-      const stateJson = await (window as any).get_logic_log_state();
-      setLogicLog(JSON.parse(stateJson));
-    } catch {
-      // Logic log state may not be available in non-logic modes — silently ignore
-      setLogicLog(null);
-    }
-  }, []);
-
   useEffect(() => {
     refresh();
-    refreshLogicLog();
-    const id = setInterval(() => {
-      refresh();
-      refreshLogicLog();
-    }, 500);
+    const id = setInterval(refresh, 500);
     return () => clearInterval(id);
-  }, [refresh, refreshLogicLog]);
+  }, [refresh]);
 
   // Subscribe to hot-reload events for the timeline
   useEffect(() => {
