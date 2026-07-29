@@ -6,7 +6,9 @@ Accepted (2026-07-23)
 
 ## Context
 
-v0.81 Tier 1c (ADR-0022) shipped drag-source primitives: stable panel
+v0.81 Tier 1c ([ADR-0022](./0022-drag-and-dock-region-swap-renumbered.md),
+originally numbered here as ADR-0022, now renumbered to ADR-0024)
+shipped drag-source primitives: stable panel
 identifiers on every dock region (`data-panel-id`), the custom MIME
 `application/x-dock-panel`, `draggable` headers with `cursor: grab`, and a
 `DockPanel` wrapper that recognises the MIME on `dragover` and exposes an

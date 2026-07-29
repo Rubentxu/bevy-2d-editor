@@ -264,8 +264,9 @@ extended to mirror `floats` alongside `panelRegions` — same key
 - **`react-draggable` library**: rejected — see §Decision 2.
 - **`string[]` for selection**: rejected — O(n) toggle on
   `Ctrl+Click` and O(n) `isSelected` checks; the `Set` shape is
-  cleaner and matches the design precedent in ADR-0022's selection
-  patterns.
+  cleaner and matches the design precedent in
+  [ADR-0022 (renumbered)](./0022-drag-and-dock-region-swap-renumbered.md)'s
+  selection patterns.
 - **`Batch` only (no `SetComponentFieldOnMultiple`)**: rejected —
   the frontend dispatch path stays explicit about intent, no Batch
   construction logic at call sites. The Rust cost is the new
@@ -283,6 +284,7 @@ extended to mirror `floats` alongside `panelRegions` — same key
 - Spec: `sddk/active/v0.82-p2-floating-multi-select/spec/spec.md`
 - Design: `sddk/active/v0.82-p2-floating-multi-select/design.md`
 - Tasks: `sddk/active/v0.82-p2-floating-multi-select/tasks.md`
-- Single-selection lineage: ADR-0017 (selection state), ADR-0022
+- Single-selection lineage: ADR-0017 (selection state),
+  [ADR-0022 (renumbered)](./0022-drag-and-dock-region-swap-renumbered.md)
   (selection patterns)
 - Dock schema lineage: ADR-0021, ADR-0024
