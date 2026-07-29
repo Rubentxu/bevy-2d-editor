@@ -29,7 +29,10 @@ ADR numbering is monotonic and never reused. Superseded decisions keep their ori
 | [ADR-0017](./0017-e2e-test-failure-root-cause.md) | E2E Test Failure Root Cause (Hito 4 final cleanup) | Investigation complete (2026-07-19) |
 | [ADR-0018](./0018-deferred-scene-component-command-handlers-keep-unsupported.md) | Deferred SceneComponent command handlers remain Unsupported | Accepted (2026-07-20) — Hito 7 (`scene-component-authoring-ux`) |
 | [ADR-0019](./0019-opfs-scene-asset-catalog-persistence-ordering.md) | OPFS Scene-Asset Catalog Persistence Ordering | Accepted (2026-07-21) — Hito 7 (`scene-component-authoring-ux`) |
+| [ADR-0020](./0020-number-skipped.md) | Number skipped — reserved | Skipped (2026-07-29) |
 | [ADR-0021](./0021-defold-inspired-layout.md) | Defold-Inspired Layout for Docks | Accepted — Hito 6 (`defold-inspired-dock-polish`) |
+| [ADR-0022](./0022-drag-and-dock-region-swap-renumbered.md) | Drag-and-Dock Region Swap — renumbered to ADR-0024 | Renumbered (2026-07-29) |
+| [ADR-0023](./0023-number-skipped.md) | Number skipped — reserved | Skipped (2026-07-29) |
 | [ADR-0024](./0024-drag-dock-swap.md) | Drag-and-Dock Region Swap | Accepted — Hito 6 (`defold-inspired-dock-polish`) |
 | [ADR-0025](./0025-floating-panels-multi-select.md) | Floating Panels + Inspector Multi-Select | Accepted (2026-07-23) — v0.82 (`v0.82-p2-floating-multi-select`) |
 | [ADR-0026](./0026-asset-browser-thumbnails.md) | Asset Browser Thumbnails — Optional `preview_resource` + Lazy Native Blob URLs | Accepted (2026-07-24) — v0.83 (`v0.82-p3-asset-thumbnails`) |

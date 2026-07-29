@@ -52,7 +52,7 @@
 
 | Change | Branch | Status |
 |--------|--------|--------|
-| — | — | — |
+| `rig-agent-runtime-foundation` | (not yet started) | ⏭️ NEXT — Hito 8 prerequisites complete (v0.85.0 + v0.86.0 merged) |
 
 ---
 
@@ -401,17 +401,17 @@ into a **Cursor-like, agent-native editor for Bevy 2D games**.
 
 ### Prerequisite sequence (must land first)
 
-| Order | Change | Status | Why |
-|-------|--------|--------|-----|
-| P0 | `editor-shell-integrity` | 🔲 Planned | Fix shell blockers before new advanced flows |
-| P1 | `workflow-surface-convergence` | 🔲 Planned | Close backend↔UI exposure gaps and docs drift |
-| P2 | `ui-workflow-overhaul` | 🔲 Planned | Upgrade primary editor surfaces and mode clarity |
+| Order | Change | Version | Status | Why |
+|-------|--------|---------|--------|-----|
+| P0 | `editor-shell-integrity` | v0.85.0 (PR #125) | ✅ DONE | Shipped 2026-07-28 — menu Portal, viewport polish, floating panel, status bar, useCodeFiles |
+| P1 | `workflow-surface-convergence` | v0.85.0 (PR #125) | ✅ DONE | Shipped 2026-07-28 — AI context, logic graph OPFS, Validation Center, Search, prompt-free |
+| P2 | `ui-workflow-overhaul` | v0.86.0 (PR #126) | ✅ DONE | Shipped 2026-07-29 — ModeContextBar, Hierarchy v2, Validation v2, Logic v2, Runtime v2, AI Panel v2 |
 
 ### Planned sequence (after prerequisites)
 
 | Order | Change | Status | Why |
 |-------|--------|--------|-----|
-| 1 | `rig-agent-runtime-foundation` | 🔲 Planned | Add `crates/agent-runtime` and Rig-based manager/worker orchestration behind `ai-proxy` |
+| 1 | `rig-agent-runtime-foundation` | ⏭️ Next | Add `crates/agent-runtime` and Rig-based manager/worker orchestration behind `ai-proxy`. Gate (P0+P1+P2) satisfied. |
 | 2 | `semantic-project-retrieval` | 🔲 Planned | Full project-semantic context and retrieval over docs, schemas, assets, logic, code, and diagnostics |
 | 3 | `agent-workbench` | 🔲 Planned | Proposal/review/apply UX with typed diffs and validation-aware approval |
 | 4 | `runtime-aware-agent-diagnostics` | 🔲 Planned | Make agents useful for runtime/debugging flows, not just generation |
@@ -548,9 +548,8 @@ Validation Center UI + WASM Surface (validation-center)                         
 
 | Item | Description | Blocking |
 |------|-------------|----------|
-| `project-asset-browser-and-scene-asset-authoring` | First Hito 2 implementation cycle. Adds Project Asset Browser and isolated Scene Asset authoring mode. | Requires Hito 2 explore to refine OPFS layout and authoring UX |
-| `scene-instance-placement` | Place Scene Assets into SceneDocuments as Scene Instances, preserving `id_map` and asset provenance. | Depends on Project Asset Browser + Scene Asset Authoring |
-| `override-resync-workbench` | UI for active/orphaned/stale/conflict overrides, resync report, apply/revert/reset. | Depends on Scene Instance Placement |
+| `rig-agent-runtime-foundation` | First Hito 8 implementation cycle. Adds `crates/agent-runtime` with Rig-based agent runtime behind `ai-proxy`. Gate satisfied (P0/P1/P2 done). | None — ready to start |
+| `ui-workflow-overhaul-pr4-debt` | Debt-fix cycle for PR4 carry-overs. Paused on backup branch `debt-backup-ui-workflow-overhaul-pr4` pending WASM env init fix. | WASM env init fix (infra) |
 
 ### Medium Priority
 
@@ -560,23 +559,9 @@ Validation Center UI + WASM Surface (validation-center)                         
 
 ### Hito 1 Pending
 
-| Item | Description | Est. LOC | Path |
-|------|-------------|-----------|------|
-| ~~AI-assisted editing~~ | ✅ Completed in v0.12.0 | — | — |
-| ~~Code export~~ | ✅ Completed in v0.14.0 | — | — |
-| ~~Multi-scene projects~~ | ✅ Completed in v0.15.0 | — | — |
-| ~~pixelmatch quantitative diff~~ | ✅ Completed | — | — |
-| ~~BSN Scene Asset model~~ | ✅ Completed v0.16.0 | — | — |
-| ~~bsn! codegen~~ | ✅ Completed v0.17.0 | — | — |
-| ~~Scene Asset Catalog~~ | ✅ Completed v0.18.0 | — | — |
-| ~~Scene Instance Overrides + Resync~~ | ✅ Completed v0.19.0 | — | — |
-| ~~BSN Migration (template.rs deleted)~~ | ✅ Completed v0.20.0 | — | — |
-| ~~`project-asset-browser-and-scene-asset-authoring` PR1 (persistence + catalog holder)~~ | ✅ Completed in v0.21.0 | ~733 (code+tests) | A-full |
-| ~~`project-asset-browser-and-scene-asset-authoring` PR2 (AssetCommand surface + WASM bridge)~~ | ✅ Completed in v0.22.0 | ~1871 (code+tests) | A-full |
-| ~~`project-asset-browser-and-scene-asset-authoring` PR3 (PAB + AAM frontend)~~ | ✅ Completed in v0.23.0 | ~790 (code+tests) | A-lite |
-| **`scene-instance-placement` PR1 (storage seam + cache + gate)** | ✅ Completed in v0.24.0 | ~240 (backend only) | A-lite (partial) |
-| **Collaborative editing** | Deferred until after Hito 2. CRDT-based multi-user editing still requires decisions: Yjs vs Automerge vs Loro, transport, awareness state, OPFS+CRDT merge strategy, conflict UX | 3000–5000 | A-full |
-| **Plugin system** | Deferred until after Hito 2. WASM plugin ABI should follow schema packs + validation extension points, not precede them | 2000–3000 | A-full |
+All Hito 1 items completed in v0.12-v0.20. Deferred items:
+- `collaborative-editing` — requires Yjs vs Automerge vs Loro decision + CRDT/OPFS merge strategy. Deferred to post-Hito 8.
+- `plugin-system` — requires WASM plugin ABI. Deferred to post-Hito 8.
 
 ### ADR-0005 Implementation Status
 

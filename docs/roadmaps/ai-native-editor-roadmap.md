@@ -41,25 +41,15 @@ This prerequisite is mandated by ADR-0028.
 
 ## Phase 0 — Rig Runtime Foundation
 
-### Goal
+### Prerequisite (already complete)
 
-Make the current editor shell reliable enough to be the foundation for every
-other workflow.
-
-### Scope
-
-- Fix top-level menu visibility/stacking.
-- Define minimum supported viewport strategy and responsive fallback policy.
-- Fix `useCodeFiles` runtime error flood.
-- Replace remaining critical floating-panel placeholders.
-- Remove duplicate onboarding surfaces and obvious visual collisions.
-- Align headers and active mode surfaces.
-
-### Success criteria
-
-- No critical runtime shell bug blocks navigation.
-- Console remains quiet on healthy startup.
-- Menu, dock, fullscreen, and play-mode basics are dependable.
+The "Editor Shell Integrity" work that originally lived in the first
+half of this Phase 0 section was extracted into its own prerequisite
+change `editor-shell-integrity` and completed before v0.85.0. It is
+documented in `docs/roadmaps/ui-workflow-overhaul-roadmap.md` Phase 0
+(Editor Shell Integrity) and the durable spec
+`docs/specs/editor-workflow-convergence.md`. No further work is required
+from the AI-native program on shell integrity.
 
 ### Goal
 
@@ -100,10 +90,11 @@ Move from "prompt with extra fields" to true project-semantic retrieval.
 
 ### Scope
 
-- Finish frontend wiring for selected entity, scene assets, and logic graphs.
 - Add retrieval/indexing for docs, ADRs, specs, recipes, validation, and diagnostics.
 - Introduce durable project knowledge indexing.
 - Add provenance for included context.
+- Wire retrieval results into the AI Assistant Panel's context sources
+  (chips already rendered by `ui-workflow-overhaul` PR4).
 
 ### Success criteria
 
