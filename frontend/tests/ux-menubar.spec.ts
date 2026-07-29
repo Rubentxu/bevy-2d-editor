@@ -23,9 +23,11 @@ test.describe("Defold-inspired menu bar", () => {
   test("opens the File menu with scene and project actions", async ({
     page,
   }) => {
-    await page.locator('[data-testid="menu-file"] .menu-trigger').click();
+    const menuTrigger = page.locator('[data-testid="menu-file"] .menu-trigger');
+    await menuTrigger.click();
 
-    const dropdown = page.locator('[data-testid="menu-file"] .menu-dropdown');
+    // The dropdown is portaled to body — locate it by its body-level data-testid.
+    const dropdown = page.locator('[data-testid="menu-dropdown"]');
     await expect(dropdown).toBeVisible();
     await expect(
       dropdown.getByRole("menuitem", { name: /New Scene/ }),
@@ -43,7 +45,7 @@ test.describe("Defold-inspired menu bar", () => {
 
   test("Escape closes an open dropdown", async ({ page }) => {
     await page.locator('[data-testid="menu-file"] .menu-trigger').click();
-    const dropdown = page.locator('[data-testid="menu-file"] .menu-dropdown');
+    const dropdown = page.locator('[data-testid="menu-dropdown"]');
     await expect(dropdown).toBeVisible();
 
     await page.keyboard.press("Escape");

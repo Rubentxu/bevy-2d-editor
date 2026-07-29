@@ -30,6 +30,10 @@
  * explicitly protected (`data-drop-allowed="false"` + no `onDragOver` /
  * `onDrop` handlers) so accidental drops on the scene viewport cannot
  * invoke the swap.
+ *
+ * Compact mode (viewport < 1280 px): the layout switches to a single
+ * column with a tab bar for switching between panels. The center viewport
+ * remains the primary tab; other panels are accessible via tabs.
  */
 
 import { useState, type DragEvent } from "react";
@@ -37,6 +41,7 @@ import type { ReactNode } from "react";
 import DockDivider from "./DockDivider";
 import { DOCK_PANEL_MIME, isDockPanelDrag } from "./drag-payload";
 import type { DockableRegion, PanelId } from "../../hooks/useDockPrefs";
+import { useViewportMode } from "../../hooks/useViewportMode";
 
 interface Props {
   menu: ReactNode;
@@ -78,6 +83,141 @@ function hasDockPanelDrag(e: DragEvent<HTMLElement>): boolean {
   return isDockPanelDrag(e.dataTransfer?.types);
 }
 
+/** Compact-mode panel tabs. */
+type CompactTab = "assets" | "scene" | "outline" | "properties" | "tools";
+
+const COMPACT_TABS: { id: CompactTab; label: string }[] = [
+  { id: "assets", label: "Assets" },
+  { id: "scene", label: "Scene" },
+  { id: "outline", label: "Outline" },
+  { id: "properties", label: "Properties" },
+  { id: "tools", label: "Tools" },
+];
+
+/** Compact mode layout: single column with tabs for panels. */
+function CompactLayout({
+  menu,
+  status,
+  left,
+  center,
+  right,
+  bottom,
+  bottomVisible,
+}: {
+  menu: ReactNode;
+  status: ReactNode;
+  left: ReactNode;
+  center: ReactNode;
+  right: ReactNode;
+  bottom?: ReactNode;
+  bottomVisible: boolean;
+}) {
+  const [activeTab, setActiveTab] = useState<CompactTab>("scene");
+
+  const renderActivePanel = () => {
+    switch (activeTab) {
+      case "assets":
+        return left;
+      case "scene":
+        return center;
+      case "outline":
+      case "properties":
+        // RightDock renders both outline and properties in a split view.
+        // In compact mode we render the whole RightDock for either tab
+        // (the user can still use both sub-panels inside it).
+        return right;
+      case "tools":
+        return bottom ?? null;
+    }
+  };
+
+  return (
+    <div
+      className="dock-layout dock-layout--compact"
+      data-testid="dock-layout"
+      data-compact="true"
+      style={{ display: "flex", flexDirection: "column", height: "100%" }}
+    >
+      {/* Menu always spans full width */}
+      <div
+        className="dock-layout-region dock-layout-menu"
+        style={{ flexShrink: 0 }}
+        data-testid="dock-region-menu"
+      >
+        {menu}
+      </div>
+
+      {/* Tab bar */}
+      <div
+        className="dock-layout-compact-tabs"
+        role="tablist"
+        aria-label="Dock panels"
+        data-testid="dock-compact-tabs"
+        style={{
+          display: "flex",
+          flexShrink: 0,
+          borderBottom: "1px solid var(--color-border)",
+          background: "var(--color-surface)",
+          overflowX: "auto",
+          gap: "2px",
+          padding: "0 4px",
+        }}
+      >
+        {COMPACT_TABS.map((tab) => {
+          // Hide Tools tab if bottom dock is not visible
+          if (tab.id === "tools" && !bottomVisible) return null;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              data-testid={`dock-compact-tab-${tab.id}`}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                padding: "6px 12px",
+                border: "none",
+                borderBottom:
+                  activeTab === tab.id
+                    ? "2px solid var(--color-accent)"
+                    : "2px solid transparent",
+                background: "transparent",
+                color:
+                  activeTab === tab.id
+                    ? "var(--color-ink)"
+                    : "var(--color-ink-muted)",
+                cursor: "pointer",
+                fontSize: "var(--fs-sm)",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Active panel content — fills remaining space */}
+      <div
+        style={{ flex: 1, overflow: "hidden", minHeight: 0 }}
+        role="tabpanel"
+        data-testid={`dock-compact-panel-${activeTab}`}
+      >
+        {renderActivePanel()}
+      </div>
+
+      {/* Status bar */}
+      <div
+        className="dock-layout-region dock-layout-status"
+        style={{ flexShrink: 0, position: "relative" }}
+        data-testid="dock-region-status"
+      >
+        {status}
+      </div>
+    </div>
+  );
+}
+
 export default function DockLayout({
   menu,
   status,
@@ -101,6 +241,8 @@ export default function DockLayout({
   bottomVisible,
   onMovePanel = () => undefined,
 }: Props) {
+  const { mode } = useViewportMode();
+
   // Track the region currently under the pointer so the visual indicator
   // (`data-drop-active="true"`) follows the cursor. Cleared on dragleave
   // and on every successful drop. We keep this as a small piece of local
@@ -134,6 +276,23 @@ export default function DockLayout({
       onMovePanel(panelId, region);
     };
 
+  // ── Compact mode: single-column tabbed layout ──────────────────────────
+  if (mode === "compact") {
+    return (
+      <CompactLayout
+        menu={menu}
+        status={status}
+        left={left}
+        center={center}
+        right={right}
+        bottom={bottom}
+        bottomVisible={bottomVisible}
+      />
+    );
+  }
+
+  // ── Desktop mode: 3-region CSS Grid ───────────────────────────────────
+
   // CSS Grid template rows. When the bottom dock is hidden the bottom row is
   // a no-op (`auto`) so the center region expands into the freed space.
   const rows = bottomVisible
@@ -148,6 +307,7 @@ export default function DockLayout({
     <div
       className="dock-layout"
       data-testid="dock-layout"
+      data-compact="false"
       style={{
         display: "grid",
         gridTemplateColumns: `${leftVisible ? `${leftWidth}px ` : ""}1fr ${rightWidth}px`,

@@ -13,7 +13,7 @@
 //! `ProcessorContext::from_globals()` or build explicitly for tests.
 
 use crate::command::{Command, CommandError};
-use crate::document::{ComponentInstance, Entity, SceneDocument, StableId};
+use crate::document::{ComponentInstance, Entity, LocalId, SceneDocument, StableId};
 use crate::scene_asset::SceneAssetDocument;
 use crate::scene_instance::SceneInstance;
 use crate::scene_instance_overrides::{resync, upsert_override, remove_override};
@@ -357,6 +357,7 @@ pub fn apply_with_context(
         } => {
             doc.entities.push(Entity {
                 id: id.clone(),
+                local_id: LocalId::new(id.as_str()),
                 name: name.clone(),
                 parent: None,
                 components: components.clone(),
@@ -761,6 +762,7 @@ mod tests {
     fn entity_with_components(id: &str, name: &str, components: Vec<ComponentInstance>) -> Entity {
         Entity {
             id: StableId::new(id),
+            local_id: LocalId::new(id),
             name: name.to_string(),
             parent: None,
             components,
@@ -834,6 +836,7 @@ mod tests {
         doc.entities.push(entity_with_components("parent", "Parent", vec![]));
         doc.entities.push(Entity {
             id: StableId::new("child"),
+            local_id: LocalId::new("child"),
             name: "Child".to_string(),
             parent: Some(StableId::new("parent")),
             components: vec![],
@@ -1020,6 +1023,7 @@ mod tests {
         doc.entities.push(entity_with_components("B", "B", vec![]));
         doc.entities.push(Entity {
             id: StableId::new("C"),
+            local_id: LocalId::new("C"),
             name: "C".to_string(),
             parent: Some(StableId::new("B")),
             components: vec![],

@@ -19,6 +19,7 @@ import ProblemsTab from "../ProblemsTab";
 import SearchTab from "../SearchTab";
 import { stampDockPanelDrag } from "./drag-payload";
 import type { DockableRegion } from "../../hooks/useDockPrefs";
+import type { NavigationTarget } from "../CodeEditor";
 
 interface Props {
   visible: boolean;
@@ -46,6 +47,8 @@ interface Props {
    */
   onFloatToggle?: () => void;
   floating?: boolean;
+  /** Wired to SearchTab → CodeEditor navigation. */
+  onSourceNavigate?: (target: NavigationTarget) => void;
 }
 
 type BottomDockTab = "console" | "search" | "output" | "problems";
@@ -70,6 +73,7 @@ export default function BottomDock({
   panelTitle = "Tools",
   onFloatToggle,
   floating,
+  onSourceNavigate,
 }: Props) {
   const [activeTab, setActiveTab] = useState<BottomDockTab>("console");
 
@@ -209,7 +213,7 @@ export default function BottomDock({
         role="tabpanel"
       >
         {activeTab === "console" && <ConsoleTab />}
-        {activeTab === "search" && <SearchTab />}
+        {activeTab === "search" && <SearchTab onSourceNavigate={onSourceNavigate} />}
         {activeTab === "output" && <OutputTab />}
         {activeTab === "problems" && <ProblemsTab />}
       </div>

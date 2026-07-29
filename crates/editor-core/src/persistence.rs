@@ -34,6 +34,9 @@ pub const ASSETS_DIR: &str = "assets";
 /// Subdirectory containing Tileset body files.
 pub const TILESETS_DIR: &str = "tilesets";
 
+/// Subdirectory containing LogicGraphAsset bodies (parallel to ASSETS_DIR for scene assets).
+pub const LOGIC_GRAPHS_DIR: &str = "logic_graphs";
+
 // RESOURCE_DIR is defined in `asset_files.rs` (the canonical location used by
 // the asset pipeline). The duplicate here was unused; left only the active
 // constant above.
@@ -96,6 +99,12 @@ pub fn asset_path(logical_path: &str) -> String {
 /// `<id>` is the TilesetId string (already opaque and escaped).
 pub fn tileset_path(id: &str) -> String {
     format!("{}/{}.tileset.json", TILESETS_DIR, id)
+}
+
+/// Resolve the OPFS path for a LogicGraphAsset body: `logic_graphs/<logical_path>.logic.json`.
+/// `logical_path` MUST be already-normalized (segments joined by '/').
+pub fn logic_graph_path(logical_path: &str) -> String {
+    format!("{}/{}.logic.json", LOGIC_GRAPHS_DIR, logical_path)
 }
 
 /// Error type for asset path validation.
@@ -324,5 +333,21 @@ mod tests {
 
         let traversal = AssetPathError::PathTraversal("'..' segment not allowed".to_string());
         assert!(traversal.to_string().contains("path traversal"));
+    }
+
+    #[test]
+    fn test_logic_graph_path_simple() {
+        assert_eq!(
+            logic_graph_path("jump"),
+            "logic_graphs/jump.logic.json"
+        );
+    }
+
+    #[test]
+    fn test_logic_graph_path_nested() {
+        assert_eq!(
+            logic_graph_path("platformer/jump"),
+            "logic_graphs/platformer/jump.logic.json"
+        );
     }
 }

@@ -183,7 +183,7 @@ pub enum OperationLogError {
 mod tests {
     use super::*;
     use crate::command::{CommandMetadata, CommandEnvelope};
-    use crate::document::{ComponentInstance, Entity, StableId};
+    use crate::document::{ComponentInstance, Entity, LocalId, StableId};
     use serde_json::json;
     use std::collections::BTreeMap;
 
@@ -506,6 +506,7 @@ mod tests {
             // Re-add to doc since processor::apply already applied forward
             doc.entities.push(Entity {
                 id: StableId::new(format!("e{}", i)),
+                local_id: LocalId::new(format!("e{}", i)),
                 name: format!("E{}", i),
                 parent: None,
                 components: vec![],
@@ -629,6 +630,7 @@ mod tests {
         log.record(&envelope_with(fwd), inv);
         doc.entities.push(Entity {
             id: StableId::new("ent_01"),
+            local_id: LocalId::new("ent_01"),
             name: "Foo".to_string(),
             parent: None,
             components: vec![],
@@ -663,6 +665,7 @@ mod tests {
         log.record(&envelope_with(fwd.clone()), inv);
         doc.entities.push(Entity {
             id: StableId::new("e1"),
+            local_id: LocalId::new("e1"),
             name: "E1".to_string(),
             parent: None,
             components: vec![ComponentInstance {

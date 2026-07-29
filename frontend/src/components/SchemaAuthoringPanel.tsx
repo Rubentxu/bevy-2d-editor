@@ -393,6 +393,20 @@ export default function SchemaAuthoringPanel({
               ? "Save blocked: Scene Asset catalog is empty. Create a Scene Asset first."
               : "Save blocked: validation issues must be resolved first.",
         });
+        // CRITICAL ISSUE 1: wire WASM schema issues to Validation Center channel.
+        if (fresh.globalIssues.length > 0) {
+          for (const iss of fresh.globalIssues) {
+            if (typeof (window as any).__registerSchemaIssue === "function") {
+              (window as any).__registerSchemaIssue({
+                severity: "error",
+                category: "schema",
+                domain: "code",
+                code: iss.code,
+                message: iss.message,
+              });
+            }
+          }
+        }
         return;
       }
     }
@@ -400,6 +414,20 @@ export default function SchemaAuthoringPanel({
     const validationErrors = validate();
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
+      // CRITICAL ISSUE 1: wire form-level schema issues to Validation Center.
+      for (const [field, msg] of Object.entries(validationErrors)) {
+        if (field === "type_id" || field === "display_name" || field === "general") {
+          if (typeof (window as any).__registerSchemaIssue === "function") {
+            (window as any).__registerSchemaIssue({
+              severity: "error",
+              category: "schema",
+              domain: "code",
+              code: `schema_${field}`,
+              message: String(msg),
+            });
+          }
+        }
+      }
       return;
     }
 

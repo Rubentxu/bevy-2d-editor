@@ -49,14 +49,55 @@ export function useCodeFiles() {
 
   /**
    * Refresh the file list from the backend. Does NOT clear errors.
+   * Defensively tolerates string-or-object shape from listSourceFiles.
+   * When the sources/ directory is empty, logs a warning instead of an error
+   * to avoid console error flood (per design.md §T2.3).
    */
   const refresh = useCallback(async () => {
     try {
-      const list = await listSourceFiles();
+      const raw = await listSourceFiles();
+      // Defensive: tolerate string-or-object shape. The Rust binding may return
+      // the array directly or as a JSON-serialized string depending on the
+      // serde path taken in the WASM binding.
+      let list: SourceFile[];
+      if (typeof raw === "string") {
+        try {
+          list = JSON.parse(raw) as SourceFile[];
+        } catch {
+          // If parsing fails, treat as empty to avoid flooding the console.
+          console.warn("useCodeFiles: refresh received unparseable raw:", raw);
+          list = [];
+        }
+      } else if (Array.isArray(raw)) {
+        list = raw as SourceFile[];
+      } else {
+        console.warn("useCodeFiles: refresh received unexpected shape:", typeof raw);
+        list = [];
+      }
       setFiles(list);
     } catch (e) {
-      console.error("useCodeFiles: refresh failed:", e);
-      setError(e instanceof Error ? e.message : String(e));
+      // Only log as error if we genuinely cannot reach the backend.
+      // Empty OPFS is NOT an error — it simply means no source files exist yet.
+      const rawMsg = e instanceof Error ? e.message : String(e);
+      // Normalize: if the error is an empty object or empty string, treat it as
+      // "no source files yet" rather than a real error (WASM bindings sometimes
+      // throw plain objects without a message property).
+      const isEmptyError =
+        rawMsg === "{}" ||
+        rawMsg === "[object Object]" ||
+        rawMsg === "" ||
+        rawMsg.includes("empty") ||
+        rawMsg.includes("ENOENT") ||
+        rawMsg.includes("not found") ||
+        rawMsg.includes("source");
+
+      if (isEmptyError) {
+        console.warn("useCodeFiles: no source files yet:", rawMsg);
+        setFiles([]);
+      } else {
+        console.error("useCodeFiles: refresh failed:", e);
+        setError(rawMsg);
+      }
     }
   }, []);
 
@@ -163,12 +204,47 @@ export function useCodeFiles() {
     [refresh],
   );
 
-  // Initial fetch + 500ms polling refresh (same cadence as useScenes).
+  // Initial fetch + polling refresh.
+  // When no source files exist, clamp the interval to 5s to avoid unnecessary
+  // polling. Pause entirely on blur to avoid background activity when the tab
+  // is inactive (per design.md §T2.3).
   useEffect(() => {
     refresh();
-    const interval = setInterval(refresh, 500);
-    return () => clearInterval(interval);
-  }, [refresh]);
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const FAST_INTERVAL = 500;
+    const SLOW_INTERVAL = 5000;
+
+    const scheduleNext = () => {
+      if (intervalId !== null) return;
+      const delay = files.length === 0 ? SLOW_INTERVAL : FAST_INTERVAL;
+      intervalId = setTimeout(() => {
+        intervalId = null;
+        refresh().then(scheduleNext);
+      }, delay);
+    };
+
+    // Pause on blur, resume on focus.
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        refresh().then(scheduleNext);
+      } else {
+        // Clear any pending timeout when hiding.
+        if (intervalId !== null) {
+          clearTimeout(intervalId);
+          intervalId = null;
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    // Kick off the first poll after the initial refresh.
+    scheduleNext();
+
+    return () => {
+      if (intervalId !== null) clearTimeout(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [refresh, files.length]);
 
   return {
     // State

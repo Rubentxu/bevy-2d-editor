@@ -426,7 +426,7 @@ pub fn is_known_anchor_str(s: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::document::{Entity, StableId};
+    use crate::document::{Entity, LocalId, StableId};
     use serde_json::json;
 
     fn make_doc(entities: Vec<Entity>) -> SceneDocument {
@@ -471,6 +471,7 @@ mod tests {
     fn entity(id: &str, name: &str, components: Vec<ComponentInstance>) -> Entity {
         Entity {
             id: StableId::new(id),
+            local_id: LocalId::new(id),
             name: name.to_string(),
             parent: None,
             components,
@@ -480,6 +481,7 @@ mod tests {
     fn child(id: &str, name: &str, parent_id: &str, components: Vec<ComponentInstance>) -> Entity {
         Entity {
             id: StableId::new(id),
+            local_id: LocalId::new(id),
             name: name.to_string(),
             parent: Some(StableId::new(parent_id)),
             components,

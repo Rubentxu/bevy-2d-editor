@@ -46,6 +46,12 @@ export interface AIAssistantState {
 interface UseAIAssistantOptions {
   /** Called after each command in a proposal is dispatched successfully */
   onApplied?: () => void;
+  /** Hito 4 Order 6: currently-open logic graph for multi-source context */
+  logicGraph?: import("../hooks/useLogicGraph").LogicGraphAsset | null;
+  /** Hito 4 Order 6: scene asset catalog + active asset body for multi-source context */
+  sceneAssetContext?: import("../types/ai").SceneAssetContext;
+  /** Hito 4 Order 6: currently-selected entity for multi-source context */
+  selectedEntity?: import("../types/ai").SelectedEntity | null;
 }
 
 /**
@@ -56,7 +62,12 @@ interface UseAIAssistantOptions {
  * const { prompt, setPrompt, loading, proposals, error, submit, applyProposal, discardProposal } = useAIAssistant();
  * ```
  */
-export function useAIAssistant({ onApplied }: UseAIAssistantOptions = {}) {
+export function useAIAssistant({
+  onApplied,
+  logicGraph,
+  sceneAssetContext,
+  selectedEntity,
+}: UseAIAssistantOptions = {}) {
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [proposals, setProposals] = useState<Proposal[]>([]);
@@ -129,6 +140,7 @@ export function useAIAssistant({ onApplied }: UseAIAssistantOptions = {}) {
         // or fail; the wrapper catches and continues.
         let extraContext: Parameters<typeof fetchPropose>[5] | undefined =
           undefined;
+        let sourceFilesWithContent: SourceFileRef[] = [];
         try {
           // Fetch with a 2s budget to avoid blocking the propose flow
           // when the source-files API is slow or unavailable.
@@ -141,7 +153,7 @@ export function useAIAssistant({ onApplied }: UseAIAssistantOptions = {}) {
               ),
             ),
           ]);
-          const sourceFilesWithContent: SourceFileRef[] = await Promise.all(
+          sourceFilesWithContent = await Promise.all(
             sourceList.map(async (sf) => {
               try {
                 const result = await Promise.race([
@@ -163,13 +175,37 @@ export function useAIAssistant({ onApplied }: UseAIAssistantOptions = {}) {
               }
             }),
           );
+        } catch (listErr) {
+          // Non-fatal: source-files fetch failed, continue with empty list.
+          console.warn("[useAIAssistant] listSourceFiles failed:", listErr, "message:", (listErr as Error)?.message, "stack:", (listErr as Error)?.stack?.substring(0, 200));
+        }
+
+        // Assemble multi-source context (selectedEntity must NOT depend on listSourceFiles succeeding)
+        try {
           const assembled: AssembledContext = assembleMultiSourceContext(
             sceneSnapshot,
             schemas,
             sourceFilesWithContent,
-            [], // logic_graphs: TBD via useLogicGraph (out of scope for PR2)
-            { catalog: [], selected_body: null }, // scene_assets: TBD
-            null,
+            logicGraph
+              ? [
+                  {
+                    asset_id: logicGraph.asset_id,
+                    nodes: logicGraph.nodes.map((n) => ({
+                      id: n.node_id,
+                      type: n.node_type_id,
+                      position: null,
+                    })),
+                    edges: logicGraph.edges.map((e) => ({
+                      from_node: e.from_node,
+                      from_port: e.from_port,
+                      to_node: e.to_node,
+                      to_port: e.to_port,
+                    })),
+                  },
+                ]
+              : [],
+            sceneAssetContext ?? { catalog: [], selected_body: null },
+            selectedEntity ?? null,
           );
           extraContext = {
             source_files: assembled.context.source_files,
@@ -184,6 +220,7 @@ export function useAIAssistant({ onApplied }: UseAIAssistantOptions = {}) {
             ctxErr,
           );
         }
+
 
         const response: ProposeResponse = await fetchPropose(
           prompt.trim(),
@@ -247,6 +284,13 @@ export function useAIAssistant({ onApplied }: UseAIAssistantOptions = {}) {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         setError(msg);
+        // CRITICAL ISSUE 2: wire network/request failures to Validation Center.
+        if (typeof (window as any).__recordAIProposalFailure === "function") {
+          (window as any).__recordAIProposalFailure({
+            code: "ai_proposal_request_failed",
+            message: `AI proposal request failed: ${msg}`,
+          });
+        }
       } finally {
         setLoading(false);
       }
@@ -269,9 +313,21 @@ export function useAIAssistant({ onApplied }: UseAIAssistantOptions = {}) {
       const errors: string[] = [];
 
       for (const envelope of proposal.commands) {
-        const result = await dispatchFn(envelope);
-        if (result.error) {
-          errors.push(`${(envelope.command as any).type}: ${result.error}`);
+        try {
+          const result = await dispatchFn(envelope);
+          if (result.error) {
+            errors.push(`${(envelope.command as any).type}: ${result.error}`);
+          }
+        } catch (thrown) {
+          const thrownMsg = thrown instanceof Error ? thrown.message : String(thrown);
+          errors.push(`${(envelope.command as any).type}: ${thrownMsg}`);
+          // CRITICAL ISSUE 2: wire thrown errors in applyProposal to Validation Center.
+          if (typeof (window as any).__recordAIProposalFailure === "function") {
+            (window as any).__recordAIProposalFailure({
+              code: "ai_proposal_apply_threw",
+              message: `AI proposal apply threw: ${thrownMsg}`,
+            });
+          }
         }
       }
 
@@ -284,6 +340,14 @@ export function useAIAssistant({ onApplied }: UseAIAssistantOptions = {}) {
             p.id === proposalId ? { ...p, validationErrors: errors } : p,
           ),
         );
+        // CRITICAL ISSUE 1: wire AI proposal failure to Validation Center channel.
+        // Record the first error for the Validation Center's AI issue inbox.
+        if (typeof (window as any).__recordAIProposalFailure === "function") {
+          (window as any).__recordAIProposalFailure({
+            code: "ai_proposal_rejected",
+            message: errors.join("; "),
+          });
+        }
       }
     },
     [proposals, onApplied],

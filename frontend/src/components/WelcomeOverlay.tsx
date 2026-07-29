@@ -11,24 +11,44 @@
  *   5. Play & Test (▶ Run)
  *
  * Two CTAs:
- *   - "Take the tour" → closes the overlay + invokes `onTakeTour` so the
- *     parent can switch editor mode to the relevant context
+ *   - "Take the tour" → closes the overlay + invokes `onTakeTour`
  *   - "Skip" → closes the overlay
  *
  * Plus a "Don't show again" checkbox that persists in OPFS so the overlay
  * doesn't reappear after the user opts out.
  *
- * The hydration gate (`hydrated && visible`) prevents a flash on reload when
- * the OPFS flag is already set.
+ * Phase C T3.3: calls `reportWelcomeShouldShow` after the OPFS hydration
+ * check so OnboardingBanner can hide itself via WelcomeDismissalContext
+ * (mutual exclusion, spec S5).
  */
 
 import { useEffect, useState } from "react";
 import { opfsLoadFile, opfsSaveFile } from "../opfs-bridge";
+import { useWelcomeDismissal } from "./WelcomeDismissalContext";
 
 const FLAGS_PATH = "welcome-dismissed.json";
 
 interface WelcomeState {
   dismissed: boolean;
+}
+
+/** Synchronous check — gates first render before any async work. */
+async function isWelcomePermanentlyDismissedSync(): Promise<boolean> {
+  try {
+    // Use sync navigator.storage API if available for immediate gate.
+    if (typeof navigator !== "undefined" && navigator.storage && navigator.storage.getDirectory) {
+      const root = await navigator.storage.getDirectory();
+      const dir = await root.getDirectoryHandle("bevy-2d-editor", { create: false });
+      const file = await dir.getFileHandle(FLAGS_PATH);
+      const blob = await file.getFile();
+      const text = await blob.text();
+      const parsed = JSON.parse(text) as Partial<WelcomeState>;
+      return parsed.dismissed === true;
+    }
+  } catch {
+    // Not available or file not present — fall through to async check.
+  }
+  return false; // default: show welcome
 }
 
 async function isWelcomeDismissed(): Promise<boolean> {
@@ -88,55 +108,74 @@ interface Props {
 }
 
 export default function WelcomeOverlay({ onTakeTour, onSkip }: Props) {
+  const { reportWelcomeShouldShow, isChecking } = useWelcomeDismissal();
   const [hydrated, setHydrated] = useState(false);
-  const [visible, setVisible] = useState(false);
   const [dontShowAgain, setDontShowAgain] = useState(false);
+  // Local dismissed state — set to true when user clicks Skip or Take the tour
+  // so the overlay closes immediately without waiting for parent re-render.
+  const [dismissed, setDismissed] = useState(false);
+  // Permanent dismissal — initialized synchronously from OPFS so the very first
+  // render is already gated (no flash before the async useEffect fires).
+  const [permanentDismissal, setPermanentDismissal] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    isWelcomeDismissed().then((dismissed) => {
+    // Gate first render with a synchronous OPFS check when available.
+    isWelcomePermanentlyDismissedSync().then((permanently) => {
       if (cancelled) return;
-      setHydrated(true);
-      // Allow tests / scripts to opt out of the welcome overlay by passing
-      // `?skip-welcome=1` on the URL — this is used by the broader Playwright
-      // suite (every UX spec) so non-welcome tests don't have to dismiss the
-      // overlay on every page load.
-      const skip =
-        typeof window !== "undefined" &&
-        new URLSearchParams(window.location.search).get("skip-welcome") ===
-          "1";
-      if (skip) {
-        setVisible(false);
+      setPermanentDismissal(permanently);
+      if (permanently) {
+        // User previously chose "Don't show again" — skip the async load.
+        setHydrated(true);
+        reportWelcomeShouldShow({ shouldShow: false, permanentDismissal: true });
         return;
       }
-      // First-visit = the persisted flag is absent AND we have not been
-      // told to skip via the onTakeTour / onSkip prop shortcuts. The prop
-      // path is honored so menu-triggered re-opens always show the modal.
-      setVisible(!dismissed);
+      // First visit (or no prior choice): fall through to async OPFS check.
+      isWelcomeDismissed().then((wasDismissed) => {
+        if (cancelled) return;
+        setHydrated(true);
+        const skip =
+          typeof window !== "undefined" &&
+          new URLSearchParams(window.location.search).get("skip-welcome") === "1";
+        reportWelcomeShouldShow({ shouldShow: !wasDismissed && !skip, permanentDismissal: false });
+      });
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reportWelcomeShouldShow]);
 
-  const handleClose = () => {
-    setVisible(false);
+  // Gate on isChecking (from WelcomeDismissalContext) to prevent both surfaces
+  // from rendering during the async OPFS hydration window (spec S5).
+  // Also gate on permanentDismissal for persisted "Don't show again" (S5).
+  // Also gate on dismissed for user-initiated temporary Skip/TakeTour.
+  if (!hydrated || permanentDismissal || dismissed || isChecking) return null;
+
+  const handleClose = async () => {
     if (dontShowAgain) {
-      void setWelcomeDismissed(true);
+      await setWelcomeDismissed(true);
+      setPermanentDismissal(true);
+      reportWelcomeShouldShow({ shouldShow: false, permanentDismissal: true });
+    }
+    // If dontShowAgain is false (Skip without permanent opt-out), we call
+    // reportWelcomeShouldShow to set welcomeVisible=false so Banner shows.
+    // The useEffect is the authoritative source for permanentDismissal.
+    if (!dontShowAgain) {
+      reportWelcomeShouldShow({ shouldShow: false, permanentDismissal: false });
     }
   };
 
-  const handleTakeTour = () => {
-    handleClose();
+  const handleTakeTour = async () => {
+    await handleClose();
+    setDismissed(true);
     onTakeTour?.();
   };
 
-  const handleSkip = () => {
-    handleClose();
+  const handleSkip = async () => {
+    await handleClose();
+    setDismissed(true);
     onSkip?.();
   };
-
-  if (!hydrated || !visible) return null;
 
   return (
     <div
@@ -146,7 +185,6 @@ export default function WelcomeOverlay({ onTakeTour, onSkip }: Props) {
       aria-modal="true"
       aria-label="Welcome to Bevy 2D Editor"
       onClick={(e) => {
-        // Click outside the panel closes the overlay.
         if (e.target === e.currentTarget) handleSkip();
       }}
     >

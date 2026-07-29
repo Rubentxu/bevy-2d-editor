@@ -322,7 +322,7 @@ pub fn export_rust_source(scene: &SceneDocument, schemas: &ComponentSchemaRegist
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::document::{Entity, StableId};
+    use crate::document::{Entity, LocalId, StableId};
     use crate::schema::{ComponentSchema, ComponentSchemaRegistry, FieldDef};
     use serde_json::json;
     use std::collections::BTreeMap;
@@ -369,6 +369,7 @@ mod tests {
     fn entity(id: &str, name: &str, components: Vec<ComponentInstance>) -> Entity {
         Entity {
             id: StableId::new(id),
+            local_id: LocalId::new(id),
             name: name.to_string(),
             parent: None,
             components,
@@ -378,6 +379,7 @@ mod tests {
     fn child(id: &str, name: &str, parent_id: &str, components: Vec<ComponentInstance>) -> Entity {
         Entity {
             id: StableId::new(id),
+            local_id: LocalId::new(id),
             name: name.to_string(),
             parent: Some(StableId::new(parent_id)),
             components,

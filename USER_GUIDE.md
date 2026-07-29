@@ -55,6 +55,13 @@ The editor follows the same spatial layout as Defold/Unity/Construct:
 | **Bottom dock — Tools** | Console · Search · Output · Problems | **F7** to toggle |
 | **Status bar** | 7 segments: mouse pos · entities · project · scene · zoom · fps · build | Always visible |
 
+### Minimum supported width
+
+The full 3-column dock layout requires a viewport of **1280 px or wider**.
+Below that threshold the editor renders in **compact mode**: a single-column layout
+with a tab bar for switching between panels (Assets · Scene · Outline · Properties · Tools).
+The Scene viewport remains the primary tab; all other panels are accessible via tabs.
+
 ### Resizing the dock
 
 Every region of the dock is resizable. Drag the thin 4px handle on the
@@ -116,11 +123,11 @@ Shortcuts are disabled while focus is in an input, text area, or editable code f
 
 | Shortcut | Action |
 |---|---|
-| `Ctrl/Cmd+P` | Play / Stop preview |
-| `Ctrl/Cmd+;` | Toggle validation center |
-| `Ctrl/Cmd+T` | Toggle tileset panel |
-| `Ctrl/Cmd+L` | Toggle auto layer panel |
-| `Ctrl/Cmd+R` | Force hot-reload |
+| `Ctrl/Cmd+P` | Play / Stop preview (planned) |
+| `Ctrl/Cmd+;` | Toggle validation center (planned) |
+| `Ctrl/Cmd+T` | Toggle tileset panel (planned) |
+| `Ctrl/Cmd+L` | Toggle auto layer panel (planned) |
+| `Ctrl/Cmd+R` | Force hot-reload (planned) |
 
 Press `?` in the editor for the current in-app list. See the cheat sheet screenshot below.
 
@@ -151,6 +158,26 @@ A Component Override is a non-destructive patch applied by a Scene Instance to a
 ### Schema
 
 A Schema describes a Component's fields and types. Built-in schemas are seeded automatically. User schemas can be registered via the Schema Authoring panel.
+
+## Editor modes
+
+The editor has four distinct modes that govern which panels are available and how the canvas behaves:
+
+### Scene mode (default)
+
+The primary authoring environment. The canvas shows the active scene; all panels (Hierarchy, Properties, Assets, Tools) are available. Switch to this mode by clicking the scene tab or pressing Escape from any other mode.
+
+### Asset Authoring mode
+
+Opened by double-clicking a Scene Asset in the Project Asset Browser. The canvas shows the selected asset's entity hierarchy; the Properties panel shows the asset's components. Changes to an asset propagate to Scene Instances through explicit resync. Press Escape or click **← Back to Scene** to return.
+
+### Logic Editor mode
+
+Opened via **Tools ▸ Logic Editor**. The canvas is replaced by the Logic Graph Editor, a node/edge graph canvas for wiring behaviour bricks (Sensors → Controllers → Actuators). Built-in Pattern Blocks (recipes) appear under the `logic` role filter in the Project Asset Browser. Press Escape or close the tab to return to Scene mode.
+
+### Code Editor mode
+
+Opened via **Tools ▸ Code Editor**. A file list (left) + CodeMirror 6 editor (right) for Rust source files stored in OPFS. Ctrl+S / Cmd+S saves the active file. Use **+ New File** to create a new source file. Press Escape or close the tab to return to Scene mode.
 
 ## Workflows
 

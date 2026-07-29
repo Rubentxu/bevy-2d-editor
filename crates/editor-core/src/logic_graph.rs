@@ -118,6 +118,24 @@ impl Default for LogicGraphAsset {
     }
 }
 
+/// A lightweight catalog entry for LogicGraphAssets — stored in
+/// `project.json` alongside `SceneAssetCatalogEntry` (ADR-0008 layout).
+/// Parallel to `SceneAssetCatalogEntry` but for behavior graphs.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LogicGraphCatalogEntry {
+    pub asset_id: String,
+    pub logical_path: String,
+    /// Built-in immutable recipe (e.g. `recipes/platformer_jump`).
+    #[serde(default)]
+    pub builtin: bool,
+    /// Unix timestamp ms when the asset was first created.
+    #[serde(default)]
+    pub created_at: u64,
+    /// Unix timestamp ms when the asset was last saved.
+    #[serde(default)]
+    pub updated_at: u64,
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // LogicInstance binding payload
 // ─────────────────────────────────────────────────────────────────────────────
@@ -149,6 +167,39 @@ pub fn editor_logic_binding_component(instance: &LogicInstance) -> ComponentInst
             "version": instance.version,
         }),
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OPFS persistence helpers (parallel to scene_asset persistence patterns)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Save a LogicGraphAsset body to OPFS at `logic_graphs/<logical_path>.logic.json`.
+/// The catalog entry must be saved separately first (ADR-0019: catalog-first).
+#[cfg(target_arch = "wasm32")]
+pub async fn save_logic_graph_body(asset: &LogicGraphAsset) -> Result<(), String> {
+    let path = crate::persistence::logic_graph_path(&asset.logical_path);
+    let json = serde_json::to_string(asset).map_err(|e| e.to_string())?;
+    crate::js_save_file(&path, &json).await
+}
+
+/// Load a LogicGraphAsset body from OPFS by logical_path.
+#[cfg(target_arch = "wasm32")]
+pub async fn load_logic_graph_body(logical_path: &str) -> Result<LogicGraphAsset, String> {
+    let path = crate::persistence::logic_graph_path(logical_path);
+    let json = crate::js_load_file(&path).await?;
+    serde_json::from_str(&json).map_err(|e| e.to_string())
+}
+
+/// Delete a LogicGraphAsset body from OPFS by logical_path.
+#[cfg(not(target_arch = "wasm32"))]
+pub async fn save_logic_graph_body(_asset: &LogicGraphAsset) -> Result<(), String> {
+    Ok(())
+}
+
+/// Placeholder for non-WASM targets.
+#[cfg(not(target_arch = "wasm32"))]
+pub async fn load_logic_graph_body(_logical_path: &str) -> Result<LogicGraphAsset, String> {
+    Err("load_logic_graph_body not available on non-WASM target".to_string())
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
