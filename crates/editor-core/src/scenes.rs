@@ -24,11 +24,10 @@ pub struct SceneEntry {
 
 /// Public metadata for a scene, returned by `list_scenes_extended`.
 #[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct SceneInfo {
     pub id: String,
     pub name: String,
-    pub is_current: bool,
+    pub is_active: bool,
     pub is_dirty: bool,
 }
 
@@ -240,7 +239,7 @@ impl SceneRegistry {
             .map(|(id, entry)| SceneInfo {
                 id: id.clone(),
                 name: entry.scene.name.clone(),
-                is_current: current.as_deref() == Some(id),
+                is_active: current.as_deref() == Some(id),
                 is_dirty: entry.is_dirty,
             })
             .collect()
@@ -520,7 +519,7 @@ mod tests {
 
         let list = registry.list();
         assert_eq!(list.len(), 2);
-        let current = list.iter().find(|s| s.is_current).unwrap();
+        let current = list.iter().find(|s| s.is_active).unwrap();
         assert_eq!(current.name, "B"); // B is current after switch
         assert!(current.is_dirty);
     }

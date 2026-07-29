@@ -33,9 +33,12 @@ ADR numbering is monotonic and never reused. Superseded decisions keep their ori
 | [ADR-0024](./0024-drag-dock-swap.md) | Drag-and-Dock Region Swap | Accepted — Hito 6 (`defold-inspired-dock-polish`) |
 | [ADR-0025](./0025-floating-panels-multi-select.md) | Floating Panels + Inspector Multi-Select | Accepted (2026-07-23) — v0.82 (`v0.82-p2-floating-multi-select`) |
 | [ADR-0026](./0026-asset-browser-thumbnails.md) | Asset Browser Thumbnails — Optional `preview_resource` + Lazy Native Blob URLs | Accepted (2026-07-24) — v0.83 (`v0.82-p3-asset-thumbnails`) |
+| [ADR-0027](./0027-rig-agentic-editor-architecture.md) | Rig-Based Agent Runtime for the AI-Native Bevy 2D Editor | Accepted (2026-07-27) — planning baseline |
+| [ADR-0028](./0028-workflow-first-before-agentic-ai.md) | Workflow-First UI Convergence Before Agentic AI | Accepted (2026-07-27) — sequencing prerequisite |
 
 ## Related Documents
 
 - [CONTEXT.md](../../CONTEXT.md) — project domain language (authoritative terminology).
 - [docs/sddk/](../sddk/) — SDD change proposals, specs, and designs.
 - [docs/specs/](../specs/) — capability specifications.
+- [docs/roadmaps/](../roadmaps/) — forward-looking implementation programs.

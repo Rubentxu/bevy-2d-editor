@@ -5,13 +5,20 @@ import { useCodeFiles } from "./useCodeFiles";
 import { useAssetFiles } from "./useAssetFiles";
 
 export type GlobalSearchResultType =
-  "scene" | "entity" | "scene-asset" | "source-file" | "asset-file" | "command";
+  | "scene"
+  | "entity"
+  | "scene-asset"
+  | "source-file"
+  | "asset-file"
+  | "command";
 
 export interface GlobalSearchResult {
   type: GlobalSearchResultType;
   id: string;
   label: string;
   path: string;
+  /** StableId of the entity this result refers to (entity type only). */
+  entityId?: string;
   /** Optional handler invoked when user clicks the result. */
   onClick?: () => void;
 }
@@ -26,7 +33,7 @@ interface IndexSources {
 const MAX_RESULTS = 50;
 
 /**
- * v0.81 Tier 1 — Global search index.
+ * v0.82 — Global search index (Phase B: entity + command implemented).
  *
  * Builds a flat, in-memory index from the existing React hooks:
  * - Scenes (`useScenes`)
@@ -34,13 +41,14 @@ const MAX_RESULTS = 50;
  * - Source files (`useCodeFiles`)
  * - Asset files (`useAssetFiles`)
  *
+ * Entity search within the active scene is supported via the WASM engine's
+ * `list_scene_entities` export when the engine is ready.
+ * Command results are populated by the consumer (SearchTab / CommandPalette)
+ * via the `commandResults` prop — this hook merges them into the result stream.
+ *
  * Search is case-insensitive substring matching, with prefix hits ranked
  * above mid-string hits. Results are capped at `MAX_RESULTS` to keep the
  * list scannable in the bottom dock.
- *
- * Entity search within the active scene is NOT yet wired — it requires a
- * global entity index from `useSceneState` that does not exist in v0.81.
- * The `entity` and `command` result types are reserved for future tiers.
  */
 export function useGlobalSearch() {
   const { scenes } = useScenes();
@@ -50,6 +58,8 @@ export function useGlobalSearch() {
 
   const [results, setResults] = useState<GlobalSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  /** Consumer-supplied command results (e.g. from CommandPalette history). */
+  const [commandResults, setCommandResults] = useState<GlobalSearchResult[]>([]);
 
   // Mirror the polled collections into a ref so `search` can read the
   // latest snapshot without depending on them in its useCallback dep array
@@ -130,10 +140,20 @@ export function useGlobalSearch() {
               type: "asset-file",
               id: file.id,
               label: file.name,
-              path: `${file.kind} · ${file.mime_type}`,
+              path: file.path,
             });
           }
         }
+
+        // Entity search — WASM provides list_scene_entities for the active scene.
+        // We only search within the currently active scene.
+        const activeScene = s.find((sc) => sc.is_active);
+        if (activeScene) {
+          await searchEntitiesInScene(q, activeScene.id, out);
+        }
+
+        // Merge command results (already filtered by query via SearchTab)
+        out.push(...commandResults.filter((r) => r.label.toLowerCase().includes(q)));
 
         // Sort: prefix matches before substring; then alphabetically.
         out.sort((a, b) => {
@@ -150,9 +170,10 @@ export function useGlobalSearch() {
         setLoading(false);
       }
     },
-    // `search` is intentionally stable — it reads from indexRef instead of
-    // depending on the polled collections directly.
-    [],
+    // `search` is intentionally stable — it reads from indexRef and commandResults
+    // instead of depending on the polled collections directly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [commandResults],
   );
 
   // Reset loading flag when the underlying index changes mid-flight so the
@@ -161,5 +182,41 @@ export function useGlobalSearch() {
     setLoading(false);
   }, [scenes, sceneAssets, sourceFiles, assetFiles]);
 
-  return { results, loading, search };
+  return { results, loading, search, setCommandResults };
+}
+
+// ── Entity search helper ──────────────────────────────────────────────────────
+
+interface SceneEntity {
+  stable_id: string;
+  local_id: string;
+  name: string;
+}
+
+async function searchEntitiesInScene(
+  query: string,
+  sceneId: string,
+  out: GlobalSearchResult[],
+): Promise<void> {
+  if (typeof window === "undefined") return;
+  const fn = (window as any).list_scene_entities;
+  if (typeof fn !== "function") return;
+  try {
+    const raw = fn(sceneId);
+    const entities: SceneEntity[] =
+      typeof raw === "string" ? JSON.parse(raw) : raw;
+    for (const entity of entities) {
+      if (entity.name.toLowerCase().includes(query)) {
+        out.push({
+          type: "entity",
+          id: entity.stable_id,
+          entityId: entity.stable_id,
+          label: entity.name,
+          path: `Entity · ${entity.local_id}`,
+        });
+      }
+    }
+  } catch {
+    // WASM not ready or scene has no entities — skip silently.
+  }
 }

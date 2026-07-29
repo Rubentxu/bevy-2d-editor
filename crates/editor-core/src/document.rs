@@ -31,6 +31,33 @@ impl fmt::Display for StableId {
     }
 }
 
+/// Local identifier for an entity within a scene.
+/// Uses #[serde(transparent)] so it serializes as a plain string.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+#[derive(Default)]
+pub struct LocalId(String);
+
+impl LocalId {
+    pub fn new(id: impl Into<String>) -> Self {
+        Self(id.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl fmt::Display for LocalId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
 /// 2D vector with x and y components.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Vec2 {
@@ -114,6 +141,9 @@ impl Default for SceneDocument {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Entity {
     pub id: StableId,
+    /// Local identifier within the scene. Falls back to id if not set.
+    #[serde(default, skip_serializing_if = "LocalId::is_empty")]
+    pub local_id: LocalId,
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<StableId>,
@@ -141,6 +171,7 @@ mod tests {
             name: "Test Scene".to_string(),
             entities: vec![Entity {
                 id: StableId::new("ent_01"),
+                local_id: LocalId::new("ent_01"),
                 name: "Player".to_string(),
                 parent: None,
                 components: vec![],
@@ -210,12 +241,14 @@ mod tests {
             entities: vec![
                 Entity {
                     id: StableId::new("parent_01"),
+                    local_id: LocalId::new("parent_01"),
                     name: "Parent".to_string(),
                     parent: None,
                     components: vec![],
                 },
                 Entity {
                     id: StableId::new("child_01"),
+                    local_id: LocalId::new("child_01"),
                     name: "Child".to_string(),
                     parent: Some(StableId::new("parent_01")),
                     components: vec![],
@@ -237,6 +270,7 @@ mod tests {
     fn test_rename_preserves_id() {
         let mut entity = Entity {
             id: StableId::new("ent_01J..."),
+            local_id: LocalId::new("ent_01J..."),
             name: "Player".to_string(),
             parent: None,
             components: vec![],

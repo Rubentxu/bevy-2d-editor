@@ -9,31 +9,38 @@ import {
   StaleSceneComponentBindingError,
 } from "../services/scene-components";
 import { importBsnAssetFromFile } from "../services/bsnImport";
+import type { LogicGraphCatalogEntry } from "../services/logic-graphs";
 import ThumbnailCell from "./ThumbnailCell";
+import PromptDialog from "./PromptDialog";
+import ConfirmDialog from "./ConfirmDialog";
 
 interface Props {
   entries: SceneAssetCatalogEntry[];
+  logicGraphEntries?: LogicGraphCatalogEntry[];
   onCreate: (name: string, role: string) => Promise<void>;
   onRename: (assetId: string, newPath: string) => Promise<void>;
   onDuplicate: (assetId: string) => Promise<void>;
   onDelete: (assetId: string) => Promise<void>;
   onOpen: (assetId: string) => void;
+  onOpenLogicGraph?: (assetId: string) => void;
   onPlaceInstance: (
     assetId: string,
     translation?: { x: number; y: number },
   ) => Promise<void>;
 }
 
-const ROLES = ["actor", "level", "ui", "fragment", "screen", "effect"] as const;
+const ROLES = ["actor", "level", "ui", "fragment", "screen", "effect", "logic"] as const;
 type Role = (typeof ROLES)[number];
 
 export default function ProjectAssetBrowser({
   entries,
+  logicGraphEntries = [],
   onCreate,
   onRename,
   onDuplicate,
   onDelete,
   onOpen,
+  onOpenLogicGraph,
   onPlaceInstance,
 }: Props) {
   const [roleFilter, setRoleFilter] = useState<string>("all");
@@ -41,6 +48,15 @@ export default function ProjectAssetBrowser({
   const [renameValue, setRenameValue] = useState("");
   const [placingAssetId, setPlacingAssetId] = useState<string | null>(null);
   const [exportingAssetId, setExportingAssetId] = useState<string | null>(null);
+
+  // T3.2 — dialog state (replaces window.prompt/confirm/alert)
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteConfirmName, setDeleteConfirmName] = useState("");
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importDefaultName, setImportDefaultName] = useState("");
+  const [placeDialogAssetId, setPlaceDialogAssetId] = useState<string | null>(null);
+
   const bsnFileInputRef = useRef<HTMLInputElement>(null);
 
   // Hito 7 (scene-component-authoring-ux PR2): for each asset row, surface
@@ -87,8 +103,10 @@ export default function ProjectAssetBrowser({
     refreshBindings();
   }, [refreshBindings, entries]);
 
-  const filteredEntries =
-    roleFilter === "all"
+  const isLogicFilter = roleFilter === "logic";
+  const filteredEntries = isLogicFilter
+    ? []
+    : roleFilter === "all"
       ? entries
       : entries.filter((e) => e.role === roleFilter);
 
@@ -99,21 +117,34 @@ export default function ProjectAssetBrowser({
     [],
   );
 
-  const handleCreate = useCallback(async () => {
-    const name = window.prompt("Scene Asset name:");
-    if (!name) return;
+  // T3.2 — two-step asset creation: name dialog → role dialog
+  const [pendingCreateName, setPendingCreateName] = useState("");
 
-    const role = window.prompt(
-      `Scene Asset role (${ROLES.join(", ")}):`,
-      "actor",
-    );
-    if (!role || !ROLES.includes(role as Role)) {
-      alert(`Invalid role. Using "actor" as default.`);
-      await onCreate(name, "actor");
-      return;
-    }
-    await onCreate(name, role);
-  }, [onCreate]);
+  const handleCreateNameSubmit = useCallback((name: string) => {
+    setPendingCreateName(name);
+  }, []);
+
+  const handleCreateRoleSubmit = useCallback(
+    async (role: string) => {
+      const finalRole = ROLES.includes(role as Role) ? role : "actor";
+      await onCreate(pendingCreateName, finalRole);
+      setPendingCreateName("");
+    },
+    [pendingCreateName, onCreate],
+  );
+
+  const handleCreateRoleCancel = useCallback(() => {
+    setPendingCreateName("");
+  }, []);
+
+  const handleCreate = useCallback(() => {
+    setPendingCreateName("__name_step__");
+  }, []);
+
+  // When pendingCreateName === "__name_step__", show name dialog
+  // When pendingCreateName is a valid name (non-empty, not "__name_step__"), show role dialog
+  const showCreateNameDialog = pendingCreateName === "__name_step__";
+  const showCreateRoleDialog = pendingCreateName !== "" && pendingCreateName !== "__name_step__";
 
   const handleRenameStart = useCallback((entry: SceneAssetCatalogEntry) => {
     setRenamingId(entry.asset_id);
@@ -157,18 +188,31 @@ export default function ProjectAssetBrowser({
     async (assetId: string) => {
       const entry = entries.find((e) => e.asset_id === assetId);
       if (!entry) return;
-      const confirmed = window.confirm(
-        `Delete Scene Asset "${entry.logical_path}"? This cannot be undone.`,
-      );
-      if (!confirmed) return;
-      try {
-        await onDelete(assetId);
-      } catch (e) {
-        console.error("Delete failed:", e);
-      }
+      setDeleteConfirmId(assetId);
+      setDeleteConfirmName(entry.logical_path);
     },
-    [entries, onDelete],
+    [entries],
   );
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteConfirmId) return;
+    try {
+      await onDelete(deleteConfirmId);
+    } catch (e) {
+      console.error("Delete failed:", e);
+    } finally {
+      setDeleteConfirmId(null);
+      setDeleteConfirmName("");
+    }
+  }, [deleteConfirmId, onDelete]);
+
+  const handleDeleteCancel = useCallback(() => {
+    setDeleteConfirmId(null);
+    setDeleteConfirmName("");
+  }, []);
+
+  // T3.2 — export alert state (replaces window.alert)
+  const [exportAlert, setExportAlert] = useState<string | null>(null);
 
   const handleExportBsn = useCallback(async (assetId: string) => {
     setExportingAssetId(assetId);
@@ -185,126 +229,134 @@ export default function ProjectAssetBrowser({
       URL.revokeObjectURL(url);
     } catch (e) {
       console.error("[ProjectAssetBrowser] Export .bsn failed:", e);
-      window.alert(`Export failed: ${e}`);
+      setExportAlert(`Export failed: ${e}`);
     } finally {
       setExportingAssetId(null);
     }
   }, []);
 
+  // T3.2 — import dialog state (replaces window.prompt + window.alert)
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importAlert, setImportAlert] = useState<string | null>(null);
+
   const handleImportBsn = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-
       // Strip .bsn extension if present for use as default name
       const defaultName = file.name.replace(/\.bsn$/i, "");
-      const name = window.prompt("Asset name:", defaultName);
-      if (!name || !name.trim()) {
-        // User cancelled or gave empty name
-        return;
-      }
+      setImportFile(file);
+      setImportDefaultName(defaultName);
+    },
+    [],
+  );
 
+  const handleImportNameSubmit = useCallback(
+    async (name: string) => {
+      if (!importFile) return;
       try {
-        const entryJson = await importBsnAssetFromFile(name.trim(), file);
-        const entry = JSON.parse(entryJson);
-        // Notify parent so it can refresh the catalog and open the new asset
+        await importBsnAssetFromFile(name.trim(), importFile);
         if ((window as any).refreshAssetCatalog) {
           (window as any).refreshAssetCatalog();
         }
-        window.alert(
-          `Imported "${name}" successfully. You can open it from the asset list.`,
-        );
+        setImportAlert(`Imported "${name}" successfully. You can open it from the asset list.`);
       } catch (err) {
         console.error("[ProjectAssetBrowser] Import .bsn failed:", err);
-        window.alert(`Import failed: ${err}`);
+        setImportAlert(`Import failed: ${err}`);
       } finally {
-        // Reset the input so the same file can be re-selected
+        setImportFile(null);
+        setImportDefaultName("");
         if (bsnFileInputRef.current) {
           bsnFileInputRef.current.value = "";
         }
       }
     },
-    [],
+    [importFile],
   );
+
+  const handleImportCancel = useCallback(() => {
+    setImportFile(null);
+    setImportDefaultName("");
+    if (bsnFileInputRef.current) {
+      bsnFileInputRef.current.value = "";
+    }
+  }, []);
 
   const handlePlaceInstance = useCallback(
     async (assetId: string) => {
-      // Show translation dialog (S1, E5)
-      const translationStr = window.prompt(
-        "Translation (optional, e.g. {x:100, y:200} or leave empty):",
-      );
-      let translation: { x: number; y: number } | undefined;
-      if (translationStr && translationStr.trim()) {
-        try {
-          translation = JSON.parse(translationStr);
-        } catch {
-          // If parsing fails, try simple x,y format
-          const match = translationStr.match(
-            /x\s*:\s*([-\d.]+)\s*,\s*y\s*:\s*([-\d.]+)/i,
-          );
-          if (match) {
-            translation = {
-              x: parseFloat(match[1]),
-              y: parseFloat(match[2]),
-            };
-          }
-        }
+      setPlaceDialogAssetId(assetId);
+    },
+    [],
+  );
+
+  const parseTranslation = (s: string): { x: number; y: number } | undefined => {
+    if (!s || !s.trim()) return undefined;
+    try {
+      return JSON.parse(s);
+    } catch {
+      const match = s.match(/x\s*:\s*([-\d.]+)\s*,\s*y\s*:\s*([-\d.]+)/i);
+      if (match) {
+        return { x: parseFloat(match[1]), y: parseFloat(match[2]) };
       }
-      setPlacingAssetId(assetId);
+    }
+    return undefined;
+  };
+
+  const handlePlaceDialogSubmit = useCallback(
+    async (translationStr: string) => {
+      if (!placeDialogAssetId) return;
+      const translation = parseTranslation(translationStr);
+      setPlaceDialogAssetId(null);
+      setPlacingAssetId(placeDialogAssetId);
       try {
-        await onPlaceInstance(assetId, translation);
+        await onPlaceInstance(placeDialogAssetId, translation);
       } catch (e) {
         console.error("Place instance failed:", e);
       } finally {
         setPlacingAssetId(null);
       }
     },
-    [onPlaceInstance],
+    [placeDialogAssetId, onPlaceInstance],
   );
 
-  // Hito 7 (scene-component-authoring-ux PR2 / S5, S7): Place Instance
-  // directly from the asset row when a SceneComponent schema binds to this
-  // asset. Translation prompt stays identical to the plain path so behaviour
-  // is consistent across entry points. The click handler dispatches into
-  // `placeSceneComponentInstance` which performs the stale-ref check, so
-  // even if a stale binding somehow lingers in `bindingsByAsset`, the user
-  // sees a typed error instead of a silent success.
+  const handlePlaceDialogCancel = useCallback(() => {
+    setPlaceDialogAssetId(null);
+  }, []);
+
+  // T3.2 — place scene component dialog state (replaces window.alert + window.prompt)
+  const [placeSceneComponentDialogAssetId, setPlaceSceneComponentDialogAssetId] =
+    useState<string | null>(null);
+  const [placeSceneComponentAlert, setPlaceSceneComponentAlert] = useState<string | null>(null);
+
   const handlePlaceSceneComponentInstance = useCallback(
     async (assetId: string) => {
       const typeId = bindingsByAsset[assetId];
       if (!typeId) {
-        window.alert(
+        setPlaceSceneComponentAlert(
           "No SceneComponent schema is currently bound to this asset. Save a SceneComponent schema first.",
         );
         return;
       }
-      const translationStr = window.prompt(
-        "Translation (optional, e.g. {x:100, y:200} or leave empty):",
-      );
-      let translation: { x: number; y: number } | undefined;
-      if (translationStr && translationStr.trim()) {
-        try {
-          translation = JSON.parse(translationStr);
-        } catch {
-          const match = translationStr.match(
-            /x\s*:\s*([-\d.]+)\s*,\s*y\s*:\s*([-\d.]+)/i,
-          );
-          if (match) {
-            translation = {
-              x: parseFloat(match[1]),
-              y: parseFloat(match[2]),
-            };
-          }
-        }
-      }
+      setPlaceSceneComponentDialogAssetId(assetId);
+    },
+    [bindingsByAsset],
+  );
+
+  const handlePlaceSceneComponentDialogSubmit = useCallback(
+    async (translationStr: string) => {
+      const assetId = placeSceneComponentDialogAssetId;
+      if (!assetId) return;
+      const typeId = bindingsByAsset[assetId];
+      const translation = parseTranslation(translationStr);
+      setPlaceSceneComponentDialogAssetId(null);
       setPlacingAssetId(assetId);
       try {
         await placeSceneComponentInstance(typeId, translation);
       } catch (e) {
         if (e instanceof StaleSceneComponentBindingError) {
-          window.alert(e.message);
+          setPlaceSceneComponentAlert(e.message);
         } else {
-          window.alert(
+          setPlaceSceneComponentAlert(
             `Place Instance failed: ${e instanceof Error ? e.message : String(e)}`,
           );
         }
@@ -312,8 +364,12 @@ export default function ProjectAssetBrowser({
         setPlacingAssetId(null);
       }
     },
-    [bindingsByAsset],
+    [placeSceneComponentDialogAssetId, bindingsByAsset],
   );
+
+  const handlePlaceSceneComponentDialogCancel = useCallback(() => {
+    setPlaceSceneComponentDialogAssetId(null);
+  }, []);
 
   return (
     <div className="project-asset-browser" data-testid="project-asset-browser">
@@ -363,7 +419,51 @@ export default function ProjectAssetBrowser({
       </div>
 
       <div className="browser-content">
-        {filteredEntries.length === 0 ? (
+        {isLogicFilter ? (
+          logicGraphEntries.length === 0 ? (
+            <div className="empty-state" data-testid="asset-browser-empty">
+              <p>No Logic Graphs yet — create one from the Logic Editor.</p>
+            </div>
+          ) : (
+            <table className="asset-table" data-testid="asset-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Role</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logicGraphEntries.map((entry) => (
+                  <tr
+                    key={entry.asset_id}
+                    data-testid={`logic-graph-row-${entry.asset_id}`}
+                  >
+                    <td className="asset-name">
+                      <span data-testid="asset-name">
+                        {entry.logical_path}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="role-badge" data-testid="asset-role-badge">
+                        {entry.builtin ? "builtin" : "logic"}
+                      </span>
+                    </td>
+                    <td className="actions">
+                      <button
+                        onClick={() => onOpenLogicGraph?.(entry.asset_id)}
+                        data-testid="logic-graph-open-btn"
+                        title="Open for editing"
+                      >
+                        Open
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )
+        ) : filteredEntries.length === 0 ? (
           <div className="empty-state" data-testid="asset-browser-empty">
             <p>
               {roleFilter === "all"
@@ -518,6 +618,118 @@ export default function ProjectAssetBrowser({
           </table>
         )}
       </div>
+
+      {/* T3.2 — In-app dialogs replacing window.prompt/alert/confirm */}
+
+      {/* Create — Step 1: asset name */}
+      {showCreateNameDialog && (
+        <PromptDialog
+          title="Create Scene Asset"
+          label="Asset name"
+          placeholder="e.g. coin_actor"
+          defaultValue=""
+          onConfirm={handleCreateNameSubmit}
+          onCancel={handleCreateRoleCancel}
+          validator={(v) =>
+            /^[a-zA-Z0-9_\-/]+$/.test(v)
+              ? null
+              : "Use only letters, numbers, _ , - , /"
+          }
+        />
+      )}
+
+      {/* Create — Step 2: role */}
+      {showCreateRoleDialog && (
+        <PromptDialog
+          title="Scene Asset Role"
+          label={`Role for "${pendingCreateName}" (valid: ${ROLES.join(", ")})`}
+          placeholder="actor"
+          defaultValue="actor"
+          onConfirm={handleCreateRoleSubmit}
+          onCancel={handleCreateRoleCancel}
+        />
+      )}
+
+      {/* Delete confirmation */}
+      {deleteConfirmId && (
+        <ConfirmDialog
+          title="Delete Scene Asset"
+          message={`Delete "${deleteConfirmName}"? This cannot be undone.`}
+          confirmLabel="Delete"
+          onConfirm={handleDeleteConfirm}
+          onCancel={handleDeleteCancel}
+          danger
+        />
+      )}
+
+      {/* Import name dialog */}
+      {importFile && (
+        <PromptDialog
+          title="Import Asset"
+          label="Asset name"
+          placeholder={importDefaultName}
+          defaultValue={importDefaultName}
+          onConfirm={handleImportNameSubmit}
+          onCancel={handleImportCancel}
+        />
+      )}
+
+      {/* Place instance translation dialog */}
+      {placeDialogAssetId && (
+        <PromptDialog
+          title="Place Instance"
+          label="Translation (optional, e.g. {x:100, y:200} or leave empty)"
+          placeholder=""
+          defaultValue=""
+          onConfirm={handlePlaceDialogSubmit}
+          onCancel={handlePlaceDialogCancel}
+        />
+      )}
+
+      {/* Place SceneComponent translation dialog */}
+      {placeSceneComponentDialogAssetId && (
+        <PromptDialog
+          title="Place SceneComponent Instance"
+          label="Translation (optional, e.g. {x:100, y:200} or leave empty)"
+          placeholder=""
+          defaultValue=""
+          onConfirm={handlePlaceSceneComponentDialogSubmit}
+          onCancel={handlePlaceSceneComponentDialogCancel}
+        />
+      )}
+
+      {/* Export error alert */}
+      {exportAlert && (
+        <ConfirmDialog
+          title="Export Failed"
+          message={exportAlert}
+          confirmLabel="OK"
+          onConfirm={() => setExportAlert(null)}
+          onCancel={() => setExportAlert(null)}
+        />
+      )}
+
+      {/* Import result alert */}
+      {importAlert && (
+        <ConfirmDialog
+          title={importAlert.startsWith("Import failed") ? "Import Failed" : "Import Successful"}
+          message={importAlert}
+          confirmLabel="OK"
+          onConfirm={() => setImportAlert(null)}
+          onCancel={() => setImportAlert(null)}
+        />
+      )}
+
+      {/* SceneComponent place error alert */}
+      {placeSceneComponentAlert && (
+        <ConfirmDialog
+          title="Cannot Place"
+          message={placeSceneComponentAlert}
+          confirmLabel="OK"
+          onConfirm={() => setPlaceSceneComponentAlert(null)}
+          onCancel={() => setPlaceSceneComponentAlert(null)}
+        />
+      )}
     </div>
   );
 }

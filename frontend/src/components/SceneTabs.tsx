@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { SceneInfo } from "../hooks/useScenes";
+import PromptDialog from "./PromptDialog";
 
 interface Props {
   scenes: SceneInfo[];
@@ -27,6 +28,9 @@ export default function SceneTabs({
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
 
+  // T3.2 — new scene dialog state (replaces window.prompt)
+  const [newSceneDialogOpen, setNewSceneDialogOpen] = useState(false);
+
   // Close context menu on outside click
   useEffect(() => {
     if (contextMenu === null) return;
@@ -53,10 +57,12 @@ export default function SceneTabs({
   };
 
   const handleNewScene = () => {
-    const name = window.prompt("Scene name:", "New Scene");
-    if (name?.trim()) {
-      onNewScene(name.trim());
-    }
+    setNewSceneDialogOpen(true);
+  };
+
+  const handleNewSceneSubmit = (name: string) => {
+    setNewSceneDialogOpen(false);
+    onNewScene(name);
   };
 
   return (
@@ -144,6 +150,18 @@ export default function SceneTabs({
             </button>
           )}
         </div>
+      )}
+
+      {/* T3.2 — in-app dialog replacing window.prompt */}
+      {newSceneDialogOpen && (
+        <PromptDialog
+          title="New Scene"
+          label="Scene name"
+          placeholder="New Scene"
+          defaultValue="New Scene"
+          onConfirm={handleNewSceneSubmit}
+          onCancel={() => setNewSceneDialogOpen(false)}
+        />
       )}
     </div>
   );

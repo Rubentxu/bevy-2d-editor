@@ -137,7 +137,7 @@ export default function LogicGraphEditor({
   }
 
   return (
-    <div style={{ display: "flex", height: "100%", width: "100%" }}>
+    <div style={{ display: "flex", height: "100%", width: "100%" }} data-testid="logic-graph-editor">
       {/* Node Palette */}
       <div
         style={{

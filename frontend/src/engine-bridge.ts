@@ -313,6 +313,8 @@ export async function initEngine(
     assetId: string,
     logicalPath: string,
   ) => wasm.create_logic_graph_asset(assetId, logicalPath);
+  (window as any).open_logic_graph_asset = (assetId: string) =>
+    wasm.open_logic_graph_asset(assetId);
   (window as any).list_logic_graph_assets = () =>
     wasm.list_logic_graph_assets();
   (window as any).get_node_descriptors = () => wasm.get_node_descriptors();

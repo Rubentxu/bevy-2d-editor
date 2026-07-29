@@ -28,6 +28,7 @@ export interface MenuHandlers {
   handleTogglePlay: () => void;
   handleOpenCheatSheet: () => void;
   handleWelcomeTour: () => void;
+  handleAbout: () => void;
   // Phase E — dock toggles + reset layout wired by App.tsx
   handleToggleLeftDock?: () => void;
   handleToggleOutlineDock?: () => void;
@@ -227,23 +228,20 @@ export function createMenuConfig(
     Tools: [
       {
         label: "AI Assistant",
-        shortcut: "Ctrl+K",
+        shortcut: "Ctrl+Shift+A",
         onClick: handlers.handleToggleAI,
       },
       {
         label: "Validation Center",
-        shortcut: "Ctrl+;",
         onClick: handlers.handleToggleValidationCenter,
       },
       { label: "Schema Authoring", onClick: todo("Schema Authoring") },
       {
         label: "Tileset Panel",
-        shortcut: "Ctrl+T",
         onClick: handlers.handleToggleTileset,
       },
       {
         label: "Auto Layer Panel",
-        shortcut: "Ctrl+L",
         onClick: handlers.handleToggleAutoLayer,
       },
       separator(),
@@ -282,7 +280,7 @@ export function createMenuConfig(
         shortcut: "?",
         onClick: handlers.handleOpenCheatSheet,
       },
-      { label: "About", onClick: () => window.alert("Bevy 2D Editor v0.80.0") },
+      { label: "About", onClick: handlers.handleAbout },
       { label: "Welcome Tour", onClick: handlers.handleWelcomeTour },
     ],
   };
@@ -298,4 +296,6 @@ export interface MenuDropdownProps {
   onOpen: () => void;
   onClose: () => void;
   testId: string;
+  /** Bounding rect of the trigger button, used to position the portaled dropdown with position:fixed. */
+  anchorRect?: DOMRect;
 }

@@ -262,6 +262,7 @@ use crate::state::{
     clear_asset_catalog_warnings, with_asset_log, with_asset_log_mut,
     with_asset_body_cache, with_asset_body_cache_mut, mark_dirty,
     with_logic_graph, with_logic_graph_mut, with_logic_log, with_logic_log_mut,
+    with_logic_graph_catalog, with_logic_graph_catalog_mut,
 };
 
 /// Mutably access the asset body cache from integration tests.
@@ -978,7 +979,7 @@ extern "C" {
 }
 
 #[cfg(target_arch = "wasm32")]
-async fn js_save_file(path: &str, contents: &str) -> Result<(), String> {
+pub(crate) async fn js_save_file(path: &str, contents: &str) -> Result<(), String> {
     let promise = opfs_save_file_raw(path, contents);
     let result = js_await(promise).await.map_err(|e| format!("{:?}", e))?;
     let val: serde_json::Value = serde_wasm_bindgen::from_value(result)
@@ -995,7 +996,7 @@ async fn js_save_file(path: &str, contents: &str) -> Result<(), String> {
 }
 
 #[cfg(target_arch = "wasm32")]
-async fn js_load_file(path: &str) -> Result<String, String> {
+pub(crate) async fn js_load_file(path: &str) -> Result<String, String> {
     let promise = opfs_load_file_raw(path);
     let result = js_await(promise).await.map_err(|e| format!("{:?}", e))?;
     let val: serde_json::Value = serde_wasm_bindgen::from_value(result)
@@ -1837,6 +1838,31 @@ pub fn get_current_scene_id() -> Option<String> {
     with_registry(|r| r.current_id())
 }
 
+/// List entities in a specific scene by scene ID.
+/// Returns a vector of { stable_id, local_id, name } for each entity.
+#[wasm_bindgen]
+pub fn list_scene_entities(scene_id: &str) -> JsValue {
+    let result: Vec<serde_json::Value> = with_registry(|r| {
+        let entry = match r.get(scene_id) {
+            Some(e) => e,
+            None => return Vec::new(),
+        };
+        entry
+            .scene
+            .entities
+            .iter()
+            .map(|e| {
+                serde_json::json!({
+                    "stable_id": e.id.as_str(),
+                    "local_id": e.local_id.as_str(),
+                    "name": e.name,
+                })
+            })
+            .collect()
+    });
+    serde_wasm_bindgen::to_value(&result).unwrap_or_else(|_| JsValue::NULL)
+}
+
 /// Discard unsaved changes in the current scene by reloading it from OPFS.
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
@@ -2309,8 +2335,16 @@ pub fn get_logic_graph() -> Result<String, JsValue> {
 }
 
 /// Create a new empty LogicGraphAsset and set it as the active graph.
+/// Saves the body to OPFS (catalog-first per ADR-0019) and registers in the
+/// in-memory catalog.
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
-pub fn create_logic_graph_asset(asset_id: &str, logical_path: &str) -> Result<String, JsValue> {
+pub async fn create_logic_graph_asset(
+    asset_id: &str,
+    logical_path: &str,
+) -> Result<String, JsValue> {
+    use crate::logic_graph::{LogicGraphAsset, LogicGraphCatalogEntry};
+
     let doc = LogicGraphAsset {
         asset_id: asset_id.to_string(),
         logical_path: logical_path.to_string(),
@@ -2318,29 +2352,107 @@ pub fn create_logic_graph_asset(asset_id: &str, logical_path: &str) -> Result<St
         ..Default::default()
     };
 
-    let json = serde_json::to_string(&doc)
-        .map_err(|e| JsValue::from_str(&format!("Failed to serialize: {}", e)))?;
+    let now = crate::time::now_millis();
 
-    with_logic_graph_mut(|doc_opt| {
-        *doc_opt = Some(doc);
+    // 1. Register in the in-memory catalog
+    let entry = LogicGraphCatalogEntry {
+        asset_id: asset_id.to_string(),
+        logical_path: logical_path.to_string(),
+        builtin: false,
+        created_at: now,
+        updated_at: now,
+    };
+    with_logic_graph_catalog_mut(|cat| {
+        // Ignore duplicate errors — if it's already registered, just proceed
+        let _ = cat.register(entry);
     });
 
-    // Clear the operation log for the new graph
+    // 2. Save body to OPFS (catalog-first: body saved after catalog registration)
+    if let Err(e) = crate::logic_graph::save_logic_graph_body(&doc).await {
+        // Log but don't fail — the in-memory state is valid
+        web_sys::console::error_1(&format!("[create_logic_graph_asset] OPFS save failed: {}", e).into());
+    }
+
+    // 3. Set as active graph
+    with_logic_graph_mut(|doc_opt| {
+        *doc_opt = Some(doc.clone());
+    });
+
+    // 4. Clear the operation log for the new graph
     with_logic_log_mut(|log| {
         log.clear();
     });
 
+    serde_json::to_string(&doc)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize: {}", e)))
+}
+
+/// Non-WASM stub for create_logic_graph_asset.
+#[cfg(not(target_arch = "wasm32"))]
+#[wasm_bindgen]
+pub fn create_logic_graph_asset(asset_id: &str, logical_path: &str) -> Result<String, JsValue> {
+    use crate::logic_graph::LogicGraphAsset;
+    let doc = LogicGraphAsset {
+        asset_id: asset_id.to_string(),
+        logical_path: logical_path.to_string(),
+        version: 1,
+        ..Default::default()
+    };
+    let json = serde_json::to_string(&doc)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize: {}", e)))?;
+    with_logic_graph_mut(|doc_opt| {
+        *doc_opt = Some(doc);
+    });
+    with_logic_log_mut(|log| {
+        log.clear();
+    });
     Ok(json)
 }
 
-/// List all logic graph assets (placeholder — returns empty for now).
-/// Tracked for OPFS persistence wiring (post-Hito 4 Order 5; Hito 4 Order 5
-/// shipped data-only hot-reload but did NOT introduce OPFS persistence for
-/// logic graphs themselves — that requires a separate cycle).
+/// Open an existing LogicGraphAsset from OPFS by asset_id.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn open_logic_graph_asset(asset_id: &str) -> Result<String, JsValue> {
+    // 1. Look up the catalog entry
+    let entry = with_logic_graph_catalog(|cat| cat.get(asset_id).cloned())
+        .ok_or_else(|| JsValue::from_str(&format!("Logic graph not found: {}", asset_id)))?;
+
+    // 2. Load the body from OPFS
+    let doc: crate::logic_graph::LogicGraphAsset =
+        crate::logic_graph::load_logic_graph_body(&entry.logical_path)
+            .await
+            .map_err(|e| JsValue::from_str(&e))?;
+
+    // 3. Set as active graph
+    with_logic_graph_mut(|doc_opt| {
+        *doc_opt = Some(doc.clone());
+    });
+
+    // 4. Clear the operation log
+    with_logic_log_mut(|log| {
+        log.clear();
+    });
+
+    serde_json::to_string(&doc)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize: {}", e)))
+}
+
+/// Non-WASM stub for open_logic_graph_asset.
+#[cfg(not(target_arch = "wasm32"))]
+#[wasm_bindgen]
+pub fn open_logic_graph_asset(_asset_id: &str) -> Result<String, JsValue> {
+    Err(JsValue::from_str("open_logic_graph_asset not available on non-WASM target"))
+}
+
+/// List all logic graph assets from the in-memory catalog.
+/// Returns the catalog entries as JSON.
 #[wasm_bindgen]
 pub fn list_logic_graph_assets() -> Result<String, JsValue> {
-    // Placeholder: returns empty until OPFS persistence is wired (see docstring above).
-    serde_json::to_string(&Vec::<LogicGraphAsset>::new())
+    // Seed built-in recipes into the catalog so they appear in the listing.
+    crate::logic_state::seed_builtin_recipes_to_catalog();
+    let entries: Vec<crate::logic_graph::LogicGraphCatalogEntry> =
+        with_logic_graph_catalog(|cat| cat.list_all().to_vec());
+    serde_json::to_string(&entries)
         .map_err(|e| JsValue::from_str(&format!("Failed to serialize: {}", e)))
 }
 
@@ -3183,6 +3295,7 @@ mod rust_source_integration_tests {
             entities: vec![
                 Entity {
                     id: StableId::new("ent_player"),
+                    local_id: LocalId::new("ent_player"),
                     name: "Player".to_string(),
                     parent: None,
                     components: vec![
@@ -3198,6 +3311,7 @@ mod rust_source_integration_tests {
                 },
                 Entity {
                     id: StableId::new("ent_enemy"),
+                    local_id: LocalId::new("ent_enemy"),
                     name: "Enemy".to_string(),
                     parent: None,
                     components: vec![
@@ -3209,6 +3323,7 @@ mod rust_source_integration_tests {
                 },
                 Entity {
                     id: StableId::new("ent_ally"),
+                    local_id: LocalId::new("ent_ally"),
                     name: "Ally".to_string(),
                     parent: None,
                     components: vec![

@@ -385,6 +385,50 @@ trait-backed controllers evaluated by an event-driven dispatch scheduler.
 
 ---
 
+## Hito 8: AI-Native Editor Program (planning baseline)
+
+**Goal**: Evolve Bevy 2D Editor from an authoring environment with AI assistance
+into a **Cursor-like, agent-native editor for Bevy 2D games**.
+
+**Why now**:
+
+- The editor already has editor-owned domain models, typed command seams, runtime
+  preview, code-aware AI context, Logic Bricks, and integrated code editing.
+- Current product gaps are increasingly about **workflow convergence** and
+  **agent orchestration**, not raw capability invention.
+- ADR-0027 adopts **Rig** as the Rust-native orchestration layer for multi-agent,
+  tool-based, retrieval-aware backend AI workflows.
+
+### Prerequisite sequence (must land first)
+
+| Order | Change | Status | Why |
+|-------|--------|--------|-----|
+| P0 | `editor-shell-integrity` | 🔲 Planned | Fix shell blockers before new advanced flows |
+| P1 | `workflow-surface-convergence` | 🔲 Planned | Close backend↔UI exposure gaps and docs drift |
+| P2 | `ui-workflow-overhaul` | 🔲 Planned | Upgrade primary editor surfaces and mode clarity |
+
+### Planned sequence (after prerequisites)
+
+| Order | Change | Status | Why |
+|-------|--------|--------|-----|
+| 1 | `rig-agent-runtime-foundation` | 🔲 Planned | Add `crates/agent-runtime` and Rig-based manager/worker orchestration behind `ai-proxy` |
+| 2 | `semantic-project-retrieval` | 🔲 Planned | Full project-semantic context and retrieval over docs, schemas, assets, logic, code, and diagnostics |
+| 3 | `agent-workbench` | 🔲 Planned | Proposal/review/apply UX with typed diffs and validation-aware approval |
+| 4 | `runtime-aware-agent-diagnostics` | 🔲 Planned | Make agents useful for runtime/debugging flows, not just generation |
+| 5 | `background-agent-automation` | 🔲 Planned | Durable low-risk maintenance/indexing/scaffolding jobs |
+
+### Normative references
+
+- [ADR-0027: Rig-Based Agent Runtime for the AI-Native Bevy 2D Editor](./adr/0027-rig-agentic-editor-architecture.md)
+- [ADR-0028: Workflow-First UI Convergence Before Agentic AI](./adr/0028-workflow-first-before-agentic-ai.md)
+- [AI-Native Bevy 2D Editor — Durable Capability Spec](./specs/ai-native-editor-capabilities.md)
+- [Editor Workflow Convergence — Durable Product Spec](./specs/editor-workflow-convergence.md)
+- [UI Workflow Overhaul — Durable Product Spec](./specs/ui-workflow-overhaul.md)
+- [UI Workflow Overhaul Roadmap](./roadmaps/ui-workflow-overhaul-roadmap.md)
+- [AI-Native Editor Roadmap](./roadmaps/ai-native-editor-roadmap.md)
+
+---
+
 ## Hito 0 — Capabilities Matrix
 
 ```

@@ -1,4 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
+import {
+  openLogicGraphAsset,
+  listLogicGraphAssets,
+} from "../services/logic-graphs";
 
 /**
  * LogicGraph node representation for React Flow.
@@ -125,40 +129,56 @@ export function useLogicGraph() {
   const [descriptors, setDescriptors] = useState<NodeDescriptor[]>([]);
 
   /**
+   * Wait for the WASM engine to be ready before issuing bridge calls.
+   * Mirrors the pattern in useAIAssistant.ts:120-127.
+   */
+  const waitForEngineReady = useCallback(async () => {
+    if ((window as any).isEngineReady?.()) return;
+    for (let i = 0; i < 50; i++) {
+      if ((window as any).isEngineReady?.()) return;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    // Don't block — proceed and let the WASM call fail gracefully
+  }, []);
+
+  /**
    * Refresh the logic log state from WASM.
    */
   const refreshLogState = useCallback(async () => {
     try {
+      await waitForEngineReady();
       const stateJson = await (window as any).get_logic_log_state();
       setLogState(JSON.parse(stateJson));
     } catch (e) {
       console.error("useLogicGraph: refreshLogState failed:", e);
     }
-  }, []);
+  }, [waitForEngineReady]);
 
   /**
    * Refresh the graph from WASM.
    */
   const refreshGraph = useCallback(async () => {
     try {
+      await waitForEngineReady();
       const graphJson = await (window as any).get_logic_graph();
       setGraph(JSON.parse(graphJson));
     } catch (e) {
       console.error("useLogicGraph: refreshGraph failed:", e);
     }
-  }, []);
+  }, [waitForEngineReady]);
 
   /**
    * Refresh descriptors from the registry.
    */
   const refreshDescriptors = useCallback(async () => {
     try {
+      await waitForEngineReady();
       const descJson = await (window as any).get_node_descriptors();
       setDescriptors(JSON.parse(descJson));
     } catch (e) {
       console.error("useLogicGraph: refreshDescriptors failed:", e);
     }
-  }, []);
+  }, [waitForEngineReady]);
 
   /**
    * Refresh everything.
@@ -173,18 +193,22 @@ export function useLogicGraph() {
   }, [refresh]);
 
   /**
-   * Open an existing logic graph asset.
-   * Currently not persisted — placeholder for OPFS integration.
+   * Open an existing logic graph asset from OPFS.
+   * Loads the catalog entry and body into the active graph slot.
    */
-  const open = useCallback(async (assetId: string) => {
-    // OPFS-backed open() pending. See ROADMAP §Hito 4 Order 5 deferral list:
-    // logic-graph OPFS persistence is post-Order-5 work (data-only hot-reload
-    // doesn't ship .logic persistence; that needs a dedicated cycle).
-    console.warn(
-      "useLogicGraph: open() is a placeholder — using create instead",
-    );
-    await create(assetId, `logic/${assetId}`);
-  }, []);
+  const open = useCallback(
+    async (assetId: string) => {
+      try {
+        const graphJson = await openLogicGraphAsset(assetId);
+        setGraph(JSON.parse(graphJson));
+        await refreshLogState();
+      } catch (e) {
+        console.error("useLogicGraph: open failed:", e);
+        throw e;
+      }
+    },
+    [refreshLogState],
+  );
 
   /**
    * Create a new empty logic graph.

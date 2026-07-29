@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import SearchResultRow from "./SearchResultRow";
+import type { GlobalSearchResult } from "../hooks/useGlobalSearch";
 
 export type CommandGroup =
   "File" | "Edit" | "View" | "Play" | "Assets" | "Help";
@@ -142,10 +144,6 @@ export default function CommandPalette({ commands, onClose }: Props) {
     return m;
   }, [grouped]);
 
-  const handleItemClick = (cmd: PaletteCommand) => {
-    runCommand(cmd);
-  };
-
   return (
     <div
       className="dialog-overlay command-palette-overlay"
@@ -198,31 +196,23 @@ export default function CommandPalette({ commands, onClose }: Props) {
               }
               const focusPos = flatIdxToFocus.get(entry.flatIdx) ?? 0;
               const isFocused = focusPos === focusIdx;
+              const cmdAsResult: GlobalSearchResult = {
+                type: "command",
+                id: entry.cmd.id,
+                label: entry.cmd.label,
+                path: entry.cmd.shortcut
+                  ? `${entry.cmd.group} · ${entry.cmd.shortcut}`
+                  : entry.cmd.group,
+              };
               return (
-                <div
+                <SearchResultRow
                   key={entry.cmd.id}
-                  className={`command-palette-item${
-                    isFocused ? " command-palette-item-focused" : ""
-                  }`}
-                  data-testid={`command-palette-item-${entry.cmd.id}`}
-                  data-focused={isFocused ? "true" : "false"}
-                  role="option"
-                  aria-selected={isFocused}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    handleItemClick(entry.cmd);
-                  }}
-                  onMouseEnter={() => setFocusIdx(focusPos)}
-                >
-                  <span className="command-palette-item-label">
-                    {entry.cmd.label}
-                  </span>
-                  {entry.cmd.shortcut && (
-                    <span className="command-palette-item-shortcut">
-                      {entry.cmd.shortcut}
-                    </span>
-                  )}
-                </div>
+                  result={cmdAsResult}
+                  isFocused={isFocused}
+                  onClick={() => runCommand(entry.cmd)}
+                  onActivate={() => runCommand(entry.cmd)}
+                  testId={`command-palette-item-${entry.cmd.id}`}
+                />
               );
             })
           )}

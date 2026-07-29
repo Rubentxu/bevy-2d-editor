@@ -5,6 +5,8 @@ import { vscodeDark } from "@uiw/codemirror-theme-vscode";
 
 import { useCodeFiles } from "../hooks/useCodeFiles";
 import type { SourceFile } from "../services/code-files";
+import PromptDialog from "./PromptDialog";
+import ConfirmDialog from "./ConfirmDialog";
 
 /** Navigation target for cross-mode jump-to-source navigation. */
 export interface NavigationTarget {
@@ -74,6 +76,11 @@ export default function CodeEditor({
   const [errorVisible, setErrorVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // T3.2 — dialog state (replaces window.prompt/confirm)
+  const [createFileDialogOpen, setCreateFileDialogOpen] = useState(false);
+  const [deleteFileId, setDeleteFileId] = useState<string | null>(null);
+  const [deleteFileName, setDeleteFileName] = useState("");
+
   // Show error toast whenever the hook reports an error.
   useEffect(() => {
     if (error) {
@@ -112,35 +119,46 @@ export default function CodeEditor({
   // Extensions for CodeMirror: Rust language + VS Code dark theme.
   const extensions = useMemo<Extension[]>(() => [rust()], []);
 
-  const handleCreateFile = useCallback(async () => {
-    const name = window.prompt("File name:", "main.rs");
-    if (!name) return;
-    try {
-      await create(name);
-    } catch (e) {
-      console.error("CodeEditor: create failed:", e);
-    }
-  }, [create]);
-
-  const handleDeleteFile = useCallback(
-    async (id: string) => {
-      // eslint-disable-next-line no-alert
-      if (!window.confirm(`Delete "${files.find((f) => f.id === id)?.name}"?`))
-        return;
-      await deleteFile(id);
+  const handleCreateFileSubmit = useCallback(
+    async (name: string) => {
+      setCreateFileDialogOpen(false);
+      try {
+        await create(name);
+      } catch (e) {
+        console.error("CodeEditor: create failed:", e);
+      }
     },
-    [files, deleteFile],
+    [create],
   );
 
-  const handleNewClick = useCallback(async () => {
-    await handleCreateFile();
-  }, [handleCreateFile]);
+  const handleDeleteFile = useCallback((id: string) => {
+    const file = files.find((f) => f.id === id);
+    setDeleteFileId(id);
+    setDeleteFileName(file?.name ?? id);
+  }, [files]);
+
+  const handleDeleteFileConfirm = useCallback(async () => {
+    if (!deleteFileId) return;
+    await deleteFile(deleteFileId);
+    setDeleteFileId(null);
+    setDeleteFileName("");
+  }, [deleteFileId, deleteFile]);
+
+  const handleDeleteFileCancel = useCallback(() => {
+    setDeleteFileId(null);
+    setDeleteFileName("");
+  }, []);
+
+  const handleNewClick = useCallback(() => {
+    setCreateFileDialogOpen(true);
+  }, []);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (files.length === 0) {
     return (
       <div
+        data-testid="code-editor"
         style={{
           display: "flex",
           alignItems: "center",
@@ -164,7 +182,7 @@ export default function CodeEditor({
   }
 
   return (
-    <div style={{ display: "flex", height: "100%", width: "100%" }}>
+    <div style={{ display: "flex", height: "100%", width: "100%" }} data-testid="code-editor">
       {/* ── File list panel ────────────────────────────────────────────── */}
       <div
         style={{
@@ -295,6 +313,29 @@ export default function CodeEditor({
           </div>
         )}
       </div>
+
+      {/* T3.2 — in-app dialogs replacing window.prompt/confirm */}
+      {createFileDialogOpen && (
+        <PromptDialog
+          title="New Source File"
+          label="File name"
+          placeholder="main.rs"
+          defaultValue="main.rs"
+          onConfirm={handleCreateFileSubmit}
+          onCancel={() => setCreateFileDialogOpen(false)}
+        />
+      )}
+
+      {deleteFileId && (
+        <ConfirmDialog
+          title="Delete Source File"
+          message={`Delete "${deleteFileName}"? This cannot be undone.`}
+          confirmLabel="Delete"
+          onConfirm={handleDeleteFileConfirm}
+          onCancel={handleDeleteFileCancel}
+          danger
+        />
+      )}
     </div>
   );
 }

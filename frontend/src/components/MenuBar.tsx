@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
 import { useScenes } from "../hooks/useScenes";
 import { useTheme } from "../hooks/useTheme";
 import type { LogState } from "../hooks/useLogState";
@@ -36,6 +36,7 @@ export interface MenuBarProps {
   onOpenSearch?: () => void;
   onOpenCheatSheet?: () => void;
   onWelcomeTour?: () => void;
+  onAbout?: () => void;
   // Phase E — View menu dock toggles + reset layout + fullscreen.
   onToggleLeftDock?: () => void;
   onToggleOutlineDock?: () => void;
@@ -49,6 +50,8 @@ export interface MenuBarProps {
 
 export default function MenuBar({
   editorMode = "scene",
+  onOpenAssets,
+  onBackToScene,
   onOpenLogic,
   onOpenCode,
   logState,
@@ -62,13 +65,18 @@ export default function MenuBar({
   onDeleteEntity,
   selectedEntityId = null,
   onToggleAI,
+  aiPanelOpen,
   onToggleValidationCenter,
+  validationCenterOpen,
   onToggleTileset,
+  tilesetPanelOpen,
   onToggleAutoLayer,
+  autoLayerPanelOpen,
   onTogglePlay,
   onOpenSearch,
   onOpenCheatSheet,
   onWelcomeTour,
+  onAbout,
   onToggleLeftDock,
   onToggleOutlineDock,
   onTogglePropertiesDock,
@@ -78,6 +86,18 @@ export default function MenuBar({
   onSaveWorkspacePreset,
 }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  /** Captures the trigger button's DOMRect when each dropdown opens so the portaled menu can position itself with position:fixed. */
+  const [anchorRectMap, setAnchorRectMap] = useState<Record<string, DOMRect>>({});
+
+  /** Called before opening a menu — captures the trigger's bounding rect synchronously so the portal positions correctly. */
+  const captureAnchorRect = (label: string) => {
+    const trigger = document.querySelector<HTMLButtonElement>(
+      `[data-testid="menu-${label.toLowerCase()}"] .menu-trigger`,
+    );
+    if (trigger) {
+      setAnchorRectMap((prev) => ({ ...prev, [label]: trigger.getBoundingClientRect() }));
+    }
+  };
   const { scenes } = useScenes();
   const { theme, setTheme, toggleTheme } = useTheme();
   const projectName = scenes[0]?.name ?? "Untitled";
@@ -105,6 +125,7 @@ export default function MenuBar({
         handleWelcomeTour:
           onWelcomeTour ??
           (() => console.warn("[menu] TODO: wire Welcome Tour")),
+        handleAbout: onAbout ?? (() => alert("Bevy 2D Editor v0.80.0")),
         handleToggleLeftDock: onToggleLeftDock,
         handleToggleOutlineDock: onToggleOutlineDock,
         handleTogglePropertiesDock: onTogglePropertiesDock,
@@ -141,6 +162,7 @@ export default function MenuBar({
       onToggleFullscreen,
       onResetLayout,
       onApplyPreset,
+      onAbout,
       onSaveWorkspacePreset,
       selectedEntityId,
       setTheme,
@@ -235,9 +257,13 @@ export default function MenuBar({
             label={label}
             items={items}
             open={openMenu === label}
-            onOpen={() => setOpenMenu(label)}
+            onOpen={() => {
+              captureAnchorRect(label);
+              setOpenMenu(label);
+            }}
             onClose={() => setOpenMenu(null)}
             testId={`menu-${label.toLowerCase()}`}
+            anchorRect={anchorRectMap[label]}
           />
         ))}
       </div>

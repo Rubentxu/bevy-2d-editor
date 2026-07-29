@@ -31,6 +31,8 @@ import DockDivider from "./DockDivider";
 import { stampDockPanelDrag } from "./drag-payload";
 import type { DockableRegion } from "../../hooks/useDockPrefs";
 
+type EditorMode = "scene" | "asset-authoring" | "logic" | "code" | "play";
+
 interface Props {
   visible: boolean;
   outlineVisible: boolean;
@@ -40,6 +42,8 @@ interface Props {
   topHeightPct: number;
   outline: ReactNode;
   properties: ReactNode;
+  /** v0.82 P2 (ADR-0025) Phase C T3.1: drives mode-aware header titles. */
+  editorMode?: EditorMode;
   onToggleCollapseOutline: () => void;
   onToggleCollapseProperties: () => void;
   onCloseOutline: () => void;
@@ -61,6 +65,42 @@ interface Props {
   propertiesFloating?: boolean;
 }
 
+/** Derive mode-aware header titles for the right dock panels (Phase C T3.1).
+ *
+ * The outline body (outlinePanelContent in App.tsx) is non-empty only in
+ * scene and asset-authoring modes. In logic/code/play the outline body is
+ * empty, so we use "Outline" — not a mode label that falsely promises content.
+ */
+function getOutlineTitle(editorMode: EditorMode = "scene"): string {
+  switch (editorMode) {
+    case "asset-authoring": return "Project Assets";
+    case "scene": return "Outline";
+    // logic/code/play: outline body is empty — use generic "Outline"
+    case "logic":
+    case "code":
+    case "play":
+      return "Outline";
+  }
+}
+
+/** Derive mode-aware header titles for the right dock properties panel.
+ *
+ * The properties body (propertiesPanelContent in App.tsx) is non-empty only in
+ * scene and asset-authoring modes. In logic/code/play it is empty, so we use
+ * the generic "Properties" label rather than a mode label that promises content.
+ */
+function getPropertiesTitle(editorMode: EditorMode = "scene"): string {
+  switch (editorMode) {
+    case "asset-authoring": return "Authoring";
+    case "scene": return "Properties";
+    // logic/code/play: properties body is empty — use generic "Properties"
+    case "logic":
+    case "code":
+    case "play":
+      return "Properties";
+  }
+}
+
 export default function RightDock({
   visible,
   outlineVisible,
@@ -70,6 +110,7 @@ export default function RightDock({
   topHeightPct,
   outline,
   properties,
+  editorMode,
   onToggleCollapseOutline,
   onToggleCollapseProperties,
   onCloseOutline,
@@ -83,6 +124,8 @@ export default function RightDock({
   outlineFloating,
   propertiesFloating,
 }: Props) {
+  const outlineTitle = getOutlineTitle(editorMode);
+  const propertiesTitle = getPropertiesTitle(editorMode);
   // Tier 1c + v0.82 P1: stamp canonical panel ids. The DOM-rooted
   // `data-panel-id` selectors (`right-outline`, `right-properties`) stay
   // for legacy tests; the dataTransfer payload is the canonical id
@@ -128,7 +171,7 @@ export default function RightDock({
             data-panel-id="right-outline"
           >
             <DockHeader
-              title="Outline"
+              title={outlineTitle}
               testId="dock-right-outline-header"
               collapsed={outlineCollapsed}
               draggable
@@ -161,17 +204,17 @@ export default function RightDock({
           data-panel-id="right-properties"
         >
           <DockHeader
-            title="Properties"
-            testId="dock-right-properties-header"
-            collapsed={propertiesCollapsed}
-            draggable
-            onDragStart={handlePropertiesDragStart}
-            onToggleCollapse={onToggleCollapseProperties}
-            onClose={onCloseProperties}
-            onMove={onMove}
-            onFloatToggle={onFloatToggleProperties}
-            floating={propertiesFloating}
-          />
+              title={propertiesTitle}
+              testId="dock-right-properties-header"
+              collapsed={propertiesCollapsed}
+              draggable
+              onDragStart={handlePropertiesDragStart}
+              onToggleCollapse={onToggleCollapseProperties}
+              onClose={onCloseProperties}
+              onMove={onMove}
+              onFloatToggle={onFloatToggleProperties}
+              floating={propertiesFloating}
+            />
           {!propertiesCollapsed && (
             <DockBody testId="dock-right-properties-body">
               {properties}
