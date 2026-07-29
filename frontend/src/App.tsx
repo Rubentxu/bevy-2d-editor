@@ -6,6 +6,7 @@ import { useLogState } from "./hooks/useLogState";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useAIAssistant } from "./hooks/useAIAssistant";
 import MenuBar from "./components/MenuBar";
+import AppHeader from "./components/AppHeader";
 import HierarchyPanel from "./components/HierarchyPanel";
 import InspectorPanel from "./components/InspectorPanel";
 import AIAssistantPanel from "./components/AIAssistantPanel";
@@ -1313,6 +1314,24 @@ function AppInner() {
     (window as any).__openSceneAssetFromSearch = async (assetId: string) => {
       await openAsset(assetId);
     };
+    // PR3: logic-graph search opens the graph in logic mode.
+    (window as any).__openLogicGraphFromSearch = async (assetId: string) => {
+      await openLogicGraphAsset(assetId);
+    };
+    // PR3: schema search opens the schema authoring panel filtered to that schema.
+    (window as any).__focusSchemaFromSearch = (typeId: string) => {
+      setEditorMode("asset-authoring");
+      // SchemaAuthoringPanel reads __focusedSchemaId and scrolls/filters to it.
+      (window as any).__focusedSchemaId = typeId;
+    };
+    // PR3: validation-issue search opens the Validation Center.
+    (window as any).__openValidationCenter = () => {
+      setValidationCenterOpen(true);
+    };
+    // PR3: navigation to a specific validation issue (highlights the issue).
+    (window as any).__navigateToValidationIssue = (issueId: string) => {
+      (window as any).__focusedValidationIssueId = issueId;
+    };
   }
 
   // ── Cheat sheet shortcuts (Phase 3.3) ─────────────────────────────────────
@@ -1545,7 +1564,7 @@ function AppInner() {
         onMovePanel={handleMovePanel}
         menu={
           <>
-            <MenuBar
+            <AppHeader
               editorMode={editorMode}
               onOpenAssets={() => {}}
               onBackToScene={
@@ -1589,6 +1608,20 @@ function AppInner() {
               onSaveWorkspacePreset={() => {
                 setSaveWorkspacePresetOpen(true);
               }}
+              // ModeContextBar props
+              currentSceneName={
+                scenes.find((s) => s.id === currentId)?.name ?? null
+              }
+              activeAssetPath={activeAssetLogicalPath}
+              assetDirty={assetDirty}
+              sceneDirty={logState.size > 0}
+              activeLogicGraphId={activeLogicGraph?.logical_path ?? null}
+              activeCodeFileName={pendingNavigation?.fileId ?? null}
+              isPlaying={editorMode === "play"}
+              canUndo={logState.can_undo}
+              canRedo={logState.can_redo}
+              assetCanUndo={assetLogState.can_undo}
+              assetCanRedo={assetLogState.can_redo}
             />
             {editorMode === "play" && <GameOverlay onStop={handleTogglePlay} />}
           </>

@@ -153,6 +153,10 @@ export interface PreviewMetrics {
   fps: number;
   frame_time_ms: number;
   rebuild_count: number;
+  /** v2: runtime-facing warnings demoted from errors (optional). */
+  warnings?: string[];
+  /** v2: human-readable cause of the last preview rebuild (optional). */
+  last_rebuild_cause?: string;
 }
 
 /**

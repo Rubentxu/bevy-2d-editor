@@ -8,8 +8,11 @@ export type GlobalSearchResultType =
   | "scene"
   | "entity"
   | "scene-asset"
+  | "logic-graph"
   | "source-file"
   | "asset-file"
+  | "schema"
+  | "validation-issue"
   | "command";
 
 export interface GlobalSearchResult {
@@ -145,6 +148,18 @@ export function useGlobalSearch() {
           }
         }
 
+        // Logic Graphs — match by logical_path
+        const logicGraphs = await searchLogicGraphs(q);
+        out.push(...logicGraphs);
+
+        // Schemas — match by type_id or name
+        const schemas = searchSchemas(q);
+        out.push(...schemas);
+
+        // Validation Issues — match by code or message
+        const validationIssues = searchValidationIssues(q);
+        out.push(...validationIssues);
+
         // Entity search — WASM provides list_scene_entities for the active scene.
         // We only search within the currently active scene.
         const activeScene = s.find((sc) => sc.is_active);
@@ -218,5 +233,103 @@ async function searchEntitiesInScene(
     }
   } catch {
     // WASM not ready or scene has no entities — skip silently.
+  }
+}
+
+// ── Logic Graph search helper ──────────────────────────────────────────────────
+
+interface LogicGraphCatalogEntry {
+  asset_id: string;
+  logical_path: string;
+  builtin: boolean;
+}
+
+async function searchLogicGraphs(
+  query: string,
+): Promise<GlobalSearchResult[]> {
+  if (typeof window === "undefined") return [];
+  const fn = (window as any).list_logic_graph_assets;
+  if (typeof fn !== "function") return [];
+  try {
+    const raw = fn();
+    const graphs: LogicGraphCatalogEntry[] =
+      typeof raw === "string" ? JSON.parse(raw) : raw;
+    return graphs
+      .filter((g) => g.logical_path.toLowerCase().includes(query))
+      .map((g) => ({
+        type: "logic-graph" as const,
+        id: g.asset_id,
+        label: g.logical_path,
+        path: g.builtin ? "Built-in Logic Graph" : "Logic Graph",
+      }));
+  } catch {
+    return [];
+  }
+}
+
+// ── Schema search helper ───────────────────────────────────────────────────────
+
+interface SchemaEntry {
+  type_id: string;
+  name?: string;
+}
+
+function searchSchemas(query: string): GlobalSearchResult[] {
+  if (typeof window === "undefined") return [];
+  const fn = (window as any).list_schemas;
+  if (typeof fn !== "function") return [];
+  try {
+    const raw = fn();
+    const schemas: SchemaEntry[] =
+      typeof raw === "string" ? JSON.parse(raw) : raw;
+    return schemas
+      .filter((s) => {
+        const haystack = `${s.type_id} ${s.name ?? ""}`.toLowerCase();
+        return haystack.includes(query);
+      })
+      .map((s) => ({
+        type: "schema" as const,
+        id: s.type_id,
+        label: s.name ?? s.type_id,
+        path: "Schema",
+      }));
+  } catch {
+    return [];
+  }
+}
+
+// ── Validation Issue search helper ─────────────────────────────────────────────
+
+interface ValidationIssueEntry {
+  id: string;
+  code: string;
+  message: string;
+  severity: string;
+  domain: string;
+}
+
+function searchValidationIssues(query: string): GlobalSearchResult[] {
+  if (typeof window === "undefined") return [];
+  const fn = (window as any).get_validation_issues_wasm;
+  if (typeof fn !== "function") return [];
+  try {
+    const raw = fn();
+    const issues: ValidationIssueEntry[] =
+      typeof raw === "string" ? JSON.parse(raw) : raw;
+    const q = query.toLowerCase();
+    return issues
+      .filter(
+        (iss) =>
+          iss.code.toLowerCase().includes(q) ||
+          iss.message.toLowerCase().includes(q),
+      )
+      .map((iss) => ({
+        type: "validation-issue" as const,
+        id: iss.id,
+        label: iss.code,
+        path: `${iss.domain} · ${iss.severity}`,
+      }));
+  } catch {
+    return [];
   }
 }
