@@ -409,13 +409,17 @@ into a **Cursor-like, agent-native editor for Bevy 2D games**.
 
 ### Planned sequence (after prerequisites)
 
+> **Sequencing update (2026-08-14):** replaced by the Architecture & Product Evolution Pack master roadmap. The Rig work is not cancelled — it is deliberately placed after the architecture boundaries it must depend upon. See [MASTER_ROADMAP.md](./roadmaps/MASTER_ROADMAP.md) and [v0.87-architecture-foundation.md](./roadmaps/v0.87-architecture-foundation.md).
+
 | Order | Change | Status | Why |
 |-------|--------|--------|-----|
-| 1 | `rig-agent-runtime-foundation` | ⏭️ Next | Add `crates/agent-runtime` and Rig-based manager/worker orchestration behind `ai-proxy`. Gate (P0+P1+P2) satisfied. |
-| 2 | `semantic-project-retrieval` | 🔲 Planned | Full project-semantic context and retrieval over docs, schemas, assets, logic, code, and diagnostics |
-| 3 | `agent-workbench` | 🔲 Planned | Proposal/review/apply UX with typed diffs and validation-aware approval |
-| 4 | `runtime-aware-agent-diagnostics` | 🔲 Planned | Make agents useful for runtime/debugging flows, not just generation |
-| 5 | `background-agent-automation` | 🔲 Planned | Durable low-risk maintenance/indexing/scaffolding jobs |
+| 1 | `v0.87-architecture-foundation` | ⏭️ Next | CI gates, `editor-model` extraction, `EditorSession`, `Clock`/`IdGenerator`, `ProjectStore`, Transaction Kernel v1, ChangeSet v1, typed backend foundation, fitness tests |
+| 2 | `v0.88-production-authoring` | 🔲 Planned | 2D direct manipulation toolkit, World Workspace v1, scope-of-change, filesystem project mode, recipes, hierarchy performance |
+| 3 | `v0.89-change-runtime-workbench` | 🔲 Planned | Change Workbench, semantic diffs, checkpoints, Runtime Causality Inspector, Runtime Apply-Back |
+| 4 | `v0.90-agent-runtime` | 🔲 Planned | `editor-protocol` tool contracts, `agent-runtime` crate (Rig behind capability ports), ChangeSet proposal generation, approval enforcement |
+| 5 | `v0.91-semantic-retrieval-agents` | 🔲 Planned | Semantic/typed retrieval, specialists, post-apply verification, bounded background maintenance |
+| 6 | `v0.92-ecosystem-sdk-importers` | 🔲 Planned | Editor Extension SDK, Aseprite/LDtk/Tiled import+reimport, capability permissions |
+| 7 | `v1.0-stabilization` | 🔲 Planned | Full small-game authoring pass, crash/recovery, performance corpus, a11y, compatibility policy |
 
 ### Normative references
 
@@ -426,6 +430,8 @@ into a **Cursor-like, agent-native editor for Bevy 2D games**.
 - [UI Workflow Overhaul — Durable Product Spec](./specs/ui-workflow-overhaul.md)
 - [UI Workflow Overhaul Roadmap](./roadmaps/ui-workflow-overhaul-roadmap.md)
 - [AI-Native Editor Roadmap](./roadmaps/ai-native-editor-roadmap.md)
+- [Master Roadmap — Bevy 2D Workbench (v0.87 → v1.0)](./roadmaps/MASTER_ROADMAP.md)
+- [Architecture & Product Evolution Pack — executive summary](./architecture/00-executive-summary.md)
 
 ---
 
@@ -595,6 +601,37 @@ All Hito 1 items completed in v0.12-v0.20. Deferred items:
 | ADR-0012 | Code editor choice — CodeMirror 6 via `@uiw/react-codemirror` (~130KB gzip, Vite-native, extension-API future-proofs Orders 2–6) | ✅ |
 | ADR-0013 | Build & Run Loop — Enhanced Preview Mode (play mode without in-browser rustc) | ✅ |
 | ADR-0014 | Data-Only Hot Reload — source/asset cache invalidation, no texture reload in this PR | ✅ |
+| ADR-0015 | Code-Aware AI Context Model — MultiSourceContext, SourceFile, token budget | ✅ |
+| ADR-0016 | Scene-Component Authoring — SchemaKind::SceneComponent, bound Scene Asset, auto-spawn | ✅ |
+| ADR-0017 | E2E Test Failure Root Cause (Hito 4 final cleanup) | Investigation complete |
+| ADR-0018 | Deferred SceneComponent command handlers remain Unsupported | ✅ |
+| ADR-0019 | OPFS Scene-Asset Catalog Persistence Ordering — body-first/catalog-second | ✅ |
+| ADR-0020 | Number skipped (reserved) | — |
+| ADR-0021 | Defold-inspired dock layout — 3-region CSS Grid, F6/F7/F8/F9, Workspace Presets | ✅ |
+| ADR-0022 | Drag-and-Dock Region Swap — renumbered to ADR-0024 | Renumbered |
+| ADR-0023 | Number skipped (reserved) | — |
+| ADR-0024 | Drag-and-Dock Region Swap — atomic `movePanel`, schema v2, `application/x-dock-panel` MIME | ✅ |
+| ADR-0025 | Floating Panels + Inspector Multi-Select | ✅ |
+| ADR-0026 | Asset Browser Thumbnails — optional `preview_resource`, lazy blobs, LRU ≤32 | ✅ |
+| ADR-0027 | Rig-Based Agent Runtime — manager/worker composition, transport-neutral, proposal-first | Accepted (planning baseline) |
+| ADR-0028 | Workflow-First UI Convergence Before Agentic AI | ✅ (v0.86.0 prerequisite) |
+| ADR-0030 | Compile-Time Hexagonal Crate Boundaries — `editor-model` / `editor-application` / `editor-bevy` / adapters | Accepted (2026-08-14) |
+| ADR-0031 | Explicit EditorSession Replaces Domain-Level Global State | Accepted (2026-08-14) |
+| ADR-0032 | Shared Transaction Kernel and ChangeSet, with Domain-Specific Commands | Accepted (2026-08-14) |
+| ADR-0033 | ProjectStore Port with OPFS and Filesystem Adapters | Accepted (2026-08-14) |
+| ADR-0034 | Typed EditorBackend Contract Replaces Global Window Bridge | Accepted (2026-08-14) |
+| ADR-0035 | Clock and IdGenerator Are Explicit Application Ports | Accepted (2026-08-14) |
+| ADR-0036 | Bevy Runtime Preview Is an Ephemeral Projection Adapter | Accepted (2026-08-14) |
+| ADR-0037 | World Workspace Is a First-Class Product Context | Accepted (2026-08-14) |
+| ADR-0038 | Workflow and Gameplay Recipes Compile Intent into Typed Changes | Accepted (2026-08-14) |
+| ADR-0039 | Change Workbench Is the Unified Review and Approval Surface | Accepted (2026-08-14) |
+| ADR-0040 | Editor Extension SDK Is Capability-First and Transactional | Accepted (2026-08-14) |
+| ADR-0041 | External Authoring Sources Use Provenance-Aware Import/Reimport Pipelines | Accepted (2026-08-14) |
+| ADR-0042 | Runtime Apply-Back Is Explicit, Scoped and Authorable-Field Only | Accepted (2026-08-14) |
+| ADR-0043 | Agent Runtime Uses Replaceable Orchestration Behind Typed Editor Capabilities | Accepted (2026-08-14) |
+| ADR-0044 | CI and Architecture Fitness Gates Are Release-Critical | Accepted (2026-08-14) |
+| ADR-0045 | Project Format Is Git-Friendly, Deterministic and Explicitly Migrated | Accepted (2026-08-14) |
+| ADR-0046 | Semantic Editor Model Is the Authoritative Source of Truth | Accepted (2026-08-14) |
 
 ---
 
@@ -614,8 +651,12 @@ All Hito 1 items completed in v0.12-v0.20. Deferred items:
 
 See [`CONTEXT.md`](../CONTEXT.md) for authoritative domain language.
 
-Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level Scene Asset**, **Level Layer**, **Scene Instance Layer**, **Scene Instance**, **Scene Asset Catalog**, **Project Asset Browser**, **Scene Asset Authoring Mode**, **Override / Resync Workbench**, **Validation Center**, **Runtime Preview Inspector**, **Component Schema Registry**, **Component Instance**, **Component Override**, **Operation Log**, **BsnIr**, **BSN Export**.
+Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level Scene Asset**, **Level Layer**, **Scene Instance Layer**, **Scene Instance**, **Scene Asset Catalog**, **Project Asset Browser**, **Scene Asset Authoring Mode**, **Override / Resync Workbench**, **Validation Center**, **Runtime Preview Inspector**, **Component Schema Registry**, **Component Instance**, **Component Override**, **Operation Log**, **BsnIr**, **BSN Export**. Evolution-pack terms: **Semantic Editor Model**, **EditorSession**, **Transaction Kernel**, **ChangeSet**, **Change Workbench**, **Editor Capability**, **World Workspace**, **Recipe**, **External Source**, **Runtime Delta**, **Scope of Change**, **Editor Extension** — see `CONTEXT.md`.
 
 ---
 
 *Last updated: v0.84.0 — 2026-07-24 (`fix/code-aware-ai-debt` COMPLETE per PR #120. Closed 3 HIGH bugs (security filter wiring H1, UTF-8 panic H2, FE budget divergence H3) + 2 MED (dead toggle UI M1, weak test M6) + 6 doc-drift corrections across ROADMAP + ADR-0015 + ADR-0016. Merge commit `c8cf956`. Tag `v0.84.0`. Bundle: 346.87 KB gzip (+0.05 KB). Rust ai-proxy 71/71 (4 new multibyte tests). `asset-thumbnails.spec.ts` 4/4 pass. `code-aware-ai.spec.ts` 4/4 fail — pre-existing (ai-panel-btn selector removed in Hito 5 v0.80.0, confirmed identical on baseline). Next cycle candidates: tab groups (#7), welcome tour step-through (#9), chunk-splitting refactor, code-aware-ai.spec.ts selector fix — see `ROADMAP_addendum_v0.81.md`.)*
+
+---
+
+_Last reviewed: v0.86.0 — 2026-08-14. Architecture & Product Evolution Pack adopted (docs-only, ADR-0030 → ADR-0046). The active execution priority is the `v0.87 Architecture Foundation` gate; see `docs/roadmaps/MASTER_ROADMAP.md`. Rig-based agent work (ADR-0027) resumes at v0.90 behind typed capability ports._

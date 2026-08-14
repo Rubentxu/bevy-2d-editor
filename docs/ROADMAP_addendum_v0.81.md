@@ -1,5 +1,7 @@
 # ROADMAP Addendum — v0.81 Candidates
 
+> **Historical** — superseded by later addenda (v0.86) and the Architecture & Product Evolution Pack master roadmap (`docs/roadmaps/MASTER_ROADMAP.md`, 2026-08-14). Retained for traceability.
+>
 > Generated 2026-07-22 from `defold-inspired-redesign` cycle completion.
 
 ## Context
