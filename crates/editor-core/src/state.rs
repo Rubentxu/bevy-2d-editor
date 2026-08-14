@@ -11,16 +11,20 @@
 //! - [`hot_reload_state`]: HOT_RELOAD_BUS, PLAY_MODE_REQUEST
 
 pub use crate::asset_state::{
-    get_asset_catalog_warnings, clear_asset_catalog_warnings, with_asset_body_cache,
+    clear_asset_catalog_warnings, get_asset_catalog_warnings, with_asset_body_cache,
     with_asset_body_cache_mut, with_asset_catalog, with_asset_catalog_mut, with_asset_doc,
     with_asset_doc_mut, with_asset_log, with_asset_log_mut,
 };
-pub use crate::hot_reload_state::{HotReloadRequest, PlayModeRequest, HOT_RELOAD_BUS, PLAY_MODE_REQUEST};
-pub use crate::logic_state::{
-    with_logic_graph, with_logic_graph_mut, with_logic_log, with_logic_log_mut,
-    with_logic_graph_catalog, with_logic_graph_catalog_mut,
+pub use crate::hot_reload_state::{
+    HOT_RELOAD_BUS, HotReloadRequest, PLAY_MODE_REQUEST, PlayModeRequest,
 };
-pub use crate::scene_state::{mark_dirty, with_registry, with_registry_mut, DIRTY_FLAG, SCENE_REGISTRY};
+pub use crate::logic_state::{
+    with_logic_graph, with_logic_graph_catalog, with_logic_graph_catalog_mut, with_logic_graph_mut,
+    with_logic_log, with_logic_log_mut,
+};
+pub use crate::scene_state::{
+    DIRTY_FLAG, SCENE_REGISTRY, mark_dirty, with_registry, with_registry_mut,
+};
 
 // The thread-locals SCENE_ASSET_CATALOG, SCENE_ASSET_DOC, etc. are
 // referenced by name from lib.rs. The names live in asset_state now; we
@@ -30,4 +34,4 @@ pub use crate::asset_state::{
     ASSET_BODY_CACHE, ASSET_OPERATION_LOG, RESYNC_REPORTS, SCENE_ASSET_CATALOG,
     SCENE_ASSET_CATALOG_WARNINGS, SCENE_ASSET_DOC, VALIDATION_ISSUES,
 };
-pub use crate::logic_state::{LOGIC_GRAPH_DOC, LOGIC_GRAPH_CATALOG, LOGIC_OPERATION_LOG};
+pub use crate::logic_state::{LOGIC_GRAPH_CATALOG, LOGIC_GRAPH_DOC, LOGIC_OPERATION_LOG};

@@ -36,9 +36,15 @@ interface WelcomeState {
 async function isWelcomePermanentlyDismissedSync(): Promise<boolean> {
   try {
     // Use sync navigator.storage API if available for immediate gate.
-    if (typeof navigator !== "undefined" && navigator.storage && navigator.storage.getDirectory) {
+    if (
+      typeof navigator !== "undefined" &&
+      navigator.storage &&
+      navigator.storage.getDirectory
+    ) {
       const root = await navigator.storage.getDirectory();
-      const dir = await root.getDirectoryHandle("bevy-2d-editor", { create: false });
+      const dir = await root.getDirectoryHandle("bevy-2d-editor", {
+        create: false,
+      });
       const file = await dir.getFileHandle(FLAGS_PATH);
       const blob = await file.getFile();
       const text = await blob.text();
@@ -117,6 +123,17 @@ export default function WelcomeOverlay({ onTakeTour, onSkip }: Props) {
   // Permanent dismissal — initialized synchronously from OPFS so the very first
   // render is already gated (no flash before the async useEffect fires).
   const [permanentDismissal, setPermanentDismissal] = useState(false);
+  // Synchronous URL-driven skip — the useEffect path also reads it, but the
+  // synchronous guard below ensures the very first render returns null
+  // when the URL explicitly opts out, so tests and smoke cohorts that
+  // navigate to `?skip-welcome=1` do not see the overlay blocking
+  // pointer events during the OPFS hydration window.
+  const [urlSkip] = useState(() =>
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("skip-welcome") === "1"
+      ? true
+      : false,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -127,7 +144,10 @@ export default function WelcomeOverlay({ onTakeTour, onSkip }: Props) {
       if (permanently) {
         // User previously chose "Don't show again" — skip the async load.
         setHydrated(true);
-        reportWelcomeShouldShow({ shouldShow: false, permanentDismissal: true });
+        reportWelcomeShouldShow({
+          shouldShow: false,
+          permanentDismissal: true,
+        });
         return;
       }
       // First visit (or no prior choice): fall through to async OPFS check.
@@ -136,20 +156,27 @@ export default function WelcomeOverlay({ onTakeTour, onSkip }: Props) {
         setHydrated(true);
         const skip =
           typeof window !== "undefined" &&
-          new URLSearchParams(window.location.search).get("skip-welcome") === "1";
-        reportWelcomeShouldShow({ shouldShow: !wasDismissed && !skip, permanentDismissal: false });
+          new URLSearchParams(window.location.search).get("skip-welcome") ===
+            "1";
+        reportWelcomeShouldShow({
+          shouldShow: !wasDismissed && !skip,
+          permanentDismissal: false,
+        });
       });
     });
     return () => {
       cancelled = true;
     };
-  }, [reportWelcomeShouldShow]);
+  }, [reportWelcomeShouldShow, urlSkip]);
 
   // Gate on isChecking (from WelcomeDismissalContext) to prevent both surfaces
   // from rendering during the async OPFS hydration window (spec S5).
   // Also gate on permanentDismissal for persisted "Don't show again" (S5).
   // Also gate on dismissed for user-initiated temporary Skip/TakeTour.
-  if (!hydrated || permanentDismissal || dismissed || isChecking) return null;
+  // Also gate on urlSkip so `?skip-welcome=1` keeps pointer events unblocked
+  // from the very first paint, not only after the useEffect settles.
+  if (!hydrated || permanentDismissal || dismissed || isChecking || urlSkip)
+    return null;
 
   const handleClose = async () => {
     if (dontShowAgain) {
@@ -192,8 +219,8 @@ export default function WelcomeOverlay({ onTakeTour, onSkip }: Props) {
         <header className="welcome-overlay-header">
           <h2>Welcome to Bevy 2D Editor</h2>
           <p>
-            Take a quick look at the workflow — you can always reopen this
-            tour from the Help menu.
+            Take a quick look at the workflow — you can always reopen this tour
+            from the Help menu.
           </p>
         </header>
 

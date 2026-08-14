@@ -43,10 +43,7 @@ pub fn get_instance_components_wasm(instance_id: &str) -> JsValue {
 /// Validate a SceneInstance's overrides against an asset document.
 /// Returns a JSON array of OverrideIssue objects.
 #[wasm_bindgen]
-pub fn validate_overrides_wasm(
-    instance_json: &str,
-    asset_json: &str,
-) -> Result<String, JsValue> {
+pub fn validate_overrides_wasm(instance_json: &str, asset_json: &str) -> Result<String, JsValue> {
     let instance: SceneInstance = serde_json::from_str(instance_json)
         .map_err(|e| JsValue::from_str(&format!("Invalid instance JSON: {}", e)))?;
     let asset: SceneAssetDocument = serde_json::from_str(asset_json)
@@ -60,10 +57,7 @@ pub fn validate_overrides_wasm(
 /// Compute effective values: read-only merge of asset + active overrides.
 /// Returns a JSON ResolvedScene object.
 #[wasm_bindgen]
-pub fn effective_values_wasm(
-    instance_json: &str,
-    asset_json: &str,
-) -> Result<String, JsValue> {
+pub fn effective_values_wasm(instance_json: &str, asset_json: &str) -> Result<String, JsValue> {
     let instance: SceneInstance = serde_json::from_str(instance_json)
         .map_err(|e| JsValue::from_str(&format!("Invalid instance JSON: {}", e)))?;
     let asset: SceneAssetDocument = serde_json::from_str(asset_json)
@@ -84,10 +78,7 @@ pub fn effective_values_wasm(
 /// Try to rebind an orphaned ComponentOverride to a new asset.
 /// Returns the matching LocalId as JSON string, or null if no match.
 #[wasm_bindgen]
-pub fn try_rebind_wasm(
-    orphaned_override_json: &str,
-    asset_json: &str,
-) -> Result<String, JsValue> {
+pub fn try_rebind_wasm(orphaned_override_json: &str, asset_json: &str) -> Result<String, JsValue> {
     let patch: ComponentOverride = serde_json::from_str(orphaned_override_json)
         .map_err(|e| JsValue::from_str(&format!("Invalid component override JSON: {}", e)))?;
     let asset: SceneAssetDocument = serde_json::from_str(asset_json)
@@ -174,7 +165,9 @@ pub fn upsert_override_wasm(
     let envelope_json = serde_json::to_string(&envelope)
         .map_err(|e| JsValue::from_str(&format!("Failed to serialize envelope: {}", e)))?;
 
-    super::dispatch_command(&envelope_json)
+    let snap = super::apply_envelope_internal(&envelope)
+        .map_err(|e| JsValue::from_str(&format!("Failed to apply: {e}")))?;
+    serde_json::to_string(&snap).map_err(|e| JsValue::from_str(&format!("Serialize: {e}")))
 }
 
 /// Revert a component override on a Scene Instance.
@@ -206,7 +199,9 @@ pub fn revert_override_wasm(
     let envelope_json = serde_json::to_string(&envelope)
         .map_err(|e| JsValue::from_str(&format!("Failed to serialize envelope: {}", e)))?;
 
-    super::dispatch_command(&envelope_json)
+    let snap = super::apply_envelope_internal(&envelope)
+        .map_err(|e| JsValue::from_str(&format!("Failed to apply: {e}")))?;
+    serde_json::to_string(&snap).map_err(|e| JsValue::from_str(&format!("Serialize: {e}")))
 }
 
 // Suppress unused import warnings for items used only in some paths.

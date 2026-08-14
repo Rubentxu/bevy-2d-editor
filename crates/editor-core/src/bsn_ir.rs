@@ -142,8 +142,8 @@ pub fn bsn_ir_from_scene_asset(doc: &SceneAssetDocument) -> BsnIr {
                     components: comps,
                     children: Vec::new(),
                     relationships: Vec::new(),
-                ..Default::default()
-        }
+                    ..Default::default()
+                }
             })
             .collect();
 
@@ -152,7 +152,7 @@ pub fn bsn_ir_from_scene_asset(doc: &SceneAssetDocument) -> BsnIr {
             components,
             children,
             relationships,
-        ..Default::default()
+            ..Default::default()
         }
     } else {
         BsnIrNode {
@@ -160,7 +160,7 @@ pub fn bsn_ir_from_scene_asset(doc: &SceneAssetDocument) -> BsnIr {
             components: BTreeMap::new(),
             children: Vec::new(),
             relationships: Vec::new(),
-        ..Default::default()
+            ..Default::default()
         }
     };
 

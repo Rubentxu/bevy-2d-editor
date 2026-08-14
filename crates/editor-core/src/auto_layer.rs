@@ -170,11 +170,8 @@ pub fn regenerate(layer: &mut AutoLayer, source: &TileLayer, rng: &mut impl Rng)
 /// cell set to `Any` (wildcard — it is the cell being evaluated, not part
 /// of the pattern context).
 fn build_neighborhood(source: &TileLayer, center: &TileCoord) -> [[Option<TileRef>; 3]; 3] {
-    let mut neighborhood: [[Option<TileRef>; 3]; 3] = [
-        [None, None, None],
-        [None, None, None],
-        [None, None, None],
-    ];
+    let mut neighborhood: [[Option<TileRef>; 3]; 3] =
+        [[None, None, None], [None, None, None], [None, None, None]];
 
     for dy in 0..3 {
         for dx in 0..3 {
@@ -251,20 +248,24 @@ mod tests {
             order: 1,
             source_layer_id,
             tileset_id: tileset_id.clone(),
-            rules: vec![
-                AutoRule {
-                    pattern: [
-                        [PatternCell::Any; 3],
-                        [PatternCell::Any, PatternCell::Any, PatternCell::Any],
-                        [PatternCell::Any; 3],
-                    ],
-                    output: vec![
-                        TileRef { tileset_id: "ts_grass".to_string(), local_index: 0 },
-                        TileRef { tileset_id: "ts_grass".to_string(), local_index: 1 },
-                    ],
-                    chance: Some(1.0),
-                },
-            ],
+            rules: vec![AutoRule {
+                pattern: [
+                    [PatternCell::Any; 3],
+                    [PatternCell::Any, PatternCell::Any, PatternCell::Any],
+                    [PatternCell::Any; 3],
+                ],
+                output: vec![
+                    TileRef {
+                        tileset_id: "ts_grass".to_string(),
+                        local_index: 0,
+                    },
+                    TileRef {
+                        tileset_id: "ts_grass".to_string(),
+                        local_index: 1,
+                    },
+                ],
+                chance: Some(1.0),
+            }],
             cached: TileGrid::default(),
             source_generation: 3,
         };
@@ -282,8 +283,6 @@ mod tests {
         assert_eq!(roundtrip.source_generation, 3);
         assert!(roundtrip.cached.is_empty());
     }
-
-
 
     // ─────────────────────────────────────────────────────────────────────────
     // RE1 — first-match-wins
@@ -303,7 +302,10 @@ mod tests {
         source.generation = 1;
         source.paint_tile(
             TileCoord::new(0, 0),
-            TileRef { tileset_id: "ts_test".to_string(), local_index: 0 },
+            TileRef {
+                tileset_id: "ts_test".to_string(),
+                local_index: 0,
+            },
         );
 
         // Rules: first rule fires for any Filled neighbor; second rule would fire too
@@ -321,7 +323,10 @@ mod tests {
                         [PatternCell::Empty, PatternCell::Any, PatternCell::Empty],
                         [PatternCell::Empty; 3],
                     ],
-                    output: vec![TileRef { tileset_id: "ts_test".to_string(), local_index: 99 }],
+                    output: vec![TileRef {
+                        tileset_id: "ts_test".to_string(),
+                        local_index: 99,
+                    }],
                     chance: None,
                 },
                 AutoRule {
@@ -331,7 +336,10 @@ mod tests {
                         [PatternCell::Any, PatternCell::Any, PatternCell::Any],
                         [PatternCell::Any; 3],
                     ],
-                    output: vec![TileRef { tileset_id: "ts_test".to_string(), local_index: 100 }],
+                    output: vec![TileRef {
+                        tileset_id: "ts_test".to_string(),
+                        local_index: 100,
+                    }],
                     chance: None,
                 },
             ],
@@ -344,7 +352,13 @@ mod tests {
 
         // Rule 1 fired → output index 99, not 100
         let emitted = layer.cached.get(&TileCoord::new(0, 0));
-        assert_eq!(emitted, Some(&TileRef { tileset_id: "ts_test".to_string(), local_index: 99 }));
+        assert_eq!(
+            emitted,
+            Some(&TileRef {
+                tileset_id: "ts_test".to_string(),
+                local_index: 99
+            })
+        );
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -365,7 +379,10 @@ mod tests {
         source.generation = 1;
         source.paint_tile(
             TileCoord::new(0, 0),
-            TileRef { tileset_id: "ts_test".to_string(), local_index: 0 },
+            TileRef {
+                tileset_id: "ts_test".to_string(),
+                local_index: 0,
+            },
         );
 
         let mut layer = AutoLayer {
@@ -374,17 +391,18 @@ mod tests {
             order: 0,
             source_layer_id,
             tileset_id: tileset_id.clone(),
-            rules: vec![
-                AutoRule {
-                    pattern: [
-                        [PatternCell::Any; 3],
-                        [PatternCell::Any, PatternCell::Any, PatternCell::Any],
-                        [PatternCell::Any; 3],
-                    ],
-                    output: vec![TileRef { tileset_id: "ts_test".to_string(), local_index: 1 }],
-                    chance: Some(0.5),
-                },
-            ],
+            rules: vec![AutoRule {
+                pattern: [
+                    [PatternCell::Any; 3],
+                    [PatternCell::Any, PatternCell::Any, PatternCell::Any],
+                    [PatternCell::Any; 3],
+                ],
+                output: vec![TileRef {
+                    tileset_id: "ts_test".to_string(),
+                    local_index: 1,
+                }],
+                chance: Some(0.5),
+            }],
             cached: TileGrid::default(),
             source_generation: 0,
         };
@@ -430,7 +448,10 @@ mod tests {
         source.generation = 1;
         source.paint_tile(
             TileCoord::new(0, 0),
-            TileRef { tileset_id: "ts_test".to_string(), local_index: 0 },
+            TileRef {
+                tileset_id: "ts_test".to_string(),
+                local_index: 0,
+            },
         );
 
         let mut layer = AutoLayer {
@@ -442,8 +463,20 @@ mod tests {
             rules: vec![], // No rules
             cached: {
                 let mut g = TileGrid::default();
-                g.insert(TileCoord::new(0, 0), TileRef { tileset_id: "ts_test".to_string(), local_index: 99 });
-                g.insert(TileCoord::new(10, 10), TileRef { tileset_id: "ts_test".to_string(), local_index: 88 });
+                g.insert(
+                    TileCoord::new(0, 0),
+                    TileRef {
+                        tileset_id: "ts_test".to_string(),
+                        local_index: 99,
+                    },
+                );
+                g.insert(
+                    TileCoord::new(10, 10),
+                    TileRef {
+                        tileset_id: "ts_test".to_string(),
+                        local_index: 88,
+                    },
+                );
                 g
             },
             source_generation: 0,
@@ -453,7 +486,11 @@ mod tests {
         regenerate(&mut layer, &source, &mut rng);
 
         // Empty rules → nothing matches → cache is empty
-        assert!(layer.cached.is_empty(), "Expected empty cached grid, got {:?}", layer.cached);
+        assert!(
+            layer.cached.is_empty(),
+            "Expected empty cached grid, got {:?}",
+            layer.cached
+        );
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -513,7 +550,10 @@ mod tests {
                     [PatternCell::Any, PatternCell::Any, PatternCell::Any],
                     [PatternCell::Any; 3],
                 ],
-                output: vec![TileRef { tileset_id: "ts_test".to_string(), local_index: 7 }],
+                output: vec![TileRef {
+                    tileset_id: "ts_test".to_string(),
+                    local_index: 7,
+                }],
                 chance: None,
             }],
             cached: TileGrid::default(),

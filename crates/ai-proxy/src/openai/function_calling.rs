@@ -203,7 +203,11 @@ mod tests {
             },
         ];
         let (kept, rejected) = filter_forbidden_commands(envelopes);
-        assert_eq!(kept.len(), 2, "should keep 2 (CreateEntity + WriteSourceFile)");
+        assert_eq!(
+            kept.len(),
+            2,
+            "should keep 2 (CreateEntity + WriteSourceFile)"
+        );
         assert_eq!(rejected.len(), 2, "should reject 2 forbidden");
         assert!(rejected.contains(&"DeleteSourceFile".to_string()));
         assert!(rejected.contains(&"RenameSourceFile".to_string()));

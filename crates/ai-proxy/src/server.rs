@@ -1,17 +1,17 @@
 //! Axum router and app state setup.
 
-use std::sync::Arc;
 use axum::{
     http::HeaderValue,
     routing::{get, post},
     Router,
 };
+use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::info;
 
 use crate::config::AppConfig;
-use crate::handlers::{health_handler, propose_handler};
 use crate::handlers::propose::AppState;
+use crate::handlers::{health_handler, propose_handler};
 use crate::openai::OpenAIClient;
 
 /// Build the axum Router with all routes and middleware.
@@ -31,11 +31,7 @@ pub fn build_router(config: &AppConfig) -> Router {
     let allowed_origins: Vec<HeaderValue> = config
         .allowed_origins
         .iter()
-        .filter_map(|origin| {
-            origin
-                .parse::<HeaderValue>()
-                .ok()
-        })
+        .filter_map(|origin| origin.parse::<HeaderValue>().ok())
         .collect();
 
     let cors = CorsLayer::new()

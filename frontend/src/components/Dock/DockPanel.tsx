@@ -108,7 +108,11 @@ export default function DockPanel({
         onToggleCollapse={onCollapse ?? (() => {})}
         onClose={onClose}
       />
-      {!collapsed && <DockBody testId={testId ? `${testId}-body` : undefined}>{children}</DockBody>}
+      {!collapsed && (
+        <DockBody testId={testId ? `${testId}-body` : undefined}>
+          {children}
+        </DockBody>
+      )}
     </section>
   );
 }

@@ -11,10 +11,10 @@
 //!   - Round-trip JSON serde of the new variant.
 
 use editor_core::{
-    command::{Command, CommandError},
-    document::{ComponentInstance, Entity, SceneDocument},
-    processor,
     StableId,
+    command::{Command, CommandError},
+    document::{ComponentInstance, Entity, LocalId, SceneDocument},
+    processor,
 };
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -32,6 +32,7 @@ fn empty_doc() -> SceneDocument {
 fn entity_with_transform(id: &str, x: f32, y: f32) -> Entity {
     Entity {
         id: StableId::new(id),
+        local_id: LocalId::new(id),
         name: id.to_string(),
         parent: None,
         components: vec![ComponentInstance {
@@ -44,6 +45,7 @@ fn entity_with_transform(id: &str, x: f32, y: f32) -> Entity {
 fn entity_without_transform(id: &str) -> Entity {
     Entity {
         id: StableId::new(id),
+        local_id: LocalId::new(id),
         name: id.to_string(),
         parent: None,
         components: vec![],
@@ -54,11 +56,7 @@ fn x_for(doc: &SceneDocument, id: &str) -> Option<f32> {
     doc.entities
         .iter()
         .find(|e| e.id.as_str() == id)
-        .and_then(|e| {
-            e.components
-                .iter()
-                .find(|c| c.type_id == "Transform2D")
-        })
+        .and_then(|e| e.components.iter().find(|c| c.type_id == "Transform2D"))
         .and_then(|c| c.values.get("translation"))
         .and_then(|t| t.get("x"))
         .and_then(|x| x.as_f64())
@@ -101,7 +99,10 @@ fn set_component_field_on_multiple_simple_path() {
         Command::SetComponentFieldOnMultiple { entity_ids, .. } => {
             assert_eq!(entity_ids.len(), 3);
         }
-        other => panic!("expected SetComponentFieldOnMultiple inverse, got {:?}", other),
+        other => panic!(
+            "expected SetComponentFieldOnMultiple inverse, got {:?}",
+            other
+        ),
     }
 
     // Sanity: y values untouched.
@@ -136,6 +137,7 @@ fn set_component_field_on_multiple_partial_failure_rolls_back() {
     doc.entities = vec![
         Entity {
             id: StableId::new("e_a"),
+            local_id: LocalId::new("e_a"),
             name: "e_a".to_string(),
             parent: None,
             components: vec![ComponentInstance {
@@ -201,13 +203,14 @@ fn set_component_field_on_multiple_missing_component_skips() {
     assert!((x_for(&doc, "e_owner").unwrap() - 42.0).abs() < 1e-6);
 
     // Other entity untouched.
-    assert!(doc
-        .entities
-        .iter()
-        .find(|e| e.id.as_str() == "e_other")
-        .unwrap()
-        .components
-        .is_empty());
+    assert!(
+        doc.entities
+            .iter()
+            .find(|e| e.id.as_str() == "e_other")
+            .unwrap()
+            .components
+            .is_empty()
+    );
 
     // Undo: inverse must restore pre-state.
     let mut doc2 = doc.clone();

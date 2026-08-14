@@ -34,7 +34,9 @@ async function waitForEngine(): Promise<void> {
  * List all logic graph assets from the catalog.
  * @returns JSON array of LogicGraphCatalogEntry
  */
-export async function listLogicGraphAssets(): Promise<LogicGraphCatalogEntry[]> {
+export async function listLogicGraphAssets(): Promise<
+  LogicGraphCatalogEntry[]
+> {
   await waitForEngine();
   const result = (window as any).list_logic_graph_assets();
   return typeof result === "string" ? JSON.parse(result) : result;

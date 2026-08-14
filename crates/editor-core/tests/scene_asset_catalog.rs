@@ -3,8 +3,8 @@
 
 use editor_core::scene_asset::SceneAssetRole;
 use editor_core::scene_asset_catalog::{
-    mint_asset_id, normalize_logical_path, validate_logical_path, CatalogError, SceneAssetCatalog,
-    SceneAssetCatalogEntry,
+    CatalogError, SceneAssetCatalog, SceneAssetCatalogEntry, mint_asset_id, normalize_logical_path,
+    validate_logical_path,
 };
 
 fn entry(
@@ -470,7 +470,9 @@ fn register_then_unregister_roundtrip_leaves_clean_invariants() {
     );
 
     // Register (mirrors create_scene_asset's pre-metadata step).
-    catalog.register(e.clone()).expect("register should succeed");
+    catalog
+        .register(e.clone())
+        .expect("register should succeed");
     assert_eq!(catalog.get("id_rollback_1"), Some(&e));
     assert_eq!(catalog.resolve_path("actors/player"), Some("id_rollback_1"));
 

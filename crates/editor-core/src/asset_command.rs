@@ -48,9 +48,7 @@ pub enum AssetCommand {
         components: Vec<ComponentInstance>,
     },
     /// Remove an entity from the asset document.
-    RemoveEntity {
-        local_id: String,
-    },
+    RemoveEntity { local_id: String },
     /// Change an entity's human-readable name.
     RenameEntity {
         local_id: String,
@@ -68,10 +66,7 @@ pub enum AssetCommand {
         values: serde_json::Value,
     },
     /// Remove a component instance from an entity.
-    RemoveComponent {
-        local_id: String,
-        type_id: String,
-    },
+    RemoveComponent { local_id: String, type_id: String },
     /// Update one field of a component instance.
     /// `field_path` is `Vec<String>` for unambiguous dot-separated names.
     SetComponentValue {
@@ -330,15 +325,9 @@ pub fn apply(
             })
         }
 
-        AssetCommand::RemoveComponent {
-            local_id,
-            type_id,
-        } => {
+        AssetCommand::RemoveComponent { local_id, type_id } => {
             let entity = find_entity_mut(doc, local_id)?;
-            let pos = entity
-                .components
-                .iter()
-                .position(|c| c.type_id == *type_id);
+            let pos = entity.components.iter().position(|c| c.type_id == *type_id);
             match pos {
                 Some(p) => {
                     let removed = entity.components.remove(p);
@@ -370,8 +359,7 @@ pub fn apply(
                 .iter_mut()
                 .find(|c| c.type_id == *type_id)
                 .ok_or_else(|| AssetCommandError::ComponentNotFound(type_id.clone()))?;
-            let old_value =
-                set_field_path_vec(&mut component.values, field_path, value.clone())?;
+            let old_value = set_field_path_vec(&mut component.values, field_path, value.clone())?;
             Ok(AssetCommand::SetComponentValue {
                 local_id: local_id.clone(),
                 type_id: type_id.clone(),
@@ -391,13 +379,20 @@ pub fn apply(
 
             // ── ALL immutable data collection (before any mutable borrow) ──────────────
             // Find AutoLayer index.
-            let auto_idx = doc.layers
+            let auto_idx = doc
+                .layers
                 .iter()
-                .position(|l| matches!(l, LevelLayer::Auto(al) if al.id.as_str() == layer_id.as_str()))
+                .position(
+                    |l| matches!(l, LevelLayer::Auto(al) if al.id.as_str() == layer_id.as_str()),
+                )
                 .ok_or_else(|| AssetCommandError::LayerNotFound(layer_id.0.clone()))?;
 
             let (source_layer_id, pre_cached, pre_source_gen) = match &doc.layers[auto_idx] {
-                LevelLayer::Auto(al) => (al.source_layer_id.clone(), al.cached.clone(), al.source_generation),
+                LevelLayer::Auto(al) => (
+                    al.source_layer_id.clone(),
+                    al.cached.clone(),
+                    al.source_generation,
+                ),
                 _ => return Err(AssetCommandError::LayerNotFound(layer_id.0.clone())),
             };
 
@@ -409,7 +404,11 @@ pub fn apply(
                     .ok_or_else(|| AssetCommandError::SourceLayerNotFound(source_layer_id.0.clone()))?;
                 match &doc.layers[source_idx] {
                     LevelLayer::Tile(tl) => tl.clone(),
-                    _ => return Err(AssetCommandError::SourceLayerNotFound(source_layer_id.0.clone())),
+                    _ => {
+                        return Err(AssetCommandError::SourceLayerNotFound(
+                            source_layer_id.0.clone(),
+                        ));
+                    }
                 }
             }; // <-- all immutable borrows end here
 
@@ -467,10 +466,7 @@ pub fn apply(
                 LevelLayer::Tile(tl) => tl,
                 _ => return Err(AssetCommandError::LayerNotFound(layer_id_str)),
             };
-            let captured_old = tl
-                .get_tile(&coord)
-                .cloned()
-                .or_else(|| old_tile.clone());
+            let captured_old = tl.get_tile(&coord).cloned().or_else(|| old_tile.clone());
             let tile_ref = TileRef {
                 tileset_id: tileset_id.clone(),
                 local_index: *local_index,
@@ -601,7 +597,9 @@ pub fn apply(
                     y: *index as i32,
                 });
             }
-            let captured = removed_rule.clone().unwrap_or_else(|| al.rules[*index].clone());
+            let captured = removed_rule
+                .clone()
+                .unwrap_or_else(|| al.rules[*index].clone());
             al.rules.remove(*index);
             Ok(AssetCommand::AddAutoRule {
                 layer_id: layer_id.clone(),
@@ -817,7 +815,12 @@ mod tests {
         assert_eq!(doc.entities.len(), 0);
 
         match inverse {
-            AssetCommand::AddEntity { local_id, name, local_path, components } => {
+            AssetCommand::AddEntity {
+                local_id,
+                name,
+                local_path,
+                components,
+            } => {
                 assert_eq!(local_id, "a1");
                 assert_eq!(name, "A");
                 assert_eq!(local_path, "./a1");
@@ -841,7 +844,11 @@ mod tests {
         assert_eq!(doc.entities[0].name, "New");
 
         match inverse {
-            AssetCommand::RenameEntity { local_id, old_name, new_name } => {
+            AssetCommand::RenameEntity {
+                local_id,
+                old_name,
+                new_name,
+            } => {
                 assert_eq!(local_id, "a1");
                 assert_eq!(old_name, Some("Original".to_string()));
                 assert_eq!(new_name, "Original");
@@ -866,10 +873,16 @@ mod tests {
             value: json!(100.0),
         };
         let inverse = apply(&mut doc, &cmd).unwrap();
-        assert_eq!(doc.entities[0].components[0].values["translation"]["x"], json!(100.0));
+        assert_eq!(
+            doc.entities[0].components[0].values["translation"]["x"],
+            json!(100.0)
+        );
 
         apply(&mut doc, &inverse).unwrap();
-        assert_eq!(doc.entities[0].components[0].values["translation"]["x"], json!(0.0));
+        assert_eq!(
+            doc.entities[0].components[0].values["translation"]["x"],
+            json!(0.0)
+        );
     }
 
     #[test]
@@ -910,7 +923,12 @@ mod tests {
     #[test]
     fn test_set_field_path_vec_nested() {
         let mut v = json!({"a": {"b": {"c": 1}}});
-        let old = set_field_path_vec(&mut v, &["a".to_string(), "b".to_string(), "c".to_string()], json!(42)).unwrap();
+        let old = set_field_path_vec(
+            &mut v,
+            &["a".to_string(), "b".to_string(), "c".to_string()],
+            json!(42),
+        )
+        .unwrap();
         assert_eq!(old, json!(1));
         assert_eq!(v["a"]["b"]["c"], json!(42));
     }
@@ -994,7 +1012,7 @@ mod tests {
         use crate::auto_layer::{AutoLayer, AutoLayerId, AutoRule, Pattern3x3, PatternCell};
         use crate::scene_asset::{LayerId, LevelLayer};
         use crate::tile_layer::TileLayer;
-        use crate::tileset::{TileCoord, TileRef, TileGrid};
+        use crate::tileset::{TileCoord, TileGrid, TileRef};
 
         let tileset_id = crate::tileset::TilesetId::new("ts_test".to_string());
         let source_layer_id = LayerId::new("lyr_src".to_string());
@@ -1009,7 +1027,10 @@ mod tests {
         source_tl.generation = 1;
         source_tl.paint_tile(
             TileCoord::new(0, 0),
-            TileRef { tileset_id: "ts_test".to_string(), local_index: 0 },
+            TileRef {
+                tileset_id: "ts_test".to_string(),
+                local_index: 0,
+            },
         );
 
         // AutoLayer: initially stale (cached empty, source_gen = 0)
@@ -1027,7 +1048,10 @@ mod tests {
             tileset_id: tileset_id.clone(),
             rules: vec![AutoRule {
                 pattern,
-                output: vec![TileRef { tileset_id: "ts_test".to_string(), local_index: 99 }],
+                output: vec![TileRef {
+                    tileset_id: "ts_test".to_string(),
+                    local_index: 99,
+                }],
                 chance: None,
             }],
             cached: TileGrid::default(),
@@ -1058,7 +1082,10 @@ mod tests {
             LevelLayer::Auto(al) => al.cached.clone(),
             _ => panic!("expected AutoLayer"),
         };
-        assert!(!post_cached.is_empty(), "post-regen cached should not be empty");
+        assert!(
+            !post_cached.is_empty(),
+            "post-regen cached should not be empty"
+        );
 
         // Apply inverse: should restore cached to C1
         apply(&mut doc, &inverse).unwrap();
@@ -1067,6 +1094,9 @@ mod tests {
             LevelLayer::Auto(al) => al.cached.clone(),
             _ => panic!("expected AutoLayer"),
         };
-        assert!(restored_cached.is_empty(), "inverse should restore cached to C1 (empty)");
+        assert!(
+            restored_cached.is_empty(),
+            "inverse should restore cached to C1 (empty)"
+        );
     }
 }

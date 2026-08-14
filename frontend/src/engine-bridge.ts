@@ -1,3 +1,14 @@
+import {
+  opfsDeleteFile,
+  opfsExists,
+  opfsListFiles,
+  opfsLoadBinary,
+  opfsLoadFile,
+  opfsSaveBinary,
+  opfsSaveFile,
+} from "./opfs-bridge";
+import { subscribe as subscribeHotReload } from "./services/hot-reload";
+
 const CMD_MOVE_SPRITE = 1;
 const EVT_SPRITE_POSITION = 1;
 const EVT_FPS = 2;
@@ -8,7 +19,6 @@ let cmdView: DataView | null = null;
 let evtView: DataView | null = null;
 let lastMemSize = 0;
 let frameCallback: ((type: number, payload: DataView) => void) | null = null;
-let engineReady = false;
 
 // Hot-reload: subscribed to the TS event bus, calls Rust WASM exports
 let unsubSource: (() => void) | null = null;
@@ -322,14 +332,13 @@ export async function initEngine(
   // Expose sendMoveSprite (LinearBus raw command, used by legacy tests)
   (window as any).sendMoveSprite = sendMoveSprite;
   // Expose OPFS bridge functions for wasm_bindgen externs
-  const opfs = await import("./opfs-bridge");
-  (window as any).opfs_save_file = opfs.opfsSaveFile;
-  (window as any).opfs_load_file = opfs.opfsLoadFile;
-  (window as any).opfs_list_files = opfs.opfsListFiles;
-  (window as any).opfs_exists = opfs.opfsExists;
-  (window as any).opfs_delete_file = opfs.opfsDeleteFile;
-  (window as any).opfs_save_binary = opfs.opfsSaveBinary;
-  (window as any).opfs_load_binary = opfs.opfsLoadBinary;
+  (window as any).opfs_save_file = opfsSaveFile;
+  (window as any).opfs_load_file = opfsLoadFile;
+  (window as any).opfs_list_files = opfsListFiles;
+  (window as any).opfs_exists = opfsExists;
+  (window as any).opfs_delete_file = opfsDeleteFile;
+  (window as any).opfs_save_binary = opfsSaveBinary;
+  (window as any).opfs_load_binary = opfsLoadBinary;
 
   // Step 1: Create buses BEFORE starting engine
   wasm.create_buses();
@@ -344,32 +353,26 @@ export async function initEngine(
     `[bridge] evtView: ptr=${wasm.get_event_bus_ptr()} len=${wasm.get_event_bus_len()}`,
   );
 
-  // Step 3: Start Bevy engine (deferred so this promise can resolve)
-  engineReady = true;
-  setTimeout(() => {
-    try {
-      console.log("[bridge] Starting Bevy engine...");
-      wasm.start_engine(canvasId);
-      console.log("[bridge] Bevy engine started");
-      // Hito 5 (bevy-engine-hardening): signal that the Bevy app.run() has
-      // returned control (which means the engine has started its first frame
-      // and `rebuild_preview_world` has had a chance to run). Tests wait on
-      // this via `window.__bevyEngineStarted` before submitting AI prompts.
-      (window as any).__bevyEngineStarted = true;
-    } catch (e) {
-      console.error("[bridge] start_engine threw:", e);
-    }
-  }, 0);
+  // Step 3: Start Bevy engine. We start it synchronously so the readiness
+  // signal below is only published AFTER start_engine returned without
+  // throwing. The previous setTimeout(0) indirection caused `isEngineReady()`
+  // to report true before start_engine had a chance to wire its linear-memory
+  // views, which is the root cause of the WASM env init flakes Playwright
+  // surfaces. We split the publish step so hooks/tests that check
+  // window.__bevyEngineStarted see the engine only after it has really
+  // started its first frame.
+  console.log("[bridge] Starting Bevy engine...");
+  wasm.start_engine(canvasId);
+  console.log("[bridge] Bevy engine started");
+  (window as any).__bevyEngineStarted = true;
 
   // Step 4: Wire up hot-reload event bus → Rust WASM
-  // (imported lazily to avoid circular deps)
-  const { subscribe } = await import("./services/hot-reload");
-  unsubSource = subscribe("hot-reload-source", (event) => {
+  unsubSource = subscribeHotReload("hot-reload-source", (event) => {
     if (event.type === "hot-reload-source") {
       (window as any).hot_reload_source_wasm(event.fileId);
     }
   });
-  unsubAsset = subscribe("hot-reload-asset", (event) => {
+  unsubAsset = subscribeHotReload("hot-reload-asset", (event) => {
     if (event.type === "hot-reload-asset") {
       (window as any).hot_reload_asset_wasm(event.assetId);
     }
@@ -503,8 +506,8 @@ export async function exportDynamicScene(
   return inner;
 }
 
-export function isEngineReady() {
-  return engineReady;
+export function isEngineReady(): boolean {
+  return (window as any).__bevyEngineStarted === true;
 }
 
 /**

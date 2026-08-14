@@ -414,7 +414,13 @@ mod tests {
         };
         manager.register(metadata.clone());
         assert_eq!(manager.len(), 1);
-        assert_eq!(manager.get(&TilesetId::new("ts_01".to_string())).unwrap().name, "Test Tileset");
+        assert_eq!(
+            manager
+                .get(&TilesetId::new("ts_01".to_string()))
+                .unwrap()
+                .name,
+            "Test Tileset"
+        );
     }
 
     #[test]
@@ -468,18 +474,27 @@ mod tests {
         let mut grid = TileGrid::new();
 
         // Only 3 tiles in a 100x100 grid
-        grid.insert(TileCoord::new(0, 0), TileRef {
-            tileset_id: "ts_01".to_string(),
-            local_index: 0,
-        });
-        grid.insert(TileCoord::new(50, 50), TileRef {
-            tileset_id: "ts_01".to_string(),
-            local_index: 1,
-        });
-        grid.insert(TileCoord::new(99, 99), TileRef {
-            tileset_id: "ts_01".to_string(),
-            local_index: 2,
-        });
+        grid.insert(
+            TileCoord::new(0, 0),
+            TileRef {
+                tileset_id: "ts_01".to_string(),
+                local_index: 0,
+            },
+        );
+        grid.insert(
+            TileCoord::new(50, 50),
+            TileRef {
+                tileset_id: "ts_01".to_string(),
+                local_index: 1,
+            },
+        );
+        grid.insert(
+            TileCoord::new(99, 99),
+            TileRef {
+                tileset_id: "ts_01".to_string(),
+                local_index: 2,
+            },
+        );
 
         assert_eq!(grid.len(), 3);
 

@@ -181,7 +181,10 @@ export function assembleMultiSourceContext(
         let consumed = 0;
         for (const sf of sourceFiles) {
           const fileCost = sf.content.length + sf.path.length + 16;
-          if (consumed + fileCost > includedChars && keptSourceFiles.length > 0) {
+          if (
+            consumed + fileCost > includedChars &&
+            keptSourceFiles.length > 0
+          ) {
             break; // stop when adding the next file would exceed budget
           }
           keptSourceFiles.push(sf);
@@ -196,7 +199,11 @@ export function assembleMultiSourceContext(
         for (const lg of logicGraphs) {
           if (consumed > includedChars && keptLogicGraphs.length > 0) break;
           keptLogicGraphs.push(lg);
-          consumed += lg.asset_id.length + 64 + lg.nodes.length * 32 + lg.edges.length * 48;
+          consumed +=
+            lg.asset_id.length +
+            64 +
+            lg.nodes.length * 32 +
+            lg.edges.length * 48;
         }
       }
     } else if (src.name === "selected_entity") {

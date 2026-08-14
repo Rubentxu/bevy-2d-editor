@@ -16,7 +16,7 @@ use crate::command::{Command, CommandError};
 use crate::document::{ComponentInstance, Entity, LocalId, SceneDocument, StableId};
 use crate::scene_asset::SceneAssetDocument;
 use crate::scene_instance::SceneInstance;
-use crate::scene_instance_overrides::{resync, upsert_override, remove_override};
+use crate::scene_instance_overrides::{remove_override, resync, upsert_override};
 
 /// Context passed to commands that need to resolve external resources
 /// (HD-1 cleanup). Construct via `from_globals()` for production code,
@@ -38,7 +38,8 @@ impl ProcessorContext {
     /// the full surface).
     pub fn from_globals(asset_ref: &str) -> Self {
         // Resolve path → asset_id (clone to detach lifetime).
-        let asset_id = crate::with_asset_catalog(|cat| cat.resolve_path(asset_ref).map(|s| s.to_string()));
+        let asset_id =
+            crate::with_asset_catalog(|cat| cat.resolve_path(asset_ref).map(|s| s.to_string()));
         // Resolve asset_id → catalog entry.
         let entry = asset_id.and_then(|id| crate::with_asset_catalog(|cat| cat.get(&id).cloned()));
         // Resolve entry.logical_path → body cache entry.
@@ -48,10 +49,10 @@ impl ProcessorContext {
         ProcessorContext { asset_body }
     }
 
-/// Empty context for tests / callers that don't need external resources.
-pub fn empty() -> Self {
-    ProcessorContext::default()
-}
+    /// Empty context for tests / callers that don't need external resources.
+    pub fn empty() -> Self {
+        ProcessorContext::default()
+    }
 }
 
 /// Extract the asset_ref (if any) from a command. Used by `apply` to
@@ -60,6 +61,7 @@ pub fn empty() -> Self {
 /// for commands that don't need resolution.
 fn asset_ref_of<'a>(cmd: &'a Command) -> &'a str {
     match cmd {
+        Command::Noop {} => "",
         Command::ReplaceInstanceAsset { new_asset_ref, .. } => new_asset_ref.as_str(),
         Command::PlaceInstance { asset_ref, .. } => asset_ref.as_str(),
         _ => "",
@@ -149,6 +151,7 @@ fn would_create_cycle(
 /// Returns `Ok(())` if the command can be applied, or `Err(CommandError)` otherwise.
 pub fn validate(doc: &SceneDocument, cmd: &Command) -> Result<(), CommandError> {
     match cmd {
+        Command::Noop {} => {}
         Command::CreateEntity { id, .. } => {
             if doc.entities.iter().any(|e| &e.id == id) {
                 return Err(CommandError::DuplicateId(id.clone()));
@@ -165,10 +168,7 @@ pub fn validate(doc: &SceneDocument, cmd: &Command) -> Result<(), CommandError> 
                 return Err(CommandError::UnknownSchema(type_id.clone()));
             }
         }
-        Command::RemoveComponent {
-            entity_id,
-            type_id,
-        } => {
+        Command::RemoveComponent { entity_id, type_id } => {
             let entity = find_entity(doc, entity_id)?;
             if !entity.components.iter().any(|c| &c.type_id == type_id) {
                 // No-op: valid but produces self-inverse
@@ -227,21 +227,20 @@ pub fn validate(doc: &SceneDocument, cmd: &Command) -> Result<(), CommandError> 
             // owner must have the field_path — checked inline below.
             for id in entity_ids {
                 let entity = find_entity(doc, id)?;
-                if let Some(component) =
-                    entity.components.iter().find(|c| &c.type_id == type_id)
-                {
+                if let Some(component) = entity.components.iter().find(|c| &c.type_id == type_id) {
                     let parts: Vec<&str> = field_path.split('.').collect();
                     let mut current = &component.values;
                     for part in &parts {
-                        current = current
-                            .as_object()
-                            .and_then(|o| o.get(*part))
-                            .ok_or_else(|| {
-                                CommandError::FieldNotFound(format!(
-                                    "{} (entity {})",
-                                    field_path, id
-                                ))
-                            })?;
+                        current =
+                            current
+                                .as_object()
+                                .and_then(|o| o.get(*part))
+                                .ok_or_else(|| {
+                                    CommandError::FieldNotFound(format!(
+                                        "{} (entity {})",
+                                        field_path, id
+                                    ))
+                                })?;
                     }
                 }
             }
@@ -264,7 +263,8 @@ pub fn validate(doc: &SceneDocument, cmd: &Command) -> Result<(), CommandError> 
         }
         Command::CreateSceneComponent { .. } => {
             return Err(crate::command::CommandError::Unsupported(
-                "CreateSceneComponent must be applied via command_scene_component::apply_create".to_string()
+                "CreateSceneComponent must be applied via command_scene_component::apply_create"
+                    .to_string(),
             ));
         }
         Command::UpdateSceneComponentFields { .. } => {
@@ -274,7 +274,8 @@ pub fn validate(doc: &SceneDocument, cmd: &Command) -> Result<(), CommandError> 
         }
         Command::BindSceneToSchema { .. } => {
             return Err(crate::command::CommandError::Unsupported(
-                "BindSceneToSchema must be applied via command_scene_component::apply_bind".to_string()
+                "BindSceneToSchema must be applied via command_scene_component::apply_bind"
+                    .to_string(),
             ));
         }
         Command::Batch { commands, .. } => {
@@ -350,6 +351,7 @@ pub fn apply_with_context(
     validate(doc, cmd)?;
 
     match cmd {
+        Command::Noop {} => Ok(Command::Noop {}),
         Command::CreateEntity {
             id,
             name,
@@ -804,7 +806,8 @@ mod tests {
     #[test]
     fn test_create_entity_rejects_duplicate_id() {
         let mut doc = empty_doc();
-        doc.entities.push(entity_with_components("ent_dup", "Foo", vec![]));
+        doc.entities
+            .push(entity_with_components("ent_dup", "Foo", vec![]));
         let cmd = Command::CreateEntity {
             id: StableId::new("ent_dup"),
             name: "Bar".to_string(),
@@ -820,7 +823,8 @@ mod tests {
     #[test]
     fn test_delete_entity_removes_leaf() {
         let mut doc = empty_doc();
-        doc.entities.push(entity_with_components("ent_01", "Foo", vec![]));
+        doc.entities
+            .push(entity_with_components("ent_01", "Foo", vec![]));
         let cmd = Command::DeleteEntity {
             id: StableId::new("ent_01"),
         };
@@ -833,7 +837,8 @@ mod tests {
     #[test]
     fn test_delete_entity_reparents_children_to_root() {
         let mut doc = empty_doc();
-        doc.entities.push(entity_with_components("parent", "Parent", vec![]));
+        doc.entities
+            .push(entity_with_components("parent", "Parent", vec![]));
         doc.entities.push(Entity {
             id: StableId::new("child"),
             local_id: LocalId::new("child"),
@@ -855,7 +860,10 @@ mod tests {
         let cmd = Command::DeleteEntity {
             id: StableId::new("ent_missing"),
         };
-        assert!(matches!(apply(&mut doc, &cmd), Err(CommandError::EntityNotFound(_))));
+        assert!(matches!(
+            apply(&mut doc, &cmd),
+            Err(CommandError::EntityNotFound(_))
+        ));
     }
 
     // ===== AddComponent =====
@@ -863,7 +871,8 @@ mod tests {
     #[test]
     fn test_add_component_with_valid_schema() {
         let mut doc = empty_doc();
-        doc.entities.push(entity_with_components("ent_01", "Foo", vec![]));
+        doc.entities
+            .push(entity_with_components("ent_01", "Foo", vec![]));
         let cmd = Command::AddComponent {
             entity_id: StableId::new("ent_01"),
             type_id: "editor.Transform2D".to_string(),
@@ -877,7 +886,8 @@ mod tests {
     #[test]
     fn test_add_component_unknown_schema_rejected() {
         let mut doc = empty_doc();
-        doc.entities.push(entity_with_components("ent_01", "Foo", vec![]));
+        doc.entities
+            .push(entity_with_components("ent_01", "Foo", vec![]));
         let cmd = Command::AddComponent {
             entity_id: StableId::new("ent_01"),
             type_id: "editor.Bogus".to_string(),
@@ -891,7 +901,8 @@ mod tests {
     #[test]
     fn test_add_component_preserves_unknown_fields() {
         let mut doc = empty_doc();
-        doc.entities.push(entity_with_components("ent_01", "Foo", vec![]));
+        doc.entities
+            .push(entity_with_components("ent_01", "Foo", vec![]));
         let cmd = Command::AddComponent {
             entity_id: StableId::new("ent_01"),
             type_id: "editor.Transform2D".to_string(),
@@ -923,7 +934,8 @@ mod tests {
     #[test]
     fn test_remove_component_absent_is_noop() {
         let mut doc = empty_doc();
-        doc.entities.push(entity_with_components("ent_01", "Foo", vec![]));
+        doc.entities
+            .push(entity_with_components("ent_01", "Foo", vec![]));
         let cmd = Command::RemoveComponent {
             entity_id: StableId::new("ent_01"),
             type_id: "editor.Sprite2D".to_string(),
@@ -939,8 +951,11 @@ mod tests {
     #[test]
     fn test_set_component_field_simple_path() {
         let mut doc = empty_doc();
-        doc.entities
-            .push(entity_with_components("ent_01", "Foo", vec![transform2d(0.0, 0.0)]));
+        doc.entities.push(entity_with_components(
+            "ent_01",
+            "Foo",
+            vec![transform2d(0.0, 0.0)],
+        ));
         let cmd = Command::SetComponentField {
             entity_id: StableId::new("ent_01"),
             type_id: "editor.Transform2D".to_string(),
@@ -979,8 +994,11 @@ mod tests {
     #[test]
     fn test_set_component_field_missing_fails() {
         let mut doc = empty_doc();
-        doc.entities
-            .push(entity_with_components("ent_01", "Foo", vec![transform2d(0.0, 0.0)]));
+        doc.entities.push(entity_with_components(
+            "ent_01",
+            "Foo",
+            vec![transform2d(0.0, 0.0)],
+        ));
         let cmd = Command::SetComponentField {
             entity_id: StableId::new("ent_01"),
             type_id: "editor.Transform2D".to_string(),
@@ -1008,7 +1026,11 @@ mod tests {
 
         // Inverse points back: new_parent = what old_parent was (None, was root)
         match inverse {
-            Command::ReparentEntity { old_parent, new_parent, .. } => {
+            Command::ReparentEntity {
+                old_parent,
+                new_parent,
+                ..
+            } => {
                 assert_eq!(old_parent, None);
                 assert_eq!(new_parent, None);
             }
@@ -1061,7 +1083,8 @@ mod tests {
     #[test]
     fn test_rename_entity_updates_name_preserves_id() {
         let mut doc = empty_doc();
-        doc.entities.push(entity_with_components("ent_01J", "Player", vec![]));
+        doc.entities
+            .push(entity_with_components("ent_01J", "Player", vec![]));
         let cmd = Command::RenameEntity {
             entity_id: StableId::new("ent_01J"),
             old_name: None,
@@ -1182,8 +1205,11 @@ mod tests {
     #[test]
     fn test_forward_inverse_roundtrip_set_field() {
         let mut doc = empty_doc();
-        doc.entities
-            .push(entity_with_components("ent_01", "Foo", vec![transform2d(50.0, 50.0)]));
+        doc.entities.push(entity_with_components(
+            "ent_01",
+            "Foo",
+            vec![transform2d(50.0, 50.0)],
+        ));
         let cmd = Command::SetComponentField {
             entity_id: StableId::new("ent_01"),
             type_id: "editor.Transform2D".to_string(),
@@ -1191,9 +1217,15 @@ mod tests {
             value: json!(999.0),
         };
         let inverse = apply(&mut doc, &cmd).unwrap();
-        assert_eq!(doc.entities[0].components[0].values["translation"]["x"], json!(999.0));
+        assert_eq!(
+            doc.entities[0].components[0].values["translation"]["x"],
+            json!(999.0)
+        );
         apply(&mut doc, &inverse).unwrap();
-        assert_eq!(doc.entities[0].components[0].values["translation"]["x"], json!(50.0));
+        assert_eq!(
+            doc.entities[0].components[0].values["translation"]["x"],
+            json!(50.0)
+        );
     }
 
     #[test]
@@ -1217,7 +1249,8 @@ mod tests {
     #[test]
     fn test_failed_validation_leaves_doc_unchanged() {
         let mut doc = empty_doc();
-        doc.entities.push(entity_with_components("ent_01", "Foo", vec![]));
+        doc.entities
+            .push(entity_with_components("ent_01", "Foo", vec![]));
         let snapshot_before = doc.clone();
         let cmd = Command::AddComponent {
             entity_id: StableId::new("ent_01"),
@@ -1281,7 +1314,14 @@ mod tests {
             value: serde_json::json!("cannon.png"),
         };
         let inverse = apply(&mut doc, &cmd).unwrap();
-        assert_eq!(doc.instances.get(&StableId::new("inst_1")).unwrap().component_overrides.len(), 1);
+        assert_eq!(
+            doc.instances
+                .get(&StableId::new("inst_1"))
+                .unwrap()
+                .component_overrides
+                .len(),
+            1
+        );
         // Inverse should be RevertOverride since there was no prior override
         assert!(matches!(inverse, Command::RevertOverride { .. }));
     }
@@ -1291,15 +1331,17 @@ mod tests {
     fn test_forward_inverse_roundtrip_upsert_override() {
         let (_, mut doc) = make_instance("inst_1");
         // Pre-populate with an override
-        doc.instances.get_mut(&StableId::new("inst_1")).unwrap().component_overrides.push(
-            crate::scene_instance::ComponentOverride {
+        doc.instances
+            .get_mut(&StableId::new("inst_1"))
+            .unwrap()
+            .component_overrides
+            .push(crate::scene_instance::ComponentOverride {
                 target_local_id: crate::scene_asset::LocalId::new("root"),
                 component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
                 field_path: vec!["asset".to_string()],
                 value: serde_json::json!("cannon.png"),
                 status: crate::scene_instance::ComponentOverrideStatus::Active,
-            },
-        );
+            });
 
         let cmd = Command::UpsertOverride {
             instance_id: StableId::new("inst_1"),
@@ -1312,14 +1354,22 @@ mod tests {
 
         // Verify new value is stored
         assert_eq!(
-            doc.instances.get(&StableId::new("inst_1")).unwrap().component_overrides[0].value,
+            doc.instances
+                .get(&StableId::new("inst_1"))
+                .unwrap()
+                .component_overrides[0]
+                .value,
             serde_json::json!("enemy.png")
         );
 
         // Apply inverse — should restore original value
         apply(&mut doc, &inverse).unwrap();
         assert_eq!(
-            doc.instances.get(&StableId::new("inst_1")).unwrap().component_overrides[0].value,
+            doc.instances
+                .get(&StableId::new("inst_1"))
+                .unwrap()
+                .component_overrides[0]
+                .value,
             serde_json::json!("cannon.png")
         );
     }
@@ -1330,15 +1380,17 @@ mod tests {
     #[test]
     fn test_revert_override_removes_matching() {
         let (_, mut doc) = make_instance("inst_1");
-        doc.instances.get_mut(&StableId::new("inst_1")).unwrap().component_overrides.push(
-            crate::scene_instance::ComponentOverride {
+        doc.instances
+            .get_mut(&StableId::new("inst_1"))
+            .unwrap()
+            .component_overrides
+            .push(crate::scene_instance::ComponentOverride {
                 target_local_id: crate::scene_asset::LocalId::new("root"),
                 component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
                 field_path: vec!["asset".to_string()],
                 value: serde_json::json!("cannon.png"),
                 status: crate::scene_instance::ComponentOverrideStatus::Active,
-            },
-        );
+            });
 
         let cmd = Command::RevertOverride {
             instance_id: StableId::new("inst_1"),
@@ -1347,7 +1399,13 @@ mod tests {
             field_path: vec!["asset".to_string()],
         };
         let inverse = apply(&mut doc, &cmd).unwrap();
-        assert!(doc.instances.get(&StableId::new("inst_1")).unwrap().component_overrides.is_empty());
+        assert!(
+            doc.instances
+                .get(&StableId::new("inst_1"))
+                .unwrap()
+                .component_overrides
+                .is_empty()
+        );
 
         // Inverse should re-insert
         assert!(matches!(inverse, Command::UpsertOverride { .. }));
@@ -1365,7 +1423,13 @@ mod tests {
         };
         let inverse = apply(&mut doc, &cmd).unwrap();
         // No override was present — still no override
-        assert!(doc.instances.get(&StableId::new("inst_1")).unwrap().component_overrides.is_empty());
+        assert!(
+            doc.instances
+                .get(&StableId::new("inst_1"))
+                .unwrap()
+                .component_overrides
+                .is_empty()
+        );
         // Inverse is self (noop)
         assert!(matches!(inverse, Command::RevertOverride { .. }));
     }

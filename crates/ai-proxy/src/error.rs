@@ -31,10 +31,9 @@ struct ErrorBody {
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, body) = match &self {
-            AppError::BadRequest(msg) => (
-                StatusCode::BAD_REQUEST,
-                ErrorBody { error: msg.clone() },
-            ),
+            AppError::BadRequest(msg) => {
+                (StatusCode::BAD_REQUEST, ErrorBody { error: msg.clone() })
+            }
             AppError::MissingApiKey => (
                 StatusCode::SERVICE_UNAVAILABLE,
                 ErrorBody {
@@ -49,9 +48,7 @@ impl IntoResponse for AppError {
             ),
             AppError::Internal(msg) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                ErrorBody {
-                    error: msg.clone(),
-                },
+                ErrorBody { error: msg.clone() },
             ),
         };
 

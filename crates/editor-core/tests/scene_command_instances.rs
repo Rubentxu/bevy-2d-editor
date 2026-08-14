@@ -3,6 +3,7 @@
 //! Covers: S3 (RemoveInstance), S15 (PlaceInstance), S16 (RemoveInstance inverse),
 //! S17 (ReplaceInstanceAsset).
 
+use editor_core::document::LocalId as DocumentLocalId;
 use editor_core::scene_asset::{AssetReference, LocalId};
 use editor_core::scene_instance::SceneInstance;
 use editor_core::{Command, SceneDocument, StableId};
@@ -21,11 +22,10 @@ fn empty_doc() -> SceneDocument {
 /// S15: PlaceInstance serializes with type tag and all fields.
 #[test]
 fn test_place_instance_serializes_pascal_case() {
-    let id_map: BTreeMap<LocalId, StableId> = vec![
-        (LocalId::new("local_1"), StableId::new("inst_test_1")),
-    ]
-    .into_iter()
-    .collect();
+    let id_map: BTreeMap<LocalId, StableId> =
+        vec![(LocalId::new("local_1"), StableId::new("inst_test_1"))]
+            .into_iter()
+            .collect();
 
     let cmd = Command::PlaceInstance {
         instance_id: StableId::new("inst_test"),
@@ -50,11 +50,11 @@ fn test_place_instance_serializes_pascal_case() {
         json.contains("\"asset_ref\":\"characters/player\""),
         "Should have asset_ref"
     );
-    assert!(json.contains("\"asset_version\":1"), "Should have asset_version");
     assert!(
-        json.contains("\"id_map\":"),
-        "Should have id_map field"
+        json.contains("\"asset_version\":1"),
+        "Should have asset_version"
     );
+    assert!(json.contains("\"id_map\":"), "Should have id_map field");
 }
 
 /// S16: RemoveInstance serializes with type tag.
@@ -207,11 +207,10 @@ use editor_core::processor;
 fn s15_place_instance_apply_and_inverse() {
     let mut doc = empty_doc();
 
-    let id_map: BTreeMap<LocalId, StableId> = vec![
-        (LocalId::new("local_1"), StableId::new("inst_test_1")),
-    ]
-    .into_iter()
-    .collect();
+    let id_map: BTreeMap<LocalId, StableId> =
+        vec![(LocalId::new("local_1"), StableId::new("inst_test_1"))]
+            .into_iter()
+            .collect();
 
     let cmd = Command::PlaceInstance {
         instance_id: StableId::new("inst_test"),
@@ -243,7 +242,10 @@ fn s15_place_instance_apply_and_inverse() {
     // Apply inverse (RemoveInstance)
     processor::apply(&mut doc, &inverse).expect("inverse apply should succeed");
 
-    assert!(doc.instances.is_empty(), "Instances should be empty after undo");
+    assert!(
+        doc.instances.is_empty(),
+        "Instances should be empty after undo"
+    );
 }
 
 /// S16: RemoveInstance applies and produces PlaceInstance as inverse.
@@ -294,7 +296,11 @@ fn s16_remove_instance_apply_and_inverse() {
 
     assert_eq!(doc.instances.len(), 1, "Instance should be restored");
     assert_eq!(
-        doc.instances.get(&StableId::new("inst_test")).unwrap().asset_ref.as_str(),
+        doc.instances
+            .get(&StableId::new("inst_test"))
+            .unwrap()
+            .asset_ref
+            .as_str(),
         "characters/player"
     );
 }
@@ -346,7 +352,10 @@ fn s17_replace_instance_asset_apply_and_inverse() {
             assert_eq!(instance_id.as_str(), "inst_test");
             assert_eq!(new_asset_ref.as_str(), "old_player"); // Swapped back
             assert_eq!(new_asset_version, 1); // Swapped back
-            assert!(captured_old.is_some(), "captured_old should be set for next inverse");
+            assert!(
+                captured_old.is_some(),
+                "captured_old should be set for next inverse"
+            );
         }
         _ => panic!("Inverse should be ReplaceInstanceAsset"),
     }
@@ -372,6 +381,7 @@ fn s3_remove_instance_only_affects_instance() {
     // Add an authored entity
     doc.entities.push(Entity {
         id: StableId::new("authored_entity"),
+        local_id: DocumentLocalId::new("authored_entity"),
         name: "Authored Entity".to_string(),
         parent: None,
         components: vec![],
@@ -389,8 +399,7 @@ fn s3_remove_instance_only_affects_instance() {
         component_overrides: vec![],
         orphaned_component_overrides: vec![],
     };
-    doc.instances
-        .insert(StableId::new("inst_001"), instance);
+    doc.instances.insert(StableId::new("inst_001"), instance);
 
     let cmd = Command::RemoveInstance {
         instance_id: StableId::new("inst_001"),

@@ -25,14 +25,17 @@ use crate::actuator_bus;
 use crate::bevy_anchor::anchor_str_to_bevy_anchor;
 use crate::document::{Entity, SceneDocument, StableId};
 use crate::dynamic_scene::is_known_anchor_str;
-use crate::instance_projection::{project_instances, PreviewEntity};
+use crate::instance_projection::{PreviewEntity, project_instances};
 use crate::logic_dispatch;
 use crate::logic_evaluator;
 use crate::state::{
-    mark_dirty, with_asset_body_cache_mut, with_logic_graph_mut, DIRTY_FLAG, HOT_RELOAD_BUS,
-    PLAY_MODE_REQUEST, HotReloadRequest, PlayModeRequest,
+    DIRTY_FLAG, HOT_RELOAD_BUS, HotReloadRequest, PLAY_MODE_REQUEST, PlayModeRequest, mark_dirty,
+    with_asset_body_cache_mut, with_logic_graph_mut,
 };
-use crate::{source_files, OperationLogState, PlayMode, SceneDocumentState, SceneEntity, SceneInstanceChild, TransformSnapshot, BevyEntity, OPERATION_LOG};
+use crate::{
+    BevyEntity, OPERATION_LOG, OperationLogState, PlayMode, SceneDocumentState, SceneEntity,
+    SceneInstanceChild, TransformSnapshot, source_files,
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Bus / event constants and default scene payload
@@ -114,18 +117,46 @@ pub fn start_engine(canvas_id: &str) {
         // mutable overlap with the scene-entity ParamSet below.
         .add_systems(Update, process_play_mode_request)
         // process_hot_reload_requests drains the HOT_RELOAD_BUS each frame before rebuild
-        .add_systems(Update, process_hot_reload_requests.before(rebuild_preview_world))
+        .add_systems(
+            Update,
+            process_hot_reload_requests.before(rebuild_preview_world),
+        )
         // Editor-only systems gated during play mode. `Without<SceneEntity>`
         // keeps these queries provably disjoint from play-mode systems that
         // write to scene-entity Transforms/Sprites (process_play_mode_request
         // ParamSet, apply_actuator_outputs).
-        .add_systems(Update, process_commands.run_if(in_edit_mode).before(actuator_bus::apply_actuator_outputs))
-        .add_systems(Update, rebuild_preview_world.run_if(in_edit_mode).after(process_commands))
-        .add_systems(Update, sync_log_state.run_if(in_edit_mode).after(rebuild_preview_world))
+        .add_systems(
+            Update,
+            process_commands
+                .run_if(in_edit_mode)
+                .before(actuator_bus::apply_actuator_outputs),
+        )
+        .add_systems(
+            Update,
+            rebuild_preview_world
+                .run_if(in_edit_mode)
+                .after(process_commands),
+        )
+        .add_systems(
+            Update,
+            sync_log_state
+                .run_if(in_edit_mode)
+                .after(rebuild_preview_world),
+        )
         // Play-mode sensor systems — run before logic evaluation
-        .add_systems(Update, logic_evaluator::update_keyboard_state.run_if(in_play_mode).before(logic_dispatch::logic_evaluation_system))
+        .add_systems(
+            Update,
+            logic_evaluator::update_keyboard_state
+                .run_if(in_play_mode)
+                .before(logic_dispatch::logic_evaluation_system),
+        )
         // Logic dispatch runs only in play mode
-        .add_systems(Update, logic_dispatch::logic_evaluation_system.run_if(in_play_mode).after(sync_log_state))
+        .add_systems(
+            Update,
+            logic_dispatch::logic_evaluation_system
+                .run_if(in_play_mode)
+                .after(sync_log_state),
+        )
         // apply_actuator_outputs (play mode) is explicitly ordered AFTER
         // process_play_mode_request and process_commands so Bevy 0.19 treats
         // the &mut Transform overlap with those systems as sequential rather
@@ -355,14 +386,11 @@ fn rebuild_preview_world(
 
 /// Update the runtime preview inspector thread-locals after a rebuild.
 /// `projected` is the list returned by `project_instances` for the same doc.
-fn push_preview_inspector_state(
-    doc: &SceneDocument,
-    projected: &[PreviewEntity],
-) {
-    use std::collections::BTreeMap;
+fn push_preview_inspector_state(doc: &SceneDocument, projected: &[PreviewEntity]) {
     use crate::preview_inspector::{
         PreviewMappingEntry, PreviewProvenance, set_mapping, set_provenance,
     };
+    use std::collections::BTreeMap;
 
     let mut mapping: Vec<PreviewMappingEntry> = Vec::new();
     let mut provenance: BTreeMap<StableId, PreviewProvenance> = BTreeMap::new();

@@ -19,7 +19,7 @@ import ProblemsTab from "../ProblemsTab";
 import SearchTab from "../SearchTab";
 import { stampDockPanelDrag } from "./drag-payload";
 import type { DockableRegion } from "../../hooks/useDockPrefs";
-import type { NavigationTarget } from "../CodeEditor";
+import type { NavigationTarget } from "../../types/navigation";
 
 interface Props {
   visible: boolean;
@@ -213,7 +213,9 @@ export default function BottomDock({
         role="tabpanel"
       >
         {activeTab === "console" && <ConsoleTab />}
-        {activeTab === "search" && <SearchTab onSourceNavigate={onSourceNavigate} />}
+        {activeTab === "search" && (
+          <SearchTab onSourceNavigate={onSourceNavigate} />
+        )}
         {activeTab === "output" && <OutputTab />}
         {activeTab === "problems" && <ProblemsTab />}
       </div>

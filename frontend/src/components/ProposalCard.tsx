@@ -120,13 +120,20 @@ export default function ProposalCard({
 
       {/* v2: risk + validation impact preview */}
       {(risk !== "low" || hasValidationErrors) && (
-        <div className="proposal-impact-preview" data-testid="proposal-impact-preview">
+        <div
+          className="proposal-impact-preview"
+          data-testid="proposal-impact-preview"
+        >
           <span
             className={`proposal-risk risk-${risk}`}
             data-testid={`proposal-risk-${risk}`}
             title="Estimated risk level of this proposal"
           >
-            {risk === "high" ? "⚠ High risk" : risk === "medium" ? "⚡ Medium risk" : "✓ Low risk"}
+            {risk === "high"
+              ? "⚠ High risk"
+              : risk === "medium"
+                ? "⚡ Medium risk"
+                : "✓ Low risk"}
           </span>
           {surfaces.length > 0 && (
             <span className="proposal-surfaces" data-testid="proposal-surfaces">
@@ -139,7 +146,8 @@ export default function ProposalCard({
               data-testid="proposal-validation-warning"
               title="Validation errors detected"
             >
-              ⚠ {validationErrors.length} validation issue{validationErrors.length !== 1 ? "s" : ""}
+              ⚠ {validationErrors.length} validation issue
+              {validationErrors.length !== 1 ? "s" : ""}
             </span>
           )}
         </div>

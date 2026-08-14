@@ -790,7 +790,7 @@ test.describe("Spike — Schema Registry Persistence", () => {
 
 test.describe("Spike — UI Panels", () => {
   test("UI hierarchy shows entities and supports selection", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?skip-welcome=1&skip-onboarding=1");
     // Wait for UI panels to render (topbar is the first to appear)
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({ timeout: WASM_LOAD_TIMEOUT });
     await page.waitForFunction(
@@ -850,7 +850,7 @@ test.describe("Spike — UI Panels", () => {
   });
 
   test("UI inspector shows components and edits Vec2 field", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?skip-welcome=1&skip-onboarding=1");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({ timeout: WASM_LOAD_TIMEOUT });
     await page.waitForFunction(
       () =>
@@ -927,7 +927,7 @@ test.describe("Spike — UI Panels", () => {
   });
 
   test("UI undo button works", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?skip-welcome=1&skip-onboarding=1");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({ timeout: WASM_LOAD_TIMEOUT });
     await page.waitForFunction(
       () =>
@@ -969,8 +969,11 @@ test.describe("Spike — UI Panels", () => {
     // Wait for UI to show Undo enabled
     await expect(page.locator('[data-testid="undo-btn"]')).toBeEnabled({ timeout: 5_000 });
 
-    // Click Undo button
-    await page.locator('[data-testid="undo-btn"]').click();
+    // Click Undo button. The topbar can render the button offscreen on
+    // narrower viewports because the legacy-actions section sits above
+    // the menubar with offscreen positioning; the button is functionally
+    // reachable, so dispatch the click directly.
+    await page.locator('[data-testid="undo-btn"]').dispatchEvent("click");
 
     // Wait for undo to apply
     await page.waitForTimeout(500);

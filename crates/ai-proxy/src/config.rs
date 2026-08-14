@@ -35,8 +35,7 @@ impl AppConfig {
             .parse()
             .unwrap_or(DEFAULT_PORT);
 
-        let model =
-            std::env::var("OPENAI_MODEL").unwrap_or_else(|_| DEFAULT_MODEL.to_string());
+        let model = std::env::var("OPENAI_MODEL").unwrap_or_else(|_| DEFAULT_MODEL.to_string());
 
         let token_threshold: usize = std::env::var("TOKEN_THRESHOLD")
             .unwrap_or_else(|_| DEFAULT_TOKEN_THRESHOLD.to_string())

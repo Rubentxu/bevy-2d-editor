@@ -163,8 +163,7 @@ function valueKey(v: any): string {
  * Returns either a single homogeneous value or `{ kind: "mixed" }`.
  */
 type FieldAggregate =
-  | { kind: "homogeneous"; value: any }
-  | { kind: "mixed"; sampleValues: any[] };
+  { kind: "homogeneous"; value: any } | { kind: "mixed"; sampleValues: any[] };
 
 function aggregateField(values: any[]): FieldAggregate {
   if (values.length === 0) return { kind: "mixed", sampleValues: [] };
@@ -278,7 +277,10 @@ function MultiInspector({
           >
             <header>
               <span className="type-id">{typeId}</span>
-              <span className="multi-entity-count" title="Entities sharing this component">
+              <span
+                className="multi-entity-count"
+                title="Entities sharing this component"
+              >
                 ×{entities.length}
               </span>
             </header>
@@ -355,9 +357,7 @@ function MultiFieldRow({
     // `sampleValues` exists on the union.
     const sampleTooltip =
       aggregate.kind === "mixed"
-        ? aggregate.sampleValues
-            .map((v: any) => valueKey(v))
-            .join(", ")
+        ? aggregate.sampleValues.map((v: any) => valueKey(v)).join(", ")
         : "";
     return (
       <div
@@ -693,7 +693,11 @@ export default function InspectorPanel({
       {entity && (
         <>
           {/* Zone 1 — Identity / Provenance */}
-          <InspectorSection id="identity" title="Identity" defaultCollapsed={false}>
+          <InspectorSection
+            id="identity"
+            title="Identity"
+            defaultCollapsed={false}
+          >
             <div className="zone-identity">
               <input
                 type="text"
@@ -712,7 +716,10 @@ export default function InspectorPanel({
                 }}
                 data-testid={`entity-name-${entity.id}`}
               />
-              <span className="entity-id-label" data-testid={`entity-id-display-${entity.id}`}>
+              <span
+                className="entity-id-label"
+                data-testid={`entity-id-display-${entity.id}`}
+              >
                 {entity.id}
               </span>
               {/* Logic Workflow v2: Open Bound Logic for logic-bound entities */}
@@ -720,16 +727,17 @@ export default function InspectorPanel({
                 (c) =>
                   c.type_id.startsWith("LogicBridge") ||
                   c.type_id.startsWith("LogicNode"),
-              ) && onOpenBoundLogic && (
-                <button
-                  type="button"
-                  className="open-bound-logic-btn"
-                  onClick={() => onOpenBoundLogic(entity.id)}
-                  data-testid={`open-bound-logic-btn-${entity.id}`}
-                >
-                  Open Bound Logic
-                </button>
-              )}
+              ) &&
+                onOpenBoundLogic && (
+                  <button
+                    type="button"
+                    className="open-bound-logic-btn"
+                    onClick={() => onOpenBoundLogic(entity.id)}
+                    data-testid={`open-bound-logic-btn-${entity.id}`}
+                  >
+                    Open Bound Logic
+                  </button>
+                )}
             </div>
           </InspectorSection>
 
@@ -748,7 +756,9 @@ export default function InspectorPanel({
             ): Record<string, ComponentOverrideStatus> | undefined => {
               if (!isInstanceEntity) return undefined;
               const result: Record<string, ComponentOverrideStatus> = {};
-              for (const [key, status] of Object.entries(fieldOverrideStatusMap)) {
+              for (const [key, status] of Object.entries(
+                fieldOverrideStatusMap,
+              )) {
                 const [tid, fieldName] = key.split(":");
                 if (tid === typeId) result[fieldName] = status;
               }
@@ -771,9 +781,7 @@ export default function InspectorPanel({
                         onCommit={(fieldPath, value) =>
                           onSetField(entity.id, c.type_id, fieldPath, value)
                         }
-                        onRemove={() =>
-                          onRemoveComponent(entity.id, c.type_id)
-                        }
+                        onRemove={() => onRemoveComponent(entity.id, c.type_id)}
                         fieldOverrideStatus={buildFieldStatus(c.type_id)}
                         onRevertField={
                           isInstanceEntity
@@ -796,11 +804,7 @@ export default function InspectorPanel({
                   id="components"
                   title="Components"
                   defaultCollapsed={false}
-                  badge={
-                    others.length > 0
-                      ? others.length
-                      : undefined
-                  }
+                  badge={others.length > 0 ? others.length : undefined}
                 >
                   {others.length === 0 && visibleComponents.length === 0 && (
                     <div className="panel-empty">
@@ -810,30 +814,28 @@ export default function InspectorPanel({
                     </div>
                   )}
                   {others.map((c) => (
-                      <ComponentCard
-                        key={c.type_id}
-                        component={c}
-                        entityId={entity.id}
-                        onCommit={(fieldPath, value) =>
-                          onSetField(entity.id, c.type_id, fieldPath, value)
-                        }
-                        onRemove={() =>
-                          onRemoveComponent(entity.id, c.type_id)
-                        }
-                        fieldOverrideStatus={buildFieldStatus(c.type_id)}
-                        onRevertField={
-                          isInstanceEntity
-                            ? (fieldPath) =>
-                                handleRevertField(c.type_id, fieldPath)
-                            : undefined
-                        }
-                        onJumpToSource={
-                          onJumpToSource
-                            ? () => onJumpToSource(c.type_id)
-                            : undefined
-                        }
-                      />
-                    ))}
+                    <ComponentCard
+                      key={c.type_id}
+                      component={c}
+                      entityId={entity.id}
+                      onCommit={(fieldPath, value) =>
+                        onSetField(entity.id, c.type_id, fieldPath, value)
+                      }
+                      onRemove={() => onRemoveComponent(entity.id, c.type_id)}
+                      fieldOverrideStatus={buildFieldStatus(c.type_id)}
+                      onRevertField={
+                        isInstanceEntity
+                          ? (fieldPath) =>
+                              handleRevertField(c.type_id, fieldPath)
+                          : undefined
+                      }
+                      onJumpToSource={
+                        onJumpToSource
+                          ? () => onJumpToSource(c.type_id)
+                          : undefined
+                      }
+                    />
+                  ))}
                   <AddComponentButton
                     key={schemaRefreshKey}
                     entityId={entity.id}
@@ -851,11 +853,10 @@ export default function InspectorPanel({
             defaultCollapsed={true}
             badge={
               overrideCounts
-                ? (overrideCounts.active +
+                ? overrideCounts.active +
                     overrideCounts.stale +
                     overrideCounts.orphaned +
-                    overrideCounts.conflict) ||
-                  undefined
+                    overrideCounts.conflict || undefined
                 : undefined
             }
           >
@@ -930,9 +931,7 @@ export default function InspectorPanel({
                   <button
                     type="button"
                     className="override-issues-toggle"
-                    onClick={() =>
-                      setShowOverrideDetails(!showOverrideDetails)
-                    }
+                    onClick={() => setShowOverrideDetails(!showOverrideDetails)}
                   >
                     {overrideIssues.length} issue
                     {overrideIssues.length !== 1 ? "s" : ""}{" "}
@@ -965,7 +964,11 @@ export default function InspectorPanel({
           </InspectorSection>
 
           {/* Zone 6 — AI Actions (zone 5 = Runtime Preview rendered separately below) */}
-          <InspectorSection id="ai-actions" title="AI Actions" defaultCollapsed={true}>
+          <InspectorSection
+            id="ai-actions"
+            title="AI Actions"
+            defaultCollapsed={true}
+          >
             <div className="inspector-actions">
               <button
                 type="button"
@@ -1043,7 +1046,11 @@ export default function InspectorPanel({
                 onRemove={() => handleRemoveInstance(inst.instance_id)}
                 onReplace={() => handleReplaceInstance(inst.instance_id)}
                 assetEntries={assetEntries}
-                onAttachLogic={onAttachLogic ? (id) => onAttachLogic(inst.instance_id) : undefined}
+                onAttachLogic={
+                  onAttachLogic
+                    ? (id) => onAttachLogic(inst.instance_id)
+                    : undefined
+                }
               />
             ))
           )}

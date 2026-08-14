@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted — superseded in source-of-truth semantics by [ADR-0046](./0046-semantic-editor-model-authority.md) (2026-08-14). Retained for historical rationale and JSON adapter policy. JSON remains a supported adapter of the semantic editor model.
 
 ## Context
 

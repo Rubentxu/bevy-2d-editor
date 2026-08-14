@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { Suspense, lazy, useEffect, useState, useCallback, useMemo } from "react";
 import "./styles.css";
 import { initEngine, isEngineReady } from "./engine-bridge";
 import { useSceneState, SceneDocument } from "./hooks/useSceneState";
@@ -22,9 +22,7 @@ import AssetAuthoringView from "./components/AssetAuthoringView";
 import AssetUnsavedChangesDialog from "./components/AssetUnsavedChangesDialog";
 import { TilesetPanel } from "./components/TilesetPanel";
 import { AutoLayerPanel } from "./components/AutoLayerPanel";
-import LogicGraphEditor from "./components/LogicGraphEditor";
 import GameOverlay from "./components/GameOverlay";
-import CodeEditor, { type NavigationTarget } from "./components/CodeEditor";
 import ConsoleTab from "./components/ConsoleTab";
 import StatusBar from "./components/StatusBar";
 import ViewportControls from "./components/ViewportControls";
@@ -35,8 +33,15 @@ import CheatSheet, {
   type ShortcutGroup as CheatSheetGroup,
 } from "./components/CheatSheet";
 import OnboardingBanner from "./components/OnboardingBanner";
+import type { NavigationTarget } from "./types/navigation";
+
+const LogicGraphEditor = lazy(
+  () => import("./components/LogicGraphEditor"),
+);
+const CodeEditor = lazy(() => import("./components/CodeEditor"));
 import { useCanvasViewport } from "./hooks/useCanvasViewport";
 import { useDockResize } from "./hooks/useDockResize";
+import { useEditorWorkspaceController } from "./hooks/useEditorWorkspaceController";
 import type {
   DockableRegion,
   FloatingPanelState,
@@ -103,90 +108,34 @@ function AppInner() {
 
   const { scene, refresh, dispatch } = useSceneState();
 
-  // v0.82 P2 (ADR-0025): multi-select state. `selectedIds` is the
-  // authoritative selection; `selectedEntityId` (below) is a
-  // *derived* single-id view used for backward compat with the
-  // existing surface (toolbar, status bar, keyboard shortcuts).
-  // Placed AFTER `useSceneState()` so the modifier-aware click handler
-  // and the Esc / Ctrl+A effect can close over `scene` without a
-  // TDZ hazard.
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(
-    () => new Set<string>(),
-  );
-  const [lastClickedId, setLastClickedId] = useState<string | null>(null);
-  const setSelectedEntityId = useCallback((id: string | null) => {
-    // Back-compat shim: a single id replaces; a non-null id selects
-    // exactly that id (matches the original "clicking a row selects it"
-    // semantics expected by existing tests).
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (id == null) next.clear();
-      else {
-        next.clear();
-        next.add(id);
-      }
-      return next;
-    });
-    setLastClickedId(id);
-  }, []);
-  // Derived single-id view: prefer `lastClickedId` ONLY when it is
-  // still in the active set. A Ctrl/Cmd+Click that toggles OFF the
-  // last-clicked id must clear the inspector's primary subject so
-  // the row's `selected` class disappears (matches macOS Finder /
-  // Figma semantics). Fall back to the lone id when the set has
-  // exactly one member.
-  const selectedEntityId =
-    (lastClickedId && selectedIds.has(lastClickedId)
-      ? lastClickedId
-      : null) ??
-    (selectedIds.size === 1 ? Array.from(selectedIds)[0] : null);
-
-  // v0.82 P2 (ADR-0025 §F7): modifier-aware hierarchy click handler.
-  //
-  //   "plain"   → replace selection with { id }
-  //   "range"   → extend to every entity between lastClickedId and id
-  //               in scene.entities iteration order (Shift+Click)
-  //   "toggle"  → add/remove id from the set (Ctrl/Cmd+Click)
-  const selectEntity = useCallback(
-    (id: string, modifier: "plain" | "range" | "toggle") => {
-      if (modifier === "range" && lastClickedId && scene?.entities) {
-        const ids = scene.entities.map((e) => e.id);
-        const fromIdx = ids.indexOf(lastClickedId);
-        const toIdx = ids.indexOf(id);
-        if (fromIdx === -1 || toIdx === -1) {
-          // Anchor missing — fall back to plain select so the user's
-          // intent (click on id) still takes effect.
-          setSelectedIds(new Set([id]));
-        } else {
-          const [lo, hi] =
-            fromIdx < toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx];
-          const next = new Set(selectedIds);
-          for (let i = lo; i <= hi; i++) next.add(ids[i]);
-          setSelectedIds(next);
-        }
-      } else if (modifier === "toggle") {
-        setSelectedIds((prev) => {
-          const next = new Set(prev);
-          if (next.has(id)) next.delete(id);
-          else next.add(id);
-          return next;
-        });
-      } else {
-        setSelectedIds(new Set([id]));
-      }
-      setLastClickedId(id);
-    },
-    [lastClickedId, scene, selectedIds],
-  );
+  // Workspace-level composition state (mode, multi-select, dirty
+  // guards, test bridge) lives in the controller hook so App.tsx can
+  // stay a pure composition root. The scene-order option is filled in
+  // after `scene` is hydrated, so the range-select helper is wired
+  // through a layout effect to avoid a TDZ.
+  const workspace = useEditorWorkspaceController({
+    sceneOrderForRangeSelect: scene?.entities.map((e) => e.id),
+  });
+  const {
+    editorMode,
+    setEditorMode,
+    selectedIds,
+    lastClickedId,
+    selectedEntityId,
+    selectEntity,
+    setSelectedEntityId,
+    setSelectedIds,
+    clearSelection,
+    pendingNavigation,
+    setPendingNavigation,
+    pendingBackToScene,
+    setPendingBackToScene,
+    bindTestHooks,
+  } = workspace;
 
   // v0.82 P2 (ADR-0025 §F8 + §F7): Esc clears selection; Ctrl/Cmd+A
   // selects every entity. Both pass through when a text input or
   // context menu is focused so we don't fight the user's editing.
-  const clearSelection = useCallback(() => {
-    setSelectedIds(new Set());
-    setLastClickedId(null);
-  }, []);
-
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
@@ -208,13 +157,18 @@ function AppInner() {
         }
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
         if (!scene?.entities?.length) return;
+        // Wave D2: workspace exposes `selectAll` through `setSelectedIds`
+        // path — go through the controller's domain by setting
+        // `lastClickedId` is not enough; the controller's `setSelectedIds`
+        // is internal. For now, replicate the same call as before by
+        // toggling each id off/on (preserves the contract).
         setSelectedIds(new Set(scene.entities.map((e) => e.id)));
         e.preventDefault();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [clearSelection, selectedIds.size, lastClickedId, scene]);
+  }, [clearSelection, selectedIds.size, lastClickedId, scene, setSelectedIds]);
 
   const logState = useLogState();
   const { zoom, pan, reset: resetViewport, fitToContent } = useCanvasViewport();
@@ -247,28 +201,24 @@ function AppInner() {
   );
 
   // ── Asset Authoring Mode ─────────────────────────────────────────────────
-  const [editorMode, setEditorMode] = useState<EditorMode>("scene");
+  // (editorMode + setEditorMode now live in useEditorWorkspaceController.)
 
-  // Phase C T3.4 test hook: expose setEditorMode for Playwright tests that need
-  // to switch to logic/code/play modes (which have no direct UI trigger path in the
-  // test harness). Safe: this is a no-op in production builds where __TESTING__
-  // is not set. Remove in production builds.
-  if (typeof window !== "undefined") {
-    (window as any).__setEditorMode = (mode: EditorMode) => setEditorMode(mode);
-    // Phase B T2.5: exposed for SearchTab entity focus action
-    (window as any).__setSelectedEntityId = (id: string | null) => setSelectedEntityId(id);
-    // PR4 correction: exposed for Playwright tests that need to open AI panel before assertions
+  // Phase C T3.4 test hook: expose workspace hooks for Playwright tests
+  // that need to switch mode/selection/open AI panel. The controller
+  // owns the editorMode + selection setters; the AI panel setter still
+  // lives here because it controls a top-level dialog whose state
+  // (setAiPanelOpen) is owned by this component.
+  bindTestHooks();
+  useEffect(() => {
+    if (typeof window === "undefined") return;
     (window as any).__openAIPanel = () => setAiPanelOpen(true);
-  }
+  }, []);
   const [activeAssetLogicalPath, setActiveAssetLogicalPath] = useState<
     string | null
   >(null);
-  const [pendingBackToScene, setPendingBackToScene] = useState(false);
 
   // ── Cross-mode Navigation (rust-source-integration) ─────────────────────
-  // Holds the target file + line for scene → code jump-to-source navigation.
-  const [pendingNavigation, setPendingNavigation] =
-    useState<NavigationTarget | null>(null);
+  // (pendingNavigation/setPendingNavigation live in the controller.)
 
   const {
     entries: assetEntries,
@@ -307,7 +257,9 @@ function AppInner() {
   const { graph: activeLogicGraph } = useLogicGraph();
 
   // Hito 4 Order 6: logic graph catalog entries for ProjectAssetBrowser
-  const [logicGraphEntries, setLogicGraphEntries] = useState<LogicGraphCatalogEntry[]>([]);
+  const [logicGraphEntries, setLogicGraphEntries] = useState<
+    LogicGraphCatalogEntry[]
+  >([]);
   const refreshLogicGraphEntries = useCallback(async () => {
     try {
       const entries = await listLogicGraphAssets();
@@ -374,17 +326,20 @@ function AppInner() {
   }, []);
 
   // v2 context source toggle — updates the enabledSources Set.
-  const handleContextToggle = useCallback((sourceName: string, enabled: boolean) => {
-    setEnabledSources((prev) => {
-      const next = new Set(prev);
-      if (enabled) {
-        next.add(sourceName);
-      } else {
-        next.delete(sourceName);
-      }
-      return next;
-    });
-  }, []);
+  const handleContextToggle = useCallback(
+    (sourceName: string, enabled: boolean) => {
+      setEnabledSources((prev) => {
+        const next = new Set(prev);
+        if (enabled) {
+          next.add(sourceName);
+        } else {
+          next.delete(sourceName);
+        }
+        return next;
+      });
+    },
+    [],
+  );
 
   const handleToggleValidationCenter = useCallback(() => {
     setValidationCenterOpen((prev) => !prev);
@@ -401,7 +356,9 @@ function AppInner() {
         try {
           // CRITICAL ISSUE 4: use __openSceneAssetFromSearch so asset navigation
           // goes through the App-owned scene asset state (updates assetDoc, activeAssetId).
-          await (window as any).__openSceneAssetFromSearch?.(issue.affected_asset_id);
+          await (window as any).__openSceneAssetFromSearch?.(
+            issue.affected_asset_id,
+          );
         } catch (e) {
           console.warn("[App] open asset failed:", e);
         }
@@ -654,25 +611,19 @@ function AppInner() {
 
   // ── Logic Workflow v2 handlers (PR4 correction) ───────────────────────────
   // Opens the attach-logic dialog or navigates to logic mode for the entity.
-  const handleAttachLogic = useCallback(
-    async (instanceId: string) => {
-      console.log("[App] handleAttachLogic called for instance:", instanceId);
-      // TODO: wire to the attach-logic dialog / logic authoring workflow
-      setEditorMode("logic");
-    },
-    [],
-  );
+  const handleAttachLogic = useCallback(async (instanceId: string) => {
+    console.log("[App] handleAttachLogic called for instance:", instanceId);
+    // TODO: wire to the attach-logic dialog / logic authoring workflow
+    setEditorMode("logic");
+  }, []);
 
   // Delegates to the existing handleOpenLogic with the bound asset id.
-  const handleOpenBoundLogic = useCallback(
-    async (entityId: string) => {
-      console.log("[App] handleOpenBoundLogic called for entity:", entityId);
-      // TODO: wire to bound asset loader
-      setEditorMode("logic");
-      // openLogicGraphAsset(assetId) — deferred; needs bound asset id from instance
-    },
-    [],
-  );
+  const handleOpenBoundLogic = useCallback(async (entityId: string) => {
+    console.log("[App] handleOpenBoundLogic called for entity:", entityId);
+    // TODO: wire to bound asset loader
+    setEditorMode("logic");
+    // openLogicGraphAsset(assetId) — deferred; needs bound asset id from instance
+  }, []);
 
   // Navigates to the RecipePicker in logic mode (no parameters — uses selected entity).
   const handleCreateFromRecipe = useCallback(() => {
@@ -1523,28 +1474,59 @@ function AppInner() {
           />
         )}
         {editorMode === "logic" && (
-          <LogicGraphEditor editorMode={editorMode} />
+          <Suspense fallback={<div className="surface-loading">Loading logic graph...</div>}>
+            <LogicGraphEditor editorMode={editorMode} />
+          </Suspense>
         )}
         {editorMode === "code" && (
-          <CodeEditor
-            navigationTarget={pendingNavigation}
-            onEditorReady={() => setPendingNavigation(null)}
-          />
+          <Suspense fallback={<div className="surface-loading">Loading source editor...</div>}>
+            <CodeEditor
+              navigationTarget={pendingNavigation}
+              onEditorReady={() => setPendingNavigation(null)}
+            />
+          </Suspense>
         )}
       </div>
     ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
-      editorMode, scene, selectedEntityId, selectedIds, instances, aiPanelOpen,
-      validationCenterOpen, tilesetPanelOpen, assetDoc, activeAssetLogicalPath,
-      assetEntries, pendingNavigation,
-      prompt, aiLoading, proposals, aiError,
-      handleToggleAI, setPrompt, handleSubmitAI, handleApplyProposal,
-      discardProposal, applyingIds, contextStats, contextUsedChars,
-      handleToggleValidationCenter, handleSelectTileset,
-      setSelectedEntityId, handleRename, handleCreateEntity, renameRequestTick,
-      selectEntity, handleAssetCreate, handleAssetRename, handleAssetDuplicate,
-      handleAssetDelete, handleOpenAsset, placeInstance,
+      editorMode,
+      scene,
+      selectedEntityId,
+      selectedIds,
+      instances,
+      aiPanelOpen,
+      validationCenterOpen,
+      tilesetPanelOpen,
+      assetDoc,
+      activeAssetLogicalPath,
+      assetEntries,
+      pendingNavigation,
+      prompt,
+      aiLoading,
+      proposals,
+      aiError,
+      handleToggleAI,
+      setPrompt,
+      handleSubmitAI,
+      handleApplyProposal,
+      discardProposal,
+      applyingIds,
+      contextStats,
+      contextUsedChars,
+      handleToggleValidationCenter,
+      handleSelectTileset,
+      setSelectedEntityId,
+      handleRename,
+      handleCreateEntity,
+      renameRequestTick,
+      selectEntity,
+      handleAssetCreate,
+      handleAssetRename,
+      handleAssetDuplicate,
+      handleAssetDelete,
+      handleOpenAsset,
+      placeInstance,
     ],
   );
 
@@ -1602,8 +1584,8 @@ function AppInner() {
             <div className="tileset-panel">
               <h3>Auto Layer</h3>
               <p style={{ fontSize: 12, color: "#666" }}>
-                No auto layers in this asset. Open a level scene asset
-                to edit auto layers.
+                No auto layers in this asset. Open a level scene asset to edit
+                auto layers.
               </p>
             </div>
           ))}
@@ -1611,14 +1593,33 @@ function AppInner() {
     ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
-      editorMode, scene, selectedEntityId, selectedIds, instances, assetDoc,
-      assetEntries, assetLogState, assetDirty, autoLayerPanelOpen,
-      selectedAutoLayer, activeAssetLogicalPath,
-      handleRename, handleSetField, handleSetFieldOnMultiple,
-      handleRemoveComponent, handleAddComponent, removeInstance,
-      replaceInstanceAsset, handleJumpToSource,
-      handleAssetCommit, handleAssetAddComponent, handleAssetRemoveComponent,
-      handleAssetUndo, handleAssetRedo, handleAssetSave, handleBackToScene,
+      editorMode,
+      scene,
+      selectedEntityId,
+      selectedIds,
+      instances,
+      assetDoc,
+      assetEntries,
+      assetLogState,
+      assetDirty,
+      autoLayerPanelOpen,
+      selectedAutoLayer,
+      activeAssetLogicalPath,
+      handleRename,
+      handleSetField,
+      handleSetFieldOnMultiple,
+      handleRemoveComponent,
+      handleAddComponent,
+      removeInstance,
+      replaceInstanceAsset,
+      handleJumpToSource,
+      handleAssetCommit,
+      handleAssetAddComponent,
+      handleAssetRemoveComponent,
+      handleAssetUndo,
+      handleAssetRedo,
+      handleAssetSave,
+      handleBackToScene,
       refresh,
     ],
   );

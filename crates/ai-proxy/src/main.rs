@@ -13,8 +13,8 @@
 //!     TOKEN_THRESHOLD  — max tokens before scene truncation (default: 10000)
 //!     ALLOWED_ORIGINS  — comma-separated CORS origins (default: http://localhost:5173)
 
-use std::net::SocketAddr;
 use clap::Parser;
+use std::net::SocketAddr;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use ai_proxy::config::AppConfig;

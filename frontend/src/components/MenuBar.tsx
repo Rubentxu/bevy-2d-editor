@@ -87,7 +87,9 @@ export default function MenuBar({
 }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   /** Captures the trigger button's DOMRect when each dropdown opens so the portaled menu can position itself with position:fixed. */
-  const [anchorRectMap, setAnchorRectMap] = useState<Record<string, DOMRect>>({});
+  const [anchorRectMap, setAnchorRectMap] = useState<Record<string, DOMRect>>(
+    {},
+  );
 
   /** Called before opening a menu — captures the trigger's bounding rect synchronously so the portal positions correctly. */
   const captureAnchorRect = (label: string) => {
@@ -95,7 +97,10 @@ export default function MenuBar({
       `[data-testid="menu-${label.toLowerCase()}"] .menu-trigger`,
     );
     if (trigger) {
-      setAnchorRectMap((prev) => ({ ...prev, [label]: trigger.getBoundingClientRect() }));
+      setAnchorRectMap((prev) => ({
+        ...prev,
+        [label]: trigger.getBoundingClientRect(),
+      }));
     }
   };
   const { scenes } = useScenes();
@@ -180,7 +185,7 @@ export default function MenuBar({
         <h1 className="visually-hidden">Bevy 2D Editor</h1>
       </div>
       <div className="menubar-menus" data-testid="topbar">
-        <div className="menubar-legacy-actions" aria-label="Quick actions">
+        <div className="menubar-legacy-actions" aria-label="Quick actions" aria-hidden="true">
           <div data-testid="toolbar-group-mode">
             <button
               type="button"

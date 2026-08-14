@@ -3,6 +3,7 @@ import {
   openLogicGraphAsset,
   listLogicGraphAssets,
 } from "../services/logic-graphs";
+import { waitForEditorReady } from "../utils/waitForEditorReady";
 
 /**
  * LogicGraph node representation for React Flow.
@@ -130,15 +131,12 @@ export function useLogicGraph() {
 
   /**
    * Wait for the WASM engine to be ready before issuing bridge calls.
-   * Mirrors the pattern in useAIAssistant.ts:120-127.
+   * Uses the single readiness signal published by engine-bridge once
+   * start_engine has actually returned; throws after a timeout so the
+   * call site surfaces a diagnostic instead of a silent failure.
    */
   const waitForEngineReady = useCallback(async () => {
-    if ((window as any).isEngineReady?.()) return;
-    for (let i = 0; i < 50; i++) {
-      if ((window as any).isEngineReady?.()) return;
-      await new Promise((r) => setTimeout(r, 100));
-    }
-    // Don't block — proceed and let the WASM call fail gracefully
+    await waitForEditorReady();
   }, []);
 
   /**

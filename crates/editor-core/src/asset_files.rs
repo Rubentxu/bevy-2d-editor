@@ -101,8 +101,14 @@ mod tests {
     // §1.2: Path derivation
     #[test]
     fn test_asset_file_path_from_id() {
-        assert_eq!(asset_file_path_from_id("player.png"), "resources/player.png");
-        assert_eq!(asset_file_path_from_id("characters/hero.png"), "resources/characters/hero.png");
+        assert_eq!(
+            asset_file_path_from_id("player.png"),
+            "resources/player.png"
+        );
+        assert_eq!(
+            asset_file_path_from_id("characters/hero.png"),
+            "resources/characters/hero.png"
+        );
         assert_eq!(asset_file_path_from_id(""), "resources/");
     }
 

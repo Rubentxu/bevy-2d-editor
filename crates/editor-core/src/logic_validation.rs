@@ -12,7 +12,10 @@
 //! `with_logic_graph`. Cross-document enumeration of every `LogicGraphAsset` is deferred.
 
 use crate::logic_evaluator::{LogicNodeRegistry, PortValueType};
-use crate::logic_graph::{find_dangling_edge_nodes, find_duplicate_node_id, LogicEdge, LogicGraphAsset, LogicNode, NodeId, NodeTypeId};
+use crate::logic_graph::{
+    LogicEdge, LogicGraphAsset, LogicNode, NodeId, NodeTypeId, find_dangling_edge_nodes,
+    find_duplicate_node_id,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -120,11 +123,8 @@ fn validate_edge_port_types(
     let mut issues = Vec::new();
 
     // Build a map of node_id -> node for O(1) lookup
-    let node_map: HashMap<NodeId, &LogicNode> = asset
-        .nodes
-        .iter()
-        .map(|n| (n.node_id.clone(), n))
-        .collect();
+    let node_map: HashMap<NodeId, &LogicNode> =
+        asset.nodes.iter().map(|n| (n.node_id.clone(), n)).collect();
 
     for edge in &asset.edges {
         // Look up source and target nodes
@@ -351,7 +351,7 @@ fn validate_controller_refs(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::logic_evaluator::{global_node_registry, NodeDescriptor, PortSpec};
+    use crate::logic_evaluator::{NodeDescriptor, PortSpec, global_node_registry};
     use crate::logic_graph::{LogicNode, LogicNodeRole, NodeTypeId, PortId};
 
     // ── Helper: minimal LogicGraphAsset ──────────────────────────────────
@@ -485,7 +485,9 @@ mod tests {
         let registry = global_node_registry();
         let issues = validate_logic_graph(&asset, registry);
         assert!(
-            !issues.iter().any(|i| matches!(i.code, LogicValidationIssueCode::DuplicateNodeId)),
+            !issues
+                .iter()
+                .any(|i| matches!(i.code, LogicValidationIssueCode::DuplicateNodeId)),
             "unique node ids should not produce DuplicateNodeId issues"
         );
     }
@@ -544,7 +546,9 @@ mod tests {
         let registry = global_node_registry();
         let issues = validate_logic_graph(&asset, registry);
         assert!(
-            !issues.iter().any(|i| matches!(i.code, LogicValidationIssueCode::DanglingEdgeEndpoint)),
+            !issues
+                .iter()
+                .any(|i| matches!(i.code, LogicValidationIssueCode::DanglingEdgeEndpoint)),
             "valid edge endpoints should not produce issues"
         );
     }
@@ -616,7 +620,9 @@ mod tests {
         let registry = global_node_registry();
         let issues = validate_logic_graph(&asset, registry);
         assert!(
-            !issues.iter().any(|i| matches!(i.code, LogicValidationIssueCode::InvalidPortType)),
+            !issues
+                .iter()
+                .any(|i| matches!(i.code, LogicValidationIssueCode::InvalidPortType)),
             "unknown node type should not produce InvalidPortType"
         );
     }
@@ -656,7 +662,9 @@ mod tests {
         let registry = global_node_registry();
         let issues = validate_logic_graph(&asset, registry);
         assert!(
-            issues.iter().any(|i| matches!(i.code, LogicValidationIssueCode::Cycle)),
+            issues
+                .iter()
+                .any(|i| matches!(i.code, LogicValidationIssueCode::Cycle)),
             "A→B→A cycle should be detected"
         );
     }
@@ -681,7 +689,9 @@ mod tests {
         let registry = global_node_registry();
         let issues = validate_logic_graph(&asset, registry);
         assert!(
-            issues.iter().any(|i| matches!(i.code, LogicValidationIssueCode::Cycle)),
+            issues
+                .iter()
+                .any(|i| matches!(i.code, LogicValidationIssueCode::Cycle)),
             "self-loop should be detected as cycle"
         );
     }
@@ -728,7 +738,9 @@ mod tests {
         let registry = global_node_registry();
         let issues = validate_logic_graph(&asset, registry);
         assert!(
-            !issues.iter().any(|i| matches!(i.code, LogicValidationIssueCode::Cycle)),
+            !issues
+                .iter()
+                .any(|i| matches!(i.code, LogicValidationIssueCode::Cycle)),
             "linear chain should have no cycles"
         );
     }
@@ -752,9 +764,7 @@ mod tests {
             .filter(|i| matches!(i.code, LogicValidationIssueCode::DanglingControllerRef))
             .collect();
         assert_eq!(ctrl_issues.len(), 1);
-        assert!(ctrl_issues[0]
-            .message
-            .contains("ghost.controller"));
+        assert!(ctrl_issues[0].message.contains("ghost.controller"));
     }
 
     #[test]
@@ -789,7 +799,9 @@ mod tests {
         let registry = global_node_registry();
         let issues = validate_logic_graph(&asset, registry);
         assert!(
-            !issues.iter().any(|i| matches!(i.code, LogicValidationIssueCode::DanglingControllerRef)),
+            !issues
+                .iter()
+                .any(|i| matches!(i.code, LogicValidationIssueCode::DanglingControllerRef)),
             "non-rust-controller nodes should not be checked for controller_id"
         );
     }
@@ -836,10 +848,7 @@ mod tests {
             to_port: PortId::new("condition"),
         };
 
-        let asset = make_asset(
-            vec![node_sensor, node_and, node_if],
-            vec![edge1, edge2],
-        );
+        let asset = make_asset(vec![node_sensor, node_and, node_if], vec![edge1, edge2]);
         let registry = global_node_registry();
         let issues = validate_logic_graph(&asset, registry);
         assert!(

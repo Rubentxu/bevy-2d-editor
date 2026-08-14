@@ -10,7 +10,10 @@
  */
 
 import { useEffect, useState, useCallback } from "react";
-import { listLogicGraphAssets, type LogicGraphCatalogEntry } from "../services/logic-graphs";
+import {
+  listLogicGraphAssets,
+  type LogicGraphCatalogEntry,
+} from "../services/logic-graphs";
 
 interface Props {
   /** Called when user picks a recipe asset_id, or null for "blank graph". */
@@ -37,7 +40,8 @@ export default function RecipePicker({ onSelect, onStartBlank }: Props) {
         const builtin = entries.filter((e) => e.builtin);
         const user = entries.filter((e) => !e.builtin);
         const g: RecipeGroup[] = [];
-        if (builtin.length) g.push({ label: "Built-in Recipes", entries: builtin });
+        if (builtin.length)
+          g.push({ label: "Built-in Recipes", entries: builtin });
         if (user.length) g.push({ label: "My Graphs", entries: user });
         setGroups(g);
       } catch (e) {
@@ -59,23 +63,38 @@ export default function RecipePicker({ onSelect, onStartBlank }: Props) {
     <div
       className="recipe-picker"
       data-testid="recipe-picker"
-      style={{ padding: 16, height: "100%", overflowY: "auto", background: "#fafafa" }}
+      style={{
+        padding: 16,
+        height: "100%",
+        overflowY: "auto",
+        background: "#fafafa",
+      }}
     >
       <header className="recipe-picker-header">
         <h2 data-testid="recipe-picker-title">Choose a Recipe</h2>
-        <p className="recipe-picker-subtitle" data-testid="recipe-picker-subtitle">
+        <p
+          className="recipe-picker-subtitle"
+          data-testid="recipe-picker-subtitle"
+        >
           Pick a starting pattern or start from scratch
         </p>
       </header>
 
       {loading && (
-        <div className="recipe-picker-loading" data-testid="recipe-picker-loading">
+        <div
+          className="recipe-picker-loading"
+          data-testid="recipe-picker-loading"
+        >
           Loading recipes…
         </div>
       )}
 
       {error && (
-        <div className="recipe-picker-error" data-testid="recipe-picker-error" role="alert">
+        <div
+          className="recipe-picker-error"
+          data-testid="recipe-picker-error"
+          role="alert"
+        >
           {error}
         </div>
       )}
@@ -87,7 +106,11 @@ export default function RecipePicker({ onSelect, onStartBlank }: Props) {
       )}
 
       {groups.map((group) => (
-        <section key={group.label} className="recipe-group" data-testid={`recipe-group-${group.label}`}>
+        <section
+          key={group.label}
+          className="recipe-group"
+          data-testid={`recipe-group-${group.label}`}
+        >
           <h3 className="recipe-group-label">{group.label}</h3>
           <ul className="recipe-list">
             {group.entries.map((entry) => (
@@ -99,10 +122,15 @@ export default function RecipePicker({ onSelect, onStartBlank }: Props) {
                   data-testid={`recipe-btn-${entry.asset_id}`}
                   title={entry.logical_path}
                 >
-                  <span className="recipe-name">{entry.logical_path.split("/").pop()}</span>
+                  <span className="recipe-name">
+                    {entry.logical_path.split("/").pop()}
+                  </span>
                   <span className="recipe-path">{entry.logical_path}</span>
                   {entry.builtin && (
-                    <span className="recipe-builtin-badge" data-testid={`recipe-builtin-${entry.asset_id}`}>
+                    <span
+                      className="recipe-builtin-badge"
+                      data-testid={`recipe-builtin-${entry.asset_id}`}
+                    >
                       built-in
                     </span>
                   )}

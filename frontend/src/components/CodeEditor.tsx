@@ -7,12 +7,7 @@ import { useCodeFiles } from "../hooks/useCodeFiles";
 import type { SourceFile } from "../services/code-files";
 import PromptDialog from "./PromptDialog";
 import ConfirmDialog from "./ConfirmDialog";
-
-/** Navigation target for cross-mode jump-to-source navigation. */
-export interface NavigationTarget {
-  fileId: string;
-  line: number;
-}
+import type { NavigationTarget } from "../types/navigation";
 
 /**
  * Props for CodeEditor — extends the hook's state with navigation support.
@@ -131,11 +126,14 @@ export default function CodeEditor({
     [create],
   );
 
-  const handleDeleteFile = useCallback((id: string) => {
-    const file = files.find((f) => f.id === id);
-    setDeleteFileId(id);
-    setDeleteFileName(file?.name ?? id);
-  }, [files]);
+  const handleDeleteFile = useCallback(
+    (id: string) => {
+      const file = files.find((f) => f.id === id);
+      setDeleteFileId(id);
+      setDeleteFileName(file?.name ?? id);
+    },
+    [files],
+  );
 
   const handleDeleteFileConfirm = useCallback(async () => {
     if (!deleteFileId) return;
@@ -182,7 +180,10 @@ export default function CodeEditor({
   }
 
   return (
-    <div style={{ display: "flex", height: "100%", width: "100%" }} data-testid="code-editor">
+    <div
+      style={{ display: "flex", height: "100%", width: "100%" }}
+      data-testid="code-editor"
+    >
       {/* ── File list panel ────────────────────────────────────────────── */}
       <div
         style={{

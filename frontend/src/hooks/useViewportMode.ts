@@ -27,8 +27,6 @@ function getViewportWidth(): number {
   return window.innerWidth;
 }
 
-
-
 /**
  * Returns `{ mode: "desktop" | "compact", width: number }`.
  *

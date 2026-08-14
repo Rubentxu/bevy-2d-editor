@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-07-27) — prerequisite sequencing decision for the AI-native editor program
+Accepted (2026-07-27) — prerequisite sequencing decision for the AI-native editor program; extended by the v0.87 Architecture Foundation gate and the master roadmap in [MASTER_ROADMAP.md](../roadmaps/MASTER_ROADMAP.md) (2026-08-14).
 
 ## Context
 

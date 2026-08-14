@@ -6,12 +6,12 @@
 //! The namespaced `inst_<iid>_<lid>` minting ensures no collision between instances.
 
 use editor_core::{
+    StableId,
     command::Command,
     document::SceneDocument,
+    processor,
     scene_asset::{AssetReference, LocalId},
     scene_instance::SceneInstance,
-    processor,
-    StableId,
 };
 use std::collections::BTreeMap;
 
@@ -40,7 +40,8 @@ fn e8_two_instances_isolated_id_maps() {
     .into_iter()
     .collect();
 
-    let cmd1 = Command::PlaceInstance {        instance_components: vec![],
+    let cmd1 = Command::PlaceInstance {
+        instance_components: vec![],
 
         instance_id: instance_id_1.clone(),
         asset_ref: AssetReference::new("characters/player"),
@@ -61,7 +62,8 @@ fn e8_two_instances_isolated_id_maps() {
     .into_iter()
     .collect();
 
-    let cmd2 = Command::PlaceInstance {        instance_components: vec![],
+    let cmd2 = Command::PlaceInstance {
+        instance_components: vec![],
 
         instance_id: instance_id_2.clone(),
         asset_ref: AssetReference::new("characters/player"), // Same asset!
@@ -77,7 +79,10 @@ fn e8_two_instances_isolated_id_maps() {
     assert_eq!(doc.instances.len(), 2);
 
     // Verify instance 1 has its own id_map
-    let inst_1 = doc.instances.get(&instance_id_1).expect("instance 1 should exist");
+    let inst_1 = doc
+        .instances
+        .get(&instance_id_1)
+        .expect("instance 1 should exist");
     assert_eq!(
         inst_1.id_map.get(&LocalId::new("root")).unwrap().as_str(),
         "inst_first_root"
@@ -88,7 +93,10 @@ fn e8_two_instances_isolated_id_maps() {
     );
 
     // Verify instance 2 has its own id_map (isolated)
-    let inst_2 = doc.instances.get(&instance_id_2).expect("instance 2 should exist");
+    let inst_2 = doc
+        .instances
+        .get(&instance_id_2)
+        .expect("instance 2 should exist");
     assert_eq!(
         inst_2.id_map.get(&LocalId::new("root")).unwrap().as_str(),
         "inst_second_root"
@@ -112,7 +120,8 @@ fn e8_inverse_independence() {
     let mut doc = empty_doc();
 
     // Place two instances
-    let cmd1 = Command::PlaceInstance {        instance_components: vec![],
+    let cmd1 = Command::PlaceInstance {
+        instance_components: vec![],
 
         instance_id: StableId::new("inst_a"),
         asset_ref: AssetReference::new("shared_asset"),
@@ -124,7 +133,8 @@ fn e8_inverse_independence() {
         orphaned_component_overrides: vec![],
     };
 
-    let cmd2 = Command::PlaceInstance {        instance_components: vec![],
+    let cmd2 = Command::PlaceInstance {
+        instance_components: vec![],
 
         instance_id: StableId::new("inst_b"),
         asset_ref: AssetReference::new("shared_asset"),
@@ -146,11 +156,13 @@ fn e8_inverse_independence() {
         instance_id: StableId::new("inst_a"),
     };
 
-    let inverse1 = processor::apply(&mut doc, &remove_cmd1)
-        .expect("remove first should succeed");
+    let inverse1 = processor::apply(&mut doc, &remove_cmd1).expect("remove first should succeed");
 
     assert_eq!(doc.instances.len(), 1);
-    assert!(doc.instances.get(&StableId::new("inst_b")).is_some(), "inst_b should remain");
+    assert!(
+        doc.instances.get(&StableId::new("inst_b")).is_some(),
+        "inst_b should remain"
+    );
 
     // Apply inverse of remove (PlaceInstance) - should restore only inst_a
     processor::apply(&mut doc, &inverse1).expect("inverse should succeed");
@@ -158,7 +170,10 @@ fn e8_inverse_independence() {
     assert_eq!(doc.instances.len(), 2);
 
     // Verify inst_b is still intact
-    let inst_b = doc.instances.get(&StableId::new("inst_b")).expect("inst_b should exist");
+    let inst_b = doc
+        .instances
+        .get(&StableId::new("inst_b"))
+        .expect("inst_b should exist");
     assert_eq!(
         inst_b.id_map.get(&LocalId::new("root")).unwrap().as_str(),
         "inst_b_root",
@@ -181,7 +196,8 @@ fn e8_three_instances_maintain_isolation() {
         .into_iter()
         .collect();
 
-        let cmd = Command::PlaceInstance {            instance_components: vec![],
+        let cmd = Command::PlaceInstance {
+            instance_components: vec![],
 
             instance_id,
             asset_ref: AssetReference::new("shared"),
@@ -199,7 +215,10 @@ fn e8_three_instances_maintain_isolation() {
     // Verify each has isolated id_map
     for i in 1..=3 {
         let instance_id = StableId::new(format!("inst_{}", i));
-        let inst = doc.instances.get(&instance_id).expect(&format!("inst_{} should exist", i));
+        let inst = doc
+            .instances
+            .get(&instance_id)
+            .expect(&format!("inst_{} should exist", i));
         let expected_root = format!("inst_{}_root", i);
         assert_eq!(
             inst.id_map.get(&LocalId::new("root")).unwrap().as_str(),

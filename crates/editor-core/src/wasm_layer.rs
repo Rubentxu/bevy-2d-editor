@@ -67,7 +67,7 @@ pub fn create_scene_instance_layer_wasm(
             return Err(JsValue::from_str(&format!(
                 "Unknown layer kind '{}'. Allowed: actors, props, spawns, triggers, collision, custom",
                 other
-            )))
+            )));
         }
     };
 
@@ -87,13 +87,14 @@ pub fn create_scene_instance_layer_wasm(
         .map(|o| o + 1)
         .unwrap_or(0);
 
-    doc.layers.push(LevelLayer::SceneInstance(SceneInstanceLayer {
-        id: new_id,
-        name: name.to_string(),
-        kind: parsed_kind,
-        order: next_order,
-        instances: Vec::new(),
-    }));
+    doc.layers
+        .push(LevelLayer::SceneInstance(SceneInstanceLayer {
+            id: new_id,
+            name: name.to_string(),
+            kind: parsed_kind,
+            order: next_order,
+            instances: Vec::new(),
+        }));
 
     serde_json::to_string(&doc)
         .map_err(|e| JsValue::from_str(&format!("Failed to serialize asset: {}", e)))

@@ -42,7 +42,10 @@ impl LogicGraphCatalog {
     }
 
     /// Register a new entry. Returns error if asset_id already exists.
-    pub fn register(&mut self, entry: LogicGraphCatalogEntry) -> Result<(), LogicGraphCatalogError> {
+    pub fn register(
+        &mut self,
+        entry: LogicGraphCatalogEntry,
+    ) -> Result<(), LogicGraphCatalogError> {
         if self.entries.contains_key(&entry.asset_id) {
             return Err(LogicGraphCatalogError::DuplicateAssetId {
                 id: entry.asset_id.clone(),
@@ -57,7 +60,8 @@ impl LogicGraphCatalog {
     /// Remove an entry by asset_id. Returns the removed entry.
     pub fn unregister(&mut self, asset_id: &str) -> Option<LogicGraphCatalogEntry> {
         if let Some(entry) = self.entries.remove(asset_id) {
-            let normalized = crate::scene_asset_catalog::normalize_logical_path(&entry.logical_path);
+            let normalized =
+                crate::scene_asset_catalog::normalize_logical_path(&entry.logical_path);
             self.path_index.remove(&normalized);
             Some(entry)
         } else {
@@ -68,7 +72,8 @@ impl LogicGraphCatalog {
     /// Seed the catalog from a list of entries (used during project load).
     pub fn seed(&mut self, entries: Vec<LogicGraphCatalogEntry>) {
         for entry in entries {
-            let normalized = crate::scene_asset_catalog::normalize_logical_path(&entry.logical_path);
+            let normalized =
+                crate::scene_asset_catalog::normalize_logical_path(&entry.logical_path);
             self.path_index.insert(normalized, entry.asset_id.clone());
             self.entries.insert(entry.asset_id.clone(), entry);
         }
@@ -295,4 +300,3 @@ mod tests {
         assert_eq!(cat.get("g2").unwrap().logical_path, "logic/graph_two");
     }
 }
-

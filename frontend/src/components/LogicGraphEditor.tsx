@@ -39,7 +39,8 @@ interface PaletteItem {
 export default function LogicGraphEditor({
   editorMode,
 }: LogicGraphEditorProps) {
-  const { graph, descriptors, dispatch, createDefault, open, refresh } = useLogicGraph();
+  const { graph, descriptors, dispatch, createDefault, open, refresh } =
+    useLogicGraph();
 
   const [nodes, setNodes, onNodesChange] = useNodesState([] as Node[]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([] as Edge[]);
@@ -154,18 +155,30 @@ export default function LogicGraphEditor({
     return null;
   }
 
-  // Show RecipePicker first — "Start from blank graph" is opt-in
+  // Show RecipePicker first — "Start from blank graph" is opt-in.
+  // The outer testid stays mounted so callers and tests have a stable
+  // selector regardless of whether the picker or the graph editor is
+  // currently rendered inside.
   if (!pickerDone) {
     return (
-      <RecipePicker
-        onSelect={handleRecipeSelect}
-        onStartBlank={handleStartBlank}
-      />
+      <div
+        style={{ display: "flex", height: "100%", width: "100%" }}
+        data-testid="logic-graph-editor"
+        data-logic-state="recipe-picker"
+      >
+        <RecipePicker
+          onSelect={handleRecipeSelect}
+          onStartBlank={handleStartBlank}
+        />
+      </div>
     );
   }
 
   return (
-    <div style={{ display: "flex", height: "100%", width: "100%" }} data-testid="logic-graph-editor">
+    <div
+      style={{ display: "flex", height: "100%", width: "100%" }}
+      data-testid="logic-graph-editor"
+    >
       {/* Node Palette */}
       <div
         style={{

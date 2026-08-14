@@ -127,10 +127,13 @@ export function useMultiSelectSummary(
     const parts: string[] = [`${entityCount} entities`];
     if (sharedComponentCount > 0) {
       parts.push(`${sharedComponentCount} share ${sharedTypeIds[0]}`);
-      if (sharedComponentCount > 1) parts.push(`${sharedComponentCount} shared components`);
+      if (sharedComponentCount > 1)
+        parts.push(`${sharedComponentCount} shared components`);
     }
     if (totalMixedCount > 0) {
-      parts.push(`${totalMixedCount} mixed field${totalMixedCount !== 1 ? "s" : ""}`);
+      parts.push(
+        `${totalMixedCount} mixed field${totalMixedCount !== 1 ? "s" : ""}`,
+      );
     }
 
     return {

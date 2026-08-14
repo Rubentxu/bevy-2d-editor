@@ -3,8 +3,8 @@
 //! Tests KEYBOARD_STATE population from ButtonInput.
 
 use bevy::prelude::*;
-use editor_core::logic_evaluator::{update_keyboard_state, KEYBOARD_STATE};
 use editor_core::PlayMode;
+use editor_core::logic_evaluator::{KEYBOARD_STATE, update_keyboard_state};
 
 /// System that populates KEYBOARD_STATE and immediately asserts — runs in same
 /// test app so thread-local state is guaranteed shared.
@@ -21,8 +21,14 @@ fn populate_and_assert(keys: Res<ButtonInput<KeyCode>>) {
             "KEYBOARD_STATE should contain KeyW, got {:?}",
             held
         );
-        assert!(held.contains("Space"), "KEYBOARD_STATE should contain Space");
-        assert!(held.contains("ArrowUp"), "KEYBOARD_STATE should contain ArrowUp");
+        assert!(
+            held.contains("Space"),
+            "KEYBOARD_STATE should contain Space"
+        );
+        assert!(
+            held.contains("ArrowUp"),
+            "KEYBOARD_STATE should contain ArrowUp"
+        );
         assert!(
             !held.contains("ArrowDown"),
             "KEYBOARD_STATE should not contain ArrowDown"
@@ -135,7 +141,10 @@ fn test_update_keyboard_state_empty_when_no_keys_pressed() {
 #[test]
 fn test_keyboard_state_not_updated_in_edit_mode() {
     let mut app = App::new();
-    app.add_systems(Update, update_keyboard_state.run_if(editor_core::in_play_mode));
+    app.add_systems(
+        Update,
+        update_keyboard_state.run_if(editor_core::in_play_mode),
+    );
 
     // Set Edit mode and press A — system should NOT run
     app.world_mut().insert_resource(PlayMode::Edit);
@@ -147,6 +156,10 @@ fn test_keyboard_state_not_updated_in_edit_mode() {
     // KEYBOARD_STATE should remain empty (system never ran)
     KEYBOARD_STATE.with(|state| {
         let held = state.borrow();
-        assert!(held.is_empty(), "edit mode: system should not run, expected empty, got {:?}", held);
+        assert!(
+            held.is_empty(),
+            "edit mode: system should not run, expected empty, got {:?}",
+            held
+        );
     });
 }

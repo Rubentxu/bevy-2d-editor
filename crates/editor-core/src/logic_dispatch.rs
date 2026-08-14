@@ -13,9 +13,7 @@ use crate::logic_graph::LogicBinding;
 /// Queries for `LogicBinding` and calls the WASM bridge to dispatch each graph.
 /// The bridge handles node evaluation (sensors → controllers → actuators) and
 /// writes actuator outputs back to Bevy component values on the entity.
-pub fn logic_evaluation_system(
-    bindings: Query<(Entity, &LogicBinding)>,
-) {
+pub fn logic_evaluation_system(bindings: Query<(Entity, &LogicBinding)>) {
     // WASM bridge dispatch: for each LogicBinding entity, call the bridge.
     // The bridge (JS side) holds the graph data and node evaluators.
     for (entity, binding) in &bindings {
@@ -35,11 +33,8 @@ fn dispatch_logic_binding(entity: Entity, binding: &LogicBinding) {
 
     #[cfg(target_arch = "wasm32")]
     {
-        let result = crate::logic_evaluator::evaluate_logic_binding_wasm(
-            entity_bits,
-            &asset_id,
-            version,
-        );
+        let result =
+            crate::logic_evaluator::evaluate_logic_binding_wasm(entity_bits, &asset_id, version);
         if let Err(e) = result {
             bevy::log::warn!(
                 "dispatch_logic_binding: WASM bridge error for asset '{}': {:?}",

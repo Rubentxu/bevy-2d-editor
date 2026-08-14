@@ -416,7 +416,11 @@ export default function SchemaAuthoringPanel({
       setErrors(validationErrors);
       // CRITICAL ISSUE 1: wire form-level schema issues to Validation Center.
       for (const [field, msg] of Object.entries(validationErrors)) {
-        if (field === "type_id" || field === "display_name" || field === "general") {
+        if (
+          field === "type_id" ||
+          field === "display_name" ||
+          field === "general"
+        ) {
           if (typeof (window as any).__registerSchemaIssue === "function") {
             (window as any).__registerSchemaIssue({
               severity: "error",

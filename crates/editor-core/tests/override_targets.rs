@@ -3,7 +3,9 @@
 
 use editor_core::{
     scene_asset::LocalId,
-    scene_instance::{ComponentOverride, ComponentOverrideStatus, component_override_status_after_field_rename},
+    scene_instance::{
+        ComponentOverride, ComponentOverrideStatus, component_override_status_after_field_rename,
+    },
 };
 
 #[test]
@@ -45,7 +47,8 @@ fn s4_rename_marks_stale() {
         "Renaming component field should mark override Stale"
     );
 
-    let unchanged_result = component_override_status_after_field_rename(&patch, ("Transform2D", "Transform"));
+    let unchanged_result =
+        component_override_status_after_field_rename(&patch, ("Transform2D", "Transform"));
     assert_eq!(
         unchanged_result,
         ComponentOverrideStatus::Active,
@@ -59,7 +62,8 @@ fn s4_rename_marks_stale() {
         value: serde_json::json!("cannon.png"),
         status: ComponentOverrideStatus::Orphaned,
     };
-    let orphan_result = component_override_status_after_field_rename(&orphan_patch, ("Sprite2D", "Sprite"));
+    let orphan_result =
+        component_override_status_after_field_rename(&orphan_patch, ("Sprite2D", "Sprite"));
     assert_eq!(
         orphan_result,
         ComponentOverrideStatus::Orphaned,

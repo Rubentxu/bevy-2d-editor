@@ -39,9 +39,7 @@ interface UseLogicActivationOptions {
  *   console.log("Logic log size:", snapshot.size, "can_undo:", snapshot.can_undo);
  * }
  */
-export function useLogicActivation(
-  options: UseLogicActivationOptions = {},
-): {
+export function useLogicActivation(options: UseLogicActivationOptions = {}): {
   snapshot: LogicLogState | null;
   refresh: () => Promise<void>;
 } {

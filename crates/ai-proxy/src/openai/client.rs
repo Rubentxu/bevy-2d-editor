@@ -71,7 +71,11 @@ impl OpenAIClient {
             .timeout(std::time::Duration::from_secs(60))
             .build()
             .expect("reqwest Client must be buildable");
-        Self { http, api_key, model }
+        Self {
+            http,
+            api_key,
+            model,
+        }
     }
 
     /// Call OpenAI with a user prompt and return parsed `CommandEnvelope`s.
@@ -126,9 +130,7 @@ impl OpenAIClient {
             .await
             .map_err(|e| AppError::OpenAIError(format!("failed to parse response: {}", e)))?;
 
-        let model = chat_resp
-            .model
-            .unwrap_or_else(|| self.model.clone());
+        let model = chat_resp.model.unwrap_or_else(|| self.model.clone());
 
         let choice = chat_resp
             .choices
@@ -155,8 +157,7 @@ mod tests {
 
     #[test]
     fn test_openai_client_creation() {
-        let client =
-            OpenAIClient::new("sk-test".to_string(), "gpt-4o".to_string());
+        let client = OpenAIClient::new("sk-test".to_string(), "gpt-4o".to_string());
         assert_eq!(client.model, "gpt-4o");
     }
 }

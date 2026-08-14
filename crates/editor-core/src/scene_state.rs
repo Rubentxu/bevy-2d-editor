@@ -52,3 +52,16 @@ pub fn mark_dirty() {
     DIRTY_FLAG.with(|d| *d.borrow_mut() = true);
     with_registry_mut(|r| r.mark_current_dirty());
 }
+
+/// Read the cross-system dirty flag without touching it.
+pub fn is_dirty() -> bool {
+    DIRTY_FLAG.with(|d| *d.borrow())
+}
+
+/// Reset the cross-system dirty flag to false. Callers MUST also
+/// re-mark the active scene dirty after loading fresh data, otherwise
+/// the next preview frame will not rebuild.
+pub fn clear_dirty() {
+    DIRTY_FLAG.with(|d| *d.borrow_mut() = false);
+    with_registry_mut(|r| r.clear_current_dirty());
+}

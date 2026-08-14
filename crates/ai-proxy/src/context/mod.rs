@@ -5,14 +5,14 @@
 //! `source_impls.rs` for the 6 concrete implementations, and `system_prompt.rs`
 //! for the `ContextBuilder` orchestrator.
 
-mod schema_fetcher;
 mod scene_truncator;
+mod schema_fetcher;
 mod source_impls;
 pub mod sources;
 mod system_prompt;
 
-pub use schema_fetcher::SchemaFetcher;
 pub use scene_truncator::{estimate_tokens, truncate_scene_if_over_budget, truncate_to_budget};
+pub use schema_fetcher::SchemaFetcher;
 pub use sources::{
     CatalogEntry, ComponentRef, ContextSource, LogicGraphRef, NodeRef, Priority, SceneAssetContext,
     SelectedEntity, SourceFileRef, TokenBudget,

@@ -32,7 +32,11 @@ pub fn truncate_scene_if_over_budget(
         <= token_threshold
     {
         // Under budget — no truncation needed
-        return (scene_json.to_string(), false, base_tokens + schemas_tokens + estimate_tokens(scene_json));
+        return (
+            scene_json.to_string(),
+            false,
+            base_tokens + schemas_tokens + estimate_tokens(scene_json),
+        );
     }
 
     // Budget for scene = threshold - base - schemas - instructions
@@ -43,10 +47,7 @@ pub fn truncate_scene_if_over_budget(
 
     let scene_chars = scene_budget * 4; // chars/4 heuristic
 
-    let truncated: String = scene_json
-        .chars()
-        .take(scene_chars)
-        .collect();
+    let truncated: String = scene_json.chars().take(scene_chars).collect();
 
     // Try to cut at a clean JSON boundary
     let truncated = find_clean_cut(&truncated);
@@ -126,8 +127,7 @@ mod tests {
     #[test]
     fn test_no_truncation_under_budget() {
         let scene = r#"{"entities": []}"#;
-        let (result, truncated, tokens) =
-            truncate_scene_if_over_budget("", "", scene, 10_000);
+        let (result, truncated, tokens) = truncate_scene_if_over_budget("", "", scene, 10_000);
         assert_eq!(result, scene);
         assert!(!truncated);
         assert!(tokens > 0);
@@ -144,8 +144,7 @@ mod tests {
         }))
         .unwrap();
 
-        let (result, truncated, tokens) =
-            truncate_scene_if_over_budget("", "", &scene, 500); // Very low threshold
+        let (result, truncated, tokens) = truncate_scene_if_over_budget("", "", &scene, 500); // Very low threshold
 
         assert!(truncated);
         assert!(result.len() < scene.len());

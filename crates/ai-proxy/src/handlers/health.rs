@@ -17,11 +17,7 @@ pub async fn health_handler() -> impl IntoResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{
-        body::Body,
-        routing::get,
-        Router,
-    };
+    use axum::{body::Body, routing::get, Router};
     use http_body_util::BodyExt;
     use tower::ServiceExt;
 

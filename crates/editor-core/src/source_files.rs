@@ -7,8 +7,8 @@
 //! The module holds an in-memory catalog of source files; OPFS holds raw `.rs` text.
 
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 
 // Thread-local in-memory cache for source file contents.
 // Invalidated when a hot-reload Source request is processed.
@@ -20,7 +20,8 @@ thread_local! {
 /// Cache source file content (keyed by file_id, e.g. "a.rs").
 pub fn cache_source(file_id: &str, content: &str) {
     SOURCE_FILE_REGISTRY.with(|r| {
-        r.borrow_mut().insert(file_id.to_string(), content.to_string());
+        r.borrow_mut()
+            .insert(file_id.to_string(), content.to_string());
     });
 }
 
@@ -192,7 +193,10 @@ mod tests {
         invalidate_cache("a.rs");
 
         // "a.rs" should be gone, "b.rs" should survive
-        assert!(get_cached_source("a.rs").is_none(), "a.rs should be invalidated");
+        assert!(
+            get_cached_source("a.rs").is_none(),
+            "a.rs should be invalidated"
+        );
         assert_eq!(
             get_cached_source("b.rs"),
             Some("content b".to_string()),

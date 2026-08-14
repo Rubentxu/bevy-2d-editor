@@ -12,19 +12,18 @@
 //!
 //! Strict TDD: tests define the expected API contracts.
 
+use editor_core::AssetCommand;
 use editor_core::asset_command::apply as asset_apply;
 use editor_core::auto_layer::{
-    is_auto_layer_stale, regenerate, AutoLayer, AutoLayerId, AutoRule, Pattern3x3,
-    PatternCell,
+    AutoLayer, AutoLayerId, AutoRule, Pattern3x3, PatternCell, is_auto_layer_stale, regenerate,
 };
 use editor_core::scene_asset::{LayerId, LevelLayer};
 use editor_core::tile_layer::TileLayer;
 use editor_core::tile_layer::TileLayerId;
 use editor_core::tileset::{TileCoord, TileGrid, TileRef, TilesetId};
-use editor_core::AssetCommand;
 use editor_core::{SceneAssetDocument, SceneAssetRole};
-use rand::rngs::StdRng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 
 // ─────────────────────────────────────────────────────────────────────────
 // Helper: build a minimal LevelSceneAsset with a TileLayer source and AutoLayer
@@ -61,10 +60,7 @@ fn level_asset_with_auto_layer(
         relationships: vec![],
         exposed_properties: vec![],
         metadata: Default::default(),
-        layers: vec![
-            LevelLayer::Tile(source_tl),
-            LevelLayer::Auto(auto_layer),
-        ],
+        layers: vec![LevelLayer::Tile(source_tl), LevelLayer::Auto(auto_layer)],
     };
     doc
 }
@@ -97,22 +93,20 @@ fn test_auto_layer_serde_roundtrip_with_rules_and_cache() {
         order: 1,
         source_layer_id,
         tileset_id: tileset_id.clone(),
-        rules: vec![
-            AutoRule {
-                pattern,
-                output: vec![
-                    TileRef {
-                        tileset_id: "ts_grass".to_string(),
-                        local_index: 1,
-                    },
-                    TileRef {
-                        tileset_id: "ts_grass".to_string(),
-                        local_index: 2,
-                    },
-                ],
-                chance: Some(0.75),
-            },
-        ],
+        rules: vec![AutoRule {
+            pattern,
+            output: vec![
+                TileRef {
+                    tileset_id: "ts_grass".to_string(),
+                    local_index: 1,
+                },
+                TileRef {
+                    tileset_id: "ts_grass".to_string(),
+                    local_index: 2,
+                },
+            ],
+            chance: Some(0.75),
+        }],
         cached: TileGrid::default(),
         source_generation: 42,
     };
@@ -320,7 +314,11 @@ fn test_regenerate_empty_rules_clears_cache() {
     let mut rng = StdRng::seed_from_u64(123);
     regenerate(&mut layer, &source, &mut rng);
 
-    assert!(layer.cached.is_empty(), "Expected empty cached grid, got {:?}", layer.cached);
+    assert!(
+        layer.cached.is_empty(),
+        "Expected empty cached grid, got {:?}",
+        layer.cached
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -381,10 +379,7 @@ fn test_regenerate_auto_layer_apply_and_inverse() {
         relationships: vec![],
         exposed_properties: vec![],
         metadata: Default::default(),
-        layers: vec![
-            LevelLayer::Tile(source_tl),
-            LevelLayer::Auto(auto_layer),
-        ],
+        layers: vec![LevelLayer::Tile(source_tl), LevelLayer::Auto(auto_layer)],
     };
 
     // C1: pre-regen cached (should be empty)
@@ -407,7 +402,10 @@ fn test_regenerate_auto_layer_apply_and_inverse() {
         LevelLayer::Auto(al) => al.cached.clone(),
         _ => panic!("expected AutoLayer"),
     };
-    assert!(!post_cached.is_empty(), "post-regen cached should not be empty");
+    assert!(
+        !post_cached.is_empty(),
+        "post-regen cached should not be empty"
+    );
 
     // Apply inverse: should restore cached to C1
     asset_apply(&mut doc, &inverse).unwrap();
@@ -416,7 +414,10 @@ fn test_regenerate_auto_layer_apply_and_inverse() {
         LevelLayer::Auto(al) => al.cached.clone(),
         _ => panic!("expected AutoLayer"),
     };
-    assert!(restored_cached.is_empty(), "inverse should restore cached to C1 (empty)");
+    assert!(
+        restored_cached.is_empty(),
+        "inverse should restore cached to C1 (empty)"
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -466,10 +467,7 @@ fn test_auto_layer_full_roundtrip_add_rule_regen_undo_redo() {
         relationships: vec![],
         exposed_properties: vec![],
         metadata: Default::default(),
-        layers: vec![
-            LevelLayer::Tile(source_tl),
-            LevelLayer::Auto(auto_layer),
-        ],
+        layers: vec![LevelLayer::Tile(source_tl), LevelLayer::Auto(auto_layer)],
     };
 
     // Step 1: Add a rule to the AutoLayer
@@ -488,7 +486,10 @@ fn test_auto_layer_full_roundtrip_add_rule_regen_undo_redo() {
     };
 
     // Find the AutoLayer and add the rule
-    let al_index = doc.layers.iter().position(|l| matches!(l, LevelLayer::Auto(_)))
+    let al_index = doc
+        .layers
+        .iter()
+        .position(|l| matches!(l, LevelLayer::Auto(_)))
         .expect("AutoLayer should exist");
     let al = match &mut doc.layers[al_index] {
         LevelLayer::Auto(al) => al,
@@ -516,7 +517,10 @@ fn test_auto_layer_full_roundtrip_add_rule_regen_undo_redo() {
         LevelLayer::Auto(al) => al,
         _ => unreachable!(),
     };
-    assert!(!al_after_regen.cached.is_empty(), "cached should have tiles after regen");
+    assert!(
+        !al_after_regen.cached.is_empty(),
+        "cached should have tiles after regen"
+    );
     assert_eq!(al_after_regen.source_generation, 1); // matches source.generation
 
     // Step 3: Undo (apply inverse)
@@ -526,7 +530,10 @@ fn test_auto_layer_full_roundtrip_add_rule_regen_undo_redo() {
         LevelLayer::Auto(al) => al,
         _ => unreachable!(),
     };
-    assert!(al_after_undo.cached.is_empty(), "cached should be empty after undo");
+    assert!(
+        al_after_undo.cached.is_empty(),
+        "cached should be empty after undo"
+    );
     assert_eq!(al_after_undo.source_generation, 0); // restored to old value
 
     // Step 4: Redo (re-apply RegenerateAutoLayer)
@@ -537,7 +544,10 @@ fn test_auto_layer_full_roundtrip_add_rule_regen_undo_redo() {
         LevelLayer::Auto(al) => al,
         _ => unreachable!(),
     };
-    assert!(!al_after_redo.cached.is_empty(), "cached should have tiles after redo");
+    assert!(
+        !al_after_redo.cached.is_empty(),
+        "cached should have tiles after redo"
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -585,5 +595,8 @@ fn test_auto_layer_requires_valid_source_layer_id() {
     };
 
     let result = asset_apply(&mut doc, &cmd);
-    assert!(result.is_err(), "RegenerateAutoLayer should fail when source layer is missing");
+    assert!(
+        result.is_err(),
+        "RegenerateAutoLayer should fail when source layer is missing"
+    );
 }

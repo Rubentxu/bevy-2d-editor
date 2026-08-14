@@ -111,7 +111,10 @@ pub struct TokenBudget {
 
 impl TokenBudget {
     pub fn new(total_chars: usize) -> Self {
-        Self { total_chars, used_chars: 0 }
+        Self {
+            total_chars,
+            used_chars: 0,
+        }
     }
 
     pub fn remaining(&self) -> usize {

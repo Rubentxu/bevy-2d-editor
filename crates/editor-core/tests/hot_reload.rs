@@ -14,7 +14,10 @@ fn hot_reload_source_wasm_pushes_source_request() {
     hot_reload_source_wasm("foo.rs");
     // Bus depth should be 1 (Source{file_id: "foo.rs"})
     let depth = editor_core::hot_reload_bus_depth_for_tests();
-    assert_eq!(depth, 1, "HOT_RELOAD_BUS should have depth 1 after one Source request");
+    assert_eq!(
+        depth, 1,
+        "HOT_RELOAD_BUS should have depth 1 after one Source request"
+    );
 }
 
 // §1.2: Drain system invalidates source cache
@@ -46,17 +49,20 @@ fn asset_request_invalidates_body_cache() {
 
     // Seed ASSET_BODY_CACHE using the internal mutable accessor
     editor_core::with_asset_body_cache_mut_for_tests(|cache| {
-        cache.insert("x".to_string(), editor_core::scene_asset::SceneAssetDocument {
-            layers: vec![],
-            asset_id: "asset-x".to_string(),
-            logical_path: "x".to_string(),
-            role: editor_core::scene_asset::SceneAssetRole::Actor,
-            version: 1,
-            entities: vec![],
-            relationships: vec![],
-            exposed_properties: vec![],
-            metadata: editor_core::scene_asset::SceneAssetMetadata::default(),
-        });
+        cache.insert(
+            "x".to_string(),
+            editor_core::scene_asset::SceneAssetDocument {
+                layers: vec![],
+                asset_id: "asset-x".to_string(),
+                logical_path: "x".to_string(),
+                role: editor_core::scene_asset::SceneAssetRole::Actor,
+                version: 1,
+                entities: vec![],
+                relationships: vec![],
+                exposed_properties: vec![],
+                metadata: editor_core::scene_asset::SceneAssetMetadata::default(),
+            },
+        );
     });
 
     // Enqueue Asset{asset_id:"x"} and run drain
@@ -64,13 +70,17 @@ fn asset_request_invalidates_body_cache() {
     editor_core::process_hot_reload_requests();
 
     // Entry should be gone from ASSET_BODY_CACHE
-    let found = editor_core::with_asset_body_cache_mut_for_tests(|cache| {
-        cache.contains_key("x")
-    });
-    assert!(!found, "ASSET_BODY_CACHE should not contain 'x' after Asset invalidation");
+    let found = editor_core::with_asset_body_cache_mut_for_tests(|cache| cache.contains_key("x"));
+    assert!(
+        !found,
+        "ASSET_BODY_CACHE should not contain 'x' after Asset invalidation"
+    );
 
     // DIRTY_FLAG should be set
-    assert!(editor_core::is_dirty_for_tests(), "DIRTY_FLAG should be set after Asset request");
+    assert!(
+        editor_core::is_dirty_for_tests(),
+        "DIRTY_FLAG should be set after Asset request"
+    );
 }
 
 // §1.5: ForceReloadAll clears all caches and sets dirty flag
@@ -80,17 +90,20 @@ fn force_reload_emits_force_variant() {
     source_files::cache_source("a.rs", "content");
     // Seed asset body cache
     editor_core::with_asset_body_cache_mut_for_tests(|cache| {
-        cache.insert("y".to_string(), editor_core::scene_asset::SceneAssetDocument {
-            layers: vec![],
-            asset_id: "asset-y".to_string(),
-            logical_path: "y".to_string(),
-            role: editor_core::scene_asset::SceneAssetRole::Actor,
-            version: 1,
-            entities: vec![],
-            relationships: vec![],
-            exposed_properties: vec![],
-            metadata: editor_core::scene_asset::SceneAssetMetadata::default(),
-        });
+        cache.insert(
+            "y".to_string(),
+            editor_core::scene_asset::SceneAssetDocument {
+                layers: vec![],
+                asset_id: "asset-y".to_string(),
+                logical_path: "y".to_string(),
+                role: editor_core::scene_asset::SceneAssetRole::Actor,
+                version: 1,
+                entities: vec![],
+                relationships: vec![],
+                exposed_properties: vec![],
+                metadata: editor_core::scene_asset::SceneAssetMetadata::default(),
+            },
+        );
     });
 
     // Enqueue ForceReloadAll
@@ -98,7 +111,10 @@ fn force_reload_emits_force_variant() {
     editor_core::process_hot_reload_requests();
 
     // Source cache should be empty
-    assert!(source_files::get_cached_source("a.rs").is_none(), "Source cache should be cleared");
+    assert!(
+        source_files::get_cached_source("a.rs").is_none(),
+        "Source cache should be cleared"
+    );
 
     // Asset body cache should be empty
     let cache_len = editor_core::with_asset_body_cache_mut_for_tests(|cache| cache.len());

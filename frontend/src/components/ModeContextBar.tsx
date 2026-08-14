@@ -79,21 +79,23 @@ export default function ModeContextBar({
   onSave,
   onBackToScene,
 }: ModeContextBarProps) {
-  const isDirty = editorMode === "asset-authoring"
-    ? assetDirty
-    : editorMode === "scene"
-      ? sceneDirty
-      : false;
+  const isDirty =
+    editorMode === "asset-authoring"
+      ? assetDirty
+      : editorMode === "scene"
+        ? sceneDirty
+        : false;
 
-  const targetName = editorMode === "scene"
-    ? (currentSceneName ?? "Untitled")
-    : editorMode === "asset-authoring"
-      ? (activeAssetPath ?? "No asset open")
-      : editorMode === "logic"
-        ? (activeLogicGraphId ?? "No graph open")
-        : editorMode === "code"
-          ? (activeCodeFileName ?? "No file open")
-          : null;
+  const targetName =
+    editorMode === "scene"
+      ? (currentSceneName ?? "Untitled")
+      : editorMode === "asset-authoring"
+        ? (activeAssetPath ?? "No asset open")
+        : editorMode === "logic"
+          ? (activeLogicGraphId ?? "No graph open")
+          : editorMode === "code"
+            ? (activeCodeFileName ?? "No file open")
+            : null;
 
   const domainDotClass = `vc-domain-dot vc-domain-dot--${MODE_DOMAINS[editorMode]}`;
 
@@ -118,7 +120,12 @@ export default function ModeContextBar({
       {/* Domain dot */}
       <span
         className={domainDotClass}
-        style={{ width: "7px", height: "7px", borderRadius: "50%", flexShrink: 0 }}
+        style={{
+          width: "7px",
+          height: "7px",
+          borderRadius: "50%",
+          flexShrink: 0,
+        }}
         aria-hidden="true"
       />
 
@@ -208,10 +215,12 @@ export default function ModeContextBar({
               padding: "2px 8px",
               border: "1px solid var(--color-border-hi)",
               borderRadius: "var(--radius-sm)",
-              background: editorMode === "play"
-                ? "var(--color-danger)"
-                : "var(--color-accent)",
-              color: editorMode === "play" ? "var(--color-bg)" : "var(--color-bg)",
+              background:
+                editorMode === "play"
+                  ? "var(--color-danger)"
+                  : "var(--color-accent)",
+              color:
+                editorMode === "play" ? "var(--color-bg)" : "var(--color-bg)",
               fontSize: "var(--fs-xs)",
               fontWeight: 600,
               cursor: "pointer",
@@ -223,31 +232,32 @@ export default function ModeContextBar({
         )}
 
         {/* Save — scene + asset-authoring */}
-        {(editorMode === "scene" || editorMode === "asset-authoring") && onSave && (
-          <button
-            type="button"
-            onClick={onSave}
-            data-testid="mode-context-bar-save-btn"
-            disabled={!isDirty}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "4px",
-              padding: "2px 8px",
-              border: "1px solid var(--color-border-hi)",
-              borderRadius: "var(--radius-sm)",
-              background: isDirty ? "var(--color-accent)" : "transparent",
-              color: isDirty ? "var(--color-bg)" : "var(--color-ink-muted)",
-              fontSize: "var(--fs-xs)",
-              fontWeight: 600,
-              cursor: isDirty ? "pointer" : "not-allowed",
-              opacity: isDirty ? 1 : 0.5,
-              whiteSpace: "nowrap",
-            }}
-          >
-            Save
-          </button>
-        )}
+        {(editorMode === "scene" || editorMode === "asset-authoring") &&
+          onSave && (
+            <button
+              type="button"
+              onClick={onSave}
+              data-testid="mode-context-bar-save-btn"
+              disabled={!isDirty}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                padding: "2px 8px",
+                border: "1px solid var(--color-border-hi)",
+                borderRadius: "var(--radius-sm)",
+                background: isDirty ? "var(--color-accent)" : "transparent",
+                color: isDirty ? "var(--color-bg)" : "var(--color-ink-muted)",
+                fontSize: "var(--fs-xs)",
+                fontWeight: 600,
+                cursor: isDirty ? "pointer" : "not-allowed",
+                opacity: isDirty ? 1 : 0.5,
+                whiteSpace: "nowrap",
+              }}
+            >
+              Save
+            </button>
+          )}
 
         {/* Back to Scene — asset-authoring */}
         {editorMode === "asset-authoring" && onBackToScene && (

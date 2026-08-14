@@ -7,7 +7,9 @@
 //! Phase 3: Logic graph evaluation dispatch (evaluate_logic_binding).
 //! All tests follow Strict TDD: RED → GREEN → TRIANGULATE → REFACTOR.
 
-use crate::logic_graph::{LogicEdge, LogicGraphAsset, LogicNode, LogicNodeRole, NodeId, NodeTypeId, PortId};
+use crate::logic_graph::{
+    LogicEdge, LogicGraphAsset, LogicNode, LogicNodeRole, NodeId, NodeTypeId, PortId,
+};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -16,9 +18,9 @@ use std::sync::OnceLock;
 
 // WASM bindings — only compiled on wasm32 target
 #[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::*;
-#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsValue;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
 
 /// Typed value boundary for logic evaluator ports.
 /// NO `serde_json::Value` inside — this is the strict contract.
@@ -94,13 +96,30 @@ impl std::fmt::Display for LogicError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             LogicError::AssetNotFound(id) => write!(f, "graph asset not found: '{}'", id),
-            LogicError::VersionMismatch { asset_id, expected, actual } => {
-                write!(f, "version mismatch for '{}': expected {}, got {}", asset_id, expected, actual)
+            LogicError::VersionMismatch {
+                asset_id,
+                expected,
+                actual,
+            } => {
+                write!(
+                    f,
+                    "version mismatch for '{}': expected {}, got {}",
+                    asset_id, expected, actual
+                )
             }
-            LogicError::CycleDetected => write!(f, "cycle detected in graph: no valid execution order"),
-            LogicError::MissingEvaluator(ntid) => write!(f, "missing evaluator for node type: '{}'", ntid.as_str()),
+            LogicError::CycleDetected => {
+                write!(f, "cycle detected in graph: no valid execution order")
+            }
+            LogicError::MissingEvaluator(ntid) => {
+                write!(f, "missing evaluator for node type: '{}'", ntid.as_str())
+            }
             LogicError::InvalidPort { node_id, port_id } => {
-                write!(f, "invalid port: '{}.{}'", node_id.as_str(), port_id.as_str())
+                write!(
+                    f,
+                    "invalid port: '{}.{}'",
+                    node_id.as_str(),
+                    port_id.as_str()
+                )
             }
             LogicError::NodeNotFound(node_id) => {
                 write!(f, "node not found in graph: '{}'", node_id.as_str())
@@ -175,7 +194,8 @@ impl LogicNodeRegistry {
 
     /// Register a controller evaluator by controller_id.
     pub fn register_controller(&mut self, controller_id: &str, evaluator: Box<dyn NodeEvaluator>) {
-        self.by_controller_id.insert(controller_id.to_string(), evaluator);
+        self.by_controller_id
+            .insert(controller_id.to_string(), evaluator);
     }
 }
 
@@ -252,7 +272,11 @@ pub fn get_logic_graph_asset(asset_id: &str) -> Option<LogicGraphAsset> {
 /// # Errors
 /// Returns `LogicError` if the asset is not found, version mismatches, or
 /// evaluation cannot proceed (cycle, missing evaluator).
-pub fn evaluate_logic_binding(asset_id: &str, version: u32, entity_bits: u64) -> Result<(), LogicError> {
+pub fn evaluate_logic_binding(
+    asset_id: &str,
+    version: u32,
+    entity_bits: u64,
+) -> Result<(), LogicError> {
     // Step 1: Find the LogicGraphAsset by asset_id
     let asset = get_logic_graph_asset(asset_id)
         .ok_or_else(|| LogicError::AssetNotFound(asset_id.to_string()))?;
@@ -270,8 +294,8 @@ pub fn evaluate_logic_binding(asset_id: &str, version: u32, entity_bits: u64) ->
     // Sensors run first (they have no input dependencies), then controllers, then actuators.
     // Edges go from output port of source node to input port of target node.
     // We do a Kahn's algorithm: nodes with all inputs satisfied can run.
-    let execution_order = topological_sort(&asset.nodes, &asset.edges)
-        .ok_or(LogicError::CycleDetected)?;
+    let execution_order =
+        topological_sort(&asset.nodes, &asset.edges).ok_or(LogicError::CycleDetected)?;
 
     // Step 4: Run sensors first, collect their output values
     // Step 5: Run controllers, propagating values through the graph
@@ -332,22 +356,25 @@ fn topological_sort(nodes: &[LogicNode], edges: &[LogicEdge]) -> Option<Vec<Node
 }
 
 /// Evaluate all nodes in the given order (result of topological sort).
-fn evaluate_nodes_in_order(asset: &LogicGraphAsset, order: &[NodeId], entity_bits: u64) -> Result<(), LogicError> {
+fn evaluate_nodes_in_order(
+    asset: &LogicGraphAsset,
+    order: &[NodeId],
+    entity_bits: u64,
+) -> Result<(), LogicError> {
     let registry = global_node_registry();
 
     // Build a map from NodeId to LogicNode for O(1) lookup
-    let node_map: HashMap<NodeId, &LogicNode> = asset
-        .nodes
-        .iter()
-        .map(|n| (n.node_id.clone(), n))
-        .collect();
+    let node_map: HashMap<NodeId, &LogicNode> =
+        asset.nodes.iter().map(|n| (n.node_id.clone(), n)).collect();
 
     // Build a map from (NodeId, PortId) to PortValue for input resolution
     // This is populated as nodes are evaluated
     let mut port_values: HashMap<(NodeId, PortId), PortValue> = HashMap::new();
 
     for node_id in order {
-        let node = node_map.get(node_id).ok_or_else(|| LogicError::NodeNotFound(node_id.clone()))?;
+        let node = node_map
+            .get(node_id)
+            .ok_or_else(|| LogicError::NodeNotFound(node_id.clone()))?;
 
         // Gather inputs for this node from port_values (set by upstream nodes)
         let input_values = gather_input_values(node, &asset.edges, &port_values)?;
@@ -355,7 +382,8 @@ fn evaluate_nodes_in_order(asset: &LogicGraphAsset, order: &[NodeId], entity_bit
         // Evaluate the node
         let evaluator = registry.get_evaluator(&node.node_type_id);
 
-        let evaluator = evaluator.ok_or_else(|| LogicError::MissingEvaluator(node.node_type_id.clone()))?;
+        let evaluator =
+            evaluator.ok_or_else(|| LogicError::MissingEvaluator(node.node_type_id.clone()))?;
 
         let outputs = evaluator.evaluate(node, &input_values);
 
@@ -386,7 +414,9 @@ fn gather_input_values(
     // Collect inputs in a deterministic order based on port_id
     let mut inputs: Vec<PortValue> = Vec::new();
     for input_edge in input_edges {
-        if let Some(value) = port_values.get(&(input_edge.from_node.clone(), input_edge.from_port.clone())) {
+        if let Some(value) =
+            port_values.get(&(input_edge.from_node.clone(), input_edge.from_port.clone()))
+        {
             inputs.push(value.clone());
         } else {
             // Missing input — use default
@@ -432,8 +462,8 @@ fn store_output_values(
 /// - "actuator.modify_health" → "health_delta" (Float derived from field_values)
 /// - "actuator.emit_signal" → field = signal_id from field_values
 fn submit_actuator_outputs_from_node(node: &LogicNode, outputs: &[PortValue], entity_bits: u64) {
-    use bevy::prelude::Entity;
     use crate::actuator_bus::submit_actuator_output;
+    use bevy::prelude::Entity;
 
     let entity = Entity::from_bits(entity_bits);
 
@@ -810,9 +840,15 @@ impl NodeEvaluator for IfEvaluator {
             .unwrap_or(false);
 
         let output = if cond {
-            inputs.get(1).cloned().unwrap_or(PortValue::Action(String::new()))
+            inputs
+                .get(1)
+                .cloned()
+                .unwrap_or(PortValue::Action(String::new()))
         } else {
-            inputs.get(2).cloned().unwrap_or(PortValue::Action(String::new()))
+            inputs
+                .get(2)
+                .cloned()
+                .unwrap_or(PortValue::Action(String::new()))
         };
         vec![output]
     }
@@ -847,7 +883,12 @@ struct TranslateEvaluator;
 impl NodeEvaluator for TranslateEvaluator {
     fn evaluate(&self, _node: &LogicNode, inputs: &[PortValue]) -> Vec<PortValue> {
         // Pass through the first input (expected: Vec2 { x, y })
-        vec![inputs.first().cloned().unwrap_or(PortValue::Vec2 { x: 0.0, y: 0.0 })]
+        vec![
+            inputs
+                .first()
+                .cloned()
+                .unwrap_or(PortValue::Vec2 { x: 0.0, y: 0.0 }),
+        ]
     }
 }
 
@@ -894,7 +935,10 @@ impl NodeEvaluator for GateEvaluator {
 
         // inputs[0]=condition(Bool), inputs[1]=trigger(Action)
         // Pass through the trigger if enabled
-        let trigger = inputs.get(1).cloned().unwrap_or(PortValue::Action(String::new()));
+        let trigger = inputs
+            .get(1)
+            .cloned()
+            .unwrap_or(PortValue::Action(String::new()));
         vec![trigger]
     }
 }
@@ -908,7 +952,10 @@ struct ApplyImpulseEvaluator;
 impl NodeEvaluator for ApplyImpulseEvaluator {
     fn evaluate(&self, _node: &LogicNode, inputs: &[PortValue]) -> Vec<PortValue> {
         // Pass through the trigger Action to "done".
-        let trigger = inputs.first().cloned().unwrap_or(PortValue::Action(String::new()));
+        let trigger = inputs
+            .first()
+            .cloned()
+            .unwrap_or(PortValue::Action(String::new()));
         vec![trigger]
     }
 }
@@ -972,10 +1019,12 @@ struct ModifyHealthEvaluator;
 impl NodeEvaluator for ModifyHealthEvaluator {
     fn evaluate(&self, node: &LogicNode, inputs: &[PortValue]) -> Vec<PortValue> {
         // Pass through the trigger to done
-        vec![inputs
-            .first()
-            .cloned()
-            .unwrap_or(PortValue::Action(String::new()))]
+        vec![
+            inputs
+                .first()
+                .cloned()
+                .unwrap_or(PortValue::Action(String::new())),
+        ]
     }
 }
 
@@ -1002,10 +1051,12 @@ struct EmitSignalEvaluator;
 impl NodeEvaluator for EmitSignalEvaluator {
     fn evaluate(&self, node: &LogicNode, inputs: &[PortValue]) -> Vec<PortValue> {
         // Pass through the trigger to done
-        vec![inputs
-            .first()
-            .cloned()
-            .unwrap_or(PortValue::Action(String::new()))]
+        vec![
+            inputs
+                .first()
+                .cloned()
+                .unwrap_or(PortValue::Action(String::new())),
+        ]
     }
 }
 
@@ -1051,7 +1102,11 @@ pub fn update_keyboard_state(keys: Res<ButtonInput<KeyCode>>) {
 /// Called from JS side after loading a .logic asset.
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
-pub fn register_logic_graph_wasm(asset_id: &str, version: u32, graph_json: &str) -> Result<(), JsValue> {
+pub fn register_logic_graph_wasm(
+    asset_id: &str,
+    version: u32,
+    graph_json: &str,
+) -> Result<(), JsValue> {
     // Deserialize from JSON
     let asset: LogicGraphAsset = serde_json::from_str(graph_json)
         .map_err(|e| JsValue::from_str(&format!("failed to parse graph JSON: {}", e)))?;
@@ -1081,7 +1136,11 @@ pub fn register_logic_graph_wasm(asset_id: &str, version: u32, graph_json: &str)
 /// Returns Ok(()) on success; missing asset is logged and returns Ok(()).
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
-pub fn evaluate_logic_binding_wasm(entity_bits: u64, asset_id: &str, version: u32) -> Result<(), JsValue> {
+pub fn evaluate_logic_binding_wasm(
+    entity_bits: u64,
+    asset_id: &str,
+    version: u32,
+) -> Result<(), JsValue> {
     // Evaluate the binding — this populates the ACTUATOR_OUTPUT_BUS via actuator nodes.
     // The entity_bits for actuator outputs are set by the dispatch layer in logic_dispatch.rs.
     match evaluate_logic_binding(asset_id, version, entity_bits) {
@@ -1327,7 +1386,9 @@ mod registry_tests {
     #[test]
     fn controller_if_condition_true() {
         let registry = global_node_registry();
-        let evaluator = registry.get_evaluator(&NodeTypeId::new("controller.if")).unwrap();
+        let evaluator = registry
+            .get_evaluator(&NodeTypeId::new("controller.if"))
+            .unwrap();
         let node = LogicNode {
             node_id: crate::logic_graph::NodeId::new("test"),
             role: LogicNodeRole::Controller,
@@ -1349,7 +1410,9 @@ mod registry_tests {
     #[test]
     fn controller_if_condition_false() {
         let registry = global_node_registry();
-        let evaluator = registry.get_evaluator(&NodeTypeId::new("controller.if")).unwrap();
+        let evaluator = registry
+            .get_evaluator(&NodeTypeId::new("controller.if"))
+            .unwrap();
         let node = LogicNode {
             node_id: crate::logic_graph::NodeId::new("test"),
             role: LogicNodeRole::Controller,
@@ -1433,11 +1496,21 @@ mod registry_tests {
         seed_builtin_evaluators(&mut registry);
 
         // Verify the three built-ins are registered
-        assert!(registry.get_evaluator(&NodeTypeId::new("controller.if")).is_some());
-        assert!(registry.get_evaluator(&NodeTypeId::new("controller.and")).is_some());
-        assert!(registry
-            .get_evaluator(&NodeTypeId::new("sensor.always"))
-            .is_some());
+        assert!(
+            registry
+                .get_evaluator(&NodeTypeId::new("controller.if"))
+                .is_some()
+        );
+        assert!(
+            registry
+                .get_evaluator(&NodeTypeId::new("controller.and"))
+                .is_some()
+        );
+        assert!(
+            registry
+                .get_evaluator(&NodeTypeId::new("sensor.always"))
+                .is_some()
+        );
 
         // Register a 4th evaluator
         struct FourthEvaluator;
@@ -1467,14 +1540,26 @@ mod registry_tests {
         );
 
         // Verify all four are present
-        assert!(registry.get_evaluator(&NodeTypeId::new("controller.if")).is_some());
-        assert!(registry.get_evaluator(&NodeTypeId::new("controller.and")).is_some());
-        assert!(registry
-            .get_evaluator(&NodeTypeId::new("sensor.always"))
-            .is_some());
-        assert!(registry
-            .get_evaluator(&NodeTypeId::new("controller.not"))
-            .is_some());
+        assert!(
+            registry
+                .get_evaluator(&NodeTypeId::new("controller.if"))
+                .is_some()
+        );
+        assert!(
+            registry
+                .get_evaluator(&NodeTypeId::new("controller.and"))
+                .is_some()
+        );
+        assert!(
+            registry
+                .get_evaluator(&NodeTypeId::new("sensor.always"))
+                .is_some()
+        );
+        assert!(
+            registry
+                .get_evaluator(&NodeTypeId::new("controller.not"))
+                .is_some()
+        );
 
         // Verify dispatch still works on original three
         let node = LogicNode {
@@ -1484,7 +1569,9 @@ mod registry_tests {
             field_values: serde_json::json!({}),
             controller_id: None,
         };
-        let evaluator = registry.get_evaluator(&NodeTypeId::new("controller.if")).unwrap();
+        let evaluator = registry
+            .get_evaluator(&NodeTypeId::new("controller.if"))
+            .unwrap();
         let inputs = vec![
             PortValue::Bool(true),
             PortValue::Action("a".to_string()),
@@ -1521,8 +1608,10 @@ mod registry_tests {
 #[cfg(test)]
 mod integration_tests {
     use super::*;
-    use crate::actuator_bus::{submit_actuator_output, drain_actuator_outputs, ActuatorOutput};
-    use crate::logic_graph::{LogicEdge, LogicGraphAsset, LogicNode, LogicNodeRole, NodeId, NodeTypeId, PortId};
+    use crate::actuator_bus::{ActuatorOutput, drain_actuator_outputs, submit_actuator_output};
+    use crate::logic_graph::{
+        LogicEdge, LogicGraphAsset, LogicNode, LogicNodeRole, NodeId, NodeTypeId, PortId,
+    };
 
     // §T1: ActuatorOutput serializes/deserializes correctly
     #[test]
@@ -1643,8 +1732,14 @@ mod integration_tests {
         assert_eq!(order.len(), 3);
         // sensor must come before controller
         let sensor_idx = order.iter().position(|id| id.as_str() == "sensor").unwrap();
-        let controller_idx = order.iter().position(|id| id.as_str() == "controller").unwrap();
-        let actuator_idx = order.iter().position(|id| id.as_str() == "actuator").unwrap();
+        let controller_idx = order
+            .iter()
+            .position(|id| id.as_str() == "controller")
+            .unwrap();
+        let actuator_idx = order
+            .iter()
+            .position(|id| id.as_str() == "actuator")
+            .unwrap();
         assert!(sensor_idx < controller_idx);
         assert!(controller_idx < actuator_idx);
     }
@@ -1795,14 +1890,12 @@ mod integration_tests {
                     controller_id: None,
                 },
             ],
-            edges: vec![
-                LogicEdge {
-                    from_node: NodeId::new("sensor"),
-                    from_port: PortId::new("tick"),
-                    to_node: NodeId::new("controller"),
-                    to_port: PortId::new("condition"),
-                },
-            ],
+            edges: vec![LogicEdge {
+                from_node: NodeId::new("sensor"),
+                from_port: PortId::new("tick"),
+                to_node: NodeId::new("controller"),
+                to_port: PortId::new("condition"),
+            }],
             ..Default::default()
         };
 
@@ -1823,15 +1916,13 @@ mod integration_tests {
             asset_id: "test/version".to_string(),
             logical_path: "test/version".to_string(),
             version: 5,
-            nodes: vec![
-                LogicNode {
-                    node_id: NodeId::new("sensor"),
-                    role: LogicNodeRole::Sensor,
-                    node_type_id: NodeTypeId::new("sensor.always"),
-                    field_values: serde_json::json!({}),
-                    controller_id: None,
-                },
-            ],
+            nodes: vec![LogicNode {
+                node_id: NodeId::new("sensor"),
+                role: LogicNodeRole::Sensor,
+                node_type_id: NodeTypeId::new("sensor.always"),
+                field_values: serde_json::json!({}),
+                controller_id: None,
+            }],
             ..Default::default()
         };
 
@@ -1841,7 +1932,11 @@ mod integration_tests {
         let result = evaluate_logic_binding("test/version", 99, 0);
         assert!(result.is_err());
         match result.unwrap_err() {
-            LogicError::VersionMismatch { asset_id, expected, actual } => {
+            LogicError::VersionMismatch {
+                asset_id,
+                expected,
+                actual,
+            } => {
                 assert_eq!(asset_id, "test/version");
                 assert_eq!(expected, 99);
                 assert_eq!(actual, 5);
@@ -1857,15 +1952,13 @@ mod integration_tests {
             asset_id: "test/retrieve".to_string(),
             logical_path: "test/retrieve".to_string(),
             version: 2,
-            nodes: vec![
-                LogicNode {
-                    node_id: NodeId::new("sensor"),
-                    role: LogicNodeRole::Sensor,
-                    node_type_id: NodeTypeId::new("sensor.always"),
-                    field_values: serde_json::json!({}),
-                    controller_id: None,
-                },
-            ],
+            nodes: vec![LogicNode {
+                node_id: NodeId::new("sensor"),
+                role: LogicNodeRole::Sensor,
+                node_type_id: NodeTypeId::new("sensor.always"),
+                field_values: serde_json::json!({}),
+                controller_id: None,
+            }],
             ..Default::default()
         };
 
@@ -1959,10 +2052,17 @@ mod integration_tests {
         assert!(!outputs.is_empty(), "expected at least one actuator output");
 
         let translate_output = outputs.iter().find(|o| o.field == "translation");
-        assert!(translate_output.is_some(), "expected translation output, got {:?}", outputs);
+        assert!(
+            translate_output.is_some(),
+            "expected translation output, got {:?}",
+            outputs
+        );
         let out = translate_output.unwrap();
         // entity_bits must be threaded through from dispatch → evaluate → submit
-        assert_eq!(out.entity_bits, entity_bits, "entity_bits should be threaded through");
+        assert_eq!(
+            out.entity_bits, entity_bits,
+            "entity_bits should be threaded through"
+        );
         // The output value is whatever TranslateEvaluator returned (Bool in this case,
         // since controller.and outputs Bool). This test verifies the pipeline plumbing.
         assert!(
@@ -2124,7 +2224,11 @@ mod integration_tests {
 
         let outputs = drain_actuator_outputs();
         // No output should be produced when not triggered
-        assert!(outputs.is_empty(), "expected no output when not triggered, got {:?}", outputs);
+        assert!(
+            outputs.is_empty(),
+            "expected no output when not triggered, got {:?}",
+            outputs
+        );
     }
 
     // §T18: CollisionEvaluator — no collision in state → Float(0.0)

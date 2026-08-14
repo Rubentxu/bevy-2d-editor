@@ -11,9 +11,7 @@ use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use crate::asset_command::AssetCommand;
 #[cfg(target_arch = "wasm32")]
-use crate::asset_state::{
-    with_asset_body_cache, with_asset_body_cache_mut, with_asset_log_mut,
-};
+use crate::asset_state::{with_asset_body_cache, with_asset_body_cache_mut, with_asset_log_mut};
 #[cfg(target_arch = "wasm32")]
 use crate::auto_layer::AutoLayerId;
 
@@ -45,7 +43,9 @@ pub fn is_auto_layer_stale_wasm(asset_ref: &str, layer_id: &str) -> Result<bool,
     let source_tl = doc
         .layers
         .iter()
-        .find(|l| matches!(l, LevelLayer::Tile(tl) if tl.id.as_str() == al.source_layer_id.as_str()))
+        .find(
+            |l| matches!(l, LevelLayer::Tile(tl) if tl.id.as_str() == al.source_layer_id.as_str()),
+        )
         .ok_or_else(|| JsValue::from_str("Source TileLayer not found"))?;
 
     let LevelLayer::Tile(tl) = source_tl else {
@@ -63,10 +63,7 @@ pub fn is_auto_layer_stale_wasm(asset_ref: &str, layer_id: &str) -> Result<bool,
 /// Returns the updated SceneAssetDocument JSON on success.
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
-pub fn regenerate_auto_layer_wasm(
-    asset_ref: &str,
-    layer_id: &str,
-) -> Result<String, JsValue> {
+pub fn regenerate_auto_layer_wasm(asset_ref: &str, layer_id: &str) -> Result<String, JsValue> {
     use crate::scene_asset::{LayerId, LevelLayer};
 
     // Load the doc from cache to find the AutoLayer

@@ -3,11 +3,11 @@
 //!
 //! Strict TDD: RED first — tests define the expected API contract.
 
+use editor_core::ComponentInstance;
 use editor_core::asset_command::{
     AssetCommand, AssetCommandError, AssetOperationLog, apply as asset_apply,
 };
-use editor_core::scene_asset::{LocalId, SceneAssetDocument, SceneAssetRole, SceneAssetEntity};
-use editor_core::ComponentInstance;
+use editor_core::scene_asset::{LocalId, SceneAssetDocument, SceneAssetEntity, SceneAssetRole};
 use serde_json::json;
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -217,11 +217,17 @@ fn set_component_value_updates_field() {
     };
 
     let inverse = asset_apply(&mut doc, &cmd).unwrap();
-    assert_eq!(doc.entities[0].components[0].values["translation"]["x"], json!(100.0));
+    assert_eq!(
+        doc.entities[0].components[0].values["translation"]["x"],
+        json!(100.0)
+    );
 
     // Inverse should restore old value
     asset_apply(&mut doc, &inverse).unwrap();
-    assert_eq!(doc.entities[0].components[0].values["translation"]["x"], json!(0.0));
+    assert_eq!(
+        doc.entities[0].components[0].values["translation"]["x"],
+        json!(0.0)
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -388,7 +394,12 @@ fn remove_entity_inverse_contains_full_entity() {
 
     // Inverse should be AddEntity with full captured entity
     match inverse {
-        AssetCommand::AddEntity { local_id, name, local_path, components } => {
+        AssetCommand::AddEntity {
+            local_id,
+            name,
+            local_path,
+            components,
+        } => {
             assert_eq!(local_id, "a1");
             assert_eq!(name, "A");
             assert_eq!(local_path, "./a1");
@@ -447,7 +458,11 @@ fn rename_entity_inverse_swaps_old_and_new_name() {
 
     // Inverse should swap: old_name = prior actual name, new_name = prior requested name
     match inverse {
-        AssetCommand::RenameEntity { local_id, old_name, new_name } => {
+        AssetCommand::RenameEntity {
+            local_id,
+            old_name,
+            new_name,
+        } => {
             assert_eq!(local_id, "a1");
             assert_eq!(old_name, Some("OriginalName".to_string()));
             assert_eq!(new_name, "OriginalName".to_string());
@@ -497,7 +512,10 @@ fn add_entity_duplicate_local_id_fails() {
     };
 
     let result = asset_apply(&mut doc, &cmd);
-    assert!(matches!(result, Err(AssetCommandError::DuplicateLocalId(_))));
+    assert!(matches!(
+        result,
+        Err(AssetCommandError::DuplicateLocalId(_))
+    ));
 }
 
 #[test]

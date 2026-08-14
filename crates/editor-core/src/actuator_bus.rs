@@ -8,9 +8,9 @@
 //! - `apply_actuator_outputs`: Bevy system that drains the bus and writes to components
 
 use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
 
 use crate::logic_evaluator::PortValue;
 
@@ -34,7 +34,9 @@ struct ActuatorBus {
 
 impl ActuatorBus {
     fn new() -> Self {
-        Self { pending: Vec::new() }
+        Self {
+            pending: Vec::new(),
+        }
     }
 
     fn submit(&mut self, output: ActuatorOutput) {
@@ -190,8 +192,8 @@ mod tests {
     // §T-apply1: drain_actuator_outputs returns submitted outputs
     #[test]
     fn test_submit_and_drain_roundtrip() {
-        use bevy::prelude::Entity;
         use crate::logic_evaluator::PortValue;
+        use bevy::prelude::Entity;
 
         // Drain any pre-existing state
         let _ = drain_actuator_outputs();
@@ -214,8 +216,8 @@ mod tests {
     // §T-apply2: bus is empty after drain
     #[test]
     fn test_bus_empty_after_drain() {
-        use bevy::prelude::Entity;
         use crate::logic_evaluator::PortValue;
+        use bevy::prelude::Entity;
 
         let entity = Entity::from_bits(1);
         submit_actuator_output(entity, "translation", PortValue::Vec2 { x: 1.0, y: 2.0 });

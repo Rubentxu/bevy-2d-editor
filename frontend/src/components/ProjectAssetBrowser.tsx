@@ -29,7 +29,15 @@ interface Props {
   ) => Promise<void>;
 }
 
-const ROLES = ["actor", "level", "ui", "fragment", "screen", "effect", "logic"] as const;
+const ROLES = [
+  "actor",
+  "level",
+  "ui",
+  "fragment",
+  "screen",
+  "effect",
+  "logic",
+] as const;
 type Role = (typeof ROLES)[number];
 
 export default function ProjectAssetBrowser({
@@ -55,7 +63,9 @@ export default function ProjectAssetBrowser({
   const [deleteConfirmName, setDeleteConfirmName] = useState("");
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importDefaultName, setImportDefaultName] = useState("");
-  const [placeDialogAssetId, setPlaceDialogAssetId] = useState<string | null>(null);
+  const [placeDialogAssetId, setPlaceDialogAssetId] = useState<string | null>(
+    null,
+  );
 
   const bsnFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -144,7 +154,8 @@ export default function ProjectAssetBrowser({
   // When pendingCreateName === "__name_step__", show name dialog
   // When pendingCreateName is a valid name (non-empty, not "__name_step__"), show role dialog
   const showCreateNameDialog = pendingCreateName === "__name_step__";
-  const showCreateRoleDialog = pendingCreateName !== "" && pendingCreateName !== "__name_step__";
+  const showCreateRoleDialog =
+    pendingCreateName !== "" && pendingCreateName !== "__name_step__";
 
   const handleRenameStart = useCallback((entry: SceneAssetCatalogEntry) => {
     setRenamingId(entry.asset_id);
@@ -259,7 +270,9 @@ export default function ProjectAssetBrowser({
         if ((window as any).refreshAssetCatalog) {
           (window as any).refreshAssetCatalog();
         }
-        setImportAlert(`Imported "${name}" successfully. You can open it from the asset list.`);
+        setImportAlert(
+          `Imported "${name}" successfully. You can open it from the asset list.`,
+        );
       } catch (err) {
         console.error("[ProjectAssetBrowser] Import .bsn failed:", err);
         setImportAlert(`Import failed: ${err}`);
@@ -282,14 +295,13 @@ export default function ProjectAssetBrowser({
     }
   }, []);
 
-  const handlePlaceInstance = useCallback(
-    async (assetId: string) => {
-      setPlaceDialogAssetId(assetId);
-    },
-    [],
-  );
+  const handlePlaceInstance = useCallback(async (assetId: string) => {
+    setPlaceDialogAssetId(assetId);
+  }, []);
 
-  const parseTranslation = (s: string): { x: number; y: number } | undefined => {
+  const parseTranslation = (
+    s: string,
+  ): { x: number; y: number } | undefined => {
     if (!s || !s.trim()) return undefined;
     try {
       return JSON.parse(s);
@@ -324,9 +336,13 @@ export default function ProjectAssetBrowser({
   }, []);
 
   // T3.2 — place scene component dialog state (replaces window.alert + window.prompt)
-  const [placeSceneComponentDialogAssetId, setPlaceSceneComponentDialogAssetId] =
-    useState<string | null>(null);
-  const [placeSceneComponentAlert, setPlaceSceneComponentAlert] = useState<string | null>(null);
+  const [
+    placeSceneComponentDialogAssetId,
+    setPlaceSceneComponentDialogAssetId,
+  ] = useState<string | null>(null);
+  const [placeSceneComponentAlert, setPlaceSceneComponentAlert] = useState<
+    string | null
+  >(null);
 
   const handlePlaceSceneComponentInstance = useCallback(
     async (assetId: string) => {
@@ -440,12 +456,13 @@ export default function ProjectAssetBrowser({
                     data-testid={`logic-graph-row-${entry.asset_id}`}
                   >
                     <td className="asset-name">
-                      <span data-testid="asset-name">
-                        {entry.logical_path}
-                      </span>
+                      <span data-testid="asset-name">{entry.logical_path}</span>
                     </td>
                     <td>
-                      <span className="role-badge" data-testid="asset-role-badge">
+                      <span
+                        className="role-badge"
+                        data-testid="asset-role-badge"
+                      >
                         {entry.builtin ? "builtin" : "logic"}
                       </span>
                     </td>
@@ -712,7 +729,11 @@ export default function ProjectAssetBrowser({
       {/* Import result alert */}
       {importAlert && (
         <ConfirmDialog
-          title={importAlert.startsWith("Import failed") ? "Import Failed" : "Import Successful"}
+          title={
+            importAlert.startsWith("Import failed")
+              ? "Import Failed"
+              : "Import Successful"
+          }
           message={importAlert}
           confirmLabel="OK"
           onConfirm={() => setImportAlert(null)}

@@ -59,7 +59,9 @@ pub enum FieldType {
     /// Serializes as a plain string (the type_id).
     ComponentRef(String),
     /// Bounded string-enum; only values in `variants` are accepted.
-    Enum { variants: Vec<String> },
+    Enum {
+        variants: Vec<String>,
+    },
 }
 
 /// Constraint on a field value.
@@ -145,7 +147,7 @@ impl Default for ComponentSchema {
             fields: Vec::new(),
             exports_to_bevy: true,
             source_location: None,
-            kind: SchemaKind::default(),     // Simple
+            kind: SchemaKind::default(), // Simple
             bound_scene_asset_ref: None,
             auto_spawn: default_auto_spawn(), // true
         }
@@ -204,19 +206,117 @@ impl ComponentSchemaRegistry {
         let mut registry = Self::new();
 
         // editor.Name
-        registry.insert(ComponentSchema {            type_id: "editor.Name".to_string(),            display_name: "Name".to_string(),            fields: vec![FieldDef {                name: "name".to_string(),                field_type: FieldType::String,                default: serde_json::json!(""),                constraints: vec![],            }],            exports_to_bevy: true,            source_location: None,            kind: SchemaKind::Simple,            bound_scene_asset_ref: None,            auto_spawn: true,        })?;
+        registry.insert(ComponentSchema {
+            type_id: "editor.Name".to_string(),
+            display_name: "Name".to_string(),
+            fields: vec![FieldDef {
+                name: "name".to_string(),
+                field_type: FieldType::String,
+                default: serde_json::json!(""),
+                constraints: vec![],
+            }],
+            exports_to_bevy: true,
+            source_location: None,
+            kind: SchemaKind::Simple,
+            bound_scene_asset_ref: None,
+            auto_spawn: true,
+        })?;
 
         // editor.Transform2D
-        registry.insert(ComponentSchema {            type_id: "editor.Transform2D".to_string(),            display_name: "Transform 2D".to_string(),            fields: vec![                FieldDef {                    name: "translation".to_string(),                    field_type: FieldType::Vec2,                    default: serde_json::json!({"x": 0.0, "y": 0.0}),                    constraints: vec![],                },                FieldDef {                    name: "rotation".to_string(),                    field_type: FieldType::F32,                    default: serde_json::json!(0.0),                    constraints: vec![],                },                FieldDef {                    name: "scale".to_string(),                    field_type: FieldType::Vec2,                    default: serde_json::json!({"x": 1.0, "y": 1.0}),                    constraints: vec![],                },            ],            exports_to_bevy: true,            source_location: None,            kind: SchemaKind::Simple,            bound_scene_asset_ref: None,            auto_spawn: true,        })?;
+        registry.insert(ComponentSchema {
+            type_id: "editor.Transform2D".to_string(),
+            display_name: "Transform 2D".to_string(),
+            fields: vec![
+                FieldDef {
+                    name: "translation".to_string(),
+                    field_type: FieldType::Vec2,
+                    default: serde_json::json!({"x": 0.0, "y": 0.0}),
+                    constraints: vec![],
+                },
+                FieldDef {
+                    name: "rotation".to_string(),
+                    field_type: FieldType::F32,
+                    default: serde_json::json!(0.0),
+                    constraints: vec![],
+                },
+                FieldDef {
+                    name: "scale".to_string(),
+                    field_type: FieldType::Vec2,
+                    default: serde_json::json!({"x": 1.0, "y": 1.0}),
+                    constraints: vec![],
+                },
+            ],
+            exports_to_bevy: true,
+            source_location: None,
+            kind: SchemaKind::Simple,
+            bound_scene_asset_ref: None,
+            auto_spawn: true,
+        })?;
 
         // editor.Sprite2D
-        registry.insert(ComponentSchema {            type_id: "editor.Sprite2D".to_string(),            display_name: "Sprite 2D".to_string(),            fields: vec![                FieldDef {                    name: "asset".to_string(),                    field_type: FieldType::AssetReference,                    default: serde_json::json!(""),                    constraints: vec![],                },                FieldDef {                    name: "color".to_string(),                    field_type: FieldType::Color,                    default: serde_json::json!({"r": 1.0, "g": 1.0, "b": 1.0, "a": 1.0}),                    constraints: vec![],                },                FieldDef {                    name: "anchor".to_string(),                    field_type: FieldType::Anchor,                    default: serde_json::json!("Center"),                    constraints: vec![],                },            ],            exports_to_bevy: true,            source_location: None,            kind: SchemaKind::Simple,            bound_scene_asset_ref: None,            auto_spawn: true,        })?;
+        registry.insert(ComponentSchema {
+            type_id: "editor.Sprite2D".to_string(),
+            display_name: "Sprite 2D".to_string(),
+            fields: vec![
+                FieldDef {
+                    name: "asset".to_string(),
+                    field_type: FieldType::AssetReference,
+                    default: serde_json::json!(""),
+                    constraints: vec![],
+                },
+                FieldDef {
+                    name: "color".to_string(),
+                    field_type: FieldType::Color,
+                    default: serde_json::json!({"r": 1.0, "g": 1.0, "b": 1.0, "a": 1.0}),
+                    constraints: vec![],
+                },
+                FieldDef {
+                    name: "anchor".to_string(),
+                    field_type: FieldType::Anchor,
+                    default: serde_json::json!("Center"),
+                    constraints: vec![],
+                },
+            ],
+            exports_to_bevy: true,
+            source_location: None,
+            kind: SchemaKind::Simple,
+            bound_scene_asset_ref: None,
+            auto_spawn: true,
+        })?;
 
         // editor.Visible
-        registry.insert(ComponentSchema {            type_id: "editor.Visible".to_string(),            display_name: "Visible".to_string(),            fields: vec![FieldDef {                name: "visible".to_string(),                field_type: FieldType::Bool,                default: serde_json::json!(true),                constraints: vec![],            }],            exports_to_bevy: false,            source_location: None,            kind: SchemaKind::Simple,            bound_scene_asset_ref: None,            auto_spawn: true,        })?;
+        registry.insert(ComponentSchema {
+            type_id: "editor.Visible".to_string(),
+            display_name: "Visible".to_string(),
+            fields: vec![FieldDef {
+                name: "visible".to_string(),
+                field_type: FieldType::Bool,
+                default: serde_json::json!(true),
+                constraints: vec![],
+            }],
+            exports_to_bevy: false,
+            source_location: None,
+            kind: SchemaKind::Simple,
+            bound_scene_asset_ref: None,
+            auto_spawn: true,
+        })?;
 
         // editor.Locked
-        registry.insert(ComponentSchema {            type_id: "editor.Locked".to_string(),            display_name: "Locked".to_string(),            fields: vec![FieldDef {                name: "locked".to_string(),                field_type: FieldType::Bool,                default: serde_json::json!(false),                constraints: vec![],            }],            exports_to_bevy: false,            source_location: None,            kind: SchemaKind::Simple,            bound_scene_asset_ref: None,            auto_spawn: true,        })?;
+        registry.insert(ComponentSchema {
+            type_id: "editor.Locked".to_string(),
+            display_name: "Locked".to_string(),
+            fields: vec![FieldDef {
+                name: "locked".to_string(),
+                field_type: FieldType::Bool,
+                default: serde_json::json!(false),
+                constraints: vec![],
+            }],
+            exports_to_bevy: false,
+            source_location: None,
+            kind: SchemaKind::Simple,
+            bound_scene_asset_ref: None,
+            auto_spawn: true,
+        })?;
 
         // editor.LogicBinding — binds a Scene Instance to a LogicGraphAsset
         registry.insert(ComponentSchema {
@@ -436,15 +536,24 @@ mod tests {
     fn test_logic_binding_schema_in_global_registry() {
         let registry = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
         let schema = registry.get("editor.LogicBinding");
-        assert!(schema.is_some(), "editor.LogicBinding should be in global registry");
+        assert!(
+            schema.is_some(),
+            "editor.LogicBinding should be in global registry"
+        );
         let schema = schema.unwrap();
         assert_eq!(schema.type_id, "editor.LogicBinding");
         assert_eq!(schema.display_name, "Logic Binding");
 
         // Check fields: asset_id (AssetReference) and version (F32)
         let field_names: Vec<&str> = schema.fields.iter().map(|f| f.name.as_str()).collect();
-        assert!(field_names.contains(&"asset_id"), "should have asset_id field");
-        assert!(field_names.contains(&"version"), "should have version field");
+        assert!(
+            field_names.contains(&"asset_id"),
+            "should have asset_id field"
+        );
+        assert!(
+            field_names.contains(&"version"),
+            "should have version field"
+        );
 
         let asset_id_field = schema.fields.iter().find(|f| f.name == "asset_id").unwrap();
         assert_eq!(asset_id_field.field_type, FieldType::AssetReference);
@@ -457,7 +566,10 @@ mod tests {
     fn test_logic_binding_schema_in_combined_registry() {
         let combined = combined_registry();
         let schema = combined.get("editor.LogicBinding");
-        assert!(schema.is_some(), "editor.LogicBinding should be in combined registry");
+        assert!(
+            schema.is_some(),
+            "editor.LogicBinding should be in combined registry"
+        );
     }
 
     // §3.8: Global singleton
@@ -554,7 +666,10 @@ mod tests {
     #[test]
     fn test_unregister_schema_rejects_builtin() {
         let result = unregister_schema("editor.Transform2D");
-        assert!(matches!(result, Err(SchemaError::CannotUnregisterBuiltin(_))));
+        assert!(matches!(
+            result,
+            Err(SchemaError::CannotUnregisterBuiltin(_))
+        ));
     }
 
     #[test]
@@ -642,7 +757,10 @@ mod tests {
         let json = serde_json::to_string(&schema).unwrap();
         let roundtrip: ComponentSchema = serde_json::from_str(&json).unwrap();
         assert!(roundtrip.source_location.is_some());
-        assert_eq!(roundtrip.source_location.unwrap().file_id, "src/ecs/components.rs");
+        assert_eq!(
+            roundtrip.source_location.unwrap().file_id,
+            "src/ecs/components.rs"
+        );
     }
 
     #[test]
@@ -689,7 +807,9 @@ mod tests {
 
     #[test]
     fn test_field_type_enum_serializes_with_variants() {
-        let ft = FieldType::Enum { variants: vec!["red".to_string(), "green".to_string(), "blue".to_string()] };
+        let ft = FieldType::Enum {
+            variants: vec!["red".to_string(), "green".to_string(), "blue".to_string()],
+        };
         let json = serde_json::to_string(&ft).unwrap();
         let parsed: FieldType = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed, ft);
@@ -721,11 +841,14 @@ mod tests {
             exports_to_bevy: true,
             source_location: None,
             kind: SchemaKind::SceneComponent,
-            bound_scene_asset_ref: None,  // missing
+            bound_scene_asset_ref: None, // missing
             ..Default::default()
         };
         let result = registry.insert(schema);
-        assert!(matches!(result, Err(SchemaError::MissingBoundSceneAsset(_))));
+        assert!(matches!(
+            result,
+            Err(SchemaError::MissingBoundSceneAsset(_))
+        ));
     }
 
     #[test]

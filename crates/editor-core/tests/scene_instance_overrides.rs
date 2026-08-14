@@ -36,7 +36,8 @@ fn make_instance(
     id_map: BTreeMap<LocalId, StableId>,
     asset_version_seen: u32,
 ) -> SceneInstance {
-    SceneInstance {        instance_components: vec![],
+    SceneInstance {
+        instance_components: vec![],
 
         instance_id: StableId::new("inst_1"),
         asset_ref: AssetReference::new("assets/test"),
@@ -159,7 +160,10 @@ fn resync_preserves_override_on_rename() {
     assert_eq!(report.rebound, 0);
     assert_eq!(instance.asset_version_seen, 2);
     assert_eq!(instance.component_overrides.len(), 1);
-    assert_eq!(instance.component_overrides[0].status, ComponentOverrideStatus::Active);
+    assert_eq!(
+        instance.component_overrides[0].status,
+        ComponentOverrideStatus::Active
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -254,7 +258,10 @@ fn resync_marks_stale_on_field_rename() {
     assert_eq!(report.stale, 1);
     assert_eq!(report.active, 0);
     assert_eq!(instance.component_overrides.len(), 1);
-    assert_eq!(instance.component_overrides[0].status, ComponentOverrideStatus::Stale);
+    assert_eq!(
+        instance.component_overrides[0].status,
+        ComponentOverrideStatus::Stale
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -294,7 +301,10 @@ fn resync_marks_conflict_on_type_change() {
 
     assert_eq!(report.conflict, 1);
     assert_eq!(instance.component_overrides.len(), 1);
-    assert_eq!(instance.component_overrides[0].status, ComponentOverrideStatus::Conflict);
+    assert_eq!(
+        instance.component_overrides[0].status,
+        ComponentOverrideStatus::Conflict
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -345,8 +355,14 @@ fn resync_rebinds_via_local_path() {
 
     assert_eq!(report.rebound, 1);
     assert_eq!(instance.component_overrides.len(), 1);
-    assert_eq!(instance.component_overrides[0].status, ComponentOverrideStatus::Active);
-    assert_eq!(instance.component_overrides[0].target_local_id, LocalId::new("abc"));
+    assert_eq!(
+        instance.component_overrides[0].status,
+        ComponentOverrideStatus::Active
+    );
+    assert_eq!(
+        instance.component_overrides[0].target_local_id,
+        LocalId::new("abc")
+    );
 }
 
 // ---------------------------------------------------------------------------

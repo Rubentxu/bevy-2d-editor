@@ -71,7 +71,10 @@ export function useCodeFiles() {
       } else if (Array.isArray(raw)) {
         list = raw as SourceFile[];
       } else {
-        console.warn("useCodeFiles: refresh received unexpected shape:", typeof raw);
+        console.warn(
+          "useCodeFiles: refresh received unexpected shape:",
+          typeof raw,
+        );
         list = [];
       }
       setFiles(list);
