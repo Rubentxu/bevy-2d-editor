@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-07-27) — planning baseline for the AI-native editor program
+Accepted (2026-07-27) — planning baseline for the AI-native editor program; refined by [ADR-0043](./0043-agent-runtime-capability-boundary.md) (2026-08-14). Rig remains the selected orchestration implementation, behind capability/tool ports.
 
 ## Context
 

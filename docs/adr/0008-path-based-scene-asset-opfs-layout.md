@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-06-29)
+Accepted (2026-06-29) — amended by [ADR-0033](./0033-projectstore-port-opfs-filesystem.md) (2026-08-14). The OPFS path layout remains valid for the OPFS adapter but is no longer the only project persistence model.
 
 ## Context
 

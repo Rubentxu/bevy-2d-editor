@@ -423,13 +423,17 @@ into a **Cursor-like, agent-native editor for Bevy 2D games**.
 
 ### Planned sequence (after prerequisites)
 
-| Order | Change                            | Status        | Why                                                                                                                |
-| ----- | --------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------ |
-| 1     | `rig-agent-runtime-foundation`    | BLOCKED by P3 | Add transport-neutral `crates/agent-runtime` orchestration behind `ai-proxy` after the release-health gate passes. |
-| 2     | `semantic-project-retrieval`      | 🔲 Planned    | Full project-semantic context and retrieval over docs, schemas, assets, logic, code, and diagnostics               |
-| 3     | `agent-workbench`                 | 🔲 Planned    | Proposal/review/apply UX with typed diffs and validation-aware approval                                            |
-| 4     | `runtime-aware-agent-diagnostics` | 🔲 Planned    | Make agents useful for runtime/debugging flows, not just generation                                                |
-| 5     | `background-agent-automation`     | 🔲 Planned    | Durable low-risk maintenance/indexing/scaffolding jobs                                                             |
+> **Sequencing update (2026-08-14):** replaced by the Architecture & Product Evolution Pack master roadmap. The Rig work is not cancelled — it is deliberately placed after the architecture boundaries it must depend upon. See [MASTER_ROADMAP.md](./roadmaps/MASTER_ROADMAP.md) and [v0.87-architecture-foundation.md](./roadmaps/v0.87-architecture-foundation.md).
+
+| Order | Change | Status | Why |
+|-------|--------|--------|-----|
+| 1 | `v0.87-architecture-foundation` | ⏭️ Next | CI gates, `editor-model` extraction, `EditorSession`, `Clock`/`IdGenerator`, `ProjectStore`, Transaction Kernel v1, ChangeSet v1, typed backend foundation, fitness tests |
+| 2 | `v0.88-production-authoring` | 🔲 Planned | 2D direct manipulation toolkit, World Workspace v1, scope-of-change, filesystem project mode, recipes, hierarchy performance |
+| 3 | `v0.89-change-runtime-workbench` | 🔲 Planned | Change Workbench, semantic diffs, checkpoints, Runtime Causality Inspector, Runtime Apply-Back |
+| 4 | `v0.90-agent-runtime` | 🔲 Planned | `editor-protocol` tool contracts, `agent-runtime` crate (Rig behind capability ports), ChangeSet proposal generation, approval enforcement |
+| 5 | `v0.91-semantic-retrieval-agents` | 🔲 Planned | Semantic/typed retrieval, specialists, post-apply verification, bounded background maintenance |
+| 6 | `v0.92-ecosystem-sdk-importers` | 🔲 Planned | Editor Extension SDK, Aseprite/LDtk/Tiled import+reimport, capability permissions |
+| 7 | `v1.0-stabilization` | 🔲 Planned | Full small-game authoring pass, crash/recovery, performance corpus, a11y, compatibility policy |
 
 ### Normative references
 
@@ -442,6 +446,8 @@ into a **Cursor-like, agent-native editor for Bevy 2D games**.
 - [UI Workflow Overhaul — Durable Product Spec](./specs/ui-workflow-overhaul.md)
 - [UI Workflow Overhaul Roadmap](./roadmaps/ui-workflow-overhaul-roadmap.md)
 - [AI-Native Editor Roadmap](./roadmaps/ai-native-editor-roadmap.md)
+- [Master Roadmap — Bevy 2D Workbench (v0.87 → v1.0)](./roadmaps/MASTER_ROADMAP.md)
+- [Architecture & Product Evolution Pack — executive summary](./architecture/00-executive-summary.md)
 
 ---
 
@@ -628,6 +634,23 @@ All Hito 1 items completed in v0.12-v0.20. Deferred items:
 | ADR-0027 | Rig-Based Agent Runtime for the AI-Native Bevy 2D Editor — manager/worker composition, transport-neutrality, proposal-first workflows                                                  | Accepted (planning baseline) |
 | ADR-0028 | Workflow-First UI Convergence Before Agentic AI — editor-shell-integrity → workflow-surface-convergence → ui-workflow-overhaul sequencing                                              | ✅ (v0.86.0 prerequisite)    |
 | ADR-0029 | Frontend Performance Budget Contract — three-budget gate (initialJs 380 KB, totalJs 800 KB, wasm 20 MB) enforced by `frontend/scripts/check-bundle-size.mjs`                           | ✅ (v0.86.1)                 |
+| ADR-0030 | Compile-Time Hexagonal Crate Boundaries — `editor-model` / `editor-application` / `editor-bevy` / adapters | Accepted (2026-08-14) |
+| ADR-0031 | Explicit EditorSession Replaces Domain-Level Global State | Accepted (2026-08-14) |
+| ADR-0032 | Shared Transaction Kernel and ChangeSet, with Domain-Specific Commands | Accepted (2026-08-14) |
+| ADR-0033 | ProjectStore Port with OPFS and Filesystem Adapters | Accepted (2026-08-14) |
+| ADR-0034 | Typed EditorBackend Contract Replaces Global Window Bridge | Accepted (2026-08-14) |
+| ADR-0035 | Clock and IdGenerator Are Explicit Application Ports | Accepted (2026-08-14) |
+| ADR-0036 | Bevy Runtime Preview Is an Ephemeral Projection Adapter | Accepted (2026-08-14) |
+| ADR-0037 | World Workspace Is a First-Class Product Context | Accepted (2026-08-14) |
+| ADR-0038 | Workflow and Gameplay Recipes Compile Intent into Typed Changes | Accepted (2026-08-14) |
+| ADR-0039 | Change Workbench Is the Unified Review and Approval Surface | Accepted (2026-08-14) |
+| ADR-0040 | Editor Extension SDK Is Capability-First and Transactional | Accepted (2026-08-14) |
+| ADR-0041 | External Authoring Sources Use Provenance-Aware Import/Reimport Pipelines | Accepted (2026-08-14) |
+| ADR-0042 | Runtime Apply-Back Is Explicit, Scoped and Authorable-Field Only | Accepted (2026-08-14) |
+| ADR-0043 | Agent Runtime Uses Replaceable Orchestration Behind Typed Editor Capabilities | Accepted (2026-08-14) |
+| ADR-0044 | CI and Architecture Fitness Gates Are Release-Critical | Accepted (2026-08-14) |
+| ADR-0045 | Project Format Is Git-Friendly, Deterministic and Explicitly Migrated | Accepted (2026-08-14) |
+| ADR-0046 | Semantic Editor Model Is the Authoritative Source of Truth | Accepted (2026-08-14) |
 
 ---
 
@@ -652,7 +675,7 @@ All Hito 1 items completed in v0.12-v0.20. Deferred items:
 
 See [`CONTEXT.md`](../CONTEXT.md) for authoritative domain language.
 
-Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level Scene Asset**, **Level Layer**, **Scene Instance Layer**, **Scene Instance**, **Scene Asset Catalog**, **Project Asset Browser**, **Scene Asset Authoring Mode**, **Override / Resync Workbench**, **Validation Center**, **Runtime Preview Inspector**, **Component Schema Registry**, **Component Instance**, **Component Override**, **Operation Log**, **BsnIr**, **BSN Export**.
+Key terms: **SceneDocument**, **StableId**, **Entity**, **Scene Asset**, **Level Scene Asset**, **Level Layer**, **Scene Instance Layer**, **Scene Instance**, **Scene Asset Catalog**, **Project Asset Browser**, **Scene Asset Authoring Mode**, **Override / Resync Workbench**, **Validation Center**, **Runtime Preview Inspector**, **Component Schema Registry**, **Component Instance**, **Component Override**, **Operation Log**, **BsnIr**, **BSN Export**. Evolution-pack terms: **Semantic Editor Model**, **EditorSession**, **Transaction Kernel**, **ChangeSet**, **Change Workbench**, **Editor Capability**, **World Workspace**, **Recipe**, **External Source**, **Runtime Delta**, **Scope of Change**, **Editor Extension** — see `CONTEXT.md`.
 
 ---
 
@@ -668,3 +691,7 @@ release-health gate (`docs/specs/application-stabilization-and-roadmap-convergen
 the three-budget performance contract (`ADR-0029`), the unified editor
 readiness signal, and the documentation hierarchy contract
 (`docs/specs/documentation-hierarchy-and-drift-detection.md`).
+
+---
+
+_Architecture & Product Evolution Pack adopted (2026-08-14, docs-only, ADR-0030 → ADR-0046). The v0.87 Architecture Foundation gate now precedes the Hito 8 program; see `docs/roadmaps/MASTER_ROADMAP.md`. Rig-based agent work (ADR-0027) resumes at v0.90 behind typed capability ports._

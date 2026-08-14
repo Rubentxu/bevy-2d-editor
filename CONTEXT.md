@@ -237,3 +237,41 @@ _Avoid_: "command palette" (those are two separate surfaces), "find", "spotlight
 **Drag-and-Dock**:
 The HTML5-draggable interaction pattern shipped in v0.81.0 and extended in v0.82.0 (ADR-0024, P1). Dock headers carry `draggable="true"` + a DOM `data-panel-id` (kept stable for layout selectors — values like `left-assets`, `right-outline`, `right-properties`, `bottom`, `center`); the dataTransfer payload at the `application/x-dock-panel` MIME is the **canonical bare panel id** (`assets`, `outline`, `properties`, `bottom`) — never regionalised and never tabbed. v0.82.0 wires the region-swap command: pointer drops on `DockLayout` region containers and the keyboard `Move →` menu on every dock header both funnel through `useDockResize.movePanel`, which atomically swaps panels on collision and persists `panelRegions` to `dock-prefs.json` (`schemaVersion: 2`). The visual drop indicator is `.dock-layout-region--drop-active`; the center region is protected (`data-drop-allowed="false"`). Drop is a no-op on the same source region. The bottom dock is treated as a single swap unit; finer-grained per-tab moves are deferred.
 _Avoid_: "panel drag", "dock drag", "undock drag"
+
+## Architecture Evolution Additions (v0.87 planning, 2026-08-14)
+
+**Semantic Editor Model**:
+The representation-independent editor-owned domain state. JSON, BSN and Bevy runtime scenes are representations/projections, not the authority (ADR-0046).
+
+**EditorSession**:
+Explicit application-level owner of mutable project/editing state for one active editor session. Replaces scattered implicit global stores (ADR-0031).
+
+**Transaction Kernel**:
+Shared application infrastructure for validation, batches, inverse/rollback, history, effects and ChangeSet application. It does not erase domain-specific command types (ADR-0032).
+
+**ChangeSet**:
+A reviewable group of typed semantic operations with origin, actor, rationale, affected resources, validation, semantic diff, runtime/build effects and approval policy.
+
+**Change Workbench**:
+Unified review/apply/rollback surface for non-trivial ChangeSets from humans, recipes, agents, imports, migrations, plugins and runtime apply-back (ADR-0039).
+
+**Editor Capability**:
+A stable user/tool action exposed by the application layer, such as `PlaceSceneInstance`, `ExtractSelectionAsSceneAsset` or `ReimportExternalSource`. Capabilities can coordinate multiple bounded contexts.
+
+**World Workspace**:
+Spatial/topological authoring surface for arranging and connecting existing Level Scene Assets. It does not replace level content documents (ADR-0037).
+
+**Recipe**:
+Versioned authoring-time workflow that converts intent and parameters into a validated ChangeSet. Distinct from runtime Logic Bricks (ADR-0038).
+
+**External Source**:
+Provenance record linking externally authored data (Aseprite/LDtk/Tiled, etc.) to editor resources for semantic reimport and conflict handling (ADR-0041).
+
+**Runtime Delta**:
+An observed play-mode difference between authoring baseline and runtime value. It is transient until selected through Runtime Apply-Back (ADR-0042).
+
+**Scope of Change**:
+Explicit target level for a semantic edit: instance, selected instances, definition, component default or supported source definition.
+
+**Editor Extension**:
+A capability-limited contribution to actions, validators, recipes, importers, inspectors, panels or diagnostics. Extensions do not receive unrestricted mutable EditorSession access (ADR-0040).
