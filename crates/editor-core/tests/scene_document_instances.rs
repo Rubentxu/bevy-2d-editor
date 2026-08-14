@@ -5,10 +5,10 @@
 //! S14: Authored entities do NOT have an `instance_id` field.
 
 use editor_core::{
-    SceneDocument,
+    SceneDocument, StableId,
+    document::LocalId as DocumentLocalId,
     scene_asset::{AssetReference, LocalId, SceneAssetDocument, SceneAssetEntity, SceneAssetRole},
     scene_instance::SceneInstance,
-    StableId,
 };
 use std::collections::BTreeMap;
 
@@ -51,7 +51,8 @@ fn s7_instances_field_absent_then_present_roundtrip() {
     id_map.insert(LocalId("root".into()), StableId::new("ent_001"));
     instances.insert(
         StableId::new("inst_001"),
-        SceneInstance {            instance_components: vec![],
+        SceneInstance {
+            instance_components: vec![],
 
             instance_id: StableId::new("inst_001"),
             asset_ref: AssetReference("assets/player.bsn".into()),
@@ -93,13 +94,15 @@ fn s13_entities_array_shape_unchanged_when_instances_present() {
         name: "Test Scene".to_string(),
         entities: vec![editor_core::Entity {
             id: StableId::new("ent_001"),
+            local_id: DocumentLocalId::new("ent_001"),
             name: "Player".to_string(),
             parent: None,
             components: vec![],
         }],
         instances: BTreeMap::from([(
             StableId::new("inst_001"),
-            SceneInstance {                instance_components: vec![],
+            SceneInstance {
+                instance_components: vec![],
 
                 instance_id: StableId::new("inst_001"),
                 asset_ref: AssetReference("assets/player.bsn".into()),
@@ -137,6 +140,7 @@ fn s14_authored_entities_do_not_have_instance_id() {
         name: "Test Scene".to_string(),
         entities: vec![editor_core::Entity {
             id: StableId::new("ent_001"),
+            local_id: DocumentLocalId::new("ent_001"),
             name: "Player".to_string(),
             parent: None,
             components: vec![],
@@ -175,7 +179,8 @@ fn s6_instances_with_id_map_3_entries_byte_equal_roundtrip() {
         entities: vec![],
         instances: BTreeMap::from([(
             StableId::new("inst_001"),
-            SceneInstance {                instance_components: vec![],
+            SceneInstance {
+                instance_components: vec![],
 
                 instance_id: StableId::new("inst_001"),
                 asset_ref: AssetReference("assets/player.bsn".into()),

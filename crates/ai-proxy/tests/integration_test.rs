@@ -1,19 +1,16 @@
 //! Integration tests for the AI proxy handlers using tower::oneshot.
 
-use axum::{
-    body::Body,
-    Router,
-};
+use axum::{body::Body, Router};
 use http_body_util::BodyExt;
 use serde_json::json;
 use std::sync::Arc;
 use tower::ServiceExt;
 
-use ai_proxy::context::SchemaFetcher;
 use ai_proxy::context::sources::{
     CatalogEntry, ComponentRef, LogicGraphRef, NodeRef, SceneAssetContext, SelectedEntity,
     SourceFileRef,
 };
+use ai_proxy::context::SchemaFetcher;
 use ai_proxy::handlers::propose::{AppState, ProposeRequest};
 use ai_proxy::openai::OpenAIClient;
 
@@ -89,8 +86,7 @@ fn test_scene_truncation_large_scene() {
     ]"#;
 
     let threshold = 5_000;
-    let (result, truncated, tokens) =
-        truncate_scene_if_over_budget("", schemas, &scene, threshold);
+    let (result, truncated, tokens) = truncate_scene_if_over_budget("", schemas, &scene, threshold);
 
     assert!(truncated, "Scene should be truncated when over budget");
     assert!(
@@ -111,8 +107,7 @@ fn test_scene_not_truncated_small_scene() {
 
     let scene = r#"{"entities": []}"#;
 
-    let (result, truncated, tokens) =
-        truncate_scene_if_over_budget("", "", scene, 10_000);
+    let (result, truncated, tokens) = truncate_scene_if_over_budget("", "", scene, 10_000);
 
     assert!(!truncated);
     assert_eq!(result, scene);

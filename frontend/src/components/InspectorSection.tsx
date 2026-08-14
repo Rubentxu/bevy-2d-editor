@@ -68,13 +68,19 @@ export default function InspectorSection({
         </span>
         <span className="inspector-section-title">{title}</span>
         {badge !== undefined && badge !== null && badge !== "" && (
-          <span className="inspector-section-badge" data-testid={`section-badge-${id}`}>
+          <span
+            className="inspector-section-badge"
+            data-testid={`section-badge-${id}`}
+          >
             {badge}
           </span>
         )}
       </header>
       {!collapsed && (
-        <div className="inspector-section-body" data-testid={`inspector-section-body-${id}`}>
+        <div
+          className="inspector-section-body"
+          data-testid={`inspector-section-body-${id}`}
+        >
           {children}
         </div>
       )}

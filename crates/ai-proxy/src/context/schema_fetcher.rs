@@ -97,7 +97,14 @@ mod tests {
             }
         ]);
         assert!(SchemaFetcher::fetch(schemas.clone()).is_ok());
-        assert_eq!(SchemaFetcher::fetch(schemas).unwrap().as_array().unwrap().len(), 1);
+        assert_eq!(
+            SchemaFetcher::fetch(schemas)
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     #[test]
@@ -119,6 +126,9 @@ mod tests {
     fn test_not_an_array() {
         let schemas = serde_json::json!({"type_id": "editor.Transform2D"});
         let result = SchemaFetcher::fetch(schemas);
-        assert!(matches!(result.unwrap_err(), SchemaValidationError::NotAnArray));
+        assert!(matches!(
+            result.unwrap_err(),
+            SchemaValidationError::NotAnArray
+        ));
     }
 }

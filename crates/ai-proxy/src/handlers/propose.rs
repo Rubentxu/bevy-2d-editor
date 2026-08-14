@@ -1,18 +1,12 @@
 //! `POST /v1/propose` handler.
 
-use axum::{
-    extract::State,
-    http::StatusCode,
-    Json,
-};
+use axum::{extract::State, http::StatusCode, Json};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 use tracing::{info, warn};
 
-use crate::context::sources::{
-    LogicGraphRef, SceneAssetContext, SelectedEntity, SourceFileRef,
-};
+use crate::context::sources::{LogicGraphRef, SceneAssetContext, SelectedEntity, SourceFileRef};
 use crate::context::{ContextBuilder, SchemaFetcher};
 use crate::error::AppError;
 use crate::openai::filter_forbidden_commands;
@@ -60,7 +54,9 @@ impl ProposeRequest {
     /// Validate required fields.
     pub fn validate(&self) -> Result<(), AppError> {
         if self.prompt.is_none() {
-            return Err(AppError::BadRequest("missing required field: 'prompt'".to_string()));
+            return Err(AppError::BadRequest(
+                "missing required field: 'prompt'".to_string(),
+            ));
         }
         if self.scene_snapshot.is_none() {
             return Err(AppError::BadRequest(
@@ -85,8 +81,7 @@ impl ProposeRequest {
         if let Some(sel) = &self.selected_entity {
             if sel.stable_id.is_empty() {
                 return Err(AppError::BadRequest(
-                    "selected_entity: 'stable_id' is required and must be non-empty"
-                        .to_string(),
+                    "selected_entity: 'stable_id' is required and must be non-empty".to_string(),
                 ));
             }
         }
@@ -167,7 +162,10 @@ pub async fn propose_handler(
         );
     }
 
-    let commands: Vec<Value> = envelopes.into_iter().map(|e| serde_json::to_value(e).unwrap()).collect();
+    let commands: Vec<Value> = envelopes
+        .into_iter()
+        .map(|e| serde_json::to_value(e).unwrap())
+        .collect();
 
     // Collect rationale from first command's metadata (all have same rationale)
     let rationale = commands
@@ -265,8 +263,12 @@ mod tests {
     use super::*;
     use crate::context::sources::SourceFileRef;
 
-    fn empty_sources() -> Vec<SourceFileRef> { vec![] }
-    fn empty_graphs() -> Vec<crate::context::sources::LogicGraphRef> { vec![] }
+    fn empty_sources() -> Vec<SourceFileRef> {
+        vec![]
+    }
+    fn empty_graphs() -> Vec<crate::context::sources::LogicGraphRef> {
+        vec![]
+    }
     fn empty_assets() -> crate::context::sources::SceneAssetContext {
         crate::context::sources::SceneAssetContext::default()
     }

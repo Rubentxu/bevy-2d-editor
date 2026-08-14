@@ -419,14 +419,18 @@ mod tests {
     fn register_then_unregister_roundtrip() {
         let mut catalog = SceneAssetCatalog::new();
         let e = entry("id_x", "actors/player", SceneAssetRole::Actor);
-        catalog.register(e.clone()).expect("register should succeed");
+        catalog
+            .register(e.clone())
+            .expect("register should succeed");
 
         assert_eq!(catalog.get("id_x"), Some(&e));
         assert_eq!(catalog.resolve_path("actors/player"), Some("id_x"));
         assert_eq!(catalog.list_by_role(SceneAssetRole::Actor).len(), 1);
 
         // Rollback path used by WASM create/rename helpers on metadata failure
-        let removed = catalog.unregister("id_x").expect("unregister should succeed");
+        let removed = catalog
+            .unregister("id_x")
+            .expect("unregister should succeed");
         assert_eq!(removed.asset_id, "id_x");
 
         assert_eq!(catalog.get("id_x"), None);
@@ -449,8 +453,7 @@ mod tests {
         let entry = catalog.get("id_x").expect("entry should be present");
         assert_eq!(entry.preview_resource, None);
 
-        let reserialized =
-            serde_json::to_string(&catalog).expect("re-serialize");
+        let reserialized = serde_json::to_string(&catalog).expect("re-serialize");
         assert!(
             !reserialized.contains("preview_resource"),
             "preview_resource must be skipped when None: {}",
@@ -465,15 +468,19 @@ mod tests {
         let mut catalog = SceneAssetCatalog::new();
         let mut e = entry("id_x", "actors/player", SceneAssetRole::Actor);
         e.preview_resource = Some("textures/player.png".to_string());
-        catalog.register(e.clone()).expect("register should succeed");
+        catalog
+            .register(e.clone())
+            .expect("register should succeed");
 
         let json = serde_json::to_string(&catalog).expect("serialize");
         assert!(json.contains("preview_resource"));
 
-        let reparsed: SceneAssetCatalog =
-            serde_json::from_str(&json).expect("deserialize");
+        let reparsed: SceneAssetCatalog = serde_json::from_str(&json).expect("deserialize");
         let entry = reparsed.get("id_x").expect("entry present");
-        assert_eq!(entry.preview_resource.as_deref(), Some("textures/player.png"));
+        assert_eq!(
+            entry.preview_resource.as_deref(),
+            Some("textures/player.png")
+        );
     }
 
     /// ADR-0026 S1.2: an entry registered without setting

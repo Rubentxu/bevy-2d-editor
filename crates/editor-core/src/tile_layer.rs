@@ -110,7 +110,7 @@ fn default_grid_height() -> u32 {
 }
 
 /// Re-export TileGrid from tileset module for convenience.
-pub use super::tileset::TileGrid as TileGrid;
+pub use super::tileset::TileGrid;
 
 impl TileLayer {
     /// Create a new TileLayer with an empty grid, default order (0), and generation (0).
@@ -291,15 +291,24 @@ mod tests {
         // Paint only 3 tiles in a large grid
         layer.paint_tile(
             TileCoord::new(0, 0),
-            TileRef { tileset_id: "ts_grass".to_string(), local_index: 0 },
+            TileRef {
+                tileset_id: "ts_grass".to_string(),
+                local_index: 0,
+            },
         );
         layer.paint_tile(
             TileCoord::new(100, 200),
-            TileRef { tileset_id: "ts_grass".to_string(), local_index: 1 },
+            TileRef {
+                tileset_id: "ts_grass".to_string(),
+                local_index: 1,
+            },
         );
         layer.paint_tile(
             TileCoord::new(-50, -30),
-            TileRef { tileset_id: "ts_grass".to_string(), local_index: 2 },
+            TileRef {
+                tileset_id: "ts_grass".to_string(),
+                local_index: 2,
+            },
         );
 
         // Layer reports 3 tiles
@@ -401,7 +410,10 @@ mod tests {
         layer.order = 1;
         layer.paint_tile(
             TileCoord::new(5, 10),
-            TileRef { tileset_id: "ts_grass".to_string(), local_index: 7 },
+            TileRef {
+                tileset_id: "ts_grass".to_string(),
+                local_index: 7,
+            },
         );
 
         let json = serde_json::to_string(&layer).unwrap();
@@ -456,14 +468,20 @@ mod tests {
 
         layer.paint_tile(
             TileCoord::new(0, 0),
-            TileRef { tileset_id: "ts_test".to_string(), local_index: 0 },
+            TileRef {
+                tileset_id: "ts_test".to_string(),
+                local_index: 0,
+            },
         );
         assert_eq!(layer.generation, 1);
 
         // Paint again at same coord — still bumps
         layer.paint_tile(
             TileCoord::new(0, 0),
-            TileRef { tileset_id: "ts_test".to_string(), local_index: 1 },
+            TileRef {
+                tileset_id: "ts_test".to_string(),
+                local_index: 1,
+            },
         );
         assert_eq!(layer.generation, 2);
     }
@@ -478,7 +496,10 @@ mod tests {
         );
         layer.paint_tile(
             TileCoord::new(5, 5),
-            TileRef { tileset_id: "ts_test".to_string(), local_index: 0 },
+            TileRef {
+                tileset_id: "ts_test".to_string(),
+                local_index: 0,
+            },
         );
         assert_eq!(layer.generation, 1);
 

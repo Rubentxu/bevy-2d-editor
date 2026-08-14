@@ -62,7 +62,9 @@ export function useGlobalSearch() {
   const [results, setResults] = useState<GlobalSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   /** Consumer-supplied command results (e.g. from CommandPalette history). */
-  const [commandResults, setCommandResults] = useState<GlobalSearchResult[]>([]);
+  const [commandResults, setCommandResults] = useState<GlobalSearchResult[]>(
+    [],
+  );
 
   // Mirror the polled collections into a ref so `search` can read the
   // latest snapshot without depending on them in its useCallback dep array
@@ -168,7 +170,9 @@ export function useGlobalSearch() {
         }
 
         // Merge command results (already filtered by query via SearchTab)
-        out.push(...commandResults.filter((r) => r.label.toLowerCase().includes(q)));
+        out.push(
+          ...commandResults.filter((r) => r.label.toLowerCase().includes(q)),
+        );
 
         // Sort: prefix matches before substring; then alphabetically.
         out.sort((a, b) => {
@@ -244,9 +248,7 @@ interface LogicGraphCatalogEntry {
   builtin: boolean;
 }
 
-async function searchLogicGraphs(
-  query: string,
-): Promise<GlobalSearchResult[]> {
+async function searchLogicGraphs(query: string): Promise<GlobalSearchResult[]> {
   if (typeof window === "undefined") return [];
   const fn = (window as any).list_logic_graph_assets;
   if (typeof fn !== "function") return [];

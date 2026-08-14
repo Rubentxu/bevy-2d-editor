@@ -120,8 +120,7 @@ impl OperationLog {
         }
         self.cursor += 1;
         let entry = &self.entries[self.cursor as usize];
-        processor::apply(doc, &entry.forward)
-            .map_err(|e| OperationLogError::CommandFailed(e))?;
+        processor::apply(doc, &entry.forward).map_err(|e| OperationLogError::CommandFailed(e))?;
         Ok(doc.clone())
     }
 
@@ -182,7 +181,7 @@ pub enum OperationLogError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command::{CommandMetadata, CommandEnvelope};
+    use crate::command::{CommandEnvelope, CommandMetadata};
     use crate::document::{ComponentInstance, Entity, LocalId, StableId};
     use serde_json::json;
     use std::collections::BTreeMap;
@@ -679,10 +678,16 @@ mod tests {
         });
 
         log.undo(&mut doc).unwrap();
-        assert_eq!(doc.entities[0].components[0].values["translation"]["x"], json!(0.0));
+        assert_eq!(
+            doc.entities[0].components[0].values["translation"]["x"],
+            json!(0.0)
+        );
 
         log.redo(&mut doc).unwrap();
-        assert_eq!(doc.entities[0].components[0].values["translation"]["x"], json!(999.0));
+        assert_eq!(
+            doc.entities[0].components[0].values["translation"]["x"],
+            json!(999.0)
+        );
     }
 
     // ===== empty log edge cases =====

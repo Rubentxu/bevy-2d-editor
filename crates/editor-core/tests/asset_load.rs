@@ -47,11 +47,15 @@ fn catalog_survives_across_register_and_lookup() {
 
     // First call: register a new asset
     let e1 = entry("id_1", "player", SceneAssetRole::Actor, 1);
-    catalog.register(e1.clone()).expect("register should succeed");
+    catalog
+        .register(e1.clone())
+        .expect("register should succeed");
 
     // Second call: register another asset
     let e2 = entry("id_2", "enemy", SceneAssetRole::Actor, 1);
-    catalog.register(e2.clone()).expect("register should succeed");
+    catalog
+        .register(e2.clone())
+        .expect("register should succeed");
 
     // Third call: list all — should show both
     let all = catalog.list_all();
@@ -97,7 +101,9 @@ fn catalog_unregister_and_reregister_preserves_other_entries() {
         .unwrap();
 
     // Unregister one
-    catalog.unregister("id_1").expect("unregister should succeed");
+    catalog
+        .unregister("id_1")
+        .expect("unregister should succeed");
 
     // Other entry still present
     assert!(catalog.get("id_1").is_none());
@@ -164,10 +170,7 @@ fn orphan_entry_is_kept_not_deleted() {
     // Registration succeeds — entry is kept in catalog
     assert!(result.is_ok());
     assert!(catalog.get("id_ghost").is_some());
-    assert_eq!(
-        catalog.resolve_path("deleted/player"),
-        Some("id_ghost")
-    );
+    assert_eq!(catalog.resolve_path("deleted/player"), Some("id_ghost"));
 
     // The orphan warning is EMITTED but the entry is NOT deleted
     // This matches spec S16: "the catalog still contains A (no silent delete)"
@@ -197,18 +200,9 @@ fn multiple_orphans_each_get_own_warning() {
 
     assert_eq!(warnings.len(), 3);
     assert!(warnings.iter().all(|w| w.code == "orphaned_index"));
-    assert_eq!(
-        warnings[0].asset_id.as_deref(),
-        Some("id_1")
-    );
-    assert_eq!(
-        warnings[1].asset_id.as_deref(),
-        Some("id_2")
-    );
-    assert_eq!(
-        warnings[2].asset_id.as_deref(),
-        Some("id_3")
-    );
+    assert_eq!(warnings[0].asset_id.as_deref(), Some("id_1"));
+    assert_eq!(warnings[1].asset_id.as_deref(), Some("id_2"));
+    assert_eq!(warnings[2].asset_id.as_deref(), Some("id_3"));
 }
 
 #[test]

@@ -3,8 +3,8 @@
 //! Pure-functions module for the override lifecycle contracted by
 //! ADR-0005 §Overrides and §Versioning and Resync.
 
-use std::collections::{BTreeMap, BTreeSet};
 use serde::Serialize;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::document::{ComponentInstance, StableId};
 use crate::scene_asset::{LocalId, SceneAssetDocument, SceneAssetEntity};
@@ -339,8 +339,7 @@ pub fn validate_overrides(
                     patch: patch.clone(),
                     message: format!(
                         "Field path {:?} does not resolve in component '{}'",
-                        &patch.field_path,
-                        type_id
+                        &patch.field_path, type_id
                     ),
                 });
             }
@@ -933,7 +932,10 @@ mod tests {
         assert_eq!(report.rebound, 0);
         assert_eq!(instance.asset_version_seen, 2);
         assert_eq!(instance.component_overrides.len(), 1);
-        assert_eq!(instance.component_overrides[0].status, ComponentOverrideStatus::Active);
+        assert_eq!(
+            instance.component_overrides[0].status,
+            ComponentOverrideStatus::Active
+        );
     }
 
     #[test]
@@ -991,7 +993,10 @@ mod tests {
         assert_eq!(report.stale, 1);
         assert_eq!(report.active, 0);
         assert_eq!(instance.component_overrides.len(), 1);
-        assert_eq!(instance.component_overrides[0].status, ComponentOverrideStatus::Stale);
+        assert_eq!(
+            instance.component_overrides[0].status,
+            ComponentOverrideStatus::Stale
+        );
     }
 
     #[test]
@@ -1018,7 +1023,10 @@ mod tests {
 
         assert_eq!(report.conflict, 1);
         assert_eq!(instance.component_overrides.len(), 1);
-        assert_eq!(instance.component_overrides[0].status, ComponentOverrideStatus::Conflict);
+        assert_eq!(
+            instance.component_overrides[0].status,
+            ComponentOverrideStatus::Conflict
+        );
     }
 
     #[test]
@@ -1054,8 +1062,14 @@ mod tests {
 
         assert_eq!(report.rebound, 1);
         assert_eq!(instance.component_overrides.len(), 1);
-        assert_eq!(instance.component_overrides[0].status, ComponentOverrideStatus::Active);
-        assert_eq!(instance.component_overrides[0].target_local_id, LocalId::new("abc"));
+        assert_eq!(
+            instance.component_overrides[0].status,
+            ComponentOverrideStatus::Active
+        );
+        assert_eq!(
+            instance.component_overrides[0].target_local_id,
+            LocalId::new("abc")
+        );
     }
 
     #[test]
@@ -1092,8 +1106,20 @@ mod tests {
     #[test]
     fn test_effective_values_no_overrides() {
         let asset = fixture_asset_with_entities_and_components(&[
-            ("a", "a", "A", "editor.Sprite2D", serde_json::json!({"asset": "a.png"})),
-            ("b", "b", "B", "editor.Sprite2D", serde_json::json!({"asset": "b.png"})),
+            (
+                "a",
+                "a",
+                "A",
+                "editor.Sprite2D",
+                serde_json::json!({"asset": "a.png"}),
+            ),
+            (
+                "b",
+                "b",
+                "B",
+                "editor.Sprite2D",
+                serde_json::json!({"asset": "b.png"}),
+            ),
         ]);
 
         let instance = fixture_instance();
@@ -1110,13 +1136,7 @@ mod tests {
 
     #[test]
     fn test_validate_overrides_missing_entity() {
-        let asset = fixture_asset_with_entity(
-            "root",
-            "root",
-            "Root",
-            "",
-            serde_json::Value::Null,
-        );
+        let asset = fixture_asset_with_entity("root", "root", "Root", "", serde_json::Value::Null);
 
         let instance = fixture_instance_with_override(
             "nonexistent",
@@ -1146,8 +1166,14 @@ mod tests {
         );
         upsert_override(&mut inst, patch);
         assert_eq!(inst.component_overrides.len(), 1);
-        assert_eq!(inst.component_overrides[0].status, ComponentOverrideStatus::Active);
-        assert_eq!(inst.component_overrides[0].value, serde_json::Value::String("cannon.png".to_string()));
+        assert_eq!(
+            inst.component_overrides[0].status,
+            ComponentOverrideStatus::Active
+        );
+        assert_eq!(
+            inst.component_overrides[0].value,
+            serde_json::Value::String("cannon.png".to_string())
+        );
     }
 
     // S11 — Upsert replaces a same-key override
@@ -1169,8 +1195,14 @@ mod tests {
         );
         upsert_override(&mut inst, patch);
         assert_eq!(inst.component_overrides.len(), 1);
-        assert_eq!(inst.component_overrides[0].value, serde_json::Value::String("enemy.png".to_string()));
-        assert_eq!(inst.component_overrides[0].status, ComponentOverrideStatus::Active);
+        assert_eq!(
+            inst.component_overrides[0].value,
+            serde_json::Value::String("enemy.png".to_string())
+        );
+        assert_eq!(
+            inst.component_overrides[0].status,
+            ComponentOverrideStatus::Active
+        );
     }
 
     // S12 — Remove returns the captured patch
@@ -1191,7 +1223,10 @@ mod tests {
         );
         assert!(result.is_some());
         let removed = result.unwrap();
-        assert_eq!(removed.value, serde_json::Value::String("cannon.png".to_string()));
+        assert_eq!(
+            removed.value,
+            serde_json::Value::String("cannon.png".to_string())
+        );
         assert!(inst.component_overrides.is_empty());
     }
 

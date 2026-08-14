@@ -4,7 +4,7 @@ import {
   type GlobalSearchResult,
 } from "../hooks/useGlobalSearch";
 import SearchResultRow from "./SearchResultRow";
-import type { NavigationTarget } from "./CodeEditor";
+import type { NavigationTarget } from "../types/navigation";
 import { sceneSwitch } from "../services/scenes";
 
 const DEBOUNCE_MS = 150;
@@ -39,7 +39,12 @@ export default function SearchTab({ onSourceNavigate }: SearchTabProps) {
   useEffect(() => {
     const items = (window as any).__getCommandPaletteItems?.() ?? [];
     const commandResults: GlobalSearchResult[] = items.map(
-      (item: { id: string; label: string; shortcut?: string; group: string }) => ({
+      (item: {
+        id: string;
+        label: string;
+        shortcut?: string;
+        group: string;
+      }) => ({
         type: "command" as const,
         id: item.id,
         label: item.label,
@@ -178,7 +183,8 @@ export default function SearchTab({ onSourceNavigate }: SearchTabProps) {
         </p>
       ) : query.length === 0 ? (
         <p className="bottom-dock-empty" data-testid="global-search-helper">
-          Type to search scenes, scene assets, source files, asset files, entities, and commands.
+          Type to search scenes, scene assets, source files, asset files,
+          entities, and commands.
         </p>
       ) : results.length === 0 ? (
         <p className="bottom-dock-empty" data-testid="global-search-empty">

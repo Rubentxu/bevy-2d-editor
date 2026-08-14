@@ -73,8 +73,10 @@ interface Props {
  */
 function getOutlineTitle(editorMode: EditorMode = "scene"): string {
   switch (editorMode) {
-    case "asset-authoring": return "Project Assets";
-    case "scene": return "Outline";
+    case "asset-authoring":
+      return "Project Assets";
+    case "scene":
+      return "Outline";
     // logic/code/play: outline body is empty — use generic "Outline"
     case "logic":
     case "code":
@@ -91,8 +93,10 @@ function getOutlineTitle(editorMode: EditorMode = "scene"): string {
  */
 function getPropertiesTitle(editorMode: EditorMode = "scene"): string {
   switch (editorMode) {
-    case "asset-authoring": return "Authoring";
-    case "scene": return "Properties";
+    case "asset-authoring":
+      return "Authoring";
+    case "scene":
+      return "Properties";
     // logic/code/play: properties body is empty — use generic "Properties"
     case "logic":
     case "code":
@@ -204,17 +208,17 @@ export default function RightDock({
           data-panel-id="right-properties"
         >
           <DockHeader
-              title={propertiesTitle}
-              testId="dock-right-properties-header"
-              collapsed={propertiesCollapsed}
-              draggable
-              onDragStart={handlePropertiesDragStart}
-              onToggleCollapse={onToggleCollapseProperties}
-              onClose={onCloseProperties}
-              onMove={onMove}
-              onFloatToggle={onFloatToggleProperties}
-              floating={propertiesFloating}
-            />
+            title={propertiesTitle}
+            testId="dock-right-properties-header"
+            collapsed={propertiesCollapsed}
+            draggable
+            onDragStart={handlePropertiesDragStart}
+            onToggleCollapse={onToggleCollapseProperties}
+            onClose={onCloseProperties}
+            onMove={onMove}
+            onFloatToggle={onFloatToggleProperties}
+            floating={propertiesFloating}
+          />
           {!propertiesCollapsed && (
             <DockBody testId="dock-right-properties-body">
               {properties}

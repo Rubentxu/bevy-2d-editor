@@ -19,9 +19,7 @@ async function waitForEngine(page: Page): Promise<void> {
     timeout: WASM_LOAD_TIMEOUT,
   });
   await page.waitForFunction(
-    () =>
-      typeof (window as any).load_scene_json === "function" &&
-      typeof (window as any).dispatch_command === "function",
+    () => (window as any).__bevyEngineStarted === true,
     undefined,
     { timeout: 30_000 },
   );
@@ -34,11 +32,23 @@ async function setEditorMode(page: Page, mode: string): Promise<void> {
   }, mode);
   // Allow React to re-render the dock headers and bodies
   await page.waitForTimeout(500);
+  // When entering code or logic mode, the editor surface is lazy-loaded
+  // via React.lazy + Suspense. Wait until the lazy chunk has hydrated so
+  // downstream assertions on the editor testid do not race the fallback.
+  if (mode === "logic") {
+    await expect(page.locator('[data-testid="logic-graph-editor"]')).toBeVisible({
+      timeout: 30_000,
+    });
+  } else if (mode === "code") {
+    await expect(page.locator('[data-testid="code-editor"]')).toBeVisible({
+      timeout: 30_000,
+    });
+  }
 }
 
 test.describe("Mode-aware dock header titles (Phase C T3.4 / spec S7)", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/?skip-welcome=1");
+    await page.goto("/?skip-welcome=1&skip-onboarding=1");
     await waitForEngine(page);
   });
 

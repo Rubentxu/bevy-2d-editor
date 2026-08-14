@@ -104,7 +104,8 @@ fn s2_scene_instance_roundtrip() {
     id_map.insert(LocalId("root".to_string()), StableId::new("ent_a"));
     id_map.insert(LocalId("weapon".to_string()), StableId::new("ent_b"));
 
-    let instance = SceneInstance {        instance_components: vec![],
+    let instance = SceneInstance {
+        instance_components: vec![],
 
         instance_id: StableId::new("instance-001"),
         asset_ref: AssetReference("assets/player.bsn".into()),
@@ -129,7 +130,10 @@ fn s2_scene_instance_roundtrip() {
     assert_eq!(roundtripped.asset_version_seen, 7);
     assert_eq!(roundtripped.id_map.len(), 2);
     assert_eq!(roundtripped.component_overrides.len(), 1);
-    assert_eq!(roundtripped.component_overrides[0].status, ComponentOverrideStatus::Active);
+    assert_eq!(
+        roundtripped.component_overrides[0].status,
+        ComponentOverrideStatus::Active
+    );
 }
 
 #[test]

@@ -19,10 +19,16 @@ pub struct SceneSnapshotSource {
 }
 
 impl ContextSource for SceneSnapshotSource {
-    fn name(&self) -> &'static str { "scene_snapshot" }
-    fn priority(&self) -> Priority { Priority::SCENE_SNAPSHOT }
+    fn name(&self) -> &'static str {
+        "scene_snapshot"
+    }
+    fn priority(&self) -> Priority {
+        Priority::SCENE_SNAPSHOT
+    }
     fn total_chars(&self) -> usize {
-        serde_json::to_string(&self.json).map(|s| s.len()).unwrap_or(0)
+        serde_json::to_string(&self.json)
+            .map(|s| s.len())
+            .unwrap_or(0)
     }
     fn assemble(&self, budget: &mut TokenBudget) -> String {
         let serialized = serde_json::to_string_pretty(&self.json).unwrap_or_default();
@@ -40,10 +46,16 @@ pub struct SchemasSource {
 }
 
 impl ContextSource for SchemasSource {
-    fn name(&self) -> &'static str { "schemas" }
-    fn priority(&self) -> Priority { Priority::SCHEMAS }
+    fn name(&self) -> &'static str {
+        "schemas"
+    }
+    fn priority(&self) -> Priority {
+        Priority::SCHEMAS
+    }
     fn total_chars(&self) -> usize {
-        serde_json::to_string(&self.json).map(|s| s.len()).unwrap_or(0)
+        serde_json::to_string(&self.json)
+            .map(|s| s.len())
+            .unwrap_or(0)
     }
     fn assemble(&self, budget: &mut TokenBudget) -> String {
         let serialized = serde_json::to_string_pretty(&self.json).unwrap_or_default();
@@ -61,10 +73,17 @@ pub struct SourceFilesSource {
 }
 
 impl ContextSource for SourceFilesSource {
-    fn name(&self) -> &'static str { "source_files" }
-    fn priority(&self) -> Priority { Priority::SOURCE_FILES }
+    fn name(&self) -> &'static str {
+        "source_files"
+    }
+    fn priority(&self) -> Priority {
+        Priority::SOURCE_FILES
+    }
     fn total_chars(&self) -> usize {
-        self.files.iter().map(|f| f.content.len() + f.path.len() + 8).sum()
+        self.files
+            .iter()
+            .map(|f| f.content.len() + f.path.len() + 8)
+            .sum()
     }
     fn assemble(&self, budget: &mut TokenBudget) -> String {
         if self.files.is_empty() {
@@ -119,10 +138,17 @@ pub struct LogicGraphsSource {
 }
 
 impl ContextSource for LogicGraphsSource {
-    fn name(&self) -> &'static str { "logic_graphs" }
-    fn priority(&self) -> Priority { Priority::LOGIC_GRAPHS }
+    fn name(&self) -> &'static str {
+        "logic_graphs"
+    }
+    fn priority(&self) -> Priority {
+        Priority::LOGIC_GRAPHS
+    }
     fn total_chars(&self) -> usize {
-        self.graphs.iter().map(|g| g.asset_id.len() + 64 + g.nodes.len() * 32 + g.edges.len() * 48).sum()
+        self.graphs
+            .iter()
+            .map(|g| g.asset_id.len() + 64 + g.nodes.len() * 32 + g.edges.len() * 48)
+            .sum()
     }
     fn assemble(&self, budget: &mut TokenBudget) -> String {
         if self.graphs.is_empty() {
@@ -130,20 +156,31 @@ impl ContextSource for LogicGraphsSource {
         }
         let mut out = String::from("## Logic Graphs\n\n");
         for g in &self.graphs {
-            if budget.remaining() < 40 { break; }
+            if budget.remaining() < 40 {
+                break;
+            }
             let header = format!("=== Graph: {} ===\n", g.asset_id);
-            if !budget.try_consume(header.len()) { break; }
+            if !budget.try_consume(header.len()) {
+                break;
+            }
             out.push_str(&header);
             out.push_str("Nodes:\n");
             for n in &g.nodes {
                 let line = format!("  - {} ({}): pos={}\n", n.id, n.r#type, n.position);
-                if !budget.try_consume(line.len()) { break; }
+                if !budget.try_consume(line.len()) {
+                    break;
+                }
                 out.push_str(&line);
             }
             out.push_str("Edges:\n");
             for e in &g.edges {
-                let line = format!("  - {}:{}\n    -> {}:{}\n", e.from_node, e.from_port, e.to_node, e.to_port);
-                if !budget.try_consume(line.len()) { break; }
+                let line = format!(
+                    "  - {}:{}\n    -> {}:{}\n",
+                    e.from_node, e.from_port, e.to_node, e.to_port
+                );
+                if !budget.try_consume(line.len()) {
+                    break;
+                }
                 out.push_str(&line);
             }
         }
@@ -160,12 +197,26 @@ pub struct SceneAssetSource {
 }
 
 impl ContextSource for SceneAssetSource {
-    fn name(&self) -> &'static str { "scene_assets" }
-    fn priority(&self) -> Priority { Priority::SCENE_ASSET_CATALOG }
+    fn name(&self) -> &'static str {
+        "scene_assets"
+    }
+    fn priority(&self) -> Priority {
+        Priority::SCENE_ASSET_CATALOG
+    }
     fn total_chars(&self) -> usize {
-        let catalog_chars: usize = self.ctx.catalog.iter()
-            .map(|c| c.id.len() + c.name.len() + c.role.len() + 8).sum();
-        catalog_chars + self.ctx.selected_body.as_ref().map(|b| b.len()).unwrap_or(0)
+        let catalog_chars: usize = self
+            .ctx
+            .catalog
+            .iter()
+            .map(|c| c.id.len() + c.name.len() + c.role.len() + 8)
+            .sum();
+        catalog_chars
+            + self
+                .ctx
+                .selected_body
+                .as_ref()
+                .map(|b| b.len())
+                .unwrap_or(0)
     }
     fn assemble(&self, budget: &mut TokenBudget) -> String {
         if self.ctx.catalog.is_empty() && self.ctx.selected_body.is_none() {
@@ -176,7 +227,9 @@ impl ContextSource for SceneAssetSource {
             out.push_str("### Catalog\n");
             for c in &self.ctx.catalog {
                 let line = format!("- id={} name={} role={}\n", c.id, c.name, c.role);
-                if !budget.try_consume(line.len()) { break; }
+                if !budget.try_consume(line.len()) {
+                    break;
+                }
                 out.push_str(&line);
             }
         }
@@ -204,11 +257,21 @@ pub struct SelectedEntitySource {
 }
 
 impl ContextSource for SelectedEntitySource {
-    fn name(&self) -> &'static str { "selected_entity" }
-    fn priority(&self) -> Priority { Priority::SELECTED_ENTITY }
+    fn name(&self) -> &'static str {
+        "selected_entity"
+    }
+    fn priority(&self) -> Priority {
+        Priority::SELECTED_ENTITY
+    }
     fn total_chars(&self) -> usize {
         match &self.entity {
-            Some(e) => e.stable_id.len() + e.components.iter().map(|c| c.type_id.len() + 32).sum::<usize>(),
+            Some(e) => {
+                e.stable_id.len()
+                    + e.components
+                        .iter()
+                        .map(|c| c.type_id.len() + 32)
+                        .sum::<usize>()
+            }
             None => 0,
         }
     }
@@ -222,7 +285,9 @@ impl ContextSource for SelectedEntitySource {
         for c in &entity.components {
             let val = serde_json::to_string(&c.values).unwrap_or_default();
             let line = format!("  - {}\n    values: {}\n", c.type_id, val);
-            if !budget.try_consume(line.len()) { break; }
+            if !budget.try_consume(line.len()) {
+                break;
+            }
             out.push_str(&line);
         }
         out
@@ -286,15 +351,27 @@ mod tests {
         // chars of content. SourceFilesSource should append "[truncated]".
         let mut b = TokenBudget::new(300);
         let out = s.assemble(&mut b);
-        assert!(out.contains("[truncated]"), "expected '[truncated]' marker, got: {}", out);
+        assert!(
+            out.contains("[truncated]"),
+            "expected '[truncated]' marker, got: {}",
+            out
+        );
     }
 
     #[test]
     fn source_files_two_files_second_truncated() {
         let s = SourceFilesSource {
             files: vec![
-                SourceFileRef { id: "a".into(), path: "a.rs".into(), content: "AAAA".into() },
-                SourceFileRef { id: "b".into(), path: "b.rs".into(), content: "B".repeat(500) },
+                SourceFileRef {
+                    id: "a".into(),
+                    path: "a.rs".into(),
+                    content: "AAAA".into(),
+                },
+                SourceFileRef {
+                    id: "b".into(),
+                    path: "b.rs".into(),
+                    content: "B".repeat(500),
+                },
             ],
         };
         let mut b = TokenBudget::new(50);
@@ -315,12 +392,11 @@ mod tests {
         let s = LogicGraphsSource {
             graphs: vec![LogicGraphRef {
                 asset_id: "g1".into(),
-                nodes: vec![
-                    super::super::sources::NodeRef {
-                        id: "n1".into(), r#type: "Input".into(),
-                        position: serde_json::json!({"x": 0, "y": 0}),
-                    },
-                ],
+                nodes: vec![super::super::sources::NodeRef {
+                    id: "n1".into(),
+                    r#type: "Input".into(),
+                    position: serde_json::json!({"x": 0, "y": 0}),
+                }],
                 edges: vec![],
             }],
         };
@@ -335,7 +411,9 @@ mod tests {
         let s = SceneAssetSource {
             ctx: SceneAssetContext {
                 catalog: vec![super::super::sources::CatalogEntry {
-                    id: "a1".into(), name: "level1".into(), role: "level".into(),
+                    id: "a1".into(),
+                    name: "level1".into(),
+                    role: "level".into(),
                 }],
                 selected_body: None,
             },

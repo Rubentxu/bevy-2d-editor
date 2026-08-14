@@ -53,6 +53,9 @@ coverage/
 # Temp
 /tmp/
 
+# Playwright CLI debug snapshots
+.playwright-cli/
+
 # Cargo lockfile is committed (per Rust workspace convention)
 # !Cargo.lock
 # Rust test artifacts

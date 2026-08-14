@@ -16,10 +16,7 @@ export const DOCK_PANEL_MIME = "application/x-dock-panel";
  * `DataTransfer`. Mirrors the production code path (sets the MIME plus a
  * `text/plain` fallback) so E2E + manual interactions see identical bytes.
  */
-export function stampDockPanelDrag(
-  dt: DataTransfer,
-  panelId: PanelId,
-): void {
+export function stampDockPanelDrag(dt: DataTransfer, panelId: PanelId): void {
   dt.setData(DOCK_PANEL_MIME, panelId);
   dt.setData("text/plain", panelId);
   dt.effectAllowed = "move";

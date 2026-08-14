@@ -153,7 +153,10 @@ mod tests {
         let entries = vec![test_entry("inst_1", "root")];
         let value: serde_json::Value = serde_json::to_value(&entries).unwrap();
         let serialized = serde_json::to_string(&value).unwrap();
-        assert!(!serialized.contains("bevy_entity"), "found Bevy Entity id leak");
+        assert!(
+            !serialized.contains("bevy_entity"),
+            "found Bevy Entity id leak"
+        );
         assert!(!serialized.contains("entity_id"), "found entity id leak");
     }
 }

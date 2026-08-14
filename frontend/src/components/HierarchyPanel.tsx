@@ -457,9 +457,7 @@ export default function HierarchyPanel({
                   </span>
                 )}
                 {entity.id.startsWith("inst_") && (
-                  <InstanceBadge
-                    testId={`instance-badge-${entity.id}`}
-                  >
+                  <InstanceBadge testId={`instance-badge-${entity.id}`}>
                     I
                   </InstanceBadge>
                 )}
@@ -468,9 +466,10 @@ export default function HierarchyPanel({
                     with "LogicBridge" or contains "LogicNode". The definitive
                     marker is the presence of a logic-related component; this
                     is a present/future extension point. */}
-                {entity.components.some((c) =>
-                  c.type_id.startsWith("LogicBridge") ||
-                  c.type_id.startsWith("LogicNode"),
+                {entity.components.some(
+                  (c) =>
+                    c.type_id.startsWith("LogicBridge") ||
+                    c.type_id.startsWith("LogicNode"),
                 ) && (
                   <>
                     <LogicBadge testId={`logic-badge-${entity.id}`}>
@@ -522,9 +521,9 @@ export default function HierarchyPanel({
                 })()}
                 {/* WarningBadge: future warning conditions (asset version mismatch,
                     missing required component, etc.) can be surfaced here. */}
-                {entity.components.some((c) => c.type_id.endsWith("Broken")) && (
-                  <WarningBadge testId={`warning-badge-${entity.id}`} />
-                )}
+                {entity.components.some((c) =>
+                  c.type_id.endsWith("Broken"),
+                ) && <WarningBadge testId={`warning-badge-${entity.id}`} />}
                 <span className="id">{entity.id.slice(0, 8)}</span>
               </div>
             );

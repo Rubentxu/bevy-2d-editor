@@ -222,11 +222,8 @@ pub fn find_duplicate_node_id(asset: &LogicGraphAsset) -> Vec<NodeId> {
 
 /// Find NodeIds referenced by edges but not defined in the node list.
 pub fn find_dangling_edge_nodes(asset: &LogicGraphAsset) -> Vec<NodeId> {
-    let node_ids: std::collections::HashSet<_> = asset
-        .nodes
-        .iter()
-        .map(|n| n.node_id.clone())
-        .collect();
+    let node_ids: std::collections::HashSet<_> =
+        asset.nodes.iter().map(|n| n.node_id.clone()).collect();
     let mut dangling: Vec<NodeId> = Vec::new();
     for edge in &asset.edges {
         if !node_ids.contains(&edge.to_node) && !dangling.contains(&edge.to_node) {

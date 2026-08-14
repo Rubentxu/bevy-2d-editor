@@ -108,8 +108,9 @@ impl ContextBuilder {
         // 1. Reserve chars for the domain description + system instructions (always preserved).
         let instructions_chars =
             self.domain_description.chars().count() + SYSTEM_INSTRUCTIONS.chars().count() + 64;
-        let budget_for_sources =
-            self.token_threshold_chars.saturating_sub(instructions_chars);
+        let budget_for_sources = self
+            .token_threshold_chars
+            .saturating_sub(instructions_chars);
         let mut budget = TokenBudget::new(budget_for_sources);
 
         // 2. Compose sources (only those with data).
@@ -154,22 +155,34 @@ impl ContextBuilder {
     fn compose_sources(&self) -> Vec<Box<dyn ContextSource>> {
         let mut v: Vec<Box<dyn ContextSource>> = Vec::new();
         if let Some(scene) = &self.scene {
-            v.push(Box::new(SceneSnapshotSource { json: scene.clone() }));
+            v.push(Box::new(SceneSnapshotSource {
+                json: scene.clone(),
+            }));
         }
         if self.selected_entity.is_some() {
-            v.push(Box::new(SelectedEntitySource { entity: self.selected_entity.clone() }));
+            v.push(Box::new(SelectedEntitySource {
+                entity: self.selected_entity.clone(),
+            }));
         }
         if let Some(schemas) = &self.schemas {
-            v.push(Box::new(SchemasSource { json: schemas.clone() }));
+            v.push(Box::new(SchemasSource {
+                json: schemas.clone(),
+            }));
         }
         if !self.source_files.is_empty() {
-            v.push(Box::new(SourceFilesSource { files: self.source_files.clone() }));
+            v.push(Box::new(SourceFilesSource {
+                files: self.source_files.clone(),
+            }));
         }
         if !self.logic_graphs.is_empty() {
-            v.push(Box::new(LogicGraphsSource { graphs: self.logic_graphs.clone() }));
+            v.push(Box::new(LogicGraphsSource {
+                graphs: self.logic_graphs.clone(),
+            }));
         }
         if !self.scene_assets.catalog.is_empty() || self.scene_assets.selected_body.is_some() {
-            v.push(Box::new(SceneAssetSource { ctx: self.scene_assets.clone() }));
+            v.push(Box::new(SceneAssetSource {
+                ctx: self.scene_assets.clone(),
+            }));
         }
         v
     }

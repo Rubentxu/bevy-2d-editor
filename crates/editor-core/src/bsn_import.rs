@@ -27,12 +27,12 @@
 //! - `asset_refs` and `patches` are not representable in `SceneAssetDocument`
 //! - `relationships` are reconstructed as `RelationshipKind::Child` only
 
+use crate::bsn_ir::{BsnIr, BsnIrNode, BsnIrRelationship};
 use crate::document::ComponentInstance;
 use crate::scene_asset::{
-    LocalId, RelationshipKind, SceneAssetDocument, SceneAssetEntity,
-    SceneAssetRelationship, SceneAssetMetadata, SceneAssetRole,
+    LocalId, RelationshipKind, SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata,
+    SceneAssetRelationship, SceneAssetRole,
 };
-use crate::bsn_ir::{BsnIr, BsnIrNode, BsnIrRelationship};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -45,7 +45,11 @@ pub enum BsnImportError {
     /// The input `.bsn` text is empty or contains only whitespace.
     EmptyInput,
     /// The `.bsn` text could not be tokenized at the given position.
-    UnexpectedToken { position: usize, found: String, expected: String },
+    UnexpectedToken {
+        position: usize,
+        found: String,
+        expected: String,
+    },
     /// The `.bsn` text is truncated or malformed.
     TruncatedInput { position: usize, context: String },
     /// The parser encountered a `bsn!` block where the root identifier is missing.
@@ -60,22 +64,22 @@ pub enum BsnImportError {
 
 #[derive(Debug, Clone, PartialEq)]
 enum Token {
-    BsnOpen,          // "bsn!{"
-    BsnClose,        // "}"
-    ChildrenOpen,     // "Children ["
-    ChildrenClose,    // "]"
-    Comma,           // ","
-    Hash(String),     // "#identifier"
-    Ident(String),    // ComponentType
-    LParen,           // "("
-    RParen,           // ")"
-    LBrace,           // "{"
-    RBrace,           // "}"
-    Colon,            // ":"
-    String(String),   // "..."
-    Number(String),   // 123, 0.5, -3.14
-    True,             // true
-    False,            // false
+    BsnOpen,        // "bsn!{"
+    BsnClose,       // "}"
+    ChildrenOpen,   // "Children ["
+    ChildrenClose,  // "]"
+    Comma,          // ","
+    Hash(String),   // "#identifier"
+    Ident(String),  // ComponentType
+    LParen,         // "("
+    RParen,         // ")"
+    LBrace,         // "{"
+    RBrace,         // "}"
+    Colon,          // ":"
+    String(String), // "..."
+    Number(String), // 123, 0.5, -3.14
+    True,           // true
+    False,          // false
     Eof,
 }
 
@@ -299,7 +303,8 @@ impl<'a> Tokenizer<'a> {
     fn read_number(&mut self) -> String {
         let start = self.pos;
         while let Some(ch) = self.peek() {
-            if ch.is_ascii_digit() || ch == '.' || ch == 'e' || ch == 'E' || ch == '+' || ch == '-' {
+            if ch.is_ascii_digit() || ch == '.' || ch == 'e' || ch == 'E' || ch == '+' || ch == '-'
+            {
                 self.advance();
             } else {
                 break;
@@ -310,10 +315,7 @@ impl<'a> Tokenizer<'a> {
     }
 
     fn unexpected_token(&self, expected: &str) -> BsnImportError {
-        let found = self.input[self.pos..]
-            .chars()
-            .take(20)
-            .collect::<String>();
+        let found = self.input[self.pos..].chars().take(20).collect::<String>();
         BsnImportError::UnexpectedToken {
             position: self.pos,
             found,
@@ -322,10 +324,7 @@ impl<'a> Tokenizer<'a> {
     }
 
     fn unexpected_token_at(&self, pos: usize, expected: &str) -> BsnImportError {
-        let found = self.input[pos..]
-            .chars()
-            .take(20)
-            .collect::<String>();
+        let found = self.input[pos..].chars().take(20).collect::<String>();
         BsnImportError::UnexpectedToken {
             position: pos,
             found,
@@ -497,7 +496,7 @@ impl Parser {
             components,
             children,
             relationships: Vec::new(), // relationships rebuilt in scene_asset_from_bsn_ir
-        ..Default::default()
+            ..Default::default()
         })
     }
 
@@ -540,13 +539,11 @@ impl Parser {
                 }
                 Ok(serde_json::Value::Object(map))
             }
-            t => {
-                Err(BsnImportError::UnexpectedToken {
-                    position: self.pos,
-                    found: format!("{:?}", t),
-                    expected: "\"(\" or \"{\"".to_string(),
-                })
-            }
+            t => Err(BsnImportError::UnexpectedToken {
+                position: self.pos,
+                found: format!("{:?}", t),
+                expected: "\"(\" or \"{\"".to_string(),
+            }),
         }
     }
 
@@ -628,13 +625,11 @@ impl Parser {
                 }
                 Ok(serde_json::Value::Array(arr))
             }
-            t => {
-                Err(BsnImportError::UnexpectedToken {
-                    position: self.pos,
-                    found: format!("{:?}", t),
-                    expected: "string, number, bool, object, or array".to_string(),
-                })
-            }
+            t => Err(BsnImportError::UnexpectedToken {
+                position: self.pos,
+                found: format!("{:?}", t),
+                expected: "string, number, bool, object, or array".to_string(),
+            }),
         }
     }
 }
@@ -740,7 +735,9 @@ mod tests {
     #[test]
     fn simple_entity_round_trip() {
         use crate::document::ComponentInstance;
-        use crate::scene_asset::{SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata, LocalId, SceneAssetRole};
+        use crate::scene_asset::{
+            LocalId, SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata, SceneAssetRole,
+        };
         let doc = SceneAssetDocument {
             asset_id: String::new(),
             logical_path: String::new(),
@@ -782,22 +779,29 @@ mod tests {
         // The second-to-last token must be BsnClose (outer close);
         // Eof is always last.
         assert!(
-            matches!(tokens.get(tokens.len().saturating_sub(2)), Some(Token::BsnClose)),
+            matches!(
+                tokens.get(tokens.len().saturating_sub(2)),
+                Some(Token::BsnClose)
+            ),
             "outer close must be BsnClose; got {:?}",
             tokens.get(tokens.len().saturating_sub(2))
         );
         // Find the inner } (before the outer one). It must be RBrace.
-        let rbrace_count = tokens
-            .iter()
-            .filter(|t| matches!(t, Token::RBrace))
-            .count();
-        assert_eq!(rbrace_count, 1, "expected 1 inner RBrace; tokens = {:?}", tokens);
+        let rbrace_count = tokens.iter().filter(|t| matches!(t, Token::RBrace)).count();
+        assert_eq!(
+            rbrace_count, 1,
+            "expected 1 inner RBrace; tokens = {:?}",
+            tokens
+        );
     }
 
     #[test]
     fn nested_children_round_trip() {
         use crate::document::ComponentInstance;
-        use crate::scene_asset::{SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata, LocalId, RelationshipKind, SceneAssetRelationship, SceneAssetRole};
+        use crate::scene_asset::{
+            LocalId, RelationshipKind, SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata,
+            SceneAssetRelationship, SceneAssetRole,
+        };
         let doc = SceneAssetDocument {
             asset_id: String::new(),
             logical_path: String::new(),

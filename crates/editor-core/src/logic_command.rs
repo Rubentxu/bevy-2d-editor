@@ -18,7 +18,9 @@
 //! | `SetNodeField`   | `SetNodeField { old value at field_path }` |
 //! | `Batch`          | `Batch { reversed inverses }`         |
 
-use crate::logic_graph::{LogicEdge, LogicGraphAsset, LogicNode, LogicNodeRole, NodeId, NodeTypeId, PortId};
+use crate::logic_graph::{
+    LogicEdge, LogicGraphAsset, LogicNode, LogicNodeRole, NodeId, NodeTypeId, PortId,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -44,9 +46,7 @@ pub enum LogicCommand {
         controller_id: Option<String>,
     },
     /// Remove a node from the graph.
-    RemoveNode {
-        node_id: NodeId,
-    },
+    RemoveNode { node_id: NodeId },
     /// Connect two nodes via their ports.
     ConnectPorts {
         from_node: NodeId,
@@ -151,14 +151,19 @@ pub fn set_field_path_vec(
     for part in &path[..path.len() - 1] {
         current = current
             .as_object_mut()
-            .ok_or_else(|| LogicCommandError::JsonError(format!("Cannot navigate through non-object at '{}'", part)))?
+            .ok_or_else(|| {
+                LogicCommandError::JsonError(format!(
+                    "Cannot navigate through non-object at '{}'",
+                    part
+                ))
+            })?
             .get_mut(part)
             .ok_or_else(|| LogicCommandError::JsonError(format!("Field not found: '{}'", part)))?;
     }
     let leaf = path.last().unwrap();
-    let obj = current
-        .as_object_mut()
-        .ok_or_else(|| LogicCommandError::JsonError(format!("Cannot set field on non-object at '{}'", leaf)))?;
+    let obj = current.as_object_mut().ok_or_else(|| {
+        LogicCommandError::JsonError(format!("Cannot set field on non-object at '{}'", leaf))
+    })?;
     let old = obj
         .get(leaf)
         .ok_or_else(|| LogicCommandError::JsonError(format!("Field not found: '{}'", leaf)))?
@@ -211,7 +216,8 @@ pub fn apply(
             let removed = doc.nodes.remove(pos);
 
             // Remove any edges connected to this node
-            doc.edges.retain(|e| e.from_node != *node_id && e.to_node != *node_id);
+            doc.edges
+                .retain(|e| e.from_node != *node_id && e.to_node != *node_id);
 
             Ok(LogicCommand::AddNode {
                 node_id: removed.node_id,
@@ -538,7 +544,13 @@ mod tests {
         assert_eq!(doc.nodes.len(), 0);
 
         match inverse {
-            LogicCommand::AddNode { node_id, role, node_type_id, field_values, controller_id } => {
+            LogicCommand::AddNode {
+                node_id,
+                role,
+                node_type_id,
+                field_values,
+                controller_id,
+            } => {
                 assert_eq!(node_id.as_str(), "node_a");
                 assert_eq!(role, LogicNodeRole::Sensor);
                 assert_eq!(node_type_id.as_str(), "sensor.key_down");
@@ -621,7 +633,12 @@ mod tests {
         assert_eq!(doc.edges.len(), 1);
 
         match inverse {
-            LogicCommand::DisconnectPorts { from_node, from_port, to_node, to_port } => {
+            LogicCommand::DisconnectPorts {
+                from_node,
+                from_port,
+                to_node,
+                to_port,
+            } => {
                 assert_eq!(from_node.as_str(), "node_a");
                 assert_eq!(from_port.as_str(), "out");
                 assert_eq!(to_node.as_str(), "node_b");
@@ -718,7 +735,12 @@ mod tests {
         assert_eq!(doc.edges.len(), 0);
 
         match inverse {
-            LogicCommand::ConnectPorts { from_node, from_port, to_node, to_port } => {
+            LogicCommand::ConnectPorts {
+                from_node,
+                from_port,
+                to_node,
+                to_port,
+            } => {
                 assert_eq!(from_node.as_str(), "node_a");
                 assert_eq!(to_node.as_str(), "node_b");
             }
@@ -766,10 +788,16 @@ mod tests {
             value: serde_json::json!(0.9),
         };
         let inverse = apply(&mut doc, &cmd).unwrap();
-        assert_eq!(doc.nodes[0].field_values["threshold"], serde_json::json!(0.9));
+        assert_eq!(
+            doc.nodes[0].field_values["threshold"],
+            serde_json::json!(0.9)
+        );
 
         apply(&mut doc, &inverse).unwrap();
-        assert_eq!(doc.nodes[0].field_values["threshold"], serde_json::json!(0.5));
+        assert_eq!(
+            doc.nodes[0].field_values["threshold"],
+            serde_json::json!(0.5)
+        );
     }
 
     #[test]
@@ -789,10 +817,16 @@ mod tests {
             value: serde_json::json!(0.8),
         };
         let inverse = apply(&mut doc, &cmd).unwrap();
-        assert_eq!(doc.nodes[0].field_values["config"]["threshold"], serde_json::json!(0.8));
+        assert_eq!(
+            doc.nodes[0].field_values["config"]["threshold"],
+            serde_json::json!(0.8)
+        );
 
         apply(&mut doc, &inverse).unwrap();
-        assert_eq!(doc.nodes[0].field_values["config"]["threshold"], serde_json::json!(0.5));
+        assert_eq!(
+            doc.nodes[0].field_values["config"]["threshold"],
+            serde_json::json!(0.5)
+        );
     }
 
     #[test]
@@ -851,7 +885,12 @@ mod tests {
     #[test]
     fn test_set_field_path_vec_nested() {
         let mut v = serde_json::json!({"a": {"b": {"c": 1}}});
-        let old = set_field_path_vec(&mut v, &["a".to_string(), "b".to_string(), "c".to_string()], serde_json::json!(42)).unwrap();
+        let old = set_field_path_vec(
+            &mut v,
+            &["a".to_string(), "b".to_string(), "c".to_string()],
+            serde_json::json!(42),
+        )
+        .unwrap();
         assert_eq!(old, serde_json::json!(1));
         assert_eq!(v["a"]["b"]["c"], serde_json::json!(42));
     }
@@ -1043,15 +1082,13 @@ mod tests {
         let mut doc = builtin_graph();
         let cmd = LogicCommand::Batch {
             label: "try mutating builtin".to_string(),
-            commands: vec![
-                LogicCommand::AddNode {
-                    node_id: NodeId::new("node_new"),
-                    role: LogicNodeRole::Actuator,
-                    node_type_id: NodeTypeId::new("actuator.jump"),
-                    field_values: serde_json::json!({}),
-                    controller_id: None,
-                },
-            ],
+            commands: vec![LogicCommand::AddNode {
+                node_id: NodeId::new("node_new"),
+                role: LogicNodeRole::Actuator,
+                node_type_id: NodeTypeId::new("actuator.jump"),
+                field_values: serde_json::json!({}),
+                controller_id: None,
+            }],
         };
         let result = apply(&mut doc, &cmd);
         assert!(matches!(result, Err(LogicCommandError::RecipeImmutable(_))));

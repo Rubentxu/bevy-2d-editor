@@ -5,9 +5,9 @@
 
 use std::fmt::Write as FmtWrite;
 
-use crate::bsn_ir::{bsn_ir_from_scene_asset, BsnIr, BsnIrNode};
+use crate::bsn_ir::{BsnIr, BsnIrNode, bsn_ir_from_scene_asset};
 use crate::code_export::CodeGenResult;
-use crate::dynamic_scene::{anchor_str_to_normalized_offset, ExportWarning};
+use crate::dynamic_scene::{ExportWarning, anchor_str_to_normalized_offset};
 use crate::scene_asset::SceneAssetDocument;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -172,7 +172,11 @@ fn emit_component(
                 .and_then(|v| v.get("y"))
                 .and_then(|v| v.as_f64())
                 .unwrap_or(1.0) as f32;
-            let _ = writeln!(out, "{}Transform {{ translation: Vec2::new({}, {}), rotation: {}, scale: Vec2::new({}, {}) }},", indent_str, tx, ty, rot, sx, sy);
+            let _ = writeln!(
+                out,
+                "{}Transform {{ translation: Vec2::new({}, {}), rotation: {}, scale: Vec2::new({}, {}) }},",
+                indent_str, tx, ty, rot, sx, sy
+            );
         }
         "editor.Sprite2D" => {
             let asset = values.get("asset").and_then(|v| v.as_str()).unwrap_or("");

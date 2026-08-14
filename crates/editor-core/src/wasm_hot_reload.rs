@@ -5,7 +5,7 @@
 //! pair gated on `target_arch = "wasm32"`. The wasm pair is registered
 //! with `wasm-bindgen`; the host pair is for integration tests.
 
-use crate::hot_reload_state::{HotReloadRequest, HOT_RELOAD_BUS};
+use crate::hot_reload_state::{HOT_RELOAD_BUS, HotReloadRequest};
 
 /// Push a Source hot-reload request onto the HOT_RELOAD_BUS.
 /// wasm-bindgen wrapper — callable from TypeScript via `window.hot_reload_source_wasm`.

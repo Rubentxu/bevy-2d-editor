@@ -123,9 +123,13 @@ _Avoid_: leaking Bevy entity indices, raw entity handles, transient world pointe
 **DynamicScene Export**:
 The adapter that materializes editor-owned scene data into a Bevy-compatible runtime scene representation.
 _Avoid_: source of truth, primary scene model
-
 **BSN Export**:
-The process of converting a `SceneAssetDocument` into raw `.bsn` text via the `BsnExporter` trait. The output is `.bsn`-native syntax (no Rust `commands.spawn_scene_list(...)` wrapper, no `bsn_list![...]` macro, no Rust tuple commas in `Children`). The `EditorCoreBsnExporter` provides the working impl; when Bevy PR #23639 lands, a `BevyBsnExporter` swap-in will use Bevy's official writer. BSN Export is output-only in Hito 3; import (`.bsn` → `SceneAssetDocument`) is deferred.
+
+The process of converting a `SceneAssetDocument` into raw `.bsn` text via the `BsnExporter` trait. The output is `.bsn`-native syntax (no Rust `commands.spawn_scene_list(...)` wrapper, no `bsn_list![...]` macro, no Rust tuple commas in `Children`). The `EditorCoreBsnExporter` provides the working impl; when Bevy PR #23639 lands, a `BevyBsnExporter` swap-in will use Bevy's official writer.
+
+**BSN Import**:
+
+The reverse process — parsing `.bsn` text into a `SceneAssetDocument`. Implemented in `crates/editor-core/src/bsn_import.rs` as part of Hito 3 Order 4 (`v0.36.0`, PR #37). The editor-internal round-trip remains the supported path; Bevy's official loader/write-back is deferred until Bevy PR #23639 lands.
 _Avoid_: DynamicScene export (different format), `.bsn` asset import, round-trip conversion in Hito 3
 
 ## Logic Bricks (Behavior Authoring)

@@ -86,11 +86,17 @@ export default function RuntimePreviewInspector({ onJumpToSource }: Props) {
     (async () => {
       const { subscribe } = await import("../services/hot-reload");
       sourceUnsub = subscribe("hot-reload-source", (event) => {
-        eventBuffer.current = [...eventBuffer.current.slice(-MAX_EVENTS + 1), event];
+        eventBuffer.current = [
+          ...eventBuffer.current.slice(-MAX_EVENTS + 1),
+          event,
+        ];
         setHotReloadEvents([...eventBuffer.current]);
       });
       assetUnsub = subscribe("hot-reload-asset", (event) => {
-        eventBuffer.current = [...eventBuffer.current.slice(-MAX_EVENTS + 1), event];
+        eventBuffer.current = [
+          ...eventBuffer.current.slice(-MAX_EVENTS + 1),
+          event,
+        ];
         setHotReloadEvents([...eventBuffer.current]);
       });
     })();
@@ -160,7 +166,11 @@ export default function RuntimePreviewInspector({ onJumpToSource }: Props) {
           <h4 className="rpi-warnings-title">⚠ Warnings</h4>
           <ul className="rpi-warnings-list">
             {warnings.map((w, i) => (
-              <li key={i} className="rpi-warning-item" data-testid={`rpi-warning-${i}`}>
+              <li
+                key={i}
+                className="rpi-warning-item"
+                data-testid={`rpi-warning-${i}`}
+              >
                 {w}
               </li>
             ))}
@@ -183,11 +193,15 @@ export default function RuntimePreviewInspector({ onJumpToSource }: Props) {
             </div>
             <div className="rpi-logic-entry">
               <dt>Undo</dt>
-              <dd data-testid="rpi-logic-undo">{logicLog.can_undo ? "yes" : "no"}</dd>
+              <dd data-testid="rpi-logic-undo">
+                {logicLog.can_undo ? "yes" : "no"}
+              </dd>
             </div>
             <div className="rpi-logic-entry">
               <dt>Redo</dt>
-              <dd data-testid="rpi-logic-redo">{logicLog.can_redo ? "yes" : "no"}</dd>
+              <dd data-testid="rpi-logic-redo">
+                {logicLog.can_redo ? "yes" : "no"}
+              </dd>
             </div>
           </dl>
         </div>
@@ -217,7 +231,11 @@ export default function RuntimePreviewInspector({ onJumpToSource }: Props) {
           ) : (
             <ul className="rpi-timeline-list">
               {hotReloadEvents.map((ev, i) => (
-                <li key={i} className="rpi-timeline-item" data-testid={`rpi-timeline-item-${i}`}>
+                <li
+                  key={i}
+                  className="rpi-timeline-item"
+                  data-testid={`rpi-timeline-item-${i}`}
+                >
                   <span className="rpi-timeline-type">
                     {ev.type === "hot-reload-source" ? "src" : "asset"}
                   </span>

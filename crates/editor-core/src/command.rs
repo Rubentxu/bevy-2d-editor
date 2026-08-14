@@ -27,10 +27,15 @@ pub enum Command {
         #[serde(default)]
         components: Vec<ComponentInstance>,
     },
+    /// No-op marker. Used internally by Wave D3 callers that route
+    /// through `apply_envelope_internal` and need a non-Option
+    /// `inverse` placeholder for the `CommandResult` schema. The
+    /// processor treats Noop as a no-op: applying it mutates nothing
+    /// and the inverse is itself. Frontend code MUST NOT emit
+    /// `Noop`; the editor UI never serialises it.
+    Noop {},
     /// Remove an entity from the document. Children are reparented to root.
-    DeleteEntity {
-        id: StableId,
-    },
+    DeleteEntity { id: StableId },
     /// Attach a new component instance to an existing entity.
     AddComponent {
         entity_id: StableId,
@@ -106,9 +111,7 @@ pub enum Command {
     },
     /// Remove a Scene Instance from the document.
     /// Inverse is PlaceInstance restoring the full captured pre-state.
-    RemoveInstance {
-        instance_id: StableId,
-    },
+    RemoveInstance { instance_id: StableId },
     /// Replace the asset_ref of an existing Scene Instance.
     /// Runs resync to reclassify overrides; captures pre-state for inverse.
     ReplaceInstanceAsset {
@@ -442,7 +445,11 @@ mod tests {
         }"#;
         let cmd: Command = serde_json::from_str(json).unwrap();
         match cmd {
-            Command::CreateEntity { id, name, components } => {
+            Command::CreateEntity {
+                id,
+                name,
+                components,
+            } => {
                 assert_eq!(id.as_str(), "ent_test");
                 assert_eq!(name, "Spawn");
                 assert!(components.is_empty());

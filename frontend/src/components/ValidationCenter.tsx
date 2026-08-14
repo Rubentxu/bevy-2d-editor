@@ -94,7 +94,14 @@ function useFilters() {
     );
   };
 
-  return { activeDomains, severity, setSeverity, toggleDomain, isDomainActive, filteredIssues };
+  return {
+    activeDomains,
+    severity,
+    setSeverity,
+    toggleDomain,
+    isDomainActive,
+    filteredIssues,
+  };
 }
 
 // ── Severity icon ──────────────────────────────────────────────────────────────
@@ -117,7 +124,9 @@ function SeverityIcon({
       </span>
     );
   return (
-    <span className="vc-severity-icon vc-severity-info" title="Info">ℹ️</span>
+    <span className="vc-severity-icon vc-severity-info" title="Info">
+      ℹ️
+    </span>
   );
 }
 
@@ -235,7 +244,9 @@ function Sidebar({
       </div>
 
       <div className="vc-sidebar__footer">
-        <span className="vc-sidebar__total">{totalCount} issue{totalCount !== 1 ? "s" : ""}</span>
+        <span className="vc-sidebar__total">
+          {totalCount} issue{totalCount !== 1 ? "s" : ""}
+        </span>
       </div>
     </aside>
   );
@@ -273,10 +284,15 @@ function IssueList({
         if (domainIssues.length === 0) return null;
         return (
           <li key={domain} className="vc-list__domain-group">
-            <h3 className="vc-list__domain-label" data-testid={`vc-domain-header-${domain}`}>
+            <h3
+              className="vc-list__domain-label"
+              data-testid={`vc-domain-header-${domain}`}
+            >
               <span className={`vc-domain-dot vc-domain-dot--${domain}`} />
               {DOMAIN_LABELS[domain]}
-              <span className="vc-list__domain-count">{domainIssues.length}</span>
+              <span className="vc-list__domain-count">
+                {domainIssues.length}
+              </span>
             </h3>
             <ul className="vc-list__issues">
               {domainIssues.map((issue) => (
@@ -307,7 +323,11 @@ function IssueDetail({
   onClose: () => void;
 }) {
   return (
-    <aside className="vc-detail" data-testid="vc-detail" aria-label="Issue detail">
+    <aside
+      className="vc-detail"
+      data-testid="vc-detail"
+      aria-label="Issue detail"
+    >
       <header className="vc-detail__header">
         <SeverityIcon severity={issue.severity} />
         <span className={`vc-domain-badge vc-domain-${issue.domain}`}>
@@ -368,7 +388,9 @@ export default function ValidationCenter({ onClose, onNavigate }: Props) {
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedIssue, setSelectedIssue] = useState<ValidationIssue | null>(null);
+  const [selectedIssue, setSelectedIssue] = useState<ValidationIssue | null>(
+    null,
+  );
   const filters = useFilters();
 
   const fetchIssues = async () => {
@@ -379,7 +401,8 @@ export default function ValidationCenter({ onClose, onNavigate }: Props) {
       setIssues(result);
       // Auto-select first error if nothing selected.
       if (!selectedIssue && result.length > 0) {
-        const firstError = result.find((i) => i.severity === "error") ?? result[0];
+        const firstError =
+          result.find((i) => i.severity === "error") ?? result[0];
         setSelectedIssue(firstError);
       }
     } catch (e) {
@@ -391,7 +414,7 @@ export default function ValidationCenter({ onClose, onNavigate }: Props) {
 
   useEffect(() => {
     void fetchIssues();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const grouped = groupByDomain(issues);
@@ -461,10 +484,14 @@ export default function ValidationCenter({ onClose, onNavigate }: Props) {
         {/* Center: grouped issue list */}
         <section className="vc-center" aria-label="Issue list">
           {loading && (
-            <p className="vc-loading" data-testid="vc-loading">Loading...</p>
+            <p className="vc-loading" data-testid="vc-loading">
+              Loading...
+            </p>
           )}
           {error && (
-            <p className="vc-error" data-testid="vc-error">{error}</p>
+            <p className="vc-error" data-testid="vc-error">
+              {error}
+            </p>
           )}
           {!loading && !error && totalCount === 0 && (
             <div className="vc-empty" data-testid="vc-empty">

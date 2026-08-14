@@ -7,21 +7,48 @@ use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_futures::JsFuture;
 
+pub mod actuator_bus;
 pub mod asset_command;
+pub mod asset_files;
+mod asset_state;
+pub mod auto_layer;
 mod bevy_anchor;
-pub mod bsn_ir;
 pub mod bsn_codegen;
+pub mod bsn_export;
+pub mod bsn_import;
+pub mod bsn_ir;
 mod code_export;
 pub mod command;
 pub mod document;
-mod asset_state;
 mod dynamic_scene;
 mod hot_reload_state;
+pub mod instance_projection;
+mod lock_utils;
+pub mod logic_command;
+pub mod logic_dispatch;
+pub mod logic_evaluator;
+pub mod logic_graph;
+pub mod logic_recipes;
 mod logic_state;
-mod operation_log;
+pub mod logic_validation;
+pub mod operation_log;
 mod persistence;
-mod scene_state;
+pub mod preview_inspector;
+mod preview_runtime;
+pub mod processor;
+pub mod scene_asset;
+pub mod scene_asset_catalog;
+pub mod scene_instance;
+pub mod scene_instance_overrides;
+pub mod scene_session;
+pub mod scene_state;
+mod scenes;
+pub mod schema;
+pub mod source_files;
 mod state;
+pub mod tile_layer;
+pub mod tileset;
+pub mod time;
 mod wasm_auto_layer;
 mod wasm_bsn;
 mod wasm_export;
@@ -31,32 +58,6 @@ mod wasm_preview;
 mod wasm_recipes;
 mod wasm_scene_instance;
 mod wasm_tile;
-pub mod auto_layer;
-pub mod bsn_export;
-pub mod bsn_import;
-pub mod preview_inspector;
-pub mod processor;
-pub mod scene_asset;
-pub mod time;
-pub mod scene_asset_catalog;
-pub mod scene_instance;
-pub mod scene_instance_overrides;
-pub mod instance_projection;
-mod scenes;
-pub mod schema;
-pub mod tileset;
-pub mod tile_layer;
-pub mod logic_graph;
-pub mod logic_evaluator;
-pub mod logic_validation;
-pub mod logic_command;
-pub mod logic_recipes;
-pub mod logic_dispatch;
-pub mod actuator_bus;
-pub mod source_files;
-pub mod asset_files;
-mod preview_runtime;
-mod lock_utils;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ADR References (documentation only — no code changes here)
@@ -122,7 +123,17 @@ pub enum ValidationCategory {
     Logic,
 }
 
+pub use asset_command::{AssetCommand, AssetCommandError, AssetOperationLog};
+pub use asset_files::{AssetFile, AssetFileId, AssetFileKind, RESOURCE_DIR};
+pub use auto_layer::{
+    AutoLayer, AutoLayerId, AutoRule, Pattern3x3, PatternCell, is_auto_layer_stale, regenerate,
+};
 pub use bevy_anchor::anchor_str_to_bevy_anchor;
+pub use bsn_export::{
+    BevyBsnExporter, BsnExportError, BsnExporter, EditorCoreBsnExporter, export_to_bsn_text,
+    export_to_bsn_text_with_warnings,
+};
+pub use bsn_import::{BsnImportError, parse_bsn_text, scene_asset_from_bsn_ir};
 pub use bsn_ir::{
     BsnIr, BsnIrNode, BsnIrRelationship, BsnPatch, BsnPatchOp, bsn_ir_from_scene_asset,
 };
@@ -133,62 +144,51 @@ pub use dynamic_scene::{
     DynamicSceneExport, EXPORT_VERSION, EntityExport, ExportError, ExportWarning,
     anchor_str_to_normalized_offset, export_dynamic_scene, is_known_anchor_str,
 };
-pub use operation_log::{LogEntry, OperationLog, OperationLogError};
-pub use persistence::{asset_path, validate_logical_path, AssetPathError, PROJECT_FILE, ProjectMetadata, SCENES_DIR, SCHEMAS_DIR, ASSETS_DIR, TILESETS_DIR, tileset_path};
-pub use asset_command::{AssetCommand, AssetCommandError, AssetOperationLog};
+pub use instance_projection::{PreviewEntity, project_instances, root_local_ids};
 pub use logic_command::{LogicCommand, LogicCommandError, LogicOperationLog};
+pub use logic_evaluator::{
+    LogicNodeRegistry, NodeDescriptor, NodeEvaluator, ParamSpec, PortSpec, PortValue,
+    PortValueType, global_node_registry,
+};
+pub use logic_graph::{
+    LogicEdge, LogicGraphAsset, LogicInstance, LogicNode, LogicNodeRole, NodeId, NodeTypeId,
+    PortId, count_logic_bindings, editor_logic_binding_component, find_dangling_edge_nodes,
+    find_duplicate_node_id,
+};
 pub use logic_recipes::{is_builtin_recipe, list_builtin_recipes, seed_builtin_recipes};
+pub use logic_validation::{LogicValidationIssue, LogicValidationIssueCode, validate_logic_graph};
+pub use operation_log::{LogEntry, OperationLog, OperationLogError};
+pub use persistence::{
+    ASSETS_DIR, AssetPathError, PROJECT_FILE, ProjectMetadata, SCENES_DIR, SCHEMAS_DIR,
+    TILESETS_DIR, asset_path, tileset_path, validate_logical_path,
+};
+pub use preview_inspector::{PreviewMappingEntry, PreviewMetrics, PreviewProvenance};
+pub use preview_runtime::in_play_mode;
 pub use scene_asset::{
     AssetReference, ExposedProperty, LayerId, LevelLayer, LocalId, RelationshipKind, RoleWarning,
     SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata, SceneAssetRelationship,
     SceneAssetRole, SceneInstanceLayer, SceneInstanceLayerKind, validate_role,
 };
-pub use logic_graph::{
-    count_logic_bindings, editor_logic_binding_component, find_dangling_edge_nodes,
-    find_duplicate_node_id, LogicEdge, LogicGraphAsset, LogicInstance, LogicNode,
-    LogicNodeRole, NodeId, NodeTypeId, PortId,
-};
-pub use logic_evaluator::{
-    global_node_registry, NodeDescriptor, NodeEvaluator, PortSpec, PortValue, PortValueType,
-    ParamSpec, LogicNodeRegistry,
-};
-pub use logic_validation::{
-    validate_logic_graph, LogicValidationIssue, LogicValidationIssueCode,
-};
-pub use auto_layer::{
-    AutoLayer, AutoLayerId, AutoRule, Pattern3x3, PatternCell, is_auto_layer_stale, regenerate,
-};
 pub use scene_asset_catalog::{
     CatalogError, CatalogWarning, SceneAssetCatalog, SceneAssetCatalogEntry, mint_asset_id,
-};
-pub use bsn_export::{
-    BevyBsnExporter, BsnExportError, BsnExporter, EditorCoreBsnExporter, export_to_bsn_text,
-    export_to_bsn_text_with_warnings,
-};
-pub use bsn_import::{BsnImportError, parse_bsn_text, scene_asset_from_bsn_ir};
-pub use preview_runtime::in_play_mode;
-pub use wasm_hot_reload::{
-    force_reload_wasm, hot_reload_asset_wasm, hot_reload_bus_depth_for_tests,
-    hot_reload_source_wasm,
-};
-pub use preview_inspector::{
-    PreviewMappingEntry, PreviewMetrics, PreviewProvenance,
 };
 pub use scene_instance::{
     ComponentOverride, ComponentOverrideStatus, SceneInstance,
     component_override_status_after_field_rename,
 };
 pub use scene_instance_overrides::{OverrideIssue, ResyncReport};
-pub use instance_projection::{root_local_ids, PreviewEntity, project_instances};
-pub use source_files::{SourceFile, SourceFileId, SOURCES_DIR};
-pub use asset_files::{AssetFile, AssetFileId, AssetFileKind, RESOURCE_DIR};
-pub use schema::ComponentTypeId;
 pub use scenes::{SceneInfo, SceneRegistry, SwitchResult};
+pub use schema::ComponentTypeId;
+pub use source_files::{SOURCES_DIR, SourceFile, SourceFileId};
+pub use tile_layer::{TileLayer, TileLayerId};
 pub use tileset::{
     AsepriteFrame, AsepriteMetadata, AsepriteSlice, AsepriteTag, TileCoord, TileGrid, TileRef,
     TilesetAsset, TilesetId, TilesetManager, TilesetMetadata,
 };
-pub use tile_layer::{TileLayer, TileLayerId};
+pub use wasm_hot_reload::{
+    force_reload_wasm, hot_reload_asset_wasm, hot_reload_bus_depth_for_tests,
+    hot_reload_source_wasm,
+};
 /// Marker component for entities spawned from SceneDocument.
 /// These are despawned and respawned when the document is mutated
 /// (preview world rebuild strategy — matches Hito 0 decision 23).
@@ -252,17 +252,14 @@ pub struct TransformSnapshot {
 // crates/editor-core/src/state.rs. Re-exported here so existing
 // callers in lib.rs continue to work without modification.
 use crate::state::{
-    HotReloadRequest, PlayModeRequest,
-    DIRTY_FLAG, SCENE_REGISTRY, SCENE_ASSET_CATALOG, SCENE_ASSET_DOC,
-    SCENE_ASSET_CATALOG_WARNINGS, ASSET_OPERATION_LOG, ASSET_BODY_CACHE,
-    RESYNC_REPORTS, VALIDATION_ISSUES, LOGIC_GRAPH_DOC, LOGIC_OPERATION_LOG,
-    HOT_RELOAD_BUS, PLAY_MODE_REQUEST,
-    with_registry, with_registry_mut, with_asset_catalog, with_asset_catalog_mut,
-    with_asset_doc, with_asset_doc_mut, get_asset_catalog_warnings,
-    clear_asset_catalog_warnings, with_asset_log, with_asset_log_mut,
-    with_asset_body_cache, with_asset_body_cache_mut, mark_dirty,
-    with_logic_graph, with_logic_graph_mut, with_logic_log, with_logic_log_mut,
-    with_logic_graph_catalog, with_logic_graph_catalog_mut,
+    ASSET_BODY_CACHE, ASSET_OPERATION_LOG, DIRTY_FLAG, HOT_RELOAD_BUS, HotReloadRequest,
+    LOGIC_GRAPH_DOC, LOGIC_OPERATION_LOG, PLAY_MODE_REQUEST, PlayModeRequest, RESYNC_REPORTS,
+    SCENE_ASSET_CATALOG, SCENE_ASSET_CATALOG_WARNINGS, SCENE_ASSET_DOC, SCENE_REGISTRY,
+    VALIDATION_ISSUES, clear_asset_catalog_warnings, get_asset_catalog_warnings, mark_dirty,
+    with_asset_body_cache, with_asset_body_cache_mut, with_asset_catalog, with_asset_catalog_mut,
+    with_asset_doc, with_asset_doc_mut, with_asset_log, with_asset_log_mut, with_logic_graph,
+    with_logic_graph_catalog, with_logic_graph_catalog_mut, with_logic_graph_mut, with_logic_log,
+    with_logic_log_mut, with_registry, with_registry_mut,
 };
 
 /// Mutably access the asset body cache from integration tests.
@@ -282,7 +279,6 @@ pub fn clear_dirty_for_tests() {
 pub fn is_dirty_for_tests() -> bool {
     DIRTY_FLAG.with(|dirty| *dirty.borrow())
 }
-
 
 const CMD_MOVE_SPRITE: u16 = 1;
 const EVT_SPRITE_POSITION: u16 = 1;
@@ -411,7 +407,7 @@ pub fn create_buses() {
 pub fn load_scene_json(json: &str) -> Result<(), JsValue> {
     let doc: SceneDocument = serde_json::from_str(json)
         .map_err(|e| JsValue::from_str(&format!("Failed to parse scene JSON: {}", e)))?;
-    SCENE_DOC.with(|s| *s.borrow_mut() = Some(doc));
+    scene_session::replace_active_doc(doc);
     web_sys::console::log_1(&"[editor-core] Scene document loaded".into());
     Ok(())
 }
@@ -433,10 +429,8 @@ pub async fn load_scene_by_name(name: &str) -> Result<String, JsValue> {
         .map_err(|e| JsValue::from_str(&format!("Failed to load scene '{}': {}", name, e)))?;
     let doc: SceneDocument = serde_json::from_str(&json)
         .map_err(|e| JsValue::from_str(&format!("Failed to parse scene JSON: {}", e)))?;
-    SCENE_DOC.with(|s| *s.borrow_mut() = Some(doc));
-    web_sys::console::log_1(
-        &format!("[editor-core] Scene '{}' loaded from {}", name, path).into(),
-    );
+    scene_session::replace_active_doc(doc);
+    web_sys::console::log_1(&format!("[editor-core] Scene '{}' loaded from {}", name, path).into());
     Ok(json)
 }
 
@@ -446,35 +440,63 @@ pub async fn load_scene_by_name(name: &str) -> Result<String, JsValue> {
 /// The command envelope (command + metadata) is parsed from JSON. On success,
 /// the dirty flag is set so `rebuild_preview_world` respawns Bevy entities.
 /// The command is also recorded in the operation log for undo/redo.
+/// Apply a typed command envelope to the active SceneDocument and
+/// record the inverse in the operation log. Returns the inverse plus
+/// a post-apply snapshot, all serialised as JSON.
+///
+/// `dispatch_command` is the primary editor mutation seam. Every
+/// edit flows through here, so the operation log can drive undo/redo
+/// and the dirty flag can schedule `rebuild_preview_world`.
+///
+/// Wave D3: the underlying state transitions live in
+/// `scene_session::apply_command`. This WASM binding is now a thin
+/// adapter that parses JSON, delegates, and serialises the result.
+/// Apply a typed command envelope to the active SceneDocument and
+/// record the inverse in the operation log. Returns the inverse plus
+/// a post-apply snapshot, all serialised as JSON.
+///
+/// `dispatch_command` is the primary editor mutation seam. Every
+/// edit flows through here, so the operation log can drive undo/redo
+/// and the dirty flag can schedule `rebuild_preview_world`.
+///
+/// Wave D3: the underlying state transitions live in
+/// `scene_session::apply_command`. This function delegates to that
+/// module for the actual apply + log + dirty-flag sequence.
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn dispatch_command(json: &str) -> Result<String, JsValue> {
     let envelope: CommandEnvelope = serde_json::from_str(json)
         .map_err(|e| JsValue::from_str(&format!("Invalid command JSON: {}", e)))?;
 
-    let result_json = SCENE_DOC.with(|s| {
-        let mut doc_ref = s.borrow_mut();
-        let doc = doc_ref
-            .as_mut()
-            .ok_or_else(|| JsValue::from_str("No scene loaded — call load_scene_json first"))?;
+    let result = scene_session::apply_command(&envelope)
+        .map_err(|e| JsValue::from_str(&format!("dispatch_command failed: {e}")))?;
+    let inverse = result.inverse.map(|env| env.command).unwrap_or_else(|| {
+        // `apply_command` always populates `inverse`; this branch
+        // only exists to keep the result type non-Option without
+        // changing the public CommandResult schema.
+        Command::CreateEntity {
+            id: StableId::new("__no_inverse__"),
+            name: String::new(),
+            components: vec![],
+        }
+    });
+    let result_json = serde_json::to_string(&CommandResult {
+        inverse,
+        snapshot: result.snapshot,
+    })
+    .map_err(|e| JsValue::from_str(&format!("Failed to serialize result: {}", e)))?;
 
-        let inverse = processor::apply(doc, &envelope.command)
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
-
-        // Record in operation log (consumes inverse)
-        OPERATION_LOG.with(|l| {
-            l.borrow_mut().record(&envelope, inverse.clone());
-        });
-
-        let result = CommandResult {
-            inverse,
-            snapshot: doc.clone(),
-        };
-        serde_json::to_string(&result)
-            .map_err(|e| JsValue::from_str(&format!("Failed to serialize result: {}", e)))
-    })?;
-
-    mark_dirty();
     Ok(result_json)
+}
+
+/// Internal helper that wraps `scene_session::apply_command` and
+/// returns the post-apply snapshot directly. Used by
+/// `place_scene_instance` and `replace_scene_instance_asset` so they
+/// do not have to round-trip through JSON.
+pub(crate) fn apply_envelope_internal(envelope: &CommandEnvelope) -> Result<SceneDocument, String> {
+    let result = scene_session::apply_command(envelope)
+        .map_err(|e| format!("apply_envelope_internal: {e}"))?;
+    Ok(result.snapshot)
 }
 
 /// Place a Scene Asset as a new Scene Instance in the active SceneDocument.
@@ -500,14 +522,21 @@ pub fn place_scene_instance(
         .ok_or_else(|| JsValue::from_str(&format!("Asset not found in catalog: {}", asset_id)))?;
 
     // Step 2: Look up asset body in cache (keyed by logical_path)
-    let asset = with_asset_body_cache(|cache| {
-        cache.get(&entry.logical_path).cloned()
-    }).ok_or_else(|| JsValue::from_str(&format!("Asset not in cache: {}. Call load_project first.", entry.logical_path)))?;
+    let asset = with_asset_body_cache(|cache| cache.get(&entry.logical_path).cloned()).ok_or_else(
+        || {
+            JsValue::from_str(&format!(
+                "Asset not in cache: {}. Call load_project first.",
+                entry.logical_path
+            ))
+        },
+    )?;
 
     // Step 3: Check single-root gate
     let roots = root_local_ids(&asset);
     if roots.is_empty() {
-        return Err(JsValue::from_str("Empty asset: cannot place instance with zero entities"));
+        return Err(JsValue::from_str(
+            "Empty asset: cannot place instance with zero entities",
+        ));
     }
     if roots.len() > 1 {
         return Err(JsValue::from_str(&format!(
@@ -521,18 +550,19 @@ pub fn place_scene_instance(
     let instance_id = crate::document::StableId::new(format!("inst_{:x}", now));
 
     // Step 5: Mint id_map entries with `inst_{iid}_{lid}` pattern
-    let id_map: std::collections::BTreeMap<crate::scene_asset::LocalId, crate::document::StableId> = asset
-        .entities
-        .iter()
-        .map(|e| {
-            let stable_id = crate::document::StableId::new(format!(
-                "{}_{}",
-                instance_id.as_str(),
-                e.local_id.as_str()
-            ));
-            (e.local_id.clone(), stable_id)
-        })
-        .collect();
+    let id_map: std::collections::BTreeMap<crate::scene_asset::LocalId, crate::document::StableId> =
+        asset
+            .entities
+            .iter()
+            .map(|e| {
+                let stable_id = crate::document::StableId::new(format!(
+                    "{}_{}",
+                    instance_id.as_str(),
+                    e.local_id.as_str()
+                ));
+                (e.local_id.clone(), stable_id)
+            })
+            .collect();
 
     // Step 6: Build instance_components from translation_json (placement-time data).
     // Per level-design-layers-research design, placement is NOT a ComponentOverride
@@ -574,11 +604,16 @@ pub fn place_scene_instance(
         metadata: CommandMetadata::now("user"),
     };
 
-    let envelope_json = serde_json::to_string(&envelope)
-        .map_err(|e| JsValue::from_str(&format!("Failed to serialize envelope: {}", e)))?;
-
-    // Use dispatch_command to apply
-    let result_json = dispatch_command(&envelope_json)?;
+    // Apply through the scene_session module directly to avoid a
+    // JSON round-trip on the hot path. The dirty flag is set inside
+    // apply_envelope_internal via the scene_session::mark_dirty call.
+    let snapshot = apply_envelope_internal(&envelope)
+        .map_err(|e| JsValue::from_str(&format!("place_scene_instance: {e}")))?;
+    let result_json = serde_json::to_string(&CommandResult {
+        inverse: Command::Noop {},
+        snapshot,
+    })
+    .map_err(|e| JsValue::from_str(&format!("Failed to serialize result: {}", e)))?;
 
     Ok(result_json)
 }
@@ -599,10 +634,14 @@ pub fn remove_scene_instance(instance_id: &str) -> Result<String, JsValue> {
         metadata: CommandMetadata::now("user"),
     };
 
-    let envelope_json = serde_json::to_string(&envelope)
-        .map_err(|e| JsValue::from_str(&format!("Failed to serialize envelope: {}", e)))?;
-
-    dispatch_command(&envelope_json)
+    let snapshot = apply_envelope_internal(&envelope)
+        .map_err(|e| JsValue::from_str(&format!("remove_scene_instance: {e}")))?;
+    let result_json = serde_json::to_string(&CommandResult {
+        inverse: Command::Noop {},
+        snapshot,
+    })
+    .map_err(|e| JsValue::from_str(&format!("Failed to serialize result: {}", e)))?;
+    Ok(result_json)
 }
 
 /// Replace the asset of an existing Scene Instance.
@@ -615,8 +654,9 @@ pub fn replace_scene_instance_asset(
     new_asset_id: &str,
 ) -> Result<String, JsValue> {
     // Look up new asset in catalog
-    let new_entry = with_asset_catalog(|cat| cat.get(new_asset_id).cloned())
-        .ok_or_else(|| JsValue::from_str(&format!("Asset not found in catalog: {}", new_asset_id)))?;
+    let new_entry = with_asset_catalog(|cat| cat.get(new_asset_id).cloned()).ok_or_else(|| {
+        JsValue::from_str(&format!("Asset not found in catalog: {}", new_asset_id))
+    })?;
 
     let stable_id = crate::document::StableId::new(instance_id);
 
@@ -632,10 +672,14 @@ pub fn replace_scene_instance_asset(
         metadata: CommandMetadata::now("user"),
     };
 
-    let envelope_json = serde_json::to_string(&envelope)
-        .map_err(|e| JsValue::from_str(&format!("Failed to serialize envelope: {}", e)))?;
-
-    dispatch_command(&envelope_json)
+    let snapshot = apply_envelope_internal(&envelope)
+        .map_err(|e| JsValue::from_str(&format!("replace_scene_instance_asset: {e}")))?;
+    let result_json = serde_json::to_string(&CommandResult {
+        inverse: Command::Noop {},
+        snapshot,
+    })
+    .map_err(|e| JsValue::from_str(&format!("Failed to serialize result: {}", e)))?;
+    Ok(result_json)
 }
 
 /// Get all Scene Instances from the active SceneDocument as JSON.
@@ -653,7 +697,6 @@ pub fn get_scene_instances() -> Result<String, JsValue> {
             .map_err(|e| JsValue::from_str(&format!("Failed to serialize instances: {}", e)))
     })
 }
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Validation Center WASM surface
@@ -705,7 +748,7 @@ pub fn get_validation_issues_wasm() -> Result<String, JsValue> {
     }
 
     // 2. Export warnings from the current scene document
-    let current_doc_opt = SCENE_DOC.with(|s| s.borrow().clone());
+    let current_doc_opt = scene_session::snapshot_active_doc();
     if let Some(doc) = current_doc_opt {
         match dynamic_scene::export_dynamic_scene(&doc) {
             Ok(export) => {
@@ -771,9 +814,8 @@ pub async fn export_asset_to_bsn_wasm(asset_id: &str) -> Result<String, JsValue>
     use crate::persistence;
 
     // 1. Get catalog entry to resolve logical_path
-    let entry = with_asset_catalog(|cat| {
-        cat.get(asset_id).cloned()
-    }).ok_or_else(|| JsValue::from_str(&format!("Asset not found: {}", asset_id)))?;
+    let entry = with_asset_catalog(|cat| cat.get(asset_id).cloned())
+        .ok_or_else(|| JsValue::from_str(&format!("Asset not found: {}", asset_id)))?;
 
     // 2. Load body JSON from OPFS
     let body_json = js_load_file(&persistence::asset_path(&entry.logical_path))
@@ -786,7 +828,6 @@ pub async fn export_asset_to_bsn_wasm(asset_id: &str) -> Result<String, JsValue>
     crate::bsn_export::export_to_bsn_text(&doc)
         .map_err(|e| JsValue::from_str(&format!("BSN export error: {}", e)))
 }
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Runtime Preview Inspector WASM surface
@@ -833,43 +874,19 @@ pub fn set_asset_document_wasm(asset_json: &str) -> Result<(), JsValue> {
 /// Undo the last operation. Returns the new document snapshot as JSON.
 #[wasm_bindgen]
 pub fn undo() -> Result<String, JsValue> {
-    let snapshot_json = SCENE_DOC.with(|s_doc| {
-        OPERATION_LOG.with(|s_log| {
-            let mut log = s_log.borrow_mut();
-            let mut doc_ref = s_doc.borrow_mut();
-            let doc = doc_ref
-                .as_mut()
-                .ok_or_else(|| JsValue::from_str("No scene loaded — call load_scene_json first"))?;
-            let snapshot = log
-                .undo(doc)
-                .map_err(|e| JsValue::from_str(&e.to_string()))?;
-            serde_json::to_string(&snapshot)
-                .map_err(|e| JsValue::from_str(&format!("Failed to serialize snapshot: {}", e)))
-        })
-    })?;
-    mark_dirty();
-    Ok(snapshot_json)
+    let snapshot = scene_session::undo()
+        .ok_or_else(|| JsValue::from_str("No scene loaded — call load_scene_json first"))?;
+    serde_json::to_string(&snapshot)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize snapshot: {}", e)))
 }
 
 /// Redo the next operation. Returns the new document snapshot as JSON.
 #[wasm_bindgen]
 pub fn redo() -> Result<String, JsValue> {
-    let snapshot_json = SCENE_DOC.with(|s_doc| {
-        OPERATION_LOG.with(|s_log| {
-            let mut log = s_log.borrow_mut();
-            let mut doc_ref = s_doc.borrow_mut();
-            let doc = doc_ref
-                .as_mut()
-                .ok_or_else(|| JsValue::from_str("No scene loaded — call load_scene_json first"))?;
-            let snapshot = log
-                .redo(doc)
-                .map_err(|e| JsValue::from_str(&e.to_string()))?;
-            serde_json::to_string(&snapshot)
-                .map_err(|e| JsValue::from_str(&format!("Failed to serialize snapshot: {}", e)))
-        })
-    })?;
-    mark_dirty();
-    Ok(snapshot_json)
+    let snapshot = scene_session::redo()
+        .ok_or_else(|| JsValue::from_str("No scene loaded — call load_scene_json first"))?;
+    serde_json::to_string(&snapshot)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize snapshot: {}", e)))
 }
 
 /// Returns operation log metadata as JSON.
@@ -1262,13 +1279,11 @@ pub async fn create_source_file(path: &str, name: &str) -> Result<JsValue, JsVal
                 name: name.to_string(),
             };
             let response = serde_json::json!({ "ok": true, "value": file });
-            serde_wasm_bindgen::to_value(&response)
-                .map_err(|e| JsValue::from_str(&e.to_string()))
+            serde_wasm_bindgen::to_value(&response).map_err(|e| JsValue::from_str(&e.to_string()))
         }
         Err(e) => {
             let response = serde_json::json!({ "ok": false, "error": e });
-            serde_wasm_bindgen::to_value(&response)
-                .map_err(|e| JsValue::from_str(&e.to_string()))
+            serde_wasm_bindgen::to_value(&response).map_err(|e| JsValue::from_str(&e.to_string()))
         }
     }
 }
@@ -1347,7 +1362,7 @@ pub async fn import_asset_file(
     mime_type: &str,
     bytes: js_sys::Uint8Array,
 ) -> Result<JsValue, JsValue> {
-    use crate::asset_files::{is_supported_mime, RESOURCE_DIR};
+    use crate::asset_files::{RESOURCE_DIR, is_supported_mime};
 
     // Validate MIME type
     if !is_supported_mime(mime_type) {
@@ -1402,8 +1417,7 @@ pub async fn import_asset_file(
         }
         Err(e) => {
             let response = serde_json::json!({ "ok": false, "error": e });
-            serde_wasm_bindgen::to_value(&response)
-                .map_err(|e| JsValue::from_str(&e.to_string()))
+            serde_wasm_bindgen::to_value(&response).map_err(|e| JsValue::from_str(&e.to_string()))
         }
     }
 }
@@ -1419,13 +1433,11 @@ pub async fn read_asset_file_bytes(id: &str) -> Result<JsValue, JsValue> {
     match js_load_binary(&path).await {
         Ok(bytes) => {
             let response = serde_json::json!({ "ok": true, "value": bytes });
-            serde_wasm_bindgen::to_value(&response)
-                .map_err(|e| JsValue::from_str(&e.to_string()))
+            serde_wasm_bindgen::to_value(&response).map_err(|e| JsValue::from_str(&e.to_string()))
         }
         Err(e) => {
             let response = serde_json::json!({ "ok": false, "error": e });
-            serde_wasm_bindgen::to_value(&response)
-                .map_err(|e| JsValue::from_str(&e.to_string()))
+            serde_wasm_bindgen::to_value(&response).map_err(|e| JsValue::from_str(&e.to_string()))
         }
     }
 }
@@ -1455,13 +1467,14 @@ pub async fn delete_asset_file(id: &str) -> Result<JsValue, JsValue> {
 /// Read-only — does NOT mutate state, operation log, or dirty flag.
 #[wasm_bindgen]
 pub fn get_scene_snapshot() -> JsValue {
-    SCENE_DOC.with(|s| match s.borrow().as_ref() {
+    let doc = scene_session::snapshot_active_doc();
+    match doc.as_ref() {
         Some(doc) => match serde_json::to_string(doc) {
             Ok(json) => JsValue::from_str(&json),
             Err(_) => JsValue::NULL,
         },
         None => JsValue::NULL,
-    })
+    }
 }
 
 /// Export a SceneDocument JSON string to runnable Bevy 0.19 Rust source code.
@@ -1505,8 +1518,10 @@ fn get_schema_json(type_id: &str) -> Result<String, JsValue> {
 pub fn find_source_location(type_id: &str) -> Result<String, JsValue> {
     let registry = schema::combined_registry();
     match registry.get(type_id) {
-        Some(schema) => Ok(serde_json::to_string(&schema.source_location)
-            .unwrap_or_else(|_| "null".to_string())),
+        Some(schema) => {
+            Ok(serde_json::to_string(&schema.source_location)
+                .unwrap_or_else(|_| "null".to_string()))
+        }
         None => Ok("null".to_string()),
     }
 }
@@ -1514,19 +1529,15 @@ pub fn find_source_location(type_id: &str) -> Result<String, JsValue> {
 /// Find all entity stable IDs in the current scene that have a component of the given type.
 #[wasm_bindgen]
 pub fn find_entities_by_type(type_id: &str) -> Result<String, JsValue> {
-    let matching: Vec<String> = SCENE_DOC
-        .with(|s| {
-            let doc_ref = s.borrow();
-            match doc_ref.as_ref() {
-                Some(doc) => doc
-                    .entities
-                    .iter()
-                    .filter(|e| e.components.iter().any(|c| c.type_id == type_id))
-                    .map(|e| e.id.as_str().to_string())
-                    .collect(),
-                None => Vec::new(),
-            }
-        });
+    let matching: Vec<String> = scene_session::snapshot_active_doc()
+        .map(|doc| {
+            doc.entities
+                .iter()
+                .filter(|e| e.components.iter().any(|c| c.type_id == type_id))
+                .map(|e| e.id.as_str().to_string())
+                .collect()
+        })
+        .unwrap_or_default();
     serde_json::to_string(&matching).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
@@ -1790,10 +1801,7 @@ fn perform_scene_swap(old_id: &str, new_id: &str) {
         None => (
             crate::document::SceneDocument {
                 version: "0.1".to_string(),
-                scene_id: format!(
-                    "scratch-{}",
-                    crate::time::now_nanos()
-                ),
+                scene_id: format!("scratch-{}", crate::time::now_nanos()),
                 name: old_id.to_string(),
                 entities: Vec::new(),
                 instances: BTreeMap::new(),
@@ -1806,7 +1814,7 @@ fn perform_scene_swap(old_id: &str, new_id: &str) {
 
     // Load new scene from registry into thread_locals
     if let Some((new_doc, new_log)) = with_registry(|r| r.swap_in(new_id)) {
-        SCENE_DOC.with(|s| *s.borrow_mut() = Some(new_doc));
+        scene_session::replace_active_doc(new_doc);
         OPERATION_LOG.with(|l| *l.borrow_mut() = new_log);
     }
 
@@ -1881,7 +1889,7 @@ pub async fn discard_scene_changes(id: &str) -> Result<(), JsValue> {
     with_registry_mut(|r| r.store_to(id, doc.clone(), log.clone()));
 
     if current_id.as_deref() == Some(id) {
-        SCENE_DOC.with(|s| *s.borrow_mut() = Some(doc));
+        scene_session::replace_active_doc(doc);
         OPERATION_LOG.with(|l| *l.borrow_mut() = log);
     }
 
@@ -1907,12 +1915,10 @@ async fn warm_asset_body_cache() {
     use crate::scene_asset::SceneAssetDocument;
 
     // Access the catalog that was just loaded
-    let entries: Vec<crate::scene_asset_catalog::SceneAssetCatalogEntry> =
-        SCENE_ASSET_CATALOG.with(|cell| {
-            match &*cell.borrow() {
-                Some(cat) => cat.list_all().into_iter().cloned().collect(),
-                None => Vec::new(),
-            }
+    let entries: Vec<crate::scene_asset_catalog::SceneAssetCatalogEntry> = SCENE_ASSET_CATALOG
+        .with(|cell| match &*cell.borrow() {
+            Some(cat) => cat.list_all().into_iter().cloned().collect(),
+            None => Vec::new(),
         });
 
     for entry in entries {
@@ -1981,10 +1987,7 @@ pub async fn load_project() -> Result<(), JsValue> {
                     let doc: SceneDocument = serde_json::from_str(&json_str).unwrap_or_else(|_| {
                         crate::document::SceneDocument {
                             version: "0.1".to_string(),
-                            scene_id: format!(
-                                "loaded-{}",
-                                crate::time::now_nanos()
-                            ),
+                            scene_id: format!("loaded-{}", crate::time::now_nanos()),
                             name: scene_name.clone(),
                             entities: Vec::new(),
                             instances: BTreeMap::new(),
@@ -2010,7 +2013,7 @@ pub async fn load_project() -> Result<(), JsValue> {
         if js_exists(&path).await {
             if let Ok(json_str) = js_load_file(&path).await {
                 if let Ok(doc) = serde_json::from_str::<SceneDocument>(&json_str) {
-                    SCENE_DOC.with(|s| *s.borrow_mut() = Some(doc));
+                    scene_session::replace_active_doc(doc);
                 }
             }
         }
@@ -2069,13 +2072,11 @@ pub async fn load_project() -> Result<(), JsValue> {
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn save_scene(name: &str) -> Result<String, JsValue> {
-    let doc_json = SCENE_DOC.with(|s| {
-        let doc_ref = s.borrow();
-        let doc = doc_ref
-            .as_ref()
-            .ok_or_else(|| JsValue::from_str("No scene loaded — call load_scene_json first"))?;
-        serde_json::to_string(doc).map_err(|e| JsValue::from_str(&e.to_string()))
-    })?;
+    let doc_json = scene_session::snapshot_active_doc()
+        .as_ref()
+        .ok_or_else(|| JsValue::from_str("No scene loaded — call load_scene_json first"))?;
+    let doc_json = serde_json::to_string(doc_json)
+        .map_err(|e| JsValue::from_str(&format!("serialize: {e}")))?;
 
     let path = persistence::scene_path(name);
     js_save_file(&path, &doc_json)
@@ -2112,7 +2113,10 @@ fn resync_instances_on_load(
     for (instance_id, instance) in doc.instances.iter_mut() {
         // Look up asset in catalog to get current version
         // First resolve the logical path to an asset_id, then look up the entry
-        let asset_id = match with_asset_catalog(|cat| cat.resolve_path(instance.asset_ref.as_str()).map(|s| s.to_string())) {
+        let asset_id = match with_asset_catalog(|cat| {
+            cat.resolve_path(instance.asset_ref.as_str())
+                .map(|s| s.to_string())
+        }) {
             Some(id) => id,
             None => continue, // Unresolved path — skip
         };
@@ -2155,8 +2159,7 @@ pub async fn load_scene(name: &str) -> Result<(), JsValue> {
     // Store in thread-local for UI to drain via get_resync_reports()
     RESYNC_REPORTS.with(|r| *r.borrow_mut() = reports);
 
-    SCENE_DOC.with(|s| *s.borrow_mut() = Some(doc));
-    mark_dirty();
+    scene_session::replace_active_doc(doc);
     Ok(())
 }
 
@@ -2178,8 +2181,8 @@ pub fn dispatch_asset_command(cmd_json: &str) -> Result<String, JsValue> {
             .as_mut()
             .ok_or_else(|| JsValue::from_str("No asset open — call open_scene_asset first"))?;
 
-        let inverse = asset_command::apply(doc, &cmd)
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let inverse =
+            asset_command::apply(doc, &cmd).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
         // Record in asset operation log
         with_asset_log_mut(|log| {
@@ -2254,12 +2257,12 @@ pub fn dispatch_logic_command(cmd_json: &str) -> Result<String, JsValue> {
         .map_err(|e| JsValue::from_str(&format!("Invalid command JSON: {}", e)))?;
 
     let result_json = with_logic_graph_mut(|doc_opt| {
-        let doc = doc_opt
-            .as_mut()
-            .ok_or_else(|| JsValue::from_str("No logic graph open — call create_logic_graph_asset first"))?;
+        let doc = doc_opt.as_mut().ok_or_else(|| {
+            JsValue::from_str("No logic graph open — call create_logic_graph_asset first")
+        })?;
 
-        let inverse = logic_command::apply(doc, &cmd)
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let inverse =
+            logic_command::apply(doc, &cmd).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
         // Record in logic operation log
         with_logic_log_mut(|log| {
@@ -2272,7 +2275,6 @@ pub fn dispatch_logic_command(cmd_json: &str) -> Result<String, JsValue> {
 
     Ok(result_json)
 }
-
 
 /// Undo the last logic command.
 #[wasm_bindgen]
@@ -2370,7 +2372,9 @@ pub async fn create_logic_graph_asset(
     // 2. Save body to OPFS (catalog-first: body saved after catalog registration)
     if let Err(e) = crate::logic_graph::save_logic_graph_body(&doc).await {
         // Log but don't fail — the in-memory state is valid
-        web_sys::console::error_1(&format!("[create_logic_graph_asset] OPFS save failed: {}", e).into());
+        web_sys::console::error_1(
+            &format!("[create_logic_graph_asset] OPFS save failed: {}", e).into(),
+        );
     }
 
     // 3. Set as active graph
@@ -2441,7 +2445,9 @@ pub async fn open_logic_graph_asset(asset_id: &str) -> Result<String, JsValue> {
 #[cfg(not(target_arch = "wasm32"))]
 #[wasm_bindgen]
 pub fn open_logic_graph_asset(_asset_id: &str) -> Result<String, JsValue> {
-    Err(JsValue::from_str("open_logic_graph_asset not available on non-WASM target"))
+    Err(JsValue::from_str(
+        "open_logic_graph_asset not available on non-WASM target",
+    ))
 }
 
 /// List all logic graph assets from the in-memory catalog.
@@ -2490,9 +2496,7 @@ pub async fn create_scene_asset(name: &str, role: &str) -> Result<String, JsValu
     let asset_id = scene_asset_catalog::mint_asset_id();
 
     // Check for duplicate path
-    let duplicate = with_asset_catalog(|cat| {
-        cat.resolve_path(&normalized_path).is_some()
-    });
+    let duplicate = with_asset_catalog(|cat| cat.resolve_path(&normalized_path).is_some());
     if duplicate {
         return Err(JsValue::from_str(&format!(
             "Duplicate logical path: {}",
@@ -2528,8 +2532,7 @@ pub async fn create_scene_asset(name: &str, role: &str) -> Result<String, JsValu
         layers: vec![],
     };
 
-    let doc_json = serde_json::to_string(&doc)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let doc_json = serde_json::to_string(&doc).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     // Write body file first
     js_save_file(&persistence::asset_path(&normalized_path), &doc_json)
@@ -2537,19 +2540,19 @@ pub async fn create_scene_asset(name: &str, role: &str) -> Result<String, JsValu
         .map_err(|e| JsValue::from_str(&e))?;
 
     // Register in catalog
-    with_asset_catalog_mut(|cat| {
-        cat.register(entry.clone())
-    }).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    with_asset_catalog_mut(|cat| cat.register(entry.clone()))
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     // Update project.json (awaited). On failure roll back the in-memory
     // registration so we don't publish a ghost. ADR-0019.
     if let Err(e) = update_project_metadata_for_asset(&entry, "create").await {
-        with_asset_catalog_mut(|cat| { let _ = cat.unregister(&asset_id); });
+        with_asset_catalog_mut(|cat| {
+            let _ = cat.unregister(&asset_id);
+        });
         return Err(e);
     }
 
-    serde_json::to_string(&entry)
-        .map_err(|e| JsValue::from_str(&e.to_string()))
+    serde_json::to_string(&entry).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Import a `.bsn` text file as a new Scene Asset.
@@ -2582,15 +2585,13 @@ pub async fn import_bsn_asset_wasm(name: &str, bsn_text: &str) -> Result<String,
     doc.version = entry.current_version;
 
     // Write the imported body to OPFS (overwriting the empty one created above)
-    let doc_json = serde_json::to_string(&doc)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let doc_json = serde_json::to_string(&doc).map_err(|e| JsValue::from_str(&e.to_string()))?;
     js_save_file(&persistence::asset_path(&entry.logical_path), &doc_json)
         .await
         .map_err(|e| JsValue::from_str(&e))?;
 
     // Return the entry (catalog already updated by create_scene_asset)
-    serde_json::to_string(&entry)
-        .map_err(|e| JsValue::from_str(&e.to_string()))
+    serde_json::to_string(&entry).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Rename a Scene Asset (moves the file and updates catalog).
@@ -2600,17 +2601,14 @@ pub async fn rename_scene_asset(asset_id: &str, new_path: &str) -> Result<String
     let new_path_normalized = scene_asset_catalog::normalize_logical_path(new_path);
 
     // Get old entry
-    let old_entry = with_asset_catalog(|cat| {
-        cat.get(asset_id).cloned()
-    }).ok_or_else(|| JsValue::from_str(&format!("Asset not found: {}", asset_id)))?;
+    let old_entry = with_asset_catalog(|cat| cat.get(asset_id).cloned())
+        .ok_or_else(|| JsValue::from_str(&format!("Asset not found: {}", asset_id)))?;
 
     let old_path = &old_entry.logical_path;
 
     // Check for duplicate new path
     if old_path != &new_path_normalized {
-        let duplicate = with_asset_catalog(|cat| {
-            cat.resolve_path(&new_path_normalized).is_some()
-        });
+        let duplicate = with_asset_catalog(|cat| cat.resolve_path(&new_path_normalized).is_some());
         if duplicate {
             return Err(JsValue::from_str(&format!(
                 "Duplicate logical path: {}",
@@ -2636,13 +2634,16 @@ pub async fn rename_scene_asset(asset_id: &str, new_path: &str) -> Result<String
 
     // Update catalog: unregister old, register new
     let new_entry = with_asset_catalog_mut(|cat| {
-        let _ = cat.unregister(asset_id).map_err(|e| JsValue::from_str(&e.to_string()));
+        let _ = cat
+            .unregister(asset_id)
+            .map_err(|e| JsValue::from_str(&e.to_string()));
         let mut new_entry = old_entry.clone();
         new_entry.logical_path = new_path_normalized.clone();
         new_entry.current_version += 1;
         let now = crate::time::now_millis();
         new_entry.updated_at = now;
-        cat.register(new_entry.clone()).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        cat.register(new_entry.clone())
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
         Ok::<_, JsValue>(new_entry)
     })?;
 
@@ -2664,8 +2665,7 @@ pub async fn rename_scene_asset(asset_id: &str, new_path: &str) -> Result<String
         cache.remove(old_path);
     });
 
-    serde_json::to_string(&new_entry)
-        .map_err(|e| JsValue::from_str(&e.to_string()))
+    serde_json::to_string(&new_entry).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Duplicate a Scene Asset.
@@ -2673,9 +2673,8 @@ pub async fn rename_scene_asset(asset_id: &str, new_path: &str) -> Result<String
 #[wasm_bindgen]
 pub async fn duplicate_scene_asset(asset_id: &str) -> Result<String, JsValue> {
     // Get source entry
-    let source_entry = with_asset_catalog(|cat| {
-        cat.get(asset_id).cloned()
-    }).ok_or_else(|| JsValue::from_str(&format!("Asset not found: {}", asset_id)))?;
+    let source_entry = with_asset_catalog(|cat| cat.get(asset_id).cloned())
+        .ok_or_else(|| JsValue::from_str(&format!("Asset not found: {}", asset_id)))?;
 
     let source_path = &source_entry.logical_path;
 
@@ -2710,19 +2709,19 @@ pub async fn duplicate_scene_asset(asset_id: &str) -> Result<String, JsValue> {
         .map_err(|e| JsValue::from_str(&e))?;
 
     // Register in catalog
-    with_asset_catalog_mut(|cat| {
-        cat.register(new_entry.clone())
-    }).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    with_asset_catalog_mut(|cat| cat.register(new_entry.clone()))
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     // Update project.json (awaited). On failure roll back the duplicate's
     // in-memory registration; the source body file is untouched. ADR-0019.
     if let Err(e) = update_project_metadata_for_asset(&new_entry, "duplicate").await {
-        with_asset_catalog_mut(|cat| { let _ = cat.unregister(&new_id); });
+        with_asset_catalog_mut(|cat| {
+            let _ = cat.unregister(&new_id);
+        });
         return Err(e);
     }
 
-    serde_json::to_string(&new_entry)
-        .map_err(|e| JsValue::from_str(&e.to_string()))
+    serde_json::to_string(&new_entry).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Delete a Scene Asset.
@@ -2730,9 +2729,8 @@ pub async fn duplicate_scene_asset(asset_id: &str) -> Result<String, JsValue> {
 #[wasm_bindgen]
 pub async fn delete_scene_asset(asset_id: &str) -> Result<(), JsValue> {
     // Get entry
-    let entry = with_asset_catalog(|cat| {
-        cat.get(asset_id).cloned()
-    }).ok_or_else(|| JsValue::from_str(&format!("Asset not found: {}", asset_id)))?;
+    let entry = with_asset_catalog(|cat| cat.get(asset_id).cloned())
+        .ok_or_else(|| JsValue::from_str(&format!("Asset not found: {}", asset_id)))?;
 
     let path = entry.logical_path.clone();
 
@@ -2742,15 +2740,14 @@ pub async fn delete_scene_asset(asset_id: &str) -> Result<(), JsValue> {
         .map_err(|e| JsValue::from_str(&e))?;
 
     // Unregister from catalog
-    with_asset_catalog_mut(|cat| {
-        cat.unregister(asset_id)
-    }).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    with_asset_catalog_mut(|cat| cat.unregister(asset_id))
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     // Update project.json — awaited so subsequent reads observe the removal.
-// Delete has no catalog rollback: the entry is intentionally gone. If the
-// metadata write fails, we propagate the error to the caller; the in-memory
-// catalog state matches the OPFS body state (both removed) which is the
-// correct partial state. See opfs-catalog-flake-fix ADR-0019.
+    // Delete has no catalog rollback: the entry is intentionally gone. If the
+    // metadata write fails, we propagate the error to the caller; the in-memory
+    // catalog state matches the OPFS body state (both removed) which is the
+    // correct partial state. See opfs-catalog-flake-fix ADR-0019.
     update_project_metadata_for_asset(&entry, "delete").await?;
 
     // Invalidate ASSET_BODY_CACHE by logical_path (D4)
@@ -2764,8 +2761,8 @@ pub async fn delete_scene_asset(asset_id: &str) -> Result<(), JsValue> {
 /// List all Scene Assets, optionally filtered by role.
 #[wasm_bindgen]
 pub fn list_scene_assets(role_filter: Option<String>) -> Result<String, JsValue> {
-    let entries: Vec<scene_asset_catalog::SceneAssetCatalogEntry> = with_asset_catalog(|cat| {
-        match role_filter {
+    let entries: Vec<scene_asset_catalog::SceneAssetCatalogEntry> =
+        with_asset_catalog(|cat| match role_filter {
             Some(role) => {
                 use crate::scene_asset::SceneAssetRole;
                 let r = match role.as_str() {
@@ -2780,10 +2777,8 @@ pub fn list_scene_assets(role_filter: Option<String>) -> Result<String, JsValue>
                 cat.list_by_role(r).into_iter().cloned().collect()
             }
             None => cat.list_all().into_iter().cloned().collect(),
-        }
-    });
-    serde_json::to_string(&entries)
-        .map_err(|e| JsValue::from_str(&e.to_string()))
+        });
+    serde_json::to_string(&entries).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Open a Scene Asset by asset_id into SCENE_ASSET_DOC thread-local.
@@ -2791,9 +2786,8 @@ pub fn list_scene_assets(role_filter: Option<String>) -> Result<String, JsValue>
 #[wasm_bindgen]
 pub async fn open_scene_asset(asset_id: &str) -> Result<String, JsValue> {
     // Get entry
-    let entry = with_asset_catalog(|cat| {
-        cat.get(asset_id).cloned()
-    }).ok_or_else(|| JsValue::from_str(&format!("Asset not found: {}", asset_id)))?;
+    let entry = with_asset_catalog(|cat| cat.get(asset_id).cloned())
+        .ok_or_else(|| JsValue::from_str(&format!("Asset not found: {}", asset_id)))?;
 
     let path = &entry.logical_path;
 
@@ -2815,8 +2809,7 @@ pub async fn open_scene_asset(asset_id: &str) -> Result<String, JsValue> {
         log.clear();
     });
 
-    serde_json::to_string(&doc)
-        .map_err(|e| JsValue::from_str(&e.to_string()))
+    serde_json::to_string(&doc).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Close the currently open Scene Asset (no-op if none open).
@@ -2833,23 +2826,17 @@ pub fn close_scene_asset() {
 /// Get the active SceneAssetDocument as JSON.
 #[wasm_bindgen]
 pub fn get_asset_document_json() -> Result<String, JsValue> {
-    with_asset_doc(|doc_opt| {
-        match doc_opt {
-            Some(doc) => serde_json::to_string(doc)
-                .map_err(|e| JsValue::from_str(&e.to_string())),
-            None => Err(JsValue::from_str("No asset open")),
-        }
+    with_asset_doc(|doc_opt| match doc_opt {
+        Some(doc) => serde_json::to_string(doc).map_err(|e| JsValue::from_str(&e.to_string())),
+        None => Err(JsValue::from_str("No asset open")),
     })
 }
 
 /// Get the Scene Asset Catalog as JSON.
 #[wasm_bindgen]
 pub fn get_scene_asset_catalog_json() -> Result<String, JsValue> {
-    let entries = with_asset_catalog(|cat| {
-        cat.list_all().into_iter().cloned().collect::<Vec<_>>()
-    });
-    serde_json::to_string(&entries)
-        .map_err(|e| JsValue::from_str(&e.to_string()))
+    let entries = with_asset_catalog(|cat| cat.list_all().into_iter().cloned().collect::<Vec<_>>());
+    serde_json::to_string(&entries).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Save the active Scene Asset: body-first, then catalog update.
@@ -2862,8 +2849,7 @@ pub async fn save_scene_asset() -> Result<String, JsValue> {
             .ok_or_else(|| JsValue::from_str("No asset open"))?;
         let asset_id = doc.asset_id.clone();
         let path = doc.logical_path.clone();
-        let doc_json = serde_json::to_string(doc)
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let doc_json = serde_json::to_string(doc).map_err(|e| JsValue::from_str(&e.to_string()))?;
         Ok::<_, JsValue>((asset_id, path, doc_json))
     })?;
 
@@ -2874,7 +2860,8 @@ pub async fn save_scene_asset() -> Result<String, JsValue> {
 
     // Step 2: Bump version in catalog
     let new_version = with_asset_catalog_mut(|cat| {
-        let current = cat.get(&asset_id)
+        let current = cat
+            .get(&asset_id)
             .ok_or_else(|| JsValue::from_str(&format!("Asset not found: {}", asset_id)))?
             .current_version;
         let new_ver = current + 1;
@@ -2884,13 +2871,11 @@ pub async fn save_scene_asset() -> Result<String, JsValue> {
     })?;
 
     // Step 3: Write project.json
-    let entries = with_asset_catalog(|cat| {
-        cat.list_all().into_iter().cloned().collect::<Vec<_>>()
-    });
+    let entries = with_asset_catalog(|cat| cat.list_all().into_iter().cloned().collect::<Vec<_>>());
     let mut project = load_project_metadata().await?;
     project.scene_assets = entries;
-    let project_json = serde_json::to_string(&project)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let project_json =
+        serde_json::to_string(&project).map_err(|e| JsValue::from_str(&e.to_string()))?;
     js_save_file(persistence::PROJECT_FILE, &project_json)
         .await
         .map_err(|e| JsValue::from_str(&e))?;
@@ -2965,7 +2950,9 @@ pub async fn delete_tileset(id: &str) -> Result<(), JsValue> {
     }
 
     let path = persistence::tileset_path(id);
-    js_delete_file(&path).await.map_err(|e| JsValue::from_str(&e))?;
+    js_delete_file(&path)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
     Ok(())
 }
 
@@ -2975,7 +2962,8 @@ pub async fn delete_tileset(id: &str) -> Result<(), JsValue> {
 #[wasm_bindgen]
 pub async fn list_tilesets() -> Result<String, JsValue> {
     let dir = persistence::TILESETS_DIR;
-    let files = js_list_files(dir).await
+    let files = js_list_files(dir)
+        .await
         .map_err(|e| JsValue::from_str(&e))?;
 
     let mut tilesets: Vec<tileset::TilesetMetadata> = Vec::new();
@@ -3013,9 +3001,7 @@ pub async fn list_tilesets() -> Result<String, JsValue> {
 fn derive_duplicate_path(original: &str) -> String {
     let base = format!("{}_2", original);
     // Check if collision
-    let exists = with_asset_catalog(|cat| {
-        cat.resolve_path(&base).is_some()
-    });
+    let exists = with_asset_catalog(|cat| cat.resolve_path(&base).is_some());
     if exists {
         // Try _3, _4, etc.
         let mut counter = 3;
@@ -3043,14 +3029,17 @@ async fn update_project_metadata_for_asset(
     let mut project = load_project_metadata().await?;
 
     // Find and replace or add entry
-    if let Some(existing) = project.scene_assets.iter_mut().find(|e| e.asset_id == entry.asset_id) {
+    if let Some(existing) = project
+        .scene_assets
+        .iter_mut()
+        .find(|e| e.asset_id == entry.asset_id)
+    {
         *existing = entry.clone();
     } else {
         project.scene_assets.push(entry.clone());
     }
 
-    let json = serde_json::to_string(&project)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let json = serde_json::to_string(&project).map_err(|e| JsValue::from_str(&e.to_string()))?;
     js_save_file(persistence::PROJECT_FILE, &json)
         .await
         .map_err(|e| JsValue::from_str(&e))?;
@@ -3162,13 +3151,21 @@ mod validation_center_tests {
             .filter(|i| i.category == ValidationCategory::Logic)
             .collect();
 
-        assert!(!logic_issues.is_empty(), "expected logic issues for cycle, got none");
-        let cycle_issue = logic_issues
-            .iter()
-            .find(|i| i.code == "cycle");
-        assert!(cycle_issue.is_some(), "expected code='cycle', got: {:?}", logic_issues);
+        assert!(
+            !logic_issues.is_empty(),
+            "expected logic issues for cycle, got none"
+        );
+        let cycle_issue = logic_issues.iter().find(|i| i.code == "cycle");
+        assert!(
+            cycle_issue.is_some(),
+            "expected code='cycle', got: {:?}",
+            logic_issues
+        );
         assert!(cycle_issue.unwrap().affected_asset_id.is_some());
-        assert_eq!(cycle_issue.unwrap().affected_asset_id.as_deref(), Some("cycle_test"));
+        assert_eq!(
+            cycle_issue.unwrap().affected_asset_id.as_deref(),
+            Some("cycle_test")
+        );
 
         clear_logic_graph();
     }
@@ -3186,7 +3183,11 @@ mod validation_center_tests {
             .filter(|i| i.category == ValidationCategory::Logic)
             .collect();
 
-        assert!(logic_issues.is_empty(), "expected no logic issues when no graph, got: {:?}", logic_issues);
+        assert!(
+            logic_issues.is_empty(),
+            "expected no logic issues when no graph, got: {:?}",
+            logic_issues
+        );
     }
 
     // Test 3: clean graph → no logic issues
@@ -3247,7 +3248,11 @@ mod validation_center_tests {
             .filter(|i| i.category == ValidationCategory::Logic)
             .collect();
 
-        assert!(logic_issues.is_empty(), "expected no logic issues for clean graph, got: {:?}", logic_issues);
+        assert!(
+            logic_issues.is_empty(),
+            "expected no logic issues for clean graph, got: {:?}",
+            logic_issues
+        );
 
         clear_logic_graph();
     }
@@ -3314,24 +3319,20 @@ mod rust_source_integration_tests {
                     local_id: LocalId::new("ent_enemy"),
                     name: "Enemy".to_string(),
                     parent: None,
-                    components: vec![
-                        ComponentInstance {
-                            type_id: "game.EnemyAI".to_string(),
-                            values: serde_json::json!({}),
-                        },
-                    ],
+                    components: vec![ComponentInstance {
+                        type_id: "game.EnemyAI".to_string(),
+                        values: serde_json::json!({}),
+                    }],
                 },
                 Entity {
                     id: StableId::new("ent_ally"),
                     local_id: LocalId::new("ent_ally"),
                     name: "Ally".to_string(),
                     parent: None,
-                    components: vec![
-                        ComponentInstance {
-                            type_id: "game.PlayerHealth".to_string(),
-                            values: serde_json::json!({}),
-                        },
-                    ],
+                    components: vec![ComponentInstance {
+                        type_id: "game.PlayerHealth".to_string(),
+                        values: serde_json::json!({}),
+                    }],
                 },
             ],
             instances: BTreeMap::new(),
@@ -3434,4 +3435,3 @@ mod rust_source_integration_tests {
         let _ = schema::unregister_schema("game.HasSource");
     }
 }
-

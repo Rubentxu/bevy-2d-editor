@@ -155,7 +155,10 @@ fn map_components(
     for component in &entity.components {
         match component.type_id.as_str() {
             "editor.Name" => {
-                out.insert("bevy.Name".to_string(), map_name(component, entity, warnings));
+                out.insert(
+                    "bevy.Name".to_string(),
+                    map_name(component, entity, warnings),
+                );
             }
             "editor.Transform2D" => {
                 out.insert(
@@ -278,8 +281,15 @@ fn parse_vec2_or_warn(
         None => return None,
         Some(v) => v,
     };
-    let z = if field_name == "translation" { 0.0 } else { 1.0 };
-    match (v.get("x").and_then(|x| x.as_f64()), v.get("y").and_then(|y| y.as_f64())) {
+    let z = if field_name == "translation" {
+        0.0
+    } else {
+        1.0
+    };
+    match (
+        v.get("x").and_then(|x| x.as_f64()),
+        v.get("y").and_then(|y| y.as_f64()),
+    ) {
         (Some(x), Some(y)) => Some([x as f32, y as f32, z]),
         _ => {
             warnings.push(ExportWarning {
@@ -350,7 +360,10 @@ fn map_sprite(
             warnings.push(ExportWarning {
                 entity_stable_id: Some(entity.id.to_string()),
                 component_type_id: Some("editor.Sprite2D".to_string()),
-                message: format!("Sprite2D anchor invalid on entity {}; using Center", entity.id),
+                message: format!(
+                    "Sprite2D anchor invalid on entity {}; using Center",
+                    entity.id
+                ),
             });
             "Center"
         });
@@ -446,7 +459,11 @@ mod tests {
         }
     }
 
-    fn transform_component(translation: (f32, f32), rotation: f32, scale: (f32, f32)) -> ComponentInstance {
+    fn transform_component(
+        translation: (f32, f32),
+        rotation: f32,
+        scale: (f32, f32),
+    ) -> ComponentInstance {
         ComponentInstance {
             type_id: "editor.Transform2D".to_string(),
             values: json!({
@@ -457,7 +474,11 @@ mod tests {
         }
     }
 
-    fn sprite_component(asset: &str, color: (f32, f32, f32, f32), anchor: &str) -> ComponentInstance {
+    fn sprite_component(
+        asset: &str,
+        color: (f32, f32, f32, f32),
+        anchor: &str,
+    ) -> ComponentInstance {
         ComponentInstance {
             type_id: "editor.Sprite2D".to_string(),
             values: json!({
@@ -510,7 +531,11 @@ mod tests {
     // Scenario 2: Name component.
     #[test]
     fn test_export_name_component() {
-        let doc = make_doc(vec![entity("ent_01", "Player", vec![name_component("Player")])]);
+        let doc = make_doc(vec![entity(
+            "ent_01",
+            "Player",
+            vec![name_component("Player")],
+        )]);
         let export = export_dynamic_scene(&doc).unwrap();
 
         assert_eq!(export.entities.len(), 1);
@@ -579,7 +604,11 @@ mod tests {
         let doc = make_doc(vec![entity(
             "e1",
             "Sprite",
-            vec![sprite_component("assets/player.png", (1.0, 0.0, 0.0, 1.0), "Center")],
+            vec![sprite_component(
+                "assets/player.png",
+                (1.0, 0.0, 0.0, 1.0),
+                "Center",
+            )],
         )]);
         let export = export_dynamic_scene(&doc).unwrap();
         let s = &export.entities[0].components["bevy.Sprite"];
@@ -610,10 +639,14 @@ mod tests {
                 vec![sprite_component("a.png", (1.0, 1.0, 1.0, 1.0), anchor)],
             )]);
             let export = export_dynamic_scene(&doc).unwrap();
-            assert_eq!(export.warnings.len(), 0, "anchor {} should not warn", anchor);
             assert_eq!(
-                export.entities[0].components["bevy.Sprite"]["anchor"],
-                anchor,
+                export.warnings.len(),
+                0,
+                "anchor {} should not warn",
+                anchor
+            );
+            assert_eq!(
+                export.entities[0].components["bevy.Sprite"]["anchor"], anchor,
                 "anchor {} should round-trip",
                 anchor
             );
@@ -632,7 +665,10 @@ mod tests {
         assert!(!export.entities[0].components.contains_key("bevy.Sprite"));
         assert_eq!(export.warnings.len(), 1);
         assert_eq!(export.warnings[0].entity_stable_id, Some("e1".to_string()));
-        assert_eq!(export.warnings[0].component_type_id, Some("editor.Sprite2D".to_string()));
+        assert_eq!(
+            export.warnings[0].component_type_id,
+            Some("editor.Sprite2D".to_string())
+        );
         assert!(export.warnings[0].message.contains("empty asset"));
     }
 
@@ -645,7 +681,10 @@ mod tests {
         };
         let doc = make_doc(vec![entity("e1", "Sprite", vec![sprite])]);
         let export = export_dynamic_scene(&doc).unwrap();
-        assert_eq!(export.entities[0].components["bevy.Sprite"]["color"], json!([1.0, 1.0, 1.0, 1.0]));
+        assert_eq!(
+            export.entities[0].components["bevy.Sprite"]["color"],
+            json!([1.0, 1.0, 1.0, 1.0])
+        );
         assert_eq!(export.warnings.len(), 1);
         assert!(export.warnings[0].message.contains("color"));
     }
@@ -656,10 +695,17 @@ mod tests {
         let doc = make_doc(vec![entity(
             "e1",
             "Sprite",
-            vec![sprite_component("a.png", (1.0, 1.0, 1.0, 1.0), "NotAValidAnchor")],
+            vec![sprite_component(
+                "a.png",
+                (1.0, 1.0, 1.0, 1.0),
+                "NotAValidAnchor",
+            )],
         )]);
         let export = export_dynamic_scene(&doc).unwrap();
-        assert_eq!(export.entities[0].components["bevy.Sprite"]["anchor"], "Center");
+        assert_eq!(
+            export.entities[0].components["bevy.Sprite"]["anchor"],
+            "Center"
+        );
         assert_eq!(export.warnings.len(), 1);
         assert!(export.warnings[0].message.contains("anchor"));
     }
@@ -711,7 +757,10 @@ mod tests {
             export.warnings[0].component_type_id,
             Some("game.PlayerHealth".to_string())
         );
-        assert!(export.warnings[0].message.contains("unknown") || export.warnings[0].message.contains("Skipping"));
+        assert!(
+            export.warnings[0].message.contains("unknown")
+                || export.warnings[0].message.contains("Skipping")
+        );
     }
 
     // Scenario 13: Parent-child hierarchy.
@@ -805,7 +854,10 @@ mod tests {
                 entity(
                     &format!("e{:03}", i),
                     &format!("E{}", i),
-                    vec![name_component(&format!("E{}", i)), transform_component((0.0, 0.0), 0.0, (1.0, 1.0))],
+                    vec![
+                        name_component(&format!("E{}", i)),
+                        transform_component((0.0, 0.0), 0.0, (1.0, 1.0)),
+                    ],
                 )
             })
             .collect();
@@ -821,12 +873,18 @@ mod tests {
         let doc1 = make_doc(vec![entity(
             "e1",
             "E",
-            vec![name_component("X"), transform_component((0.0, 0.0), 0.0, (1.0, 1.0))],
+            vec![
+                name_component("X"),
+                transform_component((0.0, 0.0), 0.0, (1.0, 1.0)),
+            ],
         )]);
         let doc2 = make_doc(vec![entity(
             "e1",
             "E",
-            vec![transform_component((0.0, 0.0), 0.0, (1.0, 1.0)), name_component("X")],
+            vec![
+                transform_component((0.0, 0.0), 0.0, (1.0, 1.0)),
+                name_component("X"),
+            ],
         )]);
         let export1 = export_dynamic_scene(&doc1).unwrap();
         let export2 = export_dynamic_scene(&doc2).unwrap();

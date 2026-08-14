@@ -119,7 +119,11 @@ export default function PromptDialog({
             </p>
           )}
           <div className="dialog-actions">
-            <button type="button" onClick={onCancel} data-testid="prompt-dialog-cancel-btn">
+            <button
+              type="button"
+              onClick={onCancel}
+              data-testid="prompt-dialog-cancel-btn"
+            >
               Cancel
             </button>
             <button

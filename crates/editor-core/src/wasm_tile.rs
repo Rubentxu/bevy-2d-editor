@@ -9,11 +9,11 @@ use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use crate::asset_command::AssetCommand;
 #[cfg(target_arch = "wasm32")]
+use crate::asset_state::{with_asset_body_cache, with_asset_body_cache_mut, with_asset_log_mut};
+#[cfg(target_arch = "wasm32")]
 use crate::scene_asset::SceneAssetDocument;
 #[cfg(target_arch = "wasm32")]
 use crate::tile_layer::TileLayerId;
-#[cfg(target_arch = "wasm32")]
-use crate::asset_state::{with_asset_body_cache, with_asset_body_cache_mut, with_asset_log_mut};
 
 /// Paint a tile onto a TileLayer.
 ///
@@ -73,12 +73,7 @@ pub fn paint_tile(
 /// the erased TileRef via the inverse `PaintTile`.
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
-pub fn erase_tile(
-    asset_ref: &str,
-    layer_id: &str,
-    x: i32,
-    y: i32,
-) -> Result<JsValue, JsValue> {
+pub fn erase_tile(asset_ref: &str, layer_id: &str, x: i32, y: i32) -> Result<JsValue, JsValue> {
     // Load the SceneAssetDocument from cache
     let mut doc_opt: Option<SceneAssetDocument> = None;
     with_asset_body_cache(|cache| {

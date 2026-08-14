@@ -4,9 +4,9 @@
 //! These tests run entirely in-memory without WASM/OPFS, using the
 //! pure Rust persistence and catalog functions directly.
 
-use editor_core::{asset_path, ASSETS_DIR, ProjectMetadata};
 use editor_core::scene_asset::SceneAssetRole;
-use editor_core::scene_asset_catalog::{mint_asset_id, SceneAssetCatalog, SceneAssetCatalogEntry};
+use editor_core::scene_asset_catalog::{SceneAssetCatalog, SceneAssetCatalogEntry, mint_asset_id};
+use editor_core::{ASSETS_DIR, ProjectMetadata, asset_path};
 
 // ─────────────────────────────────────────────────────────────────────────
 // Helper: make a catalog entry
@@ -111,7 +111,9 @@ fn catalog_register_creates_entry() {
     let mut catalog = SceneAssetCatalog::new();
     let e = entry("id_1", "player", SceneAssetRole::Actor, 1);
 
-    catalog.register(e.clone()).expect("register should succeed");
+    catalog
+        .register(e.clone())
+        .expect("register should succeed");
 
     assert_eq!(catalog.get("id_1"), Some(&e));
     assert_eq!(catalog.resolve_path("player"), Some("id_1"));
@@ -124,7 +126,9 @@ fn catalog_register_normalizes_path() {
     // Mixed case gets normalized to lowercase and leading/trailing slashes stripped
     let e = entry("id_1", "Assets/Player/", SceneAssetRole::Actor, 1);
 
-    catalog.register(e.clone()).expect("register should succeed");
+    catalog
+        .register(e.clone())
+        .expect("register should succeed");
 
     // Resolves the normalized path (lowercase, stripped slashes)
     assert_eq!(catalog.resolve_path("assets/player"), Some("id_1"));
@@ -144,7 +148,9 @@ fn catalog_register_duplicate_path_rejected() {
     catalog.register(e1).expect("first should succeed");
 
     let e2 = entry("id_2", "player", SceneAssetRole::Actor, 1);
-    let err = catalog.register(e2).expect_err("duplicate path should fail");
+    let err = catalog
+        .register(e2)
+        .expect_err("duplicate path should fail");
     assert!(matches!(
         err,
         editor_core::scene_asset_catalog::CatalogError::DuplicateLogicalPath { path }
@@ -208,7 +214,9 @@ fn catalog_unregister_then_register_moves_path() {
     catalog.register(e1).expect("register should succeed");
 
     // Unregister and re-register with new path (simulates rename)
-    catalog.unregister("id_1").expect("unregister should succeed");
+    catalog
+        .unregister("id_1")
+        .expect("unregister should succeed");
     let e2 = entry("id_1", "characters/player", SceneAssetRole::Actor, 2);
     catalog.register(e2).expect("re-register should succeed");
 
@@ -258,7 +266,9 @@ fn catalog_unregister_removes_entry() {
     let e = entry("id_1", "player", SceneAssetRole::Actor, 1);
     catalog.register(e).expect("register should succeed");
 
-    catalog.unregister("id_1").expect("unregister should succeed");
+    catalog
+        .unregister("id_1")
+        .expect("unregister should succeed");
 
     assert!(catalog.get("id_1").is_none());
     assert!(catalog.resolve_path("player").is_none());
@@ -268,7 +278,9 @@ fn catalog_unregister_removes_entry() {
 #[test]
 fn catalog_unregister_missing_returns_not_found() {
     let mut catalog = SceneAssetCatalog::new();
-    let err = catalog.unregister("nonexistent").expect_err("missing should fail");
+    let err = catalog
+        .unregister("nonexistent")
+        .expect_err("missing should fail");
     assert!(matches!(
         err,
         editor_core::scene_asset_catalog::CatalogError::NotFound { id }

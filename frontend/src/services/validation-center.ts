@@ -37,13 +37,7 @@ export interface ValidationIssue {
   severity: "error" | "warning" | "info";
   /** Granular category as reported by the source. */
   category:
-    | "catalog"
-    | "override"
-    | "export"
-    | "schema"
-    | "dirty"
-    | "logic"
-    | "ai";
+    "catalog" | "override" | "export" | "schema" | "dirty" | "logic" | "ai";
   /** Spec grouping dimension (scene / asset / logic / code / runtime / ai). */
   domain: "scene" | "asset" | "logic" | "code" | "runtime" | "ai";
   /** Machine-readable issue code (e.g. "orphaned_index", "missing_entity"). */
@@ -215,17 +209,15 @@ async function getDirtySceneIssues(): Promise<ValidationIssue[]> {
     const scenes = await listScenesExtended();
     return scenes
       .filter((s) => s.is_dirty)
-      .map(
-        (s): ValidationIssue => ({
-          id: `dirty-scene-${s.id}`,
-          severity: "info",
-          category: "dirty",
-          domain: "scene",
-          code: "dirty_scene",
-          message: `Scene "${s.name}" has unsaved changes`,
-          affected_scene_id: s.id,
-        }),
-      );
+      .map((s): ValidationIssue => ({
+        id: `dirty-scene-${s.id}`,
+        severity: "info",
+        category: "dirty",
+        domain: "scene",
+        code: "dirty_scene",
+        message: `Scene "${s.name}" has unsaved changes`,
+        affected_scene_id: s.id,
+      }));
   } catch {
     return [];
   }

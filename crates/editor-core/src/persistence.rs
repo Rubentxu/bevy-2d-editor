@@ -132,10 +132,14 @@ pub fn validate_logical_path(s: &str) -> Result<(), AssetPathError> {
     let segments: Vec<&str> = s.split('/').collect();
     for seg in segments {
         if seg == ".." {
-            return Err(AssetPathError::PathTraversal("'..' segment not allowed".to_string()));
+            return Err(AssetPathError::PathTraversal(
+                "'..' segment not allowed".to_string(),
+            ));
         }
         if seg == "." {
-            return Err(AssetPathError::PathTraversal("'.' segment not allowed".to_string()));
+            return Err(AssetPathError::PathTraversal(
+                "'.' segment not allowed".to_string(),
+            ));
         }
     }
     Ok(())
@@ -185,8 +189,14 @@ mod tests {
 
     #[test]
     fn test_schema_path_format() {
-        assert_eq!(schema_path("editor.Transform2D"), "schemas/editor.Transform2D.schema.json");
-        assert_eq!(schema_path("game.PlayerHealth"), "schemas/game.PlayerHealth.schema.json");
+        assert_eq!(
+            schema_path("editor.Transform2D"),
+            "schemas/editor.Transform2D.schema.json"
+        );
+        assert_eq!(
+            schema_path("game.PlayerHealth"),
+            "schemas/game.PlayerHealth.schema.json"
+        );
     }
 
     #[test]
@@ -337,10 +347,7 @@ mod tests {
 
     #[test]
     fn test_logic_graph_path_simple() {
-        assert_eq!(
-            logic_graph_path("jump"),
-            "logic_graphs/jump.logic.json"
-        );
+        assert_eq!(logic_graph_path("jump"), "logic_graphs/jump.logic.json");
     }
 
     #[test]

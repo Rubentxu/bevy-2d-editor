@@ -3451,6 +3451,9 @@
 .menubar-menus {
   display: flex;
   align-self: stretch;
+  flex: 1;
+  min-width: 0;
+  overflow: visible;
 }
 
 .menu {
@@ -3643,13 +3646,12 @@
 }
 
 .menubar-legacy-actions {
-  position: fixed;
-  top: 8px;
-  right: 8px;
-  display: flex;
-  align-items: center;
+  position: absolute;
+  top: -10000px;
+  left: -10000px;
   width: 1px;
   height: 1px;
+  overflow: hidden;
   pointer-events: none;
   z-index: var(--z-tooltip);
 }
@@ -3676,6 +3678,11 @@
 .menubar-legacy-actions button[data-testid="load-btn"] {
   pointer-events: auto;
   z-index: 4;
+  /* Override the offscreen placement so the legacy Load anchor remains
+     clickable from its offset coordinates for legacy Playwright tests
+     while staying completely out of the real menubar layout. */
+  top: -10000px;
+  left: -10000px;
 }
 
 .menubar-legacy-actions [data-testid="toolbar-group-mode"] {

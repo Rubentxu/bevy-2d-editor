@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { dispatchCommand, getSceneSnapshot } from "../engine-bridge";
+import { getEditorGateway } from "../services/EditorGateway";
 
 export interface SceneDocument {
   version: string;
@@ -20,58 +20,48 @@ export interface DispatchResult {
 }
 
 /**
- * React hook for scene state management.
- * Provides:
- * - `scene`: current SceneDocument or null
- * - `refresh()`: re-reads from WASM
- * - `dispatch(envelope)`: dispatches a command, refreshes state from response
+ * React hook for scene state management. Routes through the typed
+ * `EditorGateway` so the polling + window-globals dance is hidden
+ * behind a single `whenReady()` promise. The 500 ms refresh poll
+ * remains for backwards compatibility with external `load_scene_json`
+ * mutations.
  */
 export function useSceneState() {
   const [scene, setScene] = useState<SceneDocument | null>(null);
+  const gateway = getEditorGateway();
 
   const refresh = useCallback(async () => {
     try {
-      // Wait for engine to be ready (window.get_scene_snapshot may not be set yet)
-      let attempts = 0;
-      while (
-        typeof (window as any).get_scene_snapshot !== "function" &&
-        attempts < 50
-      ) {
-        await new Promise((r) => setTimeout(r, 100));
-        attempts += 1;
+      const result = await gateway.getSceneSnapshot();
+      if (result.ok) {
+        setScene((result.value as SceneDocument | null) ?? null);
+      } else {
+        console.error("useSceneState.refresh failed:", result.error);
       }
-      const snap = await getSceneSnapshot();
-      setScene(snap);
     } catch (e) {
       console.error("useSceneState.refresh failed:", e);
     }
-  }, []);
+  }, [gateway]);
 
   const dispatch = useCallback(
     async (envelope: object): Promise<DispatchResult> => {
       try {
-        // Wait for engine ready
-        let attempts = 0;
-        while (
-          typeof (window as any).dispatch_command !== "function" &&
-          attempts < 50
-        ) {
-          await new Promise((r) => setTimeout(r, 100));
-          attempts += 1;
-        }
-        const resultJson = await dispatchCommand(envelope);
-        const parsed = JSON.parse(resultJson);
+        const parsed = await gateway.dispatchCommand(envelope);
         if (parsed.snapshot) {
-          setScene(parsed.snapshot);
+          setScene(parsed.snapshot as SceneDocument);
         }
-        return parsed;
+        return {
+          inverse: parsed.inverse,
+          snapshot: parsed.snapshot as SceneDocument | undefined,
+          error: parsed.error,
+        };
       } catch (e) {
         const msg = String(e);
         console.error("useSceneState.dispatch failed:", e);
         return { error: msg };
       }
     },
-    [],
+    [gateway],
   );
 
   useEffect(() => {

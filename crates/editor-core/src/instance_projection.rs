@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::scene_asset::{LocalId, SceneAssetDocument, SceneAssetRelationship, RelationshipKind};
+use crate::scene_asset::{LocalId, RelationshipKind, SceneAssetDocument, SceneAssetRelationship};
 
 /// A projected entity in the preview world, derived from a Scene Asset.
 #[derive(Debug, Clone, PartialEq)]

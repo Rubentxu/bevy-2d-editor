@@ -155,7 +155,8 @@ export function createMenuConfig(
       {
         label: "Toggle Properties",
         shortcut: "Shift+F8",
-        onClick: handlers.handleTogglePropertiesDock ?? todo("Toggle Properties"),
+        onClick:
+          handlers.handleTogglePropertiesDock ?? todo("Toggle Properties"),
         testId: "menu-toggle-properties",
       },
       { label: "Toggle Tools", shortcut: "F7", onClick: todo("Toggle Tools") },

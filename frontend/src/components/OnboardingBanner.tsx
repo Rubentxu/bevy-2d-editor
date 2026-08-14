@@ -48,19 +48,21 @@ export default function OnboardingBanner({
   const [onboardingDismissed, setOnboardingDismissedState] = useState(false);
   // Track permanent welcome dismissal so the banner stays hidden across reloads
   // when the user previously chose "Don't show again" in Welcome (spec S5).
-  const [welcomePermanentlyDismissed, setWelcomePermanentlyDismissed] = useState(false);
+  const [welcomePermanentlyDismissed, setWelcomePermanentlyDismissed] =
+    useState(false);
 
   // Hydrate dismissal state on mount — also checks the welcome-dismissed.json
   // flag so we stay hidden when the user previously dismissed Welcome.
   useEffect(() => {
     let cancelled = false;
-    Promise.all([isOnboardingDismissed(), isWelcomePermanentlyDismissed()]).then(
-      ([onboardingDismissed, welcomeDismissed]) => {
-        if (cancelled) return;
-        setOnboardingDismissedState(onboardingDismissed || welcomeDismissed);
-        setWelcomePermanentlyDismissed(welcomeDismissed);
-      },
-    );
+    Promise.all([
+      isOnboardingDismissed(),
+      isWelcomePermanentlyDismissed(),
+    ]).then(([onboardingDismissed, welcomeDismissed]) => {
+      if (cancelled) return;
+      setOnboardingDismissedState(onboardingDismissed || welcomeDismissed);
+      setWelcomePermanentlyDismissed(welcomeDismissed);
+    });
     return () => {
       cancelled = true;
     };
@@ -70,7 +72,13 @@ export default function OnboardingBanner({
   // until OPFS resolves). Also hide when Welcome is visible (mutual exclusion, spec S5),
   // when the user permanently dismissed Welcome via "Don't show again", or when the
   // user permanently dismissed onboarding itself.
-  if (isChecking || onboardingDismissed || welcomeVisible || welcomePermanentlyDismissed) return null;
+  if (
+    isChecking ||
+    onboardingDismissed ||
+    welcomeVisible ||
+    welcomePermanentlyDismissed
+  )
+    return null;
 
   return (
     <div className="onboarding-banner" data-testid="onboarding-banner">

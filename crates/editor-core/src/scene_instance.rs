@@ -63,7 +63,9 @@ pub fn component_override_status_after_field_rename(
     renamed_field: (&str, &str),
 ) -> ComponentOverrideStatus {
     let (old_name, _new_name) = renamed_field;
-    if patch.status == ComponentOverrideStatus::Active && patch.field_path.iter().any(|s| s == old_name) {
+    if patch.status == ComponentOverrideStatus::Active
+        && patch.field_path.iter().any(|s| s == old_name)
+    {
         ComponentOverrideStatus::Stale
     } else {
         patch.status

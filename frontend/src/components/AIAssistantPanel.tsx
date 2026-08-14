@@ -84,7 +84,12 @@ export default function AIAssistantPanel({
       <div className="ai-panel-body">
         {/* Task mode selector (Ask / Propose / Fix / Generate / Review) */}
         {onTaskModeChange && (
-          <div className="ai-task-mode-selector" data-testid="ai-task-mode-selector" role="group" aria-label="Task mode">
+          <div
+            className="ai-task-mode-selector"
+            data-testid="ai-task-mode-selector"
+            role="group"
+            aria-label="Task mode"
+          >
             {TASK_MODES.map((mode) => (
               <button
                 key={mode.value}
@@ -126,7 +131,9 @@ export default function AIAssistantPanel({
                     title={`${stat.name}: ${stat.included_chars} / ${stat.total_chars} chars`}
                   >
                     {stat.name}
-                    {stat.truncated && <span className="chip-truncated">*</span>}
+                    {stat.truncated && (
+                      <span className="chip-truncated">*</span>
+                    )}
                   </button>
                 ))}
               </div>

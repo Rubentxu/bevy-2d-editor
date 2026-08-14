@@ -52,9 +52,7 @@ function mimeFor(path: string): string | null {
   return MIME_BY_EXT[path.slice(idx).toLowerCase()] ?? null;
 }
 
-export default function ThumbnailCell({
-  resourcePath,
-}: ThumbnailCellProps) {
+export default function ThumbnailCell({ resourcePath }: ThumbnailCellProps) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const containerRef = useRef<HTMLSpanElement>(null);
   const loadedRef = useRef(false);
@@ -90,26 +88,21 @@ export default function ThumbnailCell({
     // Fallback when IntersectionObserver is unavailable (very old
     // browser): load immediately. The placeholder renders
     // synchronously in either branch.
-    if (
-      !el ||
-      typeof IntersectionObserver === "undefined"
-    ) {
+    if (!el || typeof IntersectionObserver === "undefined") {
       loadedRef.current = true;
       void loadAndSet();
       return;
     }
 
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting && !loadedRef.current) {
-            loadedRef.current = true;
-            io.disconnect();
-            void loadAndSet();
-          }
+    const io = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting && !loadedRef.current) {
+          loadedRef.current = true;
+          io.disconnect();
+          void loadAndSet();
         }
-      },
-    );
+      }
+    });
     io.observe(el);
     return () => io.disconnect();
   }, [resourcePath]);

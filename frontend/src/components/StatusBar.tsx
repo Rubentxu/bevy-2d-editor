@@ -81,12 +81,7 @@ export interface StatusBarProps {
  * here automatically.
  */
 export default function StatusBar(props: StatusBarProps = {}) {
-  const {
-    worldPos,
-    zoom,
-    setZoom,
-    fitToContent,
-  } = useCanvasViewport();
+  const { worldPos, zoom, setZoom, fitToContent } = useCanvasViewport();
   const { scene } = useSceneState();
   const logState = useLogState();
   const { scenes, currentId } = useScenes();
@@ -108,10 +103,8 @@ export default function StatusBar(props: StatusBarProps = {}) {
     return () => window.clearInterval(interval);
   }, []);
 
-  const currentScene =
-    scenes.find((item) => item.id === currentId) ?? null;
-  const sceneName =
-    currentScene?.name ?? scene?.name ?? "No scene";
+  const currentScene = scenes.find((item) => item.id === currentId) ?? null;
+  const sceneName = currentScene?.name ?? scene?.name ?? "No scene";
   const entityCount = scene?.entities.length ?? 0;
   const instanceCount =
     metrics.instance_count ??
@@ -123,8 +116,8 @@ export default function StatusBar(props: StatusBarProps = {}) {
     : "(—, —)";
   const projectName = scenes[0]?.name ?? "Untitled";
   const selectedLabel = props.selectedEntityId
-    ? scene?.entities.find((e) => e.id === props.selectedEntityId)?.name ??
-      "1 selected"
+    ? (scene?.entities.find((e) => e.id === props.selectedEntityId)?.name ??
+      "1 selected")
     : "None";
 
   // Dropdown state — mutually exclusive: only one segment menu open at a time
@@ -186,11 +179,7 @@ export default function StatusBar(props: StatusBarProps = {}) {
     logState.size > 0 ? `Dirty (${logState.size} ops pending)` : "Saved";
 
   return (
-    <div
-      className="status-bar"
-      data-testid="status-bar"
-      ref={rootRef}
-    >
+    <div className="status-bar" data-testid="status-bar" ref={rootRef}>
       {/* 1. Position (cursor world coords) */}
       <StatusSegment
         testId="status-segment-position"

@@ -14,9 +14,9 @@
 
 use std::fmt::Write as FmtWrite;
 
-use crate::bsn_ir::{bsn_ir_from_scene_asset, BsnIr, BsnIrNode};
+use crate::bsn_ir::{BsnIr, BsnIrNode, bsn_ir_from_scene_asset};
 use crate::code_export::CodeGenResult;
-use crate::dynamic_scene::{anchor_str_to_normalized_offset, ExportWarning};
+use crate::dynamic_scene::{ExportWarning, anchor_str_to_normalized_offset};
 use crate::scene_asset::SceneAssetDocument;
 
 /// Errors that can occur when exporting a `SceneAssetDocument` to `.bsn` text.
@@ -34,7 +34,9 @@ pub enum BsnExportError {
 impl std::fmt::Display for BsnExportError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            BsnExportError::EmptyScene => f.write_str("SceneAssetDocument has no entities; nothing to export"),
+            BsnExportError::EmptyScene => {
+                f.write_str("SceneAssetDocument has no entities; nothing to export")
+            }
             BsnExportError::UnsupportedShape(s) => {
                 write!(f, "Unsupported BSN shape: {}", s)
             }
@@ -53,10 +55,7 @@ impl std::error::Error for BsnExportError {}
 /// callers.
 pub trait BsnExporter: Send + Sync {
     /// Serialize the document to `.bsn` text.
-    fn export_to_bsn_text(
-        &self,
-        doc: &SceneAssetDocument,
-    ) -> Result<String, BsnExportError>;
+    fn export_to_bsn_text(&self, doc: &SceneAssetDocument) -> Result<String, BsnExportError>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -68,10 +67,7 @@ pub trait BsnExporter: Send + Sync {
 pub struct EditorCoreBsnExporter;
 
 impl BsnExporter for EditorCoreBsnExporter {
-    fn export_to_bsn_text(
-        &self,
-        doc: &SceneAssetDocument,
-    ) -> Result<String, BsnExportError> {
+    fn export_to_bsn_text(&self, doc: &SceneAssetDocument) -> Result<String, BsnExportError> {
         // Reject Logic role — BSN export is for scene assets only
         if matches!(doc.role, crate::scene_asset::SceneAssetRole::Logic) {
             return Err(BsnExportError::UnsupportedShape(
@@ -138,7 +134,12 @@ fn emit_bsn_text(ir: &BsnIr, _warnings: &mut Vec<ExportWarning>) -> String {
 /// Recursively emit a single `bsn!{ ... }` block for a `BsnIrNode`. The
 /// output is `.bsn`-native (no Rust tuple commas, no `,` after `Children`
 /// items) so the file is a valid `.bsn` asset, not a Rust source.
-fn emit_bsn_node(out: &mut String, node: &BsnIrNode, indent: usize, warnings: &mut Vec<ExportWarning>) {
+fn emit_bsn_node(
+    out: &mut String,
+    node: &BsnIrNode,
+    indent: usize,
+    warnings: &mut Vec<ExportWarning>,
+) {
     let indent_str = "    ".repeat(indent);
 
     let _ = writeln!(out, "{}bsn!{{", indent_str);
@@ -242,7 +243,10 @@ fn emit_component(
                 "{}Sprite {{ image: \"{}\", color: Color::srgba({}, {}, {}, {}) }}",
                 indent_str,
                 escape_string(asset),
-                r, g, b, a
+                r,
+                g,
+                b,
+                a
             )
             .unwrap();
 
@@ -258,12 +262,7 @@ fn emit_component(
         }
         _ => {
             // Unknown type — emit a placeholder comment
-            writeln!(
-                out,
-                "{}// unknown component type: {}",
-                indent_str, type_id
-            )
-            .unwrap();
+            writeln!(out, "{}// unknown component type: {}", indent_str, type_id).unwrap();
         }
     }
 }
@@ -420,12 +419,13 @@ mod tests {
             components: vec![],
         };
         let mut doc = make_doc(vec![root.clone(), child.clone()]);
-        doc.relationships.push(crate::scene_asset::SceneAssetRelationship {
-            from_local_id: LocalId::new("root"),
-            to_local_id: LocalId::new("child"),
-            kind: RelationshipKind::Child,
-            field_path: None,
-        });
+        doc.relationships
+            .push(crate::scene_asset::SceneAssetRelationship {
+                from_local_id: LocalId::new("root"),
+                to_local_id: LocalId::new("child"),
+                kind: RelationshipKind::Child,
+                field_path: None,
+            });
         let text = export_to_bsn_text(&doc).unwrap();
         // After Children [ we should see the child block, and after the
         // closing `}` of the child block there should NOT be a `,`.
@@ -436,7 +436,11 @@ mod tests {
         let child_close_idx = text[child_open_idx..].find("}").unwrap() + child_open_idx;
         let children_close_idx = text[child_close_idx..].rfind("]").unwrap() + child_close_idx;
         let between = &text[child_close_idx + 1..children_close_idx];
-        assert!(!between.contains(','), "between child close and Children close found: {:?}", between);
+        assert!(
+            !between.contains(','),
+            "between child close and Children close found: {:?}",
+            between
+        );
     }
 
     #[test]

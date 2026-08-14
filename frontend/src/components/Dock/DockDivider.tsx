@@ -35,8 +35,7 @@ export default function DockDivider({
       // Skip drag on double-click — onReset handles that.
       if (e.detail >= 2) return;
       draggingRef.current = true;
-      lastPosRef.current =
-        orientation === "vertical" ? e.clientX : e.clientY;
+      lastPosRef.current = orientation === "vertical" ? e.clientX : e.clientY;
       (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
       e.preventDefault();
     },

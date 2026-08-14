@@ -1,0 +1,12 @@
+# --- SDDK companion ignore (v3.3) ---
+# sddk/ and openspec/changes/ are gitignored via .gitignore
+# but searchable by ripgrep via .ignore override
+
+# Allow searching sddk/ directory contents
+!sddk/
+
+# Allow searching openspec/changes/ directory contents
+!openspec/changes/
+
+# Exclude any docs/ROADMAP.md from being confused with artifact output
+# (actual project roadmap is at docs/roadmaps/ or docs/ROADMAP.md — leave as-is)

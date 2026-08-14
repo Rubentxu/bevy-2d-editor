@@ -9,12 +9,12 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
+use crate::ValidationIssue;
 use crate::asset_command::AssetOperationLog;
 use crate::document::StableId;
 use crate::scene_asset::SceneAssetDocument;
 use crate::scene_asset_catalog::{CatalogWarning, SceneAssetCatalog};
 use crate::scene_instance_overrides::ResyncReport;
-use crate::ValidationIssue;
 
 thread_local! {
     /// Scene Asset catalog, document, and warnings holders (ADR-0008 §Decision).

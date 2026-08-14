@@ -5,7 +5,6 @@ import {
   SceneAssetDocument,
   SceneInstance,
   listSceneAssets,
-  getSceneAssetCatalogJson,
   openSceneAsset,
   closeSceneAsset,
   getAssetDocumentJson,
@@ -23,6 +22,7 @@ import {
   replaceSceneInstanceAsset,
   getSceneInstances,
 } from "../services/scene-assets";
+import { getEditorGateway } from "../services/EditorGateway";
 
 const DEFAULT_ENTRIES: SceneAssetCatalogEntry[] = [];
 const DEFAULT_DOC: SceneAssetDocument | null = null;
@@ -57,19 +57,30 @@ export function useSceneAssets() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   /**
-   * Refresh the catalog entries from the backend.
+   * Refresh the catalog entries from the backend. Uses the typed
+   * `EditorGateway` for the read; the rest of the asset operations
+   * still go through `services/scene-assets` until Wave D2/D3.
    */
   const refreshCatalog = useCallback(async () => {
     try {
-      const catalog = await getSceneAssetCatalogJson();
-      setEntries(catalog);
+      const gateway = getEditorGateway();
+      const result = await gateway.getSceneAssetCatalog();
+      if (!result.ok) {
+        console.error("useSceneAssets: refreshCatalog failed:", result.error);
+        return;
+      }
+      const value = result.value as
+        | { entries?: ReadonlyArray<SceneAssetCatalogEntry> }
+        | null;
+      setEntries([...(value?.entries ?? [])]);
     } catch (e) {
       console.error("useSceneAssets: refreshCatalog failed:", e);
     }
   }, []);
 
   /**
-   * Refresh the asset log state.
+   * Refresh the asset log state. Keeps the legacy service wrapper
+   * for now; this method is not yet in the gateway scope.
    */
   const refreshLogState = useCallback(async () => {
     try {

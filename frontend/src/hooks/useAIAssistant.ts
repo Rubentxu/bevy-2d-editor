@@ -20,6 +20,7 @@ import {
 import type { SourceFileRef } from "../types/ai";
 import { listSourceFiles, readSourceFile } from "../services/code-files";
 import { subscribe } from "../services/hot-reload";
+import { waitForEditorReady } from "../utils/waitForEditorReady";
 
 /** A batch of proposed commands with associated metadata */
 export interface Proposal {
@@ -113,18 +114,7 @@ export function useAIAssistant({
       setError(null);
 
       try {
-        // Hito 5 followups (v0.77.1): wait for the WASM bridge to mount
-        // before reading scene/schemas. Without this, getSceneSnapshot may
-        // throw because the bridge has not yet registered (initEngine
-        // completes asynchronously after start_engine's setTimeout).
-        const waitForReady = async (): Promise<void> => {
-          if ((window as any).isEngineReady?.()) return;
-          for (let i = 0; i < 50; i++) {
-            if ((window as any).isEngineReady?.()) return;
-            await new Promise((r) => setTimeout(r, 100));
-          }
-        };
-        await waitForReady();
+        await waitForEditorReady();
 
         const [sceneSnapshot, schemasJson] = await Promise.all([
           getSceneSnapshot(),
@@ -177,7 +167,14 @@ export function useAIAssistant({
           );
         } catch (listErr) {
           // Non-fatal: source-files fetch failed, continue with empty list.
-          console.warn("[useAIAssistant] listSourceFiles failed:", listErr, "message:", (listErr as Error)?.message, "stack:", (listErr as Error)?.stack?.substring(0, 200));
+          console.warn(
+            "[useAIAssistant] listSourceFiles failed:",
+            listErr,
+            "message:",
+            (listErr as Error)?.message,
+            "stack:",
+            (listErr as Error)?.stack?.substring(0, 200),
+          );
         }
 
         // Assemble multi-source context (selectedEntity must NOT depend on listSourceFiles succeeding)
@@ -220,7 +217,6 @@ export function useAIAssistant({
             ctxErr,
           );
         }
-
 
         const response: ProposeResponse = await fetchPropose(
           prompt.trim(),
@@ -319,7 +315,8 @@ export function useAIAssistant({
             errors.push(`${(envelope.command as any).type}: ${result.error}`);
           }
         } catch (thrown) {
-          const thrownMsg = thrown instanceof Error ? thrown.message : String(thrown);
+          const thrownMsg =
+            thrown instanceof Error ? thrown.message : String(thrown);
           errors.push(`${(envelope.command as any).type}: ${thrownMsg}`);
           // CRITICAL ISSUE 2: wire thrown errors in applyProposal to Validation Center.
           if (typeof (window as any).__recordAIProposalFailure === "function") {

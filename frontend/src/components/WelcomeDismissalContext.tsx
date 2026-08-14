@@ -48,7 +48,11 @@ const WelcomeDismissalContext = createContext<WelcomeDismissalContextValue>({
   reportWelcomeShouldShow: () => {},
 });
 
-export function WelcomeDismissalProvider({ children }: { children: ReactNode }) {
+export function WelcomeDismissalProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
   // welcomeVisible: false initially, set to true by WelcomeOverlay's async effect
   //   when Welcome should be shown (first visit, or no prior "Don't show again").
   // isChecking: true while OPFS is being read — both surfaces stay invisible.
@@ -63,7 +67,9 @@ export function WelcomeDismissalProvider({ children }: { children: ReactNode }) 
   }, []);
 
   return (
-    <WelcomeDismissalContext.Provider value={{ welcomeVisible, isChecking, reportWelcomeShouldShow }}>
+    <WelcomeDismissalContext.Provider
+      value={{ welcomeVisible, isChecking, reportWelcomeShouldShow }}
+    >
       {children}
     </WelcomeDismissalContext.Provider>
   );
