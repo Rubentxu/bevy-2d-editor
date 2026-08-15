@@ -6,7 +6,7 @@
 frontend/src/wasm/
 
 # Node / npm
-frontend/node_modules/
+node_modules/
 frontend/dist/
 
 # Editor / OS
@@ -34,6 +34,7 @@ frontend/.vite/
 # SDDK local working artifacts (ADR-0022 local-only policy)
 sddk/
 openspec/
+cycles/
 
 # Playwright outputs
 frontend/test-results/
