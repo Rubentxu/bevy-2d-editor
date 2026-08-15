@@ -5,9 +5,49 @@ use std::fmt::Debug;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Milliseconds since the unix epoch (1970-01-01T00:00:00Z).
-pub type Timestamp = u64;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct Timestamp(pub u64);
 
+impl Timestamp {
+    /// Unwrap the inner u64 value.
+    pub fn into_u64(self) -> u64 {
+        self.0
+    }
+}
+
+impl From<u64> for Timestamp {
+    fn from(v: u64) -> Self {
+        Timestamp(v)
+    }
+}
+
+impl core::fmt::Display for Timestamp {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl serde::Serialize for Timestamp {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Timestamp {
+    fn deserialize<D>(deserializer: D) -> Result<Timestamp, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        u64::deserialize(deserializer).map(Timestamp)
+    }
+}
+
+/// abstraction for reading the current wall-clock time in milliseconds since epoch.
 pub trait Clock: Debug + Send + Sync {
+    /// Returns the current timestamp in milliseconds since the Unix epoch.
     fn now(&self) -> Timestamp;
 }
 
@@ -18,16 +58,19 @@ pub struct FakeClock {
 }
 
 impl FakeClock {
+    /// Construct a new FakeClock with time starting at 0.
     pub fn new() -> Self {
         Self {
             current_ms: AtomicU64::new(0),
         }
     }
 
-    pub fn set(&self, t: Timestamp) {
-        self.current_ms.store(t, Ordering::SeqCst);
+    /// Set the clock to a fixed timestamp (milliseconds since epoch).
+    pub fn set(&self, t: impl Into<Timestamp>) {
+        self.current_ms.store(t.into().0, Ordering::SeqCst);
     }
 
+    /// Advance the clock by `delta_ms` milliseconds.
     pub fn advance(&self, delta_ms: u64) {
         self.current_ms.fetch_add(delta_ms, Ordering::SeqCst);
     }
@@ -35,6 +78,6 @@ impl FakeClock {
 
 impl Clock for FakeClock {
     fn now(&self) -> Timestamp {
-        self.current_ms.load(Ordering::SeqCst)
+        Timestamp(self.current_ms.load(Ordering::SeqCst))
     }
 }

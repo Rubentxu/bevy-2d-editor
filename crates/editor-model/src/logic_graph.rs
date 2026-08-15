@@ -13,9 +13,11 @@ use crate::component::ComponentInstance;
 pub struct NodeId(pub String);
 
 impl NodeId {
+    /// Construct a new NodeId from a string.
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
     }
+    /// Borrow the inner string.
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -27,9 +29,11 @@ impl NodeId {
 pub struct PortId(pub String);
 
 impl PortId {
+    /// Construct a new PortId from a string.
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
     }
+    /// Borrow the inner string.
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -41,9 +45,11 @@ impl PortId {
 pub struct NodeTypeId(pub String);
 
 impl NodeTypeId {
+    /// Construct a new NodeTypeId from a string.
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
     }
+    /// Borrow the inner string.
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -53,19 +59,27 @@ impl NodeTypeId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LogicNodeRole {
+    /// Emits events or values (e.g. key press, collision, timer).
     Sensor,
+    /// Makes decisions (e.g. if, gate, compare, math).
     Controller,
+    /// Produces side-effects (e.g. apply impulse, set animation, spawn).
     Actuator,
 }
 
 /// One node in a LogicGraphAsset graph.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LogicNode {
+    /// Unique identifier for this node within the graph.
     pub node_id: NodeId,
+    /// Role in the Sensor → Controller → Actuator flow.
     pub role: LogicNodeRole,
+    /// Type of the node (e.g. "sensor.key_down", "rust-controller").
     pub node_type_id: NodeTypeId,
+    /// Per-instance field values for this node.
     #[serde(default)]
     pub field_values: serde_json::Value,
+    /// For `RustController` nodes, the resolved controller identifier.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub controller_id: Option<String>,
 }
@@ -73,22 +87,32 @@ pub struct LogicNode {
 /// A directed edge connecting two LogicNodes.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LogicEdge {
+    /// Source node of the edge.
     pub from_node: NodeId,
+    /// Source port on the source node.
     pub from_port: PortId,
+    /// Destination node of the edge.
     pub to_node: NodeId,
+    /// Destination port on the destination node.
     pub to_port: PortId,
 }
 
 /// Editor-owned durable authoring document for a logic graph asset.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LogicGraphAsset {
+    /// Stable identifier for this asset.
     pub asset_id: String,
+    /// Logical project path.
     pub logical_path: String,
+    /// Monotonically increasing version number.
     pub version: u32,
+    /// Whether this is a built-in recipe (not user-authored).
     #[serde(default)]
     pub builtin: bool,
+    /// All nodes in this graph.
     #[serde(default)]
     pub nodes: Vec<LogicNode>,
+    /// All directed edges in this graph.
     #[serde(default)]
     pub edges: Vec<LogicEdge>,
 }
@@ -109,12 +133,17 @@ impl Default for LogicGraphAsset {
 /// A lightweight catalog entry for LogicGraphAssets.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LogicGraphCatalogEntry {
+    /// Stable identifier for this asset.
     pub asset_id: String,
+    /// Logical project path.
     pub logical_path: String,
+    /// Whether this is a built-in recipe.
     #[serde(default)]
     pub builtin: bool,
+    /// Unix timestamp (ms) when this asset was created.
     #[serde(default)]
     pub created_at: u64,
+    /// Unix timestamp (ms) when this asset was last modified.
     #[serde(default)]
     pub updated_at: u64,
 }
@@ -122,7 +151,9 @@ pub struct LogicGraphCatalogEntry {
 /// Binding payload for a LogicInstance — placed use of a LogicGraphAsset.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LogicInstance {
+    /// ID of the LogicGraphAsset being instantiated.
     pub asset_id: String,
+    /// Version of the LogicGraphAsset at the time of binding.
     pub version: u32,
 }
 

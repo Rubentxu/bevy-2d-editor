@@ -27,6 +27,9 @@ pub enum StoreError {
     /// Atomic write failed and was rolled back.
     #[error("atomic write failed and was rolled back: {0}")]
     AtomicRollback(String),
+    /// A lock was poisoned by a panicked thread.
+    #[error("lock poisoned")]
+    LockPoisoned,
 }
 
 /// ProjectStore — the file-system abstraction for the editor application.

@@ -13,16 +13,24 @@ pub type TileLayerId = LayerId;
 /// A layer inside a LevelSceneAsset that stores a sparse grid of tiles.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TileLayer {
+    /// Unique identifier for this layer.
     pub id: TileLayerId,
+    /// Human-readable name.
     pub name: String,
+    /// Tileset providing tile graphics for this layer.
     pub tileset_id: TilesetId,
+    /// Sparse map of painted tile coordinates to tile references.
     #[serde(default)]
     pub grid: TileGrid,
+    /// Z-ordering index.
     pub order: i32,
+    /// Incremented each time the grid is modified.
     #[serde(default)]
     pub generation: u64,
+    /// Width of the grid in tiles.
     #[serde(default = "default_grid_width")]
     pub grid_width: u32,
+    /// Height of the grid in tiles.
     #[serde(default = "default_grid_height")]
     pub grid_height: u32,
 }
@@ -36,6 +44,7 @@ fn default_grid_height() -> u32 {
 }
 
 impl TileLayer {
+    /// Construct a new TileLayer with default grid dimensions (50×50).
     pub fn new(id: TileLayerId, name: String, tileset_id: TilesetId) -> Self {
         TileLayer {
             id,
@@ -49,6 +58,7 @@ impl TileLayer {
         }
     }
 
+    /// Create a new layer with explicit grid dimensions.
     pub fn with_dimensions(
         id: TileLayerId,
         name: String,
@@ -68,11 +78,13 @@ impl TileLayer {
         }
     }
 
+    /// Paint a tile at `coord`, replacing any existing tile. Increments generation.
     pub fn paint_tile(&mut self, coord: TileCoord, tile_ref: TileRef) {
         self.grid.insert(coord, tile_ref);
         self.generation += 1;
     }
 
+    /// Erase the tile at `coord`. Returns the erased tile reference. Increments generation.
     pub fn erase_tile(&mut self, coord: &TileCoord) -> Option<TileRef> {
         let result = self.grid.remove(coord);
         if result.is_some() {
@@ -81,14 +93,17 @@ impl TileLayer {
         result
     }
 
+    /// Look up the tile at `coord`.
     pub fn get_tile(&self, coord: &TileCoord) -> Option<&TileRef> {
         self.grid.get(coord)
     }
 
+    /// Total number of painted tiles.
     pub fn tile_count(&self) -> usize {
         self.grid.len()
     }
 
+    /// True when no tiles are painted.
     pub fn is_empty(&self) -> bool {
         self.grid.is_empty()
     }
