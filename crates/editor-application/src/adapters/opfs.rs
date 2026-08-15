@@ -2,20 +2,20 @@
 //!
 //! ## Architecture
 //!
-//! - [`core::OpfsCore`] — pure in-memory mirror + pending-op queue. No JS deps,
+//! - `OpfsCore` — pure in-memory mirror + pending-op queue. No JS deps,
 //!   compiled on all targets.
-//! - [`bridge::RawStoreBridge`] — async I/O abstraction. On wasm32 backed by the
+//! - `RawStoreBridge` — async I/O abstraction. On wasm32 backed by the
 //!   `window.opfs_*` JS bridge via `js_sys::Promise`; on native backed by a
 //!   [`MemoryBridge`] fake for tests.
-//! - [`wasm::JsBridge`] + [`wasm::SysClock`] — wasm32-only implementations gated
-//!   behind `#[cfg(target_arch = "wasm32")]` inside the `wasm` module.
+//! - `wasm` module (`#[cfg(target_arch = "wasm32")]`) — wasm32-only bridge ops
+//!   and `SysClock` implementations.
 //! - [`OpfsProjectStore`] — public struct used at runtime. Holds
 //!   `Arc<Mutex<OpfsCore>>` + `Arc<dyn RawStoreBridge>` + `Arc<dyn Clock>`.
 //!
 //! ## Durability semantics
 //!
 //! Every [`ProjectStore::write`] / [`ProjectStore::delete`] mutates the in-memory
-//! mirror immediately and enqueues a [`PendingOp`]. The [`OpfsProjectStore::flush`]
+//! mirror immediately and enqueues a pending operation. The `flush`
 //! method drains the entire queue, awaits each operation through the bridge, and
 //! only returns `Ok(())` once every operation has resolved. The seven
 //! `js_*` wrappers in `editor-core` call `store.write(...).then(store.flush())`
@@ -67,14 +67,14 @@ impl OpfsCore {
         self.entries.get(path).map(|(b, _)| b.as_slice())
     }
 
-    /// Mirror write — mutates the in-memory mirror and enqueues a [`PendingOp::Write`].
+    /// Mirror write — mutates the in-memory mirror and enqueues a pending write op.
     pub fn write(&mut self, path: String, bytes: Vec<u8>, modified_ms: u64) {
         self.entries
             .insert(path.clone(), (bytes.clone(), modified_ms));
         self.pending.push_back(PendingOp::Write { path, bytes });
     }
 
-    /// Mirror delete — removes from mirror and enqueues a [`PendingOp::Delete`].
+    /// Mirror delete — removes from mirror and enqueues a pending delete op.
     pub fn delete(&mut self, path: String) {
         self.entries.remove(&path);
         self.pending.push_back(PendingOp::Delete { path });
@@ -122,7 +122,7 @@ pub(crate) trait RawStoreBridge: Send + Sync {
     fn delete(&self, path: &str) -> Result<(), String>;
 }
 
-/// A [`RawStoreBridge`] backed by an in-memory `BTreeMap` — for unit tests.
+/// A raw-store bridge backed by an in-memory `BTreeMap` — for unit tests.
 #[derive(Debug, Default)]
 pub struct MemoryBridge {
     entries: std::sync::RwLock<BTreeMap<String, Vec<u8>>>,
@@ -176,7 +176,7 @@ impl RawStoreBridge for MemoryBridge {
     }
 }
 
-/// A no-op [`RawStoreBridge`] used as a placeholder on wasm32 where
+/// A no-op bridge used as a placeholder on wasm32 where
 /// `hydrate` / `flush` call `wasm::list_op` / `wasm::read_op` / `wasm::flush_op`
 /// directly instead of going through the bridge.
 #[derive(Debug, Default)]
@@ -383,8 +383,8 @@ pub mod wasm {
 ///
 /// ## Lifecycle
 ///
-/// 1. Construct via [`OpfsProjectStore::new()`] (wasm32) or
-///    [`OpfsProjectStore::new_for_tests()`] (tests + native).
+/// 1. Construct via `OpfsProjectStore::new()` (wasm32) or
+///    `OpfsProjectStore::new_for_tests()` (tests + native).
 /// 2. Call [`OpfsProjectStore::hydrate()`] once to populate the in-memory mirror
 ///    from OPFS — this is the "eager load" step. Binary assets are loaded at
 ///    startup; sync-access-handles are the future fix (ADR-0033).
