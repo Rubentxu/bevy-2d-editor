@@ -89,6 +89,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
       - name: Build and check bundle budget (ADR-0029)
         run: npm run build:check
 
