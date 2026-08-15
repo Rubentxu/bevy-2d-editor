@@ -5,68 +5,10 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::fmt;
 
+use crate::component::ComponentInstance;
+use crate::ids::{LocalId, StableId};
 use crate::scene_instance::SceneInstance;
-
-// ComponentInstance is still defined locally in this module.
-// scene_instance module re-exports ComponentInstance from editor_model::component
-// (see scene_instance.rs) to break the document ↔ scene_instance circular import.
-
-/// Opaque stable identifier for entities.
-/// Uses #[serde(transparent)] so it serializes as a plain string.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct StableId(String);
-
-impl StableId {
-    pub fn new(id: impl Into<String>) -> Self {
-        Self(id.into())
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for StableId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-/// Local identifier for an entity within a scene.
-/// Uses #[serde(transparent)] so it serializes as a plain string.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(transparent)]
-#[derive(Default)]
-pub struct LocalId(String);
-
-impl LocalId {
-    pub fn new(id: impl Into<String>) -> Self {
-        Self(id.into())
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-}
-
-impl fmt::Display for LocalId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-// T-02-14 LocalId collapse: canonical definition moved to editor_model::ids::LocalId.
-// This duplicate is kept for backward compatibility during the transition.
-// All new code should use editor_model::ids::LocalId directly.
-#[deprecated(since = "0.87.0", note = "Use editor_model::ids::LocalId instead")]
-pub type DeprecatedLocalId = editor_model::ids::LocalId;
 
 /// 2D vector with x and y components.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -105,7 +47,6 @@ impl Color {
 }
 
 /// Anchor point for sprites and other positioned elements.
-/// Serializes as PascalCase strings (e.g., "Center", "TopLeft").
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub enum Anchor {
@@ -121,7 +62,6 @@ pub enum Anchor {
 }
 
 /// The root document type representing a complete scene.
-/// This is the source-of-truth structure stored as JSON.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SceneDocument {
     pub version: String,
@@ -129,8 +69,6 @@ pub struct SceneDocument {
     pub name: String,
     pub entities: Vec<Entity>,
     /// Placed Scene Instances indexed by StableId.
-    /// Serialized as a BTreeMap for deterministic key ordering.
-    /// Defaults to empty BTreeMap when absent from older documents (S7).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub instances: BTreeMap<StableId, SceneInstance>,
 }
@@ -160,37 +98,10 @@ pub struct Entity {
     pub components: Vec<ComponentInstance>,
 }
 
-/// A component instance attaching typed values to an entity.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ComponentInstance {
-    pub type_id: String,
-    #[serde(default)]
-    pub values: serde_json::Value,
-}
-
-impl From<editor_model::ComponentInstance> for ComponentInstance {
-    fn from(em: editor_model::ComponentInstance) -> Self {
-        Self {
-            type_id: em.type_id,
-            values: em.values,
-        }
-    }
-}
-
-impl From<ComponentInstance> for editor_model::ComponentInstance {
-    fn from(doc: ComponentInstance) -> Self {
-        Self {
-            type_id: doc.type_id,
-            values: doc.values,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // §2.1: Serialize a populated SceneDocument
     #[test]
     fn test_serialize_populated_scene() {
         let doc = SceneDocument {
@@ -214,7 +125,6 @@ mod tests {
         assert!(json.contains("\"entities\""));
     }
 
-    // §2.1: Serialize an empty scene
     #[test]
     fn test_serialize_empty_scene() {
         let doc = SceneDocument {
@@ -230,7 +140,6 @@ mod tests {
         assert!(deserialized.entities.is_empty());
     }
 
-    // §2.2: Deserialize a well-formed scene
     #[test]
     fn test_deserialize_well_formed_scene() {
         let json = r#"{
@@ -259,7 +168,6 @@ mod tests {
         assert_eq!(doc.entities[0].components[0].type_id, "editor.Transform2D");
     }
 
-    // §2.3: Roundtrip preserves hierarchy
     #[test]
     fn test_roundtrip_preserves_hierarchy() {
         let doc = SceneDocument {
@@ -293,7 +201,6 @@ mod tests {
         assert_eq!(doc.entities[1].parent, roundtripped.entities[1].parent);
     }
 
-    // §2.4: Rename preserves ID
     #[test]
     fn test_rename_preserves_id() {
         let mut entity = Entity {
@@ -308,7 +215,6 @@ mod tests {
         assert_eq!(entity.id.as_str(), "ent_01J...");
     }
 
-    // §2.5: IDs are opaque and value-comparable
     #[test]
     fn test_ids_are_opaque() {
         let id1 = StableId::new("ent_01");
@@ -317,11 +223,9 @@ mod tests {
 
         assert_eq!(id1, id1_clone);
         assert_ne!(id1, id2);
-        // IDs are opaque strings, not indices
         assert_eq!(id1.as_str(), "ent_01");
     }
 
-    // §2.6: Vec2, Color, Anchor JSON shapes
     #[test]
     fn test_vec2_color_anchor_json_shapes() {
         let vec2 = Vec2::new(10.0, 20.0);
@@ -341,7 +245,6 @@ mod tests {
         assert_eq!(anchor_json, "\"Center\"");
     }
 
-    // §2.7: Unknown field preserved
     #[test]
     fn test_unknown_field_preserved() {
         let json = r#"{
@@ -368,7 +271,6 @@ mod tests {
         assert_eq!(values.get("x").unwrap(), 1);
     }
 
-    // §2.8: Version field preserved
     #[test]
     fn test_version_field_preserved() {
         let doc = SceneDocument {
@@ -384,7 +286,6 @@ mod tests {
         assert_eq!(roundtripped.version, "0.1");
     }
 
-    // §2.9: Instance has namespaced type_id
     #[test]
     fn test_instance_has_namespaced_type_id() {
         let instance = ComponentInstance {
@@ -397,7 +298,6 @@ mod tests {
         assert!(json.contains("\"type_id\":\"editor.Transform2D\""));
     }
 
-    // §2.10: Component instance structure
     #[test]
     fn test_component_instance_structure() {
         let instance = ComponentInstance {

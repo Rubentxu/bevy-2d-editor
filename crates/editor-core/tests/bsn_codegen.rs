@@ -1,7 +1,6 @@
 //! Integration tests for `bsn_codegen` — covers spec scenarios S1–S8.
 
 use editor_core::{
-    ComponentInstance,
     bsn_codegen::{emit_bsn_source, emit_bsn_source_from_document},
     bsn_ir_from_scene_asset,
     scene_asset::{
@@ -9,6 +8,7 @@ use editor_core::{
         SceneAssetRole,
     },
 };
+use editor_model::ComponentInstance;
 use serde_json::json;
 
 // ─── Test helpers ─────────────────────────────────────────────────────────────

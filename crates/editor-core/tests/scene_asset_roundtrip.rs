@@ -1,16 +1,14 @@
 //! Serde round-trip tests for scene asset and instance types.
 //! Covers scenarios S1, S2, S6, S7, S8.
 
-use editor_core::{
-    StableId,
-    bsn_ir::{BsnIr, BsnIrNode, BsnIrRelationship, BsnPatch, BsnPatchOp},
-    scene_asset::{
-        AssetReference, ExposedProperty, LayerId, LevelLayer, LocalId, RelationshipKind,
-        SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata, SceneAssetRelationship,
-        SceneAssetRole, SceneInstanceLayer, SceneInstanceLayerKind,
-    },
-    scene_instance::{ComponentOverride, ComponentOverrideStatus, SceneInstance},
+use editor_core::bsn_ir::{BsnIr, BsnIrNode, BsnIrRelationship, BsnPatch, BsnPatchOp};
+use editor_core::scene_asset::{
+    AssetReference, ExposedProperty, LayerId, LevelLayer, LocalId, RelationshipKind,
+    SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata, SceneAssetRelationship,
+    SceneAssetRole, SceneInstanceLayer, SceneInstanceLayerKind,
 };
+use editor_model::scene_instance::{ComponentOverride, ComponentOverrideStatus, SceneInstance};
+use editor_model::{ComponentInstance, StableId};
 
 #[test]
 fn s1_scene_asset_document_roundtrip() {
@@ -22,11 +20,11 @@ fn s1_scene_asset_document_roundtrip() {
         version: 3,
         entities: vec![
             SceneAssetEntity {
-                local_id: LocalId("root".to_string()),
+                local_id: LocalId::new("root".to_string()),
                 local_path: "root".to_string(),
                 name: "Player".to_string(),
                 components: vec![
-                    editor_core::ComponentInstance {
+                    ComponentInstance {
                         type_id: "editor.Transform2D".to_string(),
                         values: serde_json::json!({
                             "translation": {"x": 100.0, "y": 200.0},
@@ -34,7 +32,7 @@ fn s1_scene_asset_document_roundtrip() {
                             "scale": {"x": 1.5, "y": 1.5}
                         }),
                     },
-                    editor_core::ComponentInstance {
+                    ComponentInstance {
                         type_id: "editor.Sprite2D".to_string(),
                         values: serde_json::json!({
                             "asset": "player.png",
@@ -45,10 +43,10 @@ fn s1_scene_asset_document_roundtrip() {
                 ],
             },
             SceneAssetEntity {
-                local_id: LocalId("weapon".to_string()),
+                local_id: LocalId::new("weapon".to_string()),
                 local_path: "root/weapon".to_string(),
                 name: "Weapon".to_string(),
-                components: vec![editor_core::ComponentInstance {
+                components: vec![ComponentInstance {
                     type_id: "editor.Sprite2D".to_string(),
                     values: serde_json::json!({
                         "asset": "weapon.png",
@@ -59,14 +57,14 @@ fn s1_scene_asset_document_roundtrip() {
             },
         ],
         relationships: vec![SceneAssetRelationship {
-            from_local_id: LocalId("root".to_string()),
-            to_local_id: LocalId("weapon".to_string()),
+            from_local_id: LocalId::new("root".to_string()),
+            to_local_id: LocalId::new("weapon".to_string()),
             kind: RelationshipKind::Child,
             field_path: None,
         }],
         exposed_properties: vec![ExposedProperty {
             name: "weapon_color".to_string(),
-            target_local_id: LocalId("weapon".to_string()),
+            target_local_id: LocalId::new("weapon".to_string()),
             field_path: vec!["Sprite2D".to_string(), "color".to_string()],
             default_value: serde_json::json!({"r": 0.8, "g": 0.8, "b": 0.8, "a": 1.0}),
         }],
@@ -101,8 +99,8 @@ fn s2_scene_instance_roundtrip() {
     use std::collections::BTreeMap;
 
     let mut id_map = BTreeMap::new();
-    id_map.insert(LocalId("root".to_string()), StableId::new("ent_a"));
-    id_map.insert(LocalId("weapon".to_string()), StableId::new("ent_b"));
+    id_map.insert(LocalId::new("root".to_string()), StableId::new("ent_a"));
+    id_map.insert(LocalId::new("weapon".to_string()), StableId::new("ent_b"));
 
     let instance = SceneInstance {
         instance_components: vec![],
@@ -112,8 +110,8 @@ fn s2_scene_instance_roundtrip() {
         asset_version_seen: 7,
         id_map,
         component_overrides: vec![ComponentOverride {
-            target_local_id: LocalId("weapon".to_string()),
-            component_type_id: editor_core::schema::ComponentTypeId::new("Sprite2D"),
+            target_local_id: LocalId::new("weapon".to_string()),
+            component_type_id: editor_model::schema::ComponentTypeId::new("Sprite2D"),
             field_path: vec!["color".to_string()],
             value: serde_json::json!({"r": 1.0, "g": 0.3, "b": 0.3, "a": 1.0}),
             status: ComponentOverrideStatus::Active,
@@ -198,7 +196,7 @@ fn s7_scene_asset_document_with_layers_roundtrip() {
     use std::collections::BTreeMap;
 
     let mut id_map = BTreeMap::new();
-    id_map.insert(LocalId("root".to_string()), StableId::new("ent_x"));
+    id_map.insert(LocalId::new("root".to_string()), StableId::new("ent_x"));
 
     let instance = SceneInstance {
         instance_components: vec![],

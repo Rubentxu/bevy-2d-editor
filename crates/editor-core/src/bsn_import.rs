@@ -28,11 +28,11 @@
 //! - `relationships` are reconstructed as `RelationshipKind::Child` only
 
 use crate::bsn_ir::{BsnIr, BsnIrNode, BsnIrRelationship};
-use crate::document::ComponentInstance;
 use crate::scene_asset::{
     LocalId, RelationshipKind, SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata,
     SceneAssetRelationship, SceneAssetRole,
 };
+use editor_model::ComponentInstance;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -668,7 +668,7 @@ pub fn scene_asset_from_bsn_ir(ir: BsnIr) -> SceneAssetDocument {
         entities: &mut Vec<SceneAssetEntity>,
         relationships: &mut Vec<SceneAssetRelationship>,
     ) {
-        let local_id = LocalId(node.identifier.clone());
+        let local_id = LocalId::new(node.identifier.clone());
         let components = node
             .components
             .into_iter()
@@ -684,7 +684,7 @@ pub fn scene_asset_from_bsn_ir(ir: BsnIr) -> SceneAssetDocument {
         });
 
         for child in node.children {
-            let child_local_id = LocalId(child.identifier.clone());
+            let child_local_id = LocalId::new(child.identifier.clone());
             relationships.push(SceneAssetRelationship {
                 from_local_id: entity_local_id.clone(),
                 to_local_id: child_local_id.clone(),
@@ -734,17 +734,17 @@ mod tests {
 
     #[test]
     fn simple_entity_round_trip() {
-        use crate::document::ComponentInstance;
         use crate::scene_asset::{
             LocalId, SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata, SceneAssetRole,
         };
+        use editor_model::ComponentInstance;
         let doc = SceneAssetDocument {
             asset_id: String::new(),
             logical_path: String::new(),
             role: SceneAssetRole::Fragment,
             version: 1,
             entities: vec![SceneAssetEntity {
-                local_id: LocalId("player".to_string()),
+                local_id: LocalId::new("player".to_string()),
                 local_path: String::new(),
                 name: "Player".to_string(),
                 components: vec![ComponentInstance {
@@ -797,11 +797,11 @@ mod tests {
 
     #[test]
     fn nested_children_round_trip() {
-        use crate::document::ComponentInstance;
         use crate::scene_asset::{
             LocalId, RelationshipKind, SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata,
             SceneAssetRelationship, SceneAssetRole,
         };
+        use editor_model::ComponentInstance;
         let doc = SceneAssetDocument {
             asset_id: String::new(),
             logical_path: String::new(),
@@ -809,19 +809,19 @@ mod tests {
             version: 1,
             entities: vec![
                 SceneAssetEntity {
-                    local_id: LocalId("root".to_string()),
+                    local_id: LocalId::new("root".to_string()),
                     local_path: String::new(),
                     name: "Root".to_string(),
                     components: vec![],
                 },
                 SceneAssetEntity {
-                    local_id: LocalId("child1".to_string()),
+                    local_id: LocalId::new("child1".to_string()),
                     local_path: String::new(),
                     name: "Child1".to_string(),
                     components: vec![],
                 },
                 SceneAssetEntity {
-                    local_id: LocalId("child2".to_string()),
+                    local_id: LocalId::new("child2".to_string()),
                     local_path: String::new(),
                     name: "Child2".to_string(),
                     components: vec![],
@@ -829,14 +829,14 @@ mod tests {
             ],
             relationships: vec![
                 SceneAssetRelationship {
-                    from_local_id: LocalId("root".to_string()),
-                    to_local_id: LocalId("child1".to_string()),
+                    from_local_id: LocalId::new("root".to_string()),
+                    to_local_id: LocalId::new("child1".to_string()),
                     kind: RelationshipKind::Child,
                     field_path: None,
                 },
                 SceneAssetRelationship {
-                    from_local_id: LocalId("root".to_string()),
-                    to_local_id: LocalId("child2".to_string()),
+                    from_local_id: LocalId::new("root".to_string()),
+                    to_local_id: LocalId::new("child2".to_string()),
                     kind: RelationshipKind::Child,
                     field_path: None,
                 },

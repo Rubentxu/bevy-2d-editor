@@ -11,7 +11,7 @@ fn s5_override_status_is_closed_enum() {
     // Construct an ComponentOverride with status Active, serialize to JSON,
     // deserialize back, assert status equals Active (lowercase snake_case string).
     let patch = ComponentOverride {
-        target_local_id: LocalId("weapon".into()),
+        target_local_id: LocalId::new("weapon".to_string()),
         component_type_id: editor_core::schema::ComponentTypeId::new("Sprite2D"),
         field_path: vec!["asset".into()],
         value: serde_json::json!("cannon.png"),
@@ -52,7 +52,7 @@ fn s5_override_status_is_closed_enum() {
 fn s8_local_path_and_name_independent_of_local_id() {
     // Construct a SceneAssetEntity with local_id, local_path, and name.
     let entity = SceneAssetEntity {
-        local_id: LocalId("abc".into()),
+        local_id: LocalId::new("abc".to_string()),
         local_path: "root/weapon".into(),
         name: "Weapon".into(),
         components: vec![],
@@ -103,7 +103,7 @@ fn s10_local_id_and_stable_id_are_distinct_types() {
     fn accepts_local_id(_: LocalId) {}
     fn accepts_stable_id(_: StableId) {}
 
-    let lid = LocalId("root".into());
+    let lid = LocalId::new("root".to_string());
     let sid = StableId::new("ent_a");
 
     // Each function accepts only its own type — this compiles.

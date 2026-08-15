@@ -123,7 +123,14 @@ pub fn project_instances(
             results.push(PreviewEntity {
                 stable_id,
                 local_id: local_id.clone(),
-                component_values: resolved_entity.components,
+                component_values: resolved_entity
+                    .components
+                    .into_iter()
+                    .map(|c| crate::document::ComponentInstance {
+                        type_id: c.type_id,
+                        values: c.values,
+                    })
+                    .collect(),
             });
         }
     }
@@ -163,7 +170,7 @@ mod tests {
     #[test]
     fn root_local_ids_single_entity_returns_that_entity() {
         let entity = SceneAssetEntity {
-            local_id: LocalId("root".to_string()),
+            local_id: LocalId::new("root".to_string()),
             local_path: "root".to_string(),
             name: "Single Entity".to_string(),
             components: vec![],
@@ -178,20 +185,20 @@ mod tests {
     fn root_local_ids_multi_entity_hierarchy_returns_only_toplevel() {
         // root -> child (root has outgoing Child to child, child has incoming)
         let root = SceneAssetEntity {
-            local_id: LocalId("root".to_string()),
+            local_id: LocalId::new("root".to_string()),
             local_path: "root".to_string(),
             name: "Root".to_string(),
             components: vec![],
         };
         let child = SceneAssetEntity {
-            local_id: LocalId("child".to_string()),
+            local_id: LocalId::new("child".to_string()),
             local_path: "root/child".to_string(),
             name: "Child".to_string(),
             components: vec![],
         };
         let relationships = vec![SceneAssetRelationship {
-            from_local_id: LocalId("root".to_string()),
-            to_local_id: LocalId("child".to_string()),
+            from_local_id: LocalId::new("root".to_string()),
+            to_local_id: LocalId::new("child".to_string()),
             kind: RelationshipKind::Child,
             field_path: None,
         }];
@@ -206,13 +213,13 @@ mod tests {
     fn root_local_ids_two_roots_no_relationships() {
         // Two unrelated entities - both are roots
         let entity1 = SceneAssetEntity {
-            local_id: LocalId("entity1".to_string()),
+            local_id: LocalId::new("entity1".to_string()),
             local_path: "entity1".to_string(),
             name: "Entity 1".to_string(),
             components: vec![],
         };
         let entity2 = SceneAssetEntity {
-            local_id: LocalId("entity2".to_string()),
+            local_id: LocalId::new("entity2".to_string()),
             local_path: "entity2".to_string(),
             name: "Entity 2".to_string(),
             components: vec![],
@@ -231,33 +238,33 @@ mod tests {
     fn root_local_ids_deep_hierarchy_only_top_level_returned() {
         // root -> child1 -> grandchild (only root is a root)
         let root = SceneAssetEntity {
-            local_id: LocalId("root".to_string()),
+            local_id: LocalId::new("root".to_string()),
             local_path: "root".to_string(),
             name: "Root".to_string(),
             components: vec![],
         };
         let child1 = SceneAssetEntity {
-            local_id: LocalId("child1".to_string()),
+            local_id: LocalId::new("child1".to_string()),
             local_path: "root/child1".to_string(),
             name: "Child1".to_string(),
             components: vec![],
         };
         let grandchild = SceneAssetEntity {
-            local_id: LocalId("grandchild".to_string()),
+            local_id: LocalId::new("grandchild".to_string()),
             local_path: "root/child1/grandchild".to_string(),
             name: "Grandchild".to_string(),
             components: vec![],
         };
         let relationships = vec![
             SceneAssetRelationship {
-                from_local_id: LocalId("root".to_string()),
-                to_local_id: LocalId("child1".to_string()),
+                from_local_id: LocalId::new("root".to_string()),
+                to_local_id: LocalId::new("child1".to_string()),
                 kind: RelationshipKind::Child,
                 field_path: None,
             },
             SceneAssetRelationship {
-                from_local_id: LocalId("child1".to_string()),
-                to_local_id: LocalId("grandchild".to_string()),
+                from_local_id: LocalId::new("child1".to_string()),
+                to_local_id: LocalId::new("grandchild".to_string()),
                 kind: RelationshipKind::Child,
                 field_path: None,
             },
@@ -273,26 +280,26 @@ mod tests {
     fn root_local_ids_multiple_roots_with_relationships() {
         // Two separate trees - each has its own root
         let root1 = SceneAssetEntity {
-            local_id: LocalId("root1".to_string()),
+            local_id: LocalId::new("root1".to_string()),
             local_path: "root1".to_string(),
             name: "Root1".to_string(),
             components: vec![],
         };
         let child1 = SceneAssetEntity {
-            local_id: LocalId("child1".to_string()),
+            local_id: LocalId::new("child1".to_string()),
             local_path: "root1/child1".to_string(),
             name: "Child1".to_string(),
             components: vec![],
         };
         let root2 = SceneAssetEntity {
-            local_id: LocalId("root2".to_string()),
+            local_id: LocalId::new("root2".to_string()),
             local_path: "root2".to_string(),
             name: "Root2".to_string(),
             components: vec![],
         };
         let relationships = vec![SceneAssetRelationship {
-            from_local_id: LocalId("root1".to_string()),
-            to_local_id: LocalId("child1".to_string()),
+            from_local_id: LocalId::new("root1".to_string()),
+            to_local_id: LocalId::new("child1".to_string()),
             kind: RelationshipKind::Child,
             field_path: None,
         }];

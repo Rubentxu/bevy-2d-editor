@@ -1,127 +1,24 @@
 //! Logic Graph data model for visual behavior authoring.
 //!
-//! Mirrors the Scene Asset document model but carries `nodes` and `edges`
-//! for a visual node/edge graph. Distinct from a Bevy runtime scene.
+//! ADR-0047 split complete:
+//! - Pure types (NodeId, PortId, NodeTypeId, LogicNodeRole, LogicNode, LogicEdge,
+//!   LogicGraphAsset, LogicInstance, helper functions) live in `editor_model::logic_graph`.
+//! - `LogicBinding` with `#[derive(Component)]` lives in `bevy_logic_binding.rs`.
+//!
+//! This module is now a thin re-export wrapper. All pure types are re-exported
+//! from `editor_model::logic_graph` so existing call sites are unaffected.
+//! The WASM persistence helpers (save/load) remain here as they need Bevy/WASM.
 
-use bevy::prelude::Component;
-use serde::{Deserialize, Serialize};
-
-use crate::document::ComponentInstance;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Opaque ID newtypes — mirror LocalId pattern (scene_asset.rs:13-26)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Opaque stable identity of a node inside a LogicGraphAsset.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct NodeId(pub String);
-
-impl NodeId {
-    pub fn new(id: impl Into<String>) -> Self {
-        Self(id.into())
-    }
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-/// Opaque stable identity of a port on a LogicNode.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct PortId(pub String);
-
-impl PortId {
-    pub fn new(id: impl Into<String>) -> Self {
-        Self(id.into())
-    }
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-/// Opaque identity of a node type (e.g. "sensor.key_down", "rust-controller").
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct NodeTypeId(pub String);
-
-impl NodeTypeId {
-    pub fn new(id: impl Into<String>) -> Self {
-        Self(id.into())
-    }
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Graph data model types
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Role of a LogicNode in the Sensor → Controller → Actuator flow.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum LogicNodeRole {
-    Sensor,
-    Controller,
-    Actuator,
-}
-
-/// One node in a LogicGraphAsset graph.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct LogicNode {
-    pub node_id: NodeId,
-    pub role: LogicNodeRole,
-    pub node_type_id: NodeTypeId,
-    #[serde(default)]
-    pub field_values: serde_json::Value,
-    /// Present when `node_type_id` is `"rust-controller"`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub controller_id: Option<String>,
-}
-
-/// A directed edge connecting two LogicNodes.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct LogicEdge {
-    pub from_node: NodeId,
-    pub from_port: PortId,
-    pub to_node: NodeId,
-    pub to_port: PortId,
-}
-
-/// Editor-owned durable authoring document for a logic graph asset.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct LogicGraphAsset {
-    pub asset_id: String,
-    pub logical_path: String,
-    pub version: u32,
-    /// True for built-in immutable recipes (e.g. `recipes/platformer_jump`).
-    /// User-authored assets always have `builtin: false` (the serde default).
-    #[serde(default)]
-    pub builtin: bool,
-    #[serde(default)]
-    pub nodes: Vec<LogicNode>,
-    #[serde(default)]
-    pub edges: Vec<LogicEdge>,
-}
-
-impl Default for LogicGraphAsset {
-    fn default() -> Self {
-        Self {
-            asset_id: String::new(),
-            logical_path: String::new(),
-            version: 0,
-            builtin: false,
-            nodes: Vec::new(),
-            edges: Vec::new(),
-        }
-    }
-}
+pub use editor_model::logic_graph::{
+    LogicEdge, LogicGraphAsset, LogicInstance, LogicNode, LogicNodeRole, NodeId, NodeTypeId,
+    PortId, count_logic_bindings, editor_logic_binding_component, find_dangling_edge_nodes,
+    find_duplicate_node_id,
+};
 
 /// A lightweight catalog entry for LogicGraphAssets — stored in
 /// `project.json` alongside `SceneAssetCatalogEntry` (ADR-0008 layout).
 /// Parallel to `SceneAssetCatalogEntry` but for behavior graphs.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct LogicGraphCatalogEntry {
     pub asset_id: String,
     pub logical_path: String,
@@ -134,39 +31,6 @@ pub struct LogicGraphCatalogEntry {
     /// Unix timestamp ms when the asset was last saved.
     #[serde(default)]
     pub updated_at: u64,
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// LogicInstance binding payload
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Binding payload for a LogicInstance — placed use of a LogicGraphAsset.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct LogicInstance {
-    pub asset_id: String,
-    pub version: u32,
-}
-
-/// Bevy component attached to entities that have a LogicBinding.
-///
-/// This component is inserted by `spawn_preview_entity` when it encounters
-/// an `editor.LogicBinding` component. The `logic_evaluation_system`
-/// queries for this component to find all logic-bound entities and evaluate their graphs.
-#[derive(Component, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct LogicBinding {
-    pub asset_id: String,
-    pub version: u32,
-}
-
-/// Project a LogicInstance to a ComponentInstance with type_id "editor.LogicBinding".
-pub fn editor_logic_binding_component(instance: &LogicInstance) -> ComponentInstance {
-    ComponentInstance {
-        type_id: "editor.LogicBinding".to_string(),
-        values: serde_json::json!({
-            "asset_id": instance.asset_id,
-            "version": instance.version,
-        }),
-    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -190,7 +54,7 @@ pub async fn load_logic_graph_body(logical_path: &str) -> Result<LogicGraphAsset
     serde_json::from_str(&json).map_err(|e| e.to_string())
 }
 
-/// Delete a LogicGraphAsset body from OPFS by logical_path.
+/// Placeholder for non-WASM targets.
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn save_logic_graph_body(_asset: &LogicGraphAsset) -> Result<(), String> {
     Ok(())
@@ -200,48 +64,6 @@ pub async fn save_logic_graph_body(_asset: &LogicGraphAsset) -> Result<(), Strin
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn load_logic_graph_body(_logical_path: &str) -> Result<LogicGraphAsset, String> {
     Err("load_logic_graph_body not available on non-WASM target".to_string())
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Pure shape helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Find NodeIds that appear more than once in a LogicGraphAsset.
-pub fn find_duplicate_node_id(asset: &LogicGraphAsset) -> Vec<NodeId> {
-    use std::collections::BTreeMap;
-    let mut counts: BTreeMap<NodeId, usize> = BTreeMap::new();
-    for node in &asset.nodes {
-        *counts.entry(node.node_id.clone()).or_insert(0) += 1;
-    }
-    counts
-        .into_iter()
-        .filter(|(_, c)| *c > 1)
-        .map(|(id, _)| id)
-        .collect()
-}
-
-/// Find NodeIds referenced by edges but not defined in the node list.
-pub fn find_dangling_edge_nodes(asset: &LogicGraphAsset) -> Vec<NodeId> {
-    let node_ids: std::collections::HashSet<_> =
-        asset.nodes.iter().map(|n| n.node_id.clone()).collect();
-    let mut dangling: Vec<NodeId> = Vec::new();
-    for edge in &asset.edges {
-        if !node_ids.contains(&edge.to_node) && !dangling.contains(&edge.to_node) {
-            dangling.push(edge.to_node.clone());
-        }
-        if !node_ids.contains(&edge.from_node) && !dangling.contains(&edge.from_node) {
-            dangling.push(edge.from_node.clone());
-        }
-    }
-    dangling
-}
-
-/// Count how many ComponentInstances have type_id "editor.LogicBinding".
-pub fn count_logic_bindings(components: &[ComponentInstance]) -> usize {
-    components
-        .iter()
-        .filter(|c| c.type_id == "editor.LogicBinding")
-        .count()
 }
 
 #[cfg(test)]
@@ -354,7 +176,6 @@ mod tests {
 
     #[test]
     fn logic_instance_projects_to_editor_logic_binding_component() {
-        use crate::document::ComponentInstance;
         let instance = LogicInstance {
             asset_id: "lga_jump".to_string(),
             version: 3,
@@ -484,7 +305,7 @@ mod tests {
 
     #[test]
     fn count_logic_bindings_counts_editor_logic_binding() {
-        use crate::document::ComponentInstance;
+        use editor_model::ComponentInstance;
         let components = vec![
             ComponentInstance {
                 type_id: "editor.Transform2D".to_string(),
@@ -509,7 +330,7 @@ mod tests {
 
     #[test]
     fn count_logic_bindings_returns_zero_when_none() {
-        use crate::document::ComponentInstance;
+        use editor_model::ComponentInstance;
         let components = vec![
             ComponentInstance {
                 type_id: "editor.Transform2D".to_string(),
@@ -524,11 +345,8 @@ mod tests {
         assert_eq!(count, 0);
     }
 
-    // ── builtin field tests ───────────────────────────────────────────────────
-
     #[test]
     fn builtin_field_defaults_to_false_when_absent() {
-        // JSON without `builtin` field should deserialize to builtin == false
         let json = r#"{
             "asset_id": "lga_jump",
             "logical_path": "logic/jump",

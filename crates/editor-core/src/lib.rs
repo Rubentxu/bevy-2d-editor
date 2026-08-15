@@ -13,6 +13,7 @@ pub mod asset_files;
 mod asset_state;
 pub mod auto_layer;
 mod bevy_anchor;
+pub mod bevy_logic_binding;
 pub mod bsn_codegen;
 pub mod bsn_export;
 pub mod bsn_import;

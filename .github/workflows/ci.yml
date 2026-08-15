@@ -146,3 +146,34 @@ jobs:
       - name: Run archcheck
         working-directory: tools/archcheck
         run: npm run check
+
+  editor-model-purity:
+    name: editor-model purity (no Bevy/WASM)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Verify editor-model builds for native
+        run: cargo build -p editor-model --locked
+
+      - name: Verify editor-model builds for wasm32 (proves no Bevy/WASM deps)
+        run: cargo build -p editor-model --target wasm32-unknown-unknown --locked
+
+      - name: Verify editor-model has NO bevy or wasm deps (grep gate)
+        run: |
+          if grep -E '^bevy\s*=|^wasm-bindgen\s*=|^web-sys\s*=|^js-sys\s*=' crates/editor-model/Cargo.toml; then
+            echo "ERROR: editor-model must not depend on bevy or wasm crates"
+            exit 1
+          fi
+
+      - name: Test editor-model
+        run: cargo test -p editor-model --locked

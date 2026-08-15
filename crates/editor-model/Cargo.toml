@@ -1,0 +1,18 @@
+[package]
+name = "editor-model"
+version = "0.1.0"
+edition = "2024"
+description = "Pure semantic editor model types: StableId, LocalId, documents, scene assets, scene instances, logic graphs, schemas, level layers. No Bevy, no WASM, no JS."
+repository = "https://github.com/Rubentxu/bevy-2d-editor"
+license = "MIT OR Apache-2.0"
+
+[lib]
+
+[dependencies]
+rand = { version = "0.9", default-features = false, features = ["std_rng"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+[package.metadata.docs.rs]
+all-features = false

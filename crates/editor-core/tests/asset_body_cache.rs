@@ -20,7 +20,7 @@ fn make_test_asset(logical_path: &str) -> SceneAssetDocument {
         role: SceneAssetRole::Actor,
         version: 1,
         entities: vec![SceneAssetEntity {
-            local_id: LocalId("root".to_string()),
+            local_id: LocalId::new("root".to_string()),
             local_path: "root".to_string(),
             name: "Test Entity".to_string(),
             components: vec![],
