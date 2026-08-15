@@ -13,6 +13,33 @@
 //!
 //! Refs: `sddk/active/systemtime-wasm-panic/spec/time-helpers/spec.md`.
 
+use editor_model::time::{Clock, Timestamp};
+
+/// Production wall-clock using `js_sys::Date` on wasm32 and `std::time::SystemTime` on native.
+#[derive(Debug, Default)]
+pub struct JsSysClock;
+
+impl JsSysClock {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Clock for JsSysClock {
+    #[cfg(target_arch = "wasm32")]
+    fn now(&self) -> Timestamp {
+        js_sys::Date::now() as u64
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn now(&self) -> Timestamp {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0)
+    }
+}
+
 /// Milliseconds since the UNIX epoch.
 #[cfg(target_arch = "wasm32")]
 pub fn now_millis() -> u64 {
