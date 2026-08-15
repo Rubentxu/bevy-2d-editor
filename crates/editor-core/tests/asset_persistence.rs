@@ -5,7 +5,10 @@
 //! pure Rust persistence and catalog functions directly.
 
 use editor_core::scene_asset::SceneAssetRole;
-use editor_core::scene_asset_catalog::{SceneAssetCatalog, SceneAssetCatalogEntry, mint_asset_id};
+use editor_core::scene_asset_catalog::{
+    SceneAssetCatalog, SceneAssetCatalogEntry, mint_asset_id, random_hex_8,
+};
+use editor_core::test_helpers::FakeClock;
 use editor_core::{ASSETS_DIR, ProjectMetadata, asset_path};
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -232,7 +235,13 @@ fn catalog_unregister_then_register_moves_path() {
 
 #[test]
 fn catalog_mint_asset_id_produces_unique_ids() {
-    let ids: Vec<String> = (0..50).map(|_| mint_asset_id()).collect();
+    let clock = FakeClock::new();
+    let ids: Vec<String> = (0..50)
+        .map(|i| {
+            clock.advance(1);
+            mint_asset_id(&clock, &random_hex_8())
+        })
+        .collect();
     let unique: std::collections::HashSet<_> = ids.iter().collect();
     assert_eq!(unique.len(), 50); // all unique
     assert!(ids.iter().all(|id| id.starts_with("id_")));
@@ -245,7 +254,7 @@ fn catalog_duplicate_entry_with_unique_id() {
     catalog.register(e1).expect("register should succeed");
 
     // Simulate duplicate: new entry with different id
-    let new_id = mint_asset_id();
+    let new_id = mint_asset_id(&FakeClock::new(), &random_hex_8());
     let e2 = entry(&new_id, "player", SceneAssetRole::Actor, 1);
     let err = catalog.register(e2).expect_err("same path should fail");
 

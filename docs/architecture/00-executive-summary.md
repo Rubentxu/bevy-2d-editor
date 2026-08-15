@@ -70,6 +70,7 @@ Compete on **workflow integration**, not on engine breadth:
 Architecture hardening precedes more agent sophistication. The accepted order is:
 
 1. architecture and CI boundaries;
+   - v0.87 (PR1–PR5): Clock and IdGenerator ports established; `editor-model` gains the `Clock` trait; `mint_asset_id` migrated to dependency-injected timing; `JsSysClock` provides wall-clock on wasm32.
 2. production 2D workflow;
 3. unified change/runtime workflow;
 4. agent runtime and retrieval;

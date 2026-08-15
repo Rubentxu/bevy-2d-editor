@@ -5,6 +5,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use editor_model::time::Clock;
 use serde::{Deserialize, Serialize};
 
 use crate::scene_asset::SceneAssetRole;
@@ -307,8 +308,8 @@ impl SceneAssetCatalog {
 /// Generate a fresh, unique asset_id. Combines the current Unix
 /// timestamp (millis) with 8 hex chars of randomness so collisions
 /// across rapid successive calls are extremely unlikely.
-pub fn mint_asset_id() -> String {
-    format!("id_{}_{}", current_unix_millis(), random_hex_8())
+pub fn mint_asset_id(clock: &dyn Clock, rand_hex: &str) -> String {
+    format!("id_{}_{}", clock.now(), rand_hex)
 }
 
 /// Normalize a user-supplied logical path: trim, lowercase, replace
@@ -370,14 +371,14 @@ fn current_unix_millis() -> u64 {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn random_hex_8() -> String {
+pub fn random_hex_8() -> String {
     use js_sys::{Date, Math};
     let seed = (Date::now() * 1_000_000.0) as u64 ^ (Math::random() * 1e15) as u64;
     format!("{:016x}", seed & 0xFFFFFFFF)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn random_hex_8() -> String {
+pub fn random_hex_8() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -398,6 +399,7 @@ fn static_counter() -> u64 {
 mod tests {
     use super::*;
     use crate::scene_asset::SceneAssetRole;
+    use editor_model::time::FakeClock;
 
     fn entry(asset_id: &str, logical_path: &str, role: SceneAssetRole) -> SceneAssetCatalogEntry {
         SceneAssetCatalogEntry {
@@ -494,5 +496,16 @@ mod tests {
         catalog.register(e).expect("register should succeed");
         let stored = catalog.get("id_x").expect("entry should be present");
         assert_eq!(stored.preview_resource, None);
+    }
+
+    /// Byte-pinned regression test for mint_asset_id format.
+    /// Verifies that with a fixed clock and hex string, the output is exactly
+    /// `"id_1700000000000_deadbeef"`.
+    #[test]
+    fn mint_asset_id_byte_pinned_format() {
+        let clock = FakeClock::new();
+        clock.set(1_700_000_000_000);
+        let id = mint_asset_id(&clock, "deadbeef");
+        assert_eq!(id, "id_1700000000000_deadbeef");
     }
 }
