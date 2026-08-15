@@ -22,6 +22,36 @@ All notable changes to Bevy 2D Editor are documented here. The project follows s
 
 - None.
 
+## v0.88.0 — Architecture Debt (2026-08-15)
+
+Liquidates the tracked debt from v0.87 (4 verify WARNINGs, deferred ADR decisions) and lands the application-layer composition infrastructure for the v0.88 production-authoring epics.
+
+### New features
+
+- **`crates/editor-application::session::EditorSession`** (ADR-0031): explicit application-level owner of mutable editing state — composes `Arc<dyn ProjectStore>` + `Arc<dyn Clock>`, owns active-document selection, explicit per-document `HistoryScope`s (survive deselection), and named caches with generation-based invalidation. Session isolation is unit-tested; the WASM composition root holds exactly one.
+- **`crates/editor-application::transaction`** (ADR-0032): `TransactionKernel` + `ChangeSet<O>` — dry-run preflight simulation, atomic apply with inverse-based rollback, approval gate (`RequiresHuman`), effects/diff summaries, and `ApplyReceipt`. No universal command enum: domains plug in via the generic `Applier` trait. `crates/editor-core::transaction_bridge::SceneCommandApplier` bridges scene commands onto the kernel with atomicity/rollback/approval integration tests.
+- **Real `OpfsProjectStore`** (ADR-0033/0048): mirror + write-through flush over the proven `window.opfs_*` JS bridge — sync `ProjectStore` semantics per ADR-0048 with durability-preserving `flush()`. Eager `hydrate()` at WASM startup; contract tests shared with `InMemoryProjectStore`. The 7 legacy `js_*` wrappers in `editor-core` now delegate to the store (signatures and call sites unchanged); writes still resolve only after the OPFS write is durable.
+
+### Changed
+
+- **`Timestamp`** is now a newtype (`pub struct Timestamp(pub u64)`) with transparent serde (persisted JSON unchanged), `Display` (keeps `mint_asset_id` format byte-identical) and `From<u64>` (WARNING-4).
+- **LocalId collapse completed** (T-02-14): `editor-core::document::LocalId` duplicate struct replaced by a re-export of `editor_model::ids::LocalId`; exactly one canonical definition remains.
+- **`tools/archcheck` expanded 2 → 6 assertions** (NFR-4): editor-model purity, editor-application root purity, dependency direction, LocalId uniqueness; new `--list` mode (T-01-04).
+- `editor-core` now depends on `editor-application` (ports/adapters wiring).
+
+### Fixed
+
+- `#![deny(missing_docs)]` on `editor-model` with full pub-item documentation (WARNING-1).
+- Zero `unwrap`/`expect`/`panic` in `editor-application` non-test code — lock poisoning maps to `StoreError::LockPoisoned` (WARNING-2).
+- Doc gate `RUSTDOCFLAGS="-D warnings" cargo doc` in CI for `editor-model` + `editor-application` (NFR-1).
+- Latent defect: `cargo test -p editor-application` failed to compile in isolation (tokio dev-dependency missing `macros`, masked by workspace feature unification with `ai-proxy`'s `tokio=full`); tokio removed entirely — contract tests are sync.
+
+### Known limitations
+
+- `editor-core` still owns 14+ `thread_local!` stores; full `EditorSession` adoption is gradual (later cycles). `ProcessorContext::from_globals()` still exists (ADR-0031 rule pending).
+- OPFS `hydrate()` is eager — binary assets load at startup (sync-access-handles are the future fix).
+- `TransactionKernel` is not yet wired into actual editor dispatch paths (bridge + tests only; adoption lands with the v0.89 Change Workbench).
+
 ## v0.87.0 — Architecture Foundation (2026-08-15)
 
 ### Breaking changes
