@@ -39,8 +39,7 @@ import { waitForEditorReady } from "../utils/waitForEditorReady";
  * not an error.
  */
 export type ReadResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; error: string };
+  { ok: true; value: T } | { ok: false; error: string };
 
 /**
  * Dispatch result for a typed command envelope. The inverse is

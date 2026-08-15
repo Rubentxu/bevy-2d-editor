@@ -56,6 +56,8 @@ ADR numbering is monotonic and never reused. Superseded decisions keep their ori
 | [ADR-0044](./0044-ci-and-architecture-fitness-gates.md)                          | CI and Architecture Fitness Gates Are Release-Critical                         | Accepted (2026-08-14)                                                |
 | [ADR-0045](./0045-git-friendly-project-format-and-migrations.md)                 | Project Format Is Git-Friendly, Deterministic and Explicitly Migrated          | Accepted (2026-08-14)                                                |
 | [ADR-0046](./0046-semantic-editor-model-authority.md)                            | Semantic Editor Model Is the Authoritative Source of Truth                     | Accepted (2026-08-14)                                                |
+| [ADR-0047](./0047-logic-graph-model-split-bevy-adapter.md)                       | Logic Graph Model Split — Pure Types in editor-model, Bevy Adapter in editor-core | Accepted (2026-08-15) — v0.87 (`v0.87-architecture-foundation`)    |
+| [ADR-0048](./0048-projectstore-v1-is-synchronous.md)                              | ProjectStore v1 Is a Synchronous Port                                          | Accepted (2026-08-15) — v0.87 (`v0.87-architecture-foundation`)    |
 
 ## Related Documents
 

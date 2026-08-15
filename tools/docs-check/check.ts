@@ -23,7 +23,21 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { join, resolve } from "node:path";
 
-const root = resolve(process.argv[2] ?? process.cwd());
+function findRepoRoot(cwd: string): string {
+  // Walk up from the given cwd looking for a .git directory.
+  // This ensures correct path resolution regardless of where the script
+  // is invoked from (e.g. from tools/docs-check/ subdir).
+  let dir = resolve(cwd);
+  for (;;) {
+    if (existsSync(join(dir, ".git"))) return dir;
+    const parent = resolve(dir, "..");
+    if (parent === dir) break; // reached filesystem root
+    dir = parent;
+  }
+  return resolve(cwd); // fallback: use cwd as-is
+}
+
+const root = process.argv[2] ? resolve(process.argv[2]) : findRepoRoot(process.cwd());
 const failures: string[] = [];
 
 function listFiles(dir: string, suffix: string): string[] {

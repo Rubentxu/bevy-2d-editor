@@ -17,9 +17,10 @@ export async function waitForEditorReady(
   pollMs: number = 50,
 ): Promise<void> {
   const start = Date.now();
-  while (
-    !(typeof window !== "undefined" && (window as any).__bevyEngineStarted === true)
-  ) {
+  while (!(
+    typeof window !== "undefined" &&
+    (window as any).__bevyEngineStarted === true
+  )) {
     if (Date.now() - start > timeoutMs) {
       throw new Error(
         `Editor engine did not become ready within ${timeoutMs}ms.`,
@@ -31,6 +32,7 @@ export async function waitForEditorReady(
 
 export function isEditorReady(): boolean {
   return (
-    typeof window !== "undefined" && (window as any).__bevyEngineStarted === true
+    typeof window !== "undefined" &&
+    (window as any).__bevyEngineStarted === true
   );
 }
