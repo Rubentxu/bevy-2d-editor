@@ -1,14 +1,22 @@
-//! `SceneCommandApplier` — bridges `TransactionKernel` to the scene command system.
+//! `*CommandApplier` — bridges `TransactionKernel` to the three domain command systems.
 //!
-//! Implements [`editor_application::transaction::Applier`] for `Command` / `SceneDocument`,
-//! reusing the existing [`processor::validate`] and [`processor::apply`] machinery.
+//! Implements [`editor_application::transaction::Applier`] for each domain:
+//! - `SceneCommandApplier`: `Command` / `SceneDocument`
+//! - `AssetCommandApplier`: `AssetCommand` / `SceneAssetDocument`
+//! - `LogicCommandApplier`: `LogicCommand` / `LogicGraphAsset`
+//!
+//! All three reuse the existing `processor::validate` and domain-specific `apply` machinery.
 //!
 //! This module intentionally does NOT modify the public behavior of `scene_session.rs`
-//! or `processor.rs` — it only provides a thin adapter layer.
+//! or `processor.rs` — it only provides thin adapter layers.
 
+use crate::asset_command::{AssetCommand, AssetCommandError, apply as asset_apply};
 use crate::command::{Command, CommandError};
 use crate::document::SceneDocument;
+use crate::logic_command::{LogicCommand, LogicCommandError, apply as logic_apply};
+use crate::logic_graph::LogicGraphAsset;
 use crate::processor;
+use crate::scene_asset::SceneAssetDocument;
 
 use editor_application::transaction::{
     Applier, ApprovalPolicy, ChangeOrigin, ChangeSet, DiffSummary, EffectsSummary, KernelError,
@@ -122,12 +130,196 @@ impl Applier for SceneCommandApplier {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// AssetCommandApplier
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `AssetCommandApplier` adapts the asset command processor to the `Applier` trait.
+///
+/// - `Operation = AssetCommand` — the typed asset commands from `asset_command.rs`.
+/// - `Document = SceneAssetDocument` — the editor-owned scene asset document.
+#[derive(Debug, Clone)]
+pub struct AssetCommandApplier {
+    _priv: (),
+}
+
+impl AssetCommandApplier {
+    /// Construct a new `AssetCommandApplier`.
+    pub fn new() -> Self {
+        Self { _priv: () }
+    }
+}
+
+impl Default for AssetCommandApplier {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Applier for AssetCommandApplier {
+    type Operation = AssetCommand;
+    type Document = SceneAssetDocument;
+    type Error = AssetCommandError;
+
+    fn preflight(&self, doc: &Self::Document, op: &Self::Operation) -> Result<(), Self::Error> {
+        // Simulate apply to validate without mutating.
+        // Clone doc and apply; if Ok, preflight passes.
+        let mut sim = doc.clone();
+        asset_apply(&mut sim, op).map(|_| ())
+    }
+
+    fn apply(
+        &self,
+        doc: &mut Self::Document,
+        op: &Self::Operation,
+    ) -> Result<Self::Operation, Self::Error> {
+        asset_apply(doc, op)
+    }
+
+    fn summarize(
+        &self,
+        _doc: &Self::Document,
+        ops: &[Self::Operation],
+    ) -> (EffectsSummary, DiffSummary) {
+        // Asset changes don't trigger Bevy preview rebuilds.
+        (
+            EffectsSummary {
+                runtime_rebuild_required: false,
+                build_output_changed: false,
+                notes: vec![format!("{} asset ops", ops.len())],
+            },
+            DiffSummary {
+                added: ops
+                    .iter()
+                    .filter(|o| matches!(o, AssetCommand::AddEntity { .. }))
+                    .count() as u64,
+                removed: ops
+                    .iter()
+                    .filter(|o| matches!(o, AssetCommand::RemoveEntity { .. }))
+                    .count() as u64,
+                modified: ops
+                    .iter()
+                    .filter(|o| {
+                        !matches!(
+                            o,
+                            AssetCommand::AddEntity { .. } | AssetCommand::RemoveEntity { .. }
+                        )
+                    })
+                    .count() as u64,
+                notes: Vec::new(),
+            },
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LogicCommandApplier
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `LogicCommandApplier` adapts the logic command processor to the `Applier` trait.
+///
+/// - `Operation = LogicCommand` — the typed logic commands from `logic_command.rs`.
+/// - `Document = LogicGraphAsset` — the editor-owned logic graph asset.
+#[derive(Debug, Clone)]
+pub struct LogicCommandApplier {
+    _priv: (),
+}
+
+impl LogicCommandApplier {
+    /// Construct a new `LogicCommandApplier`.
+    pub fn new() -> Self {
+        Self { _priv: () }
+    }
+}
+
+impl Default for LogicCommandApplier {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Applier for LogicCommandApplier {
+    type Operation = LogicCommand;
+    type Document = LogicGraphAsset;
+    type Error = LogicCommandError;
+
+    fn preflight(&self, doc: &Self::Document, op: &Self::Operation) -> Result<(), Self::Error> {
+        // Simulate apply to validate without mutating.
+        let mut sim = doc.clone();
+        logic_apply(&mut sim, op).map(|_| ())
+    }
+
+    fn apply(
+        &self,
+        doc: &mut Self::Document,
+        op: &Self::Operation,
+    ) -> Result<Self::Operation, Self::Error> {
+        logic_apply(doc, op)
+    }
+
+    fn summarize(
+        &self,
+        _doc: &Self::Document,
+        ops: &[Self::Operation],
+    ) -> (EffectsSummary, DiffSummary) {
+        // Logic changes don't trigger Bevy preview rebuilds directly.
+        (
+            EffectsSummary {
+                runtime_rebuild_required: false,
+                build_output_changed: false,
+                notes: vec![format!("{} logic ops", ops.len())],
+            },
+            DiffSummary {
+                added: ops
+                    .iter()
+                    .filter(|o| {
+                        matches!(
+                            o,
+                            LogicCommand::AddNode { .. } | LogicCommand::ConnectPorts { .. }
+                        )
+                    })
+                    .count() as u64,
+                removed: ops
+                    .iter()
+                    .filter(|o| {
+                        matches!(
+                            o,
+                            LogicCommand::RemoveNode { .. } | LogicCommand::DisconnectPorts { .. }
+                        )
+                    })
+                    .count() as u64,
+                modified: ops
+                    .iter()
+                    .filter(|o| matches!(o, LogicCommand::SetNodeField { .. }))
+                    .count() as u64,
+                notes: Vec::new(),
+            },
+        )
+    }
+}
+
 // Type alias for the scene transaction kernel
 pub type SceneTransactionKernel = TransactionKernel<SceneCommandApplier>;
+
+/// Type alias for the asset transaction kernel.
+pub type AssetTransactionKernel = TransactionKernel<AssetCommandApplier>;
+
+/// Type alias for the logic transaction kernel.
+pub type LogicTransactionKernel = TransactionKernel<LogicCommandApplier>;
 
 /// Construct a `SceneTransactionKernel`.
 pub fn scene_transaction_kernel() -> SceneTransactionKernel {
     TransactionKernel::new(SceneCommandApplier::new())
+}
+
+/// Construct an `AssetTransactionKernel`.
+pub fn asset_transaction_kernel() -> AssetTransactionKernel {
+    TransactionKernel::new(AssetCommandApplier::new())
+}
+
+/// Construct a `LogicTransactionKernel`.
+pub fn logic_transaction_kernel() -> LogicTransactionKernel {
+    TransactionKernel::new(LogicCommandApplier::new())
 }
 
 #[cfg(test)]
