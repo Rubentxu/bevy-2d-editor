@@ -142,7 +142,10 @@ mod tests {
                     name: "rotation".to_string(),
                     field_type: FieldType::F32,
                     default_value: Some(serde_json::json!(0.0)),
-                    constraints: vec![Constraint::Range { min: 0.0, max: 360.0 }],
+                    constraints: vec![Constraint::Range {
+                        min: 0.0,
+                        max: 360.0,
+                    }],
                     location: SourceLocation::default(),
                     description: Some("Rotation in degrees".to_string()),
                 },

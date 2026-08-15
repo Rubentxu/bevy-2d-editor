@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 
+use editor_core::StableId;
 use editor_core::scene_asset::{
     AssetReference, LocalId, SceneAssetDocument, SceneAssetEntity, SceneAssetRole,
 };
@@ -10,7 +11,6 @@ use editor_core::scene_instance_overrides::{
     classify_overrides, effective_values, mint_id_map, reconcile_id_map, resync, try_rebind,
     validate_overrides,
 };
-use editor_core::StableId;
 use editor_model::ComponentInstance;
 
 // ---------------------------------------------------------------------------

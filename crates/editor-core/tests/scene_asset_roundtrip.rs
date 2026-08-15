@@ -2,12 +2,12 @@
 //! Covers scenarios S1, S2, S6, S7, S8.
 
 use editor_core::bsn_ir::{BsnIr, BsnIrNode, BsnIrRelationship, BsnPatch, BsnPatchOp};
-use editor_model::scene_instance::{ComponentOverride, ComponentOverrideStatus, SceneInstance};
 use editor_core::scene_asset::{
     AssetReference, ExposedProperty, LayerId, LevelLayer, LocalId, RelationshipKind,
     SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata, SceneAssetRelationship,
     SceneAssetRole, SceneInstanceLayer, SceneInstanceLayerKind,
 };
+use editor_model::scene_instance::{ComponentOverride, ComponentOverrideStatus, SceneInstance};
 use editor_model::{ComponentInstance, StableId};
 
 #[test]

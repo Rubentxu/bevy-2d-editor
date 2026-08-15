@@ -20,9 +20,9 @@
 //! | `SetComponentValue` | `SetComponentValue { old value at field_path }` |
 //! | `Batch` | `Batch { reversed inverses }` |
 
-use editor_model::ComponentInstance;
 use crate::scene_asset::{LayerId, LocalId, SceneAssetDocument, SceneAssetEntity};
 use crate::tileset::{TileCoord, TileGrid, TileRef};
+use editor_model::ComponentInstance;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -756,7 +756,7 @@ impl Default for AssetOperationLog {
 #[cfg(test)]
 mod tests {
     use super::*;
-use editor_model::ComponentInstance;
+    use editor_model::ComponentInstance;
     use serde_json::json;
 
     fn empty_doc() -> SceneAssetDocument {

@@ -28,11 +28,11 @@
 //! - `relationships` are reconstructed as `RelationshipKind::Child` only
 
 use crate::bsn_ir::{BsnIr, BsnIrNode, BsnIrRelationship};
-use editor_model::ComponentInstance;
 use crate::scene_asset::{
     LocalId, RelationshipKind, SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata,
     SceneAssetRelationship, SceneAssetRole,
 };
+use editor_model::ComponentInstance;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -734,10 +734,10 @@ mod tests {
 
     #[test]
     fn simple_entity_round_trip() {
-        use editor_model::ComponentInstance;
         use crate::scene_asset::{
             LocalId, SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata, SceneAssetRole,
         };
+        use editor_model::ComponentInstance;
         let doc = SceneAssetDocument {
             asset_id: String::new(),
             logical_path: String::new(),
@@ -797,11 +797,11 @@ mod tests {
 
     #[test]
     fn nested_children_round_trip() {
-        use editor_model::ComponentInstance;
         use crate::scene_asset::{
             LocalId, RelationshipKind, SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata,
             SceneAssetRelationship, SceneAssetRole,
         };
+        use editor_model::ComponentInstance;
         let doc = SceneAssetDocument {
             asset_id: String::new(),
             logical_path: String::new(),

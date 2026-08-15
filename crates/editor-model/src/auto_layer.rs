@@ -1,8 +1,8 @@
 //! AutoLayer — auto-tiling generation engine for tile-based level design.
 
 use crate::ids::LayerId;
-use crate::tileset::{TileCoord, TileGrid, TileRef, TilesetId};
 use crate::tile_layer::TileLayer;
+use crate::tileset::{TileCoord, TileGrid, TileRef, TilesetId};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
@@ -80,10 +80,7 @@ pub fn regenerate(layer: &mut AutoLayer, source: &TileLayer, rng: &mut impl Rng)
     layer.source_generation = source.generation;
 }
 
-fn build_neighborhood(
-    source: &TileLayer,
-    center: &TileCoord,
-) -> [[Option<TileRef>; 3]; 3] {
+fn build_neighborhood(source: &TileLayer, center: &TileCoord) -> [[Option<TileRef>; 3]; 3] {
     let mut neighborhood: [[Option<TileRef>; 3]; 3] =
         [[None, None, None], [None, None, None], [None, None, None]];
 
@@ -104,10 +101,7 @@ fn build_neighborhood(
     neighborhood
 }
 
-fn matches_pattern(
-    neighborhood: &[[Option<TileRef>; 3]; 3],
-    pattern: &Pattern3x3,
-) -> bool {
+fn matches_pattern(neighborhood: &[[Option<TileRef>; 3]; 3], pattern: &Pattern3x3) -> bool {
     for dy in 0..3 {
         for dx in 0..3 {
             if dx == 1 && dy == 1 {

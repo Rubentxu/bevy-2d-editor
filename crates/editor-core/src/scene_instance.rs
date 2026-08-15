@@ -12,8 +12,8 @@ pub use crate::document::ComponentInstance;
 
 // Import AssetReference and SceneAssetLocalId from editor_model (they're the same
 // string-newtypes as the local types, just in a different crate).
-pub use editor_model::scene_asset::AssetReference;
 pub use editor_model::ids::SceneAssetLocalId;
+pub use editor_model::scene_asset::AssetReference;
 
 use crate::document::StableId;
 #[allow(deprecated)]

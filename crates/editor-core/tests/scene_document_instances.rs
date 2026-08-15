@@ -215,17 +215,23 @@ fn s6_instances_with_id_map_3_entries_byte_equal_roundtrip() {
 
     // Verify id_map contents are preserved exactly
     assert_eq!(
-        roundtripped_instance.id_map.get(&LocalId::new("root".to_string())),
+        roundtripped_instance
+            .id_map
+            .get(&LocalId::new("root".to_string())),
         Some(&StableId::new("ent_001")),
         "root mapping must be preserved"
     );
     assert_eq!(
-        roundtripped_instance.id_map.get(&LocalId::new("weapon".to_string())),
+        roundtripped_instance
+            .id_map
+            .get(&LocalId::new("weapon".to_string())),
         Some(&StableId::new("ent_002")),
         "weapon mapping must be preserved"
     );
     assert_eq!(
-        roundtripped_instance.id_map.get(&LocalId::new("shield".to_string())),
+        roundtripped_instance
+            .id_map
+            .get(&LocalId::new("shield".to_string())),
         Some(&StableId::new("ent_003")),
         "shield mapping must be preserved"
     );

@@ -10,9 +10,9 @@
 //! The WASM persistence helpers (save/load) remain here as they need Bevy/WASM.
 
 pub use editor_model::logic_graph::{
-    editor_logic_binding_component, find_dangling_edge_nodes, find_duplicate_node_id,
-    count_logic_bindings, LogicEdge, LogicGraphAsset, LogicInstance, LogicNode,
-    LogicNodeRole, NodeId, NodeTypeId, PortId,
+    LogicEdge, LogicGraphAsset, LogicInstance, LogicNode, LogicNodeRole, NodeId, NodeTypeId,
+    PortId, count_logic_bindings, editor_logic_binding_component, find_dangling_edge_nodes,
+    find_duplicate_node_id,
 };
 
 /// A lightweight catalog entry for LogicGraphAssets — stored in

@@ -3,11 +3,11 @@
 //!
 //! Strict TDD: RED first — tests define the expected API contract.
 
-use editor_model::ComponentInstance;
 use editor_core::asset_command::{
     AssetCommand, AssetCommandError, AssetOperationLog, apply as asset_apply,
 };
 use editor_core::scene_asset::{LocalId, SceneAssetDocument, SceneAssetEntity, SceneAssetRole};
+use editor_model::ComponentInstance;
 use serde_json::json;
 
 // ─────────────────────────────────────────────────────────────────────────
