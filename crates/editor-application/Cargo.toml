@@ -1,0 +1,16 @@
+[package]
+name = "editor-application"
+version = "0.1.0"
+edition = "2024"
+description = "Editor application services: ports and adapters for the application layer. No Bevy, no WASM, no JS at the crate root."
+repository = "https://github.com/Rubentxu/bevy-2d-editor"
+license = "MIT OR Apache-2.0"
+
+[lib]
+
+[features]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
