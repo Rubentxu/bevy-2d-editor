@@ -46,6 +46,8 @@ Use cases, commands, transaction kernel, ports, validation orchestration and `Ed
 ### adapters
 Bevy preview, storage, filesystem, OPFS, BSN, build/run, indexing and browser bridge implementations.
 
+**v0.87 PR4** introduces the `ProjectStore` port — a synchronous file-system abstraction in `editor-application` — with an in-memory adapter for tests and a wasm32-gated OPFS stub (full wiring deferred to v0.88). This isolates storage concerns from the application layer before migrating caller sites.
+
 ### frontend
 Presentation, interaction and view state. It consumes typed APIs; it does not become a second domain model.
 
