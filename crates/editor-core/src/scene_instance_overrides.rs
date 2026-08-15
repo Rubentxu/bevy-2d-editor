@@ -6,8 +6,9 @@
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::document::{ComponentInstance, StableId};
+use crate::document::StableId;
 use crate::scene_asset::{LocalId, SceneAssetDocument, SceneAssetEntity};
+use editor_model::ComponentInstance;
 use crate::scene_instance::{ComponentOverride, ComponentOverrideStatus, SceneInstance};
 
 // ---------------------------------------------------------------------------

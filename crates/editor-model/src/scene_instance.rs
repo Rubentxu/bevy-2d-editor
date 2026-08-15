@@ -1,23 +1,13 @@
 //! Scene Instance — placed use of a Scene Asset (reference + instance components +
 //! component overrides + id_map).
-//!
-//! PR2: SceneInstance defined locally using editor_core types (document::StableId,
-//! document::ComponentInstance) to avoid type mismatches with editor_model types.
+//! Per ADR-0005 §Overrides, §Versioning; ADR-0009; level-design-layers-research design.
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-// Re-export ComponentInstance from document (local) — same crate, no circular issue.
-pub use crate::document::ComponentInstance;
-
-// Import AssetReference and SceneAssetLocalId from editor_model (they're the same
-// string-newtypes as the local types, just in a different crate).
-pub use editor_model::scene_asset::AssetReference;
-pub use editor_model::ids::SceneAssetLocalId;
-
-use crate::document::StableId;
-#[allow(deprecated)]
-use crate::scene_asset::LocalId;
+use crate::component::ComponentInstance;
+use crate::ids::{SceneAssetLocalId, StableId};
+use crate::scene_asset::AssetReference;
 use crate::schema::ComponentTypeId;
 
 /// Component override health (ADR-0005 §Overrides, §Versioning; ADR-0009).

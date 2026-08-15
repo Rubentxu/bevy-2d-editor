@@ -23,6 +23,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::actuator_bus;
 use crate::bevy_anchor::anchor_str_to_bevy_anchor;
+use crate::bevy_logic_binding::LogicBinding;
 use crate::document::{Entity, SceneDocument, StableId};
 use crate::dynamic_scene::is_known_anchor_str;
 use crate::instance_projection::{PreviewEntity, project_instances};
@@ -582,7 +583,7 @@ fn spawn_preview_entity(commands: &mut Commands, preview: &PreviewEntity) {
     let mut transform: Option<Transform> = None;
     let mut sprite: Option<Sprite> = None;
     let mut anchor_str: Option<String> = None;
-    let mut logic_binding: Option<crate::logic_graph::LogicBinding> = None;
+    let mut logic_binding: Option<LogicBinding> = None;
 
     for component in &preview.component_values {
         match component.type_id.as_str() {
@@ -668,7 +669,7 @@ fn spawn_preview_entity(commands: &mut Commands, preview: &PreviewEntity) {
                     .get("version")
                     .and_then(|v| v.as_u64())
                     .unwrap_or(0) as u32;
-                logic_binding = Some(crate::logic_graph::LogicBinding { asset_id, version });
+                logic_binding = Some(LogicBinding { asset_id, version });
             }
             // Skip editorial-only components
             _ => {}

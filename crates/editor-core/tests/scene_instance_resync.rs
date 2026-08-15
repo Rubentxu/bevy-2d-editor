@@ -7,11 +7,11 @@
 
 use editor_core::{
     StableId,
-    document::{ComponentInstance, SceneDocument},
     scene_asset::{AssetReference, LocalId, SceneAssetDocument, SceneAssetEntity, SceneAssetRole},
     scene_instance::{ComponentOverride, ComponentOverrideStatus, SceneInstance},
     scene_instance_overrides::{ResyncReport, resync},
 };
+use editor_model::ComponentInstance;
 use std::collections::BTreeMap;
 
 // Helper: create a SceneInstance with overrides
@@ -74,7 +74,7 @@ fn s8_version_bump_triggers_resync() {
     let asset = make_asset(
         "player_asset",
         vec![SceneAssetEntity {
-            local_id: LocalId("root".to_string()),
+            local_id: LocalId::new("root".to_string()),
             local_path: "root".to_string(),
             name: "Player".to_string(),
             components: vec![],
@@ -136,7 +136,7 @@ fn s9_resync_never_silently_deletes_overrides() {
         "enemy_asset",
         vec![SceneAssetEntity {
             // Only "root" exists now, "deleted_entity" is gone
-            local_id: LocalId("root".to_string()),
+            local_id: LocalId::new("root".to_string()),
             local_path: "root".to_string(),
             name: "Enemy".to_string(),
             components: vec![],
@@ -181,7 +181,7 @@ fn s8_multiple_version_bumps() {
     let asset = make_asset(
         "npc_asset",
         vec![SceneAssetEntity {
-            local_id: LocalId("root".to_string()),
+            local_id: LocalId::new("root".to_string()),
             local_path: "root".to_string(),
             name: "NPC".to_string(),
             components: vec![],
@@ -252,7 +252,7 @@ fn s9_multiple_orphaned_overrides() {
     let asset = make_asset(
         "multi_asset",
         vec![SceneAssetEntity {
-            local_id: LocalId("root".to_string()),
+            local_id: LocalId::new("root".to_string()),
             local_path: "root".to_string(),
             name: "Multi".to_string(),
             components: vec![ComponentInstance {

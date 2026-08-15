@@ -15,7 +15,7 @@ fn s7_fragment_standalone_warning() {
         role: SceneAssetRole::Fragment,
         version: 1,
         entities: vec![SceneAssetEntity {
-            local_id: LocalId("health".to_string()),
+            local_id: LocalId::new("health".to_string()),
             local_path: "health".to_string(),
             name: "Health Pickup".to_string(),
             components: vec![],
@@ -48,21 +48,21 @@ fn s9_hierarchy_via_relationships_only() {
         version: 1,
         entities: vec![
             SceneAssetEntity {
-                local_id: LocalId("root".to_string()),
+                local_id: LocalId::new("root".to_string()),
                 local_path: "root".to_string(),
                 name: "Player".to_string(),
                 components: vec![],
             },
             SceneAssetEntity {
-                local_id: LocalId("weapon".to_string()),
+                local_id: LocalId::new("weapon".to_string()),
                 local_path: "root/weapon".to_string(),
                 name: "Weapon".to_string(),
                 components: vec![],
             },
         ],
         relationships: vec![SceneAssetRelationship {
-            from_local_id: LocalId("root".to_string()),
-            to_local_id: LocalId("weapon".to_string()),
+            from_local_id: LocalId::new("root".to_string()),
+            to_local_id: LocalId::new("weapon".to_string()),
             kind: RelationshipKind::Child,
             field_path: None,
         }],

@@ -27,7 +27,7 @@ fn make_single_entity_asset(asset_id: &str, local_id: &str) -> SceneAssetDocumen
         role: SceneAssetRole::Actor,
         version: 1,
         entities: vec![SceneAssetEntity {
-            local_id: LocalId(local_id.to_string()),
+            local_id: LocalId::new(local_id.to_string()),
             local_path: local_id.to_string(),
             name: "Root Entity".to_string(),
             components: vec![],
@@ -48,13 +48,13 @@ fn make_multi_root_asset(asset_id: &str) -> SceneAssetDocument {
         version: 1,
         entities: vec![
             SceneAssetEntity {
-                local_id: LocalId("root1".to_string()),
+                local_id: LocalId::new("root1".to_string()),
                 local_path: "root1".to_string(),
                 name: "Root 1".to_string(),
                 components: vec![],
             },
             SceneAssetEntity {
-                local_id: LocalId("root2".to_string()),
+                local_id: LocalId::new("root2".to_string()),
                 local_path: "root2".to_string(),
                 name: "Root 2".to_string(),
                 components: vec![],

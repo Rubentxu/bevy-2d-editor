@@ -6,7 +6,7 @@
 
 use bevy::prelude::*;
 
-use crate::logic_graph::LogicBinding;
+use crate::bevy_logic_binding::LogicBinding;
 
 /// Evaluate all logic-bound entities in the current frame.
 ///

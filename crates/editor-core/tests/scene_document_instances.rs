@@ -48,7 +48,7 @@ fn s7_instances_field_absent_then_present_roundtrip() {
     // Add an instance
     let mut instances = BTreeMap::new();
     let mut id_map = BTreeMap::new();
-    id_map.insert(LocalId("root".into()), StableId::new("ent_001"));
+    id_map.insert(LocalId::new("root".to_string()), StableId::new("ent_001"));
     instances.insert(
         StableId::new("inst_001"),
         SceneInstance {
@@ -86,7 +86,7 @@ fn s7_instances_field_absent_then_present_roundtrip() {
 fn s13_entities_array_shape_unchanged_when_instances_present() {
     // Create a document with entities AND instances
     let mut id_map = BTreeMap::new();
-    id_map.insert(LocalId("root".into()), StableId::new("ent_001"));
+    id_map.insert(LocalId::new("root".to_string()), StableId::new("ent_001"));
 
     let doc = SceneDocument {
         version: "0.1".to_string(),
@@ -168,9 +168,9 @@ fn s14_authored_entities_do_not_have_instance_id() {
 fn s6_instances_with_id_map_3_entries_byte_equal_roundtrip() {
     // S6: instances[id_map with 3 entries] byte-equal after serialize/deserialize
     let mut id_map = BTreeMap::new();
-    id_map.insert(LocalId("root".into()), StableId::new("ent_001"));
-    id_map.insert(LocalId("weapon".into()), StableId::new("ent_002"));
-    id_map.insert(LocalId("shield".into()), StableId::new("ent_003"));
+    id_map.insert(LocalId::new("root".to_string()), StableId::new("ent_001"));
+    id_map.insert(LocalId::new("weapon".to_string()), StableId::new("ent_002"));
+    id_map.insert(LocalId::new("shield".to_string()), StableId::new("ent_003"));
 
     let doc = SceneDocument {
         version: "0.1".to_string(),
@@ -215,17 +215,17 @@ fn s6_instances_with_id_map_3_entries_byte_equal_roundtrip() {
 
     // Verify id_map contents are preserved exactly
     assert_eq!(
-        roundtripped_instance.id_map.get(&LocalId("root".into())),
+        roundtripped_instance.id_map.get(&LocalId::new("root".to_string())),
         Some(&StableId::new("ent_001")),
         "root mapping must be preserved"
     );
     assert_eq!(
-        roundtripped_instance.id_map.get(&LocalId("weapon".into())),
+        roundtripped_instance.id_map.get(&LocalId::new("weapon".to_string())),
         Some(&StableId::new("ent_002")),
         "weapon mapping must be preserved"
     );
     assert_eq!(
-        roundtripped_instance.id_map.get(&LocalId("shield".into())),
+        roundtripped_instance.id_map.get(&LocalId::new("shield".to_string())),
         Some(&StableId::new("ent_003")),
         "shield mapping must be preserved"
     );

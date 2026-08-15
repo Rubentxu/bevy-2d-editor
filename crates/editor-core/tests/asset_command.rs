@@ -3,7 +3,7 @@
 //!
 //! Strict TDD: RED first — tests define the expected API contract.
 
-use editor_core::ComponentInstance;
+use editor_model::ComponentInstance;
 use editor_core::asset_command::{
     AssetCommand, AssetCommandError, AssetOperationLog, apply as asset_apply,
 };

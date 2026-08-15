@@ -27,6 +27,7 @@ mod lock_utils;
 pub mod logic_command;
 pub mod logic_dispatch;
 pub mod logic_evaluator;
+pub mod bevy_logic_binding;
 pub mod logic_graph;
 pub mod logic_recipes;
 mod logic_state;

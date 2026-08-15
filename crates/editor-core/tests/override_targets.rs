@@ -11,7 +11,7 @@ use editor_core::{
 #[test]
 fn s3_override_targets_local_id() {
     let patch = ComponentOverride {
-        target_local_id: LocalId("weapon".to_string()),
+        target_local_id: LocalId::new("weapon".to_string()),
         component_type_id: editor_core::schema::ComponentTypeId::new("Sprite2D"),
         field_path: vec!["asset".to_string()],
         value: serde_json::json!("cannon.png"),
@@ -21,7 +21,7 @@ fn s3_override_targets_local_id() {
     assert_eq!(patch.target_local_id.as_str(), "weapon");
 
     let renamed_name_patch = ComponentOverride {
-        target_local_id: LocalId("weapon".to_string()),
+        target_local_id: LocalId::new("weapon".to_string()),
         component_type_id: patch.component_type_id.clone(),
         field_path: patch.field_path.clone(),
         value: serde_json::json!("cannon.png"),
@@ -33,7 +33,7 @@ fn s3_override_targets_local_id() {
 #[test]
 fn s4_rename_marks_stale() {
     let patch = ComponentOverride {
-        target_local_id: LocalId("weapon".to_string()),
+        target_local_id: LocalId::new("weapon".to_string()),
         component_type_id: editor_core::schema::ComponentTypeId::new("Sprite2D"),
         field_path: vec!["asset".to_string()],
         value: serde_json::json!("cannon.png"),
@@ -56,7 +56,7 @@ fn s4_rename_marks_stale() {
     );
 
     let orphan_patch = ComponentOverride {
-        target_local_id: LocalId("weapon".to_string()),
+        target_local_id: LocalId::new("weapon".to_string()),
         component_type_id: editor_core::schema::ComponentTypeId::new("Sprite2D"),
         field_path: vec!["asset".to_string()],
         value: serde_json::json!("cannon.png"),

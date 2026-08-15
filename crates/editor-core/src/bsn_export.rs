@@ -346,6 +346,7 @@ mod tests {
     use crate::scene_asset::{
         LocalId, RelationshipKind, SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata,
     };
+    use editor_model::ComponentInstance;
     use std::collections::BTreeMap;
 
     fn make_doc(entities: Vec<SceneAssetEntity>) -> SceneAssetDocument {
@@ -375,7 +376,7 @@ mod tests {
             local_id: LocalId::new("root"),
             local_path: "root".to_string(),
             name: "Root".to_string(),
-            components: vec![crate::document::ComponentInstance {
+            components: vec![ComponentInstance {
                 type_id: "editor.Name".to_string(),
                 values: serde_json::json!({"name": "Root"}),
             }],
@@ -450,7 +451,7 @@ mod tests {
             local_id: LocalId::new("root"),
             local_path: "root".to_string(),
             name: "Root".to_string(),
-            components: vec![crate::document::ComponentInstance {
+            components: vec![ComponentInstance {
                 type_id: "editor.Name".to_string(),
                 values: serde_json::json!({"name": "Root"}),
             }],
@@ -471,7 +472,7 @@ mod tests {
             local_id: LocalId::new("root"),
             local_path: "root".to_string(),
             name: "Root".to_string(),
-            components: vec![crate::document::ComponentInstance {
+            components: vec![ComponentInstance {
                 type_id: "editor.Name".to_string(),
                 values: serde_json::json!({"name": "Root"}),
             }],
