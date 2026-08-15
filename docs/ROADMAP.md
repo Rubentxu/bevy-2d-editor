@@ -653,6 +653,7 @@ All Hito 1 items completed in v0.12-v0.20. Deferred items:
 | ADR-0046 | Semantic Editor Model Is the Authoritative Source of Truth | Accepted (2026-08-14) |
 | ADR-0047 | Logic Graph Model Split — Pure Types in editor-model, Bevy Adapter in editor-core | Accepted (2026-08-15) — v0.87 |
 | ADR-0048 | ProjectStore v1 Is a Synchronous Port | Accepted (2026-08-15) — v0.87 |
+| ADR-0049 | Dual Dispatch Gate — TransactionKernel Adoption Is Flag-Reversible | Draft (2026-08-16) — v0.89 |
 
 ---
 

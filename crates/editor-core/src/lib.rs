@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_futures::JsFuture;
@@ -75,6 +76,58 @@ mod wasm_tile;
 //   separate `AssetCommand` surface for authoring mutations.
 // - [ADR-0008](../../adr/0008-path-based-scene-asset-opfs-layout.md):
 //   `assets/<logical_path>.asset.json` path layout; catalog in `ProjectMetadata`.
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dual Dispatch Gate — TransactionKernel adoption (ADR-0049)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Runtime flag controlling whether `dispatch_command` routes through the
+/// `TransactionKernel` or the legacy direct path.
+///
+/// - `true` (default when `dispatch-via-kernel` feature is enabled): route through kernel.
+/// - `false`: use the v0.88 legacy path via `scene_session::apply_command`.
+///
+/// This flag is set via `set_dispatch_mode_wasm()` and can be flipped at runtime
+/// for testing and rollback purposes.
+static DISPATCH_VIA_KERNEL: AtomicBool = AtomicBool::new(cfg!(feature = "dispatch-via-kernel"));
+
+/// Returns `true` if the current dispatch mode routes through the TransactionKernel.
+pub fn is_dispatch_via_kernel() -> bool {
+    DISPATCH_VIA_KERNEL.load(Ordering::SeqCst)
+}
+
+/// Set the dispatch mode. Use `"kernel"` to enable kernel routing or `"legacy"` to
+/// revert to the v0.88 path.
+///
+/// This is the WASM-callable entry point exposed to the frontend.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn set_dispatch_mode_wasm(mode: &str) -> Result<(), JsValue> {
+    match mode {
+        "kernel" => {
+            DISPATCH_VIA_KERNEL.store(true, Ordering::SeqCst);
+            Ok(())
+        }
+        "legacy" => {
+            DISPATCH_VIA_KERNEL.store(false, Ordering::SeqCst);
+            Ok(())
+        }
+        _ => Err(JsValue::from_str(&format!(
+            "Unknown dispatch mode: {mode}. Expected 'kernel' or 'legacy'."
+        ))),
+    }
+}
+
+/// Get the current dispatch mode as a string ("kernel" or "legacy").
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn get_dispatch_mode_wasm() -> String {
+    if is_dispatch_via_kernel() {
+        "kernel".to_string()
+    } else {
+        "legacy".to_string()
+    }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Validation Issue — unified issue type for Validation Center
@@ -470,18 +523,98 @@ pub fn dispatch_command(json: &str) -> Result<String, JsValue> {
     let envelope: CommandEnvelope = serde_json::from_str(json)
         .map_err(|e| JsValue::from_str(&format!("Invalid command JSON: {}", e)))?;
 
-    let result = scene_session::apply_command(&envelope)
+    if is_dispatch_via_kernel() {
+        // Route through TransactionKernel for preflight validation and approval gating.
+        dispatch_command_via_kernel(envelope)
+    } else {
+        // Legacy v0.88 path: direct to scene_session::apply_command.
+        dispatch_command_legacy(&envelope)
+    }
+}
+
+/// Kernel path: route a command envelope through SceneTransactionKernel.
+fn dispatch_command_via_kernel(envelope: CommandEnvelope) -> Result<String, JsValue> {
+    use crate::transaction_bridge::scene_transaction_kernel;
+    use editor_application::session::HistoryScope;
+    use editor_application::transaction::{Applier, ChangeOrigin, ChangeSet};
+
+    // Determine ChangeOrigin from authorship metadata.
+    let origin = match envelope.metadata.authorship.as_str() {
+        "user" => ChangeOrigin::Human,
+        s if s.starts_with("agent:") => ChangeOrigin::Agent,
+        "system" => ChangeOrigin::Migration,
+        _ => ChangeOrigin::Human,
+    };
+
+    // Wrap single command in a ChangeSet.
+    let mut cs = ChangeSet::new(
+        format!("cmd-{}", envelope.metadata.timestamp),
+        origin,
+        envelope.metadata.authorship.clone(),
+        envelope.metadata.rationale.clone().unwrap_or_default(),
+    );
+    cs.add_resource("scene", "scenes/current.json");
+    cs.push_op(envelope.command.clone());
+
+    // Get mutable access to the scene doc and operation log.
+    let (inverse, snapshot) = SCENE_DOC.with(|cell| {
+        let mut doc_ref = cell.borrow_mut();
+        let doc = doc_ref
+            .as_mut()
+            .ok_or_else(|| JsValue::from_str("No active scene"))?;
+
+        // Create a temporary HistoryScope for the kernel call.
+        // Note: The kernel updates HistoryScope but we also record in OperationLog
+        // for undo/redo compatibility. The HistoryScope is not persisted.
+        let mut history = HistoryScope::new();
+
+        let kernel = scene_transaction_kernel();
+        let receipt = kernel
+            .apply_atomic(&cs, doc, &mut history)
+            .map_err(|e| JsValue::from_str(&format!("kernel apply failed: {}", e)))?;
+
+        // Extract the inverse (kernel returns inverses in reverse order).
+        let inverse =
+            receipt
+                .inverses
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| Command::CreateEntity {
+                    id: StableId::new("__no_inverse__"),
+                    name: String::new(),
+                    components: vec![],
+                });
+
+        // Record in OperationLog for undo/redo (byte-equality with legacy path).
+        OPERATION_LOG.with(|l| {
+            l.borrow_mut().record(&envelope, inverse.clone());
+        });
+
+        // Return the inverse and post-apply snapshot.
+        Ok::<(Command, SceneDocument), JsValue>((inverse, doc.clone()))
+    })?;
+
+    scene_state::mark_dirty();
+
+    let result_json = serde_json::to_string(&CommandResult { inverse, snapshot })
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize result: {}", e)))?;
+
+    Ok(result_json)
+}
+
+/// Legacy v0.88 path: direct dispatch through scene_session::apply_command.
+#[allow(dead_code)]
+fn dispatch_command_legacy(envelope: &CommandEnvelope) -> Result<String, JsValue> {
+    let result = scene_session::apply_command(envelope)
         .map_err(|e| JsValue::from_str(&format!("dispatch_command failed: {e}")))?;
-    let inverse = result.inverse.map(|env| env.command).unwrap_or_else(|| {
-        // `apply_command` always populates `inverse`; this branch
-        // only exists to keep the result type non-Option without
-        // changing the public CommandResult schema.
-        Command::CreateEntity {
+    let inverse = result
+        .inverse
+        .map(|env| env.command)
+        .unwrap_or_else(|| Command::CreateEntity {
             id: StableId::new("__no_inverse__"),
             name: String::new(),
             components: vec![],
-        }
-    });
+        });
     let result_json = serde_json::to_string(&CommandResult {
         inverse,
         snapshot: result.snapshot,
@@ -2141,17 +2274,80 @@ pub fn dispatch_asset_command(cmd_json: &str) -> Result<String, JsValue> {
     let cmd: AssetCommand = serde_json::from_str(cmd_json)
         .map_err(|e| JsValue::from_str(&format!("Invalid command JSON: {}", e)))?;
 
+    if is_dispatch_via_kernel() {
+        dispatch_asset_command_via_kernel(cmd)
+    } else {
+        dispatch_asset_command_legacy(&cmd)
+    }
+}
+
+/// Kernel path: route an asset command through AssetTransactionKernel.
+fn dispatch_asset_command_via_kernel(cmd: AssetCommand) -> Result<String, JsValue> {
+    use crate::transaction_bridge::asset_transaction_kernel;
+    use editor_application::session::HistoryScope;
+    use editor_application::transaction::{ChangeOrigin, ChangeSet};
+
+    let timestamp = crate::time::now_nanos();
+
+    // Wrap single command in a ChangeSet.
+    let mut cs = ChangeSet::new(
+        format!("asset-cmd-{}", timestamp),
+        ChangeOrigin::Human,
+        "user".to_string(),
+        "asset edit".to_string(),
+    );
+    cs.add_resource("scene_asset", "assets/current.asset.json");
+    cs.push_op(cmd.clone());
+
+    // Get mutable access to the asset doc and log.
+    let result_json = with_asset_doc_mut(|doc_opt| {
+        let doc = doc_opt
+            .as_mut()
+            .ok_or_else(|| JsValue::from_str("No asset open — call open_scene_asset first"))?;
+
+        let mut history = HistoryScope::new();
+        let kernel = asset_transaction_kernel();
+
+        let receipt = kernel
+            .apply_atomic(&cs, doc, &mut history)
+            .map_err(|e| JsValue::from_str(&format!("kernel apply failed: {}", e)))?;
+
+        // Extract the inverse.
+        let inverse = receipt.inverses.into_iter().next().unwrap_or_else(|| {
+            // Should not happen for a well-formed apply, but handle gracefully.
+            AssetCommand::RenameEntity {
+                local_id: String::new(),
+                old_name: None,
+                new_name: String::new(),
+            }
+        });
+
+        // Record in asset operation log for undo/redo.
+        with_asset_log_mut(|log| {
+            log.record(&cmd, inverse.clone());
+        });
+
+        serde_json::to_string(&inverse)
+            .map_err(|e| JsValue::from_str(&format!("Failed to serialize inverse: {}", e)))
+    })?;
+
+    Ok(result_json)
+}
+
+/// Legacy v0.88 path: direct dispatch through asset_command::apply.
+#[allow(dead_code)]
+fn dispatch_asset_command_legacy(cmd: &AssetCommand) -> Result<String, JsValue> {
     let result_json = with_asset_doc_mut(|doc_opt| {
         let doc = doc_opt
             .as_mut()
             .ok_or_else(|| JsValue::from_str("No asset open — call open_scene_asset first"))?;
 
         let inverse =
-            asset_command::apply(doc, &cmd).map_err(|e| JsValue::from_str(&e.to_string()))?;
+            asset_command::apply(doc, cmd).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
         // Record in asset operation log
         with_asset_log_mut(|log| {
-            log.record(&cmd, inverse.clone());
+            log.record(cmd, inverse.clone());
         });
 
         serde_json::to_string(&inverse)
@@ -2221,17 +2417,80 @@ pub fn dispatch_logic_command(cmd_json: &str) -> Result<String, JsValue> {
     let cmd: LogicCommand = serde_json::from_str(cmd_json)
         .map_err(|e| JsValue::from_str(&format!("Invalid command JSON: {}", e)))?;
 
+    if is_dispatch_via_kernel() {
+        dispatch_logic_command_via_kernel(cmd)
+    } else {
+        dispatch_logic_command_legacy(&cmd)
+    }
+}
+
+/// Kernel path: route a logic command through LogicTransactionKernel.
+fn dispatch_logic_command_via_kernel(cmd: LogicCommand) -> Result<String, JsValue> {
+    use crate::transaction_bridge::logic_transaction_kernel;
+    use editor_application::session::HistoryScope;
+    use editor_application::transaction::{ChangeOrigin, ChangeSet};
+
+    let timestamp = crate::time::now_nanos();
+
+    // Wrap single command in a ChangeSet.
+    let mut cs = ChangeSet::new(
+        format!("logic-cmd-{}", timestamp),
+        ChangeOrigin::Human,
+        "user".to_string(),
+        "logic edit".to_string(),
+    );
+    cs.add_resource("logic_graph", "logic/current.graph.json");
+    cs.push_op(cmd.clone());
+
+    // Get mutable access to the logic doc and log.
+    let result_json = with_logic_graph_mut(|doc_opt| {
+        let doc = doc_opt.as_mut().ok_or_else(|| {
+            JsValue::from_str("No logic graph open — call create_logic_graph_asset first")
+        })?;
+
+        let mut history = HistoryScope::new();
+        let kernel = logic_transaction_kernel();
+
+        let receipt = kernel
+            .apply_atomic(&cs, doc, &mut history)
+            .map_err(|e| JsValue::from_str(&format!("kernel apply failed: {}", e)))?;
+
+        // Extract the inverse.
+        let inverse =
+            receipt
+                .inverses
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| LogicCommand::RemoveNode {
+                    node_id: NodeId(String::new()),
+                });
+
+        // Record in logic operation log for undo/redo.
+        with_logic_log_mut(|log| {
+            log.record(&cmd, inverse.clone());
+        });
+
+        serde_json::to_string(&inverse)
+            .map_err(|e| JsValue::from_str(&format!("Failed to serialize inverse: {}", e)))
+    })?;
+
+    Ok(result_json)
+}
+
+/// Legacy v0.88 path: direct dispatch through logic_command::apply.
+#[allow(dead_code)]
+fn dispatch_logic_command_legacy(cmd: &LogicCommand) -> Result<String, JsValue> {
     let result_json = with_logic_graph_mut(|doc_opt| {
         let doc = doc_opt.as_mut().ok_or_else(|| {
             JsValue::from_str("No logic graph open — call create_logic_graph_asset first")
         })?;
 
         let inverse =
-            logic_command::apply(doc, &cmd).map_err(|e| JsValue::from_str(&e.to_string()))?;
+            logic_command::apply(doc, cmd).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
         // Record in logic operation log
         with_logic_log_mut(|log| {
-            log.record(&cmd, inverse.clone());
+            log.record(cmd, inverse.clone());
         });
 
         serde_json::to_string(&inverse)
