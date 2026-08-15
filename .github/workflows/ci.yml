@@ -60,6 +60,15 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build WASM types
+        run: npm run build:wasm
+
+      - name: Format WASM glue files
+        run: npx prettier --write src/wasm/*.d.ts
+
       - name: Run lint
         run: npm run lint
 
