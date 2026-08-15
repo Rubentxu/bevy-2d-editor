@@ -11,6 +11,7 @@ license = "MIT OR Apache-2.0"
 [features]
 
 [dependencies]
+editor-model = { path = "../editor-model" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
