@@ -39,10 +39,7 @@ export interface WorkspaceController {
   selectedIds: Set<string>;
   lastClickedId: string | null;
   selectedEntityId: string | null;
-  selectEntity: (
-    id: string,
-    modifier: "plain" | "range" | "toggle",
-  ) => void;
+  selectEntity: (id: string, modifier: "plain" | "range" | "toggle") => void;
   setSelectedEntityId: (id: string | null) => void;
   setSelectedIds: (ids: Set<string>) => void;
   clearSelection: () => void;
@@ -106,21 +103,27 @@ export function useEditorWorkspaceController(
   // still in the active set; fall back to the lone id otherwise.
   const selectedEntityId = useMemo(
     () =>
-      (lastClickedId && selectedIds.has(lastClickedId) ? lastClickedId : null) ??
-      (selectedIds.size === 1 ? Array.from(selectedIds)[0] : null),
+      (lastClickedId && selectedIds.has(lastClickedId)
+        ? lastClickedId
+        : null) ?? (selectedIds.size === 1 ? Array.from(selectedIds)[0] : null),
     [lastClickedId, selectedIds],
   );
 
   const selectEntity = useCallback(
     (id: string, modifier: "plain" | "range" | "toggle") => {
-      if (modifier === "range" && lastClickedId && options.sceneOrderForRangeSelect) {
+      if (
+        modifier === "range" &&
+        lastClickedId &&
+        options.sceneOrderForRangeSelect
+      ) {
         const ids = options.sceneOrderForRangeSelect;
         const fromIdx = ids.indexOf(lastClickedId);
         const toIdx = ids.indexOf(id);
         if (fromIdx === -1 || toIdx === -1) {
           setSelectedIds(new Set([id]));
         } else {
-          const [lo, hi] = fromIdx < toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx];
+          const [lo, hi] =
+            fromIdx < toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx];
           setSelectedIds((prev) => {
             const next = new Set(prev);
             for (let i = lo; i <= hi; i++) next.add(ids[i]);
@@ -153,11 +156,14 @@ export function useEditorWorkspaceController(
 
   const bindTestHooks = useCallback(() => {
     if (typeof window === "undefined") return;
-    (window as unknown as { __setEditorMode?: (mode: EditorMode) => void })
-      .__setEditorMode = (mode: EditorMode) => setEditorMode(mode);
-    (window as unknown as {
-      __setSelectedEntityId?: (id: string | null) => void;
-    }).__setSelectedEntityId = (id: string | null) => setSelectedEntityId(id);
+    (
+      window as unknown as { __setEditorMode?: (mode: EditorMode) => void }
+    ).__setEditorMode = (mode: EditorMode) => setEditorMode(mode);
+    (
+      window as unknown as {
+        __setSelectedEntityId?: (id: string | null) => void;
+      }
+    ).__setSelectedEntityId = (id: string | null) => setSelectedEntityId(id);
     // The AI panel hook is exposed by App.tsx because it owns the
     // dialog state. We leave it as a no-op here so callers can keep
     // asking the controller to wire it when they call bindTestHooks.
@@ -165,8 +171,9 @@ export function useEditorWorkspaceController(
       () => {
         // Real implementation lives in App.tsx; here we just record
         // intent so tests can call it before App.tsx mounts.
-        (window as unknown as { __openAIPanelPending?: boolean })
-          .__openAIPanelPending = true;
+        (
+          window as unknown as { __openAIPanelPending?: boolean }
+        ).__openAIPanelPending = true;
       };
   }, [setEditorMode, setSelectedEntityId]);
 

@@ -69,9 +69,9 @@ export function useSceneAssets() {
         console.error("useSceneAssets: refreshCatalog failed:", result.error);
         return;
       }
-      const value = result.value as
-        | { entries?: ReadonlyArray<SceneAssetCatalogEntry> }
-        | null;
+      const value = result.value as {
+        entries?: ReadonlyArray<SceneAssetCatalogEntry>;
+      } | null;
       setEntries([...(value?.entries ?? [])]);
     } catch (e) {
       console.error("useSceneAssets: refreshCatalog failed:", e);

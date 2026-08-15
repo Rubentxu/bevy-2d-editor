@@ -185,7 +185,11 @@ export default function MenuBar({
         <h1 className="visually-hidden">Bevy 2D Editor</h1>
       </div>
       <div className="menubar-menus" data-testid="topbar">
-        <div className="menubar-legacy-actions" aria-label="Quick actions" aria-hidden="true">
+        <div
+          className="menubar-legacy-actions"
+          aria-label="Quick actions"
+          aria-hidden="true"
+        >
           <div data-testid="toolbar-group-mode">
             <button
               type="button"
