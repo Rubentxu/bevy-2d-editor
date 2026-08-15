@@ -11,10 +11,12 @@ use std::fmt;
 pub struct StableId(String);
 
 impl StableId {
+    /// Construct a new StableId from a string.
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
     }
 
+    /// Borrow the inner string.
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -33,14 +35,17 @@ impl fmt::Display for StableId {
 pub struct LocalId(String);
 
 impl LocalId {
+    /// Construct a new LocalId from a string.
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
     }
 
+    /// Borrow the inner string.
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
+    /// Returns true if the local ID is empty.
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
@@ -59,10 +64,12 @@ impl fmt::Display for LocalId {
 pub struct SceneAssetLocalId(pub String);
 
 impl SceneAssetLocalId {
+    /// Construct a new SceneAssetLocalId from a string.
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
     }
 
+    /// Borrow the inner string.
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -74,10 +81,12 @@ impl SceneAssetLocalId {
 pub struct DocumentId(pub String);
 
 impl DocumentId {
+    /// Construct a new DocumentId from a string.
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
     }
 
+    /// Borrow the inner string.
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -89,10 +98,12 @@ impl DocumentId {
 pub struct EntityId(pub String);
 
 impl EntityId {
+    /// Construct a new EntityId from a string.
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
     }
 
+    /// Borrow the inner string.
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -104,10 +115,12 @@ impl EntityId {
 pub struct AssetId(pub String);
 
 impl AssetId {
+    /// Construct a new AssetId from a string.
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
     }
 
+    /// Borrow the inner string.
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -119,10 +132,12 @@ impl AssetId {
 pub struct LayerId(pub String);
 
 impl LayerId {
+    /// Construct a new LayerId from a string.
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
     }
 
+    /// Borrow the inner string.
     pub fn as_str(&self) -> &str {
         &self.0
     }

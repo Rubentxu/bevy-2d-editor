@@ -28,15 +28,15 @@ impl JsSysClock {
 impl Clock for JsSysClock {
     #[cfg(target_arch = "wasm32")]
     fn now(&self) -> Timestamp {
-        js_sys::Date::now() as u64
+        Timestamp(js_sys::Date::now() as u64)
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     fn now(&self) -> Timestamp {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as u64)
-            .unwrap_or(0)
+            .map(|d| Timestamp(d.as_millis() as u64))
+            .unwrap_or(Timestamp(0))
     }
 }
 

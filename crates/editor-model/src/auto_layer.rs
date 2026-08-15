@@ -10,8 +10,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PatternCell {
+    /// This cell must contain a tile.
     Filled,
+    /// This cell must be empty.
     Empty,
+    /// This cell can be either filled or empty.
     Any,
 }
 
@@ -21,8 +24,11 @@ pub type Pattern3x3 = [[PatternCell; 3]; 3];
 /// One auto-tiling rule.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AutoRule {
+    /// The 3×3 pattern to match.
     pub pattern: Pattern3x3,
+    /// Tiles to emit when the pattern matches.
     pub output: Vec<TileRef>,
+    /// Optional probability (0.0–1.0) of firing. Defaults to 1.0 (always).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chance: Option<f32>,
 }
@@ -33,14 +39,22 @@ pub type AutoLayerId = LayerId;
 /// An AutoLayer generates tiles automatically by pattern-matching against a source TileLayer.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AutoLayer {
+    /// Unique identifier for this auto-layer.
     pub id: AutoLayerId,
+    /// Human-readable name.
     pub name: String,
+    /// Z-ordering index.
     pub order: i32,
+    /// ID of the source tile layer to pattern-match against.
     pub source_layer_id: LayerId,
+    /// Tileset providing the output tile graphics.
     pub tileset_id: TilesetId,
+    /// Auto-tiling rules evaluated in order.
     pub rules: Vec<AutoRule>,
+    /// Cached output tile grid, regenerated when the source layer changes.
     #[serde(default)]
     pub cached: TileGrid,
+    /// Source layer generation at which `cached` was last computed.
     #[serde(default)]
     pub source_generation: u64,
 }

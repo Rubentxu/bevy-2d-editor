@@ -3,6 +3,8 @@
 //! Zero Bevy / zero WASM dependencies. Contains only serde-serializable types
 //! that represent editor-owned domain state.
 
+#![deny(missing_docs)]
+
 pub mod auto_layer;
 pub mod component;
 pub mod document;

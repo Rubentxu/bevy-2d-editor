@@ -40,6 +40,9 @@ jobs:
       - name: Check WASM target
         run: cargo check -p editor-core --target wasm32-unknown-unknown --locked
 
+      - name: Doc warnings gate (editor-model, editor-application)
+        run: cargo doc --no-deps -D warnings -p editor-model -p editor-application
+
   frontend-lint:
     name: Frontend static gates
     runs-on: ubuntu-latest

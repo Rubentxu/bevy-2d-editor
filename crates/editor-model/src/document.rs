@@ -13,15 +13,19 @@ use crate::scene_instance::SceneInstance;
 /// 2D vector with x and y components.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Vec2 {
+    /// X component.
     pub x: f32,
+    /// Y component.
     pub y: f32,
 }
 
 impl Vec2 {
+    /// Construct a new Vec2 from x and y components.
     pub fn new(x: f32, y: f32) -> Self {
         Self { x, y }
     }
 
+    /// Construct a Vec2 with both components set to `v`.
     pub fn splat(v: f32) -> Self {
         Self { x: v, y: v }
     }
@@ -30,17 +34,23 @@ impl Vec2 {
 /// RGBA color with floating-point components in [0, 1] range.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Color {
+    /// Red component.
     pub r: f32,
+    /// Green component.
     pub g: f32,
+    /// Blue component.
     pub b: f32,
+    /// Alpha (opacity) component.
     pub a: f32,
 }
 
 impl Color {
+    /// Construct a new Color from r, g, b, a components.
     pub fn new(r: f32, g: f32, b: f32, a: f32) -> Self {
         Self { r, g, b, a }
     }
 
+    /// Construct an opaque Color from sRGB components (assumes alpha = 1.0).
     pub fn srgb(r: f32, g: f32, b: f32) -> Self {
         Self { r, g, b, a: 1.0 }
     }
@@ -50,23 +60,36 @@ impl Color {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub enum Anchor {
+    /// Center point.
     Center,
+    /// Top-left corner.
     TopLeft,
+    /// Top-right corner.
     TopRight,
+    /// Bottom-left corner.
     BottomLeft,
+    /// Bottom-right corner.
     BottomRight,
+    /// Top center.
     TopCenter,
+    /// Bottom center.
     BottomCenter,
+    /// Center left.
     CenterLeft,
+    /// Center right.
     CenterRight,
 }
 
 /// The root document type representing a complete scene.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SceneDocument {
+    /// Document format version.
     pub version: String,
+    /// Stable identifier for this scene.
     pub scene_id: String,
+    /// Human-readable scene name.
     pub name: String,
+    /// All entities belonging to this scene.
     pub entities: Vec<Entity>,
     /// Placed Scene Instances indexed by StableId.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -88,13 +111,17 @@ impl Default for SceneDocument {
 /// A single entity within a scene with its associated components.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Entity {
+    /// Stable identifier for this entity.
     pub id: StableId,
     /// Local identifier within the scene. Falls back to id if not set.
     #[serde(default, skip_serializing_if = "LocalId::is_empty")]
     pub local_id: LocalId,
+    /// Human-readable name.
     pub name: String,
+    /// StableId of the parent entity, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<StableId>,
+    /// Components attached to this entity.
     pub components: Vec<ComponentInstance>,
 }
 

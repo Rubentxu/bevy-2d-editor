@@ -11,9 +11,11 @@ use serde::{Deserialize, Serialize};
 pub struct ComponentTypeId(pub String);
 
 impl ComponentTypeId {
+    /// Construct a new ComponentTypeId from a string.
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
     }
+    /// Borrow the inner string.
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -22,10 +24,13 @@ impl ComponentTypeId {
 /// Source location for a schema field (file:line:col).
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct SourceLocation {
+    /// Path to the source file that defined this field.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_file: Option<String>,
+    /// 1-based line number.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub line: Option<u32>,
+    /// 1-based column number.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub column: Option<u32>,
 }
@@ -34,42 +39,88 @@ pub struct SourceLocation {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum FieldType {
+    /// UTF-8 string value.
     String,
+    /// 32-bit signed integer.
     I32,
+    /// 32-bit floating-point.
     F32,
+    /// Boolean value.
     Bool,
+    /// 2D vector of f32.
     Vec2,
+    /// 3D vector of f32.
     Vec3,
+    /// RGBA color.
     Color,
-    Enum { variants: Vec<String> },
+    /// Enumerated value from a fixed list.
+    Enum {
+        /// Allowed variant names.
+        variants: Vec<String>,
+    },
+    /// Reference to another asset.
     AssetRef,
+    /// Reference to a scene asset.
     SceneRef,
-    Custom { type_name: String },
+    /// Extension point for custom types.
+    Custom {
+        /// Name of the custom type.
+        type_name: String,
+    },
 }
 
 /// Constraint on a schema field.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Constraint {
-    Range { min: f32, max: f32 },
-    Min { value: f32 },
-    Max { value: f32 },
-    Step { value: f32 },
-    Pattern { regex: String },
+    /// Numeric range (inclusive bounds).
+    Range {
+        /// Minimum allowed value.
+        min: f32,
+        /// Maximum allowed value.
+        max: f32,
+    },
+    /// Inclusive lower bound.
+    Min {
+        /// Minimum allowed value.
+        value: f32,
+    },
+    /// Inclusive upper bound.
+    Max {
+        /// Maximum allowed value.
+        value: f32,
+    },
+    /// Quantized step value.
+    Step {
+        /// Step size.
+        value: f32,
+    },
+    /// Regular expression constraint on string values.
+    Pattern {
+        /// Regex pattern (UTF-8).
+        regex: String,
+    },
+    /// Field must be present and non-null.
     Required,
 }
 
 /// One named field of a component schema.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FieldDef {
+    /// Name of the field.
     pub name: String,
+    /// Type discriminator and optional metadata.
     pub field_type: FieldType,
+    /// Default value when not specified.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_value: Option<serde_json::Value>,
+    /// Active constraints on this field's value.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub constraints: Vec<Constraint>,
+    /// Source location where this field was defined.
     #[serde(default)]
     pub location: SourceLocation,
+    /// Human-readable description.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 }
@@ -78,6 +129,7 @@ pub struct FieldDef {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SchemaKind {
+    /// Regular component with typed fields.
     #[default]
     Simple,
     /// Bound to a SceneAssetDocument (Bevy 0.19 #[derive(SceneComponent)] semantics).
@@ -87,15 +139,22 @@ pub enum SchemaKind {
 /// A registered component type and its field definitions.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ComponentSchema {
+    /// Type identifier for this component.
     pub type_id: ComponentTypeId,
+    /// For `SceneComponent` kind, the bound scene asset path.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bound_scene_asset_ref: Option<String>,
+    /// Whether placing an instance auto-spawns the bound scene.
     #[serde(default = "default_auto_spawn")]
     pub auto_spawn: bool,
+    /// Field definitions in declaration order.
     pub fields: Vec<FieldDef>,
+    /// Kind discriminator.
     pub kind: SchemaKind,
+    /// Human-readable description.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// Source location of the schema definition.
     #[serde(default)]
     pub location: SourceLocation,
 }

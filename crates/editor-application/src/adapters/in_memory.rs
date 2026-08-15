@@ -2,7 +2,7 @@
 
 use crate::ports::project_store::{ProjectStore, StoreEntry, StoreError};
 use std::collections::HashMap;
-use std::sync::RwLock;
+use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// In-memory project store backed by a `RwLock<HashMap>`.
 #[derive(Debug, Default)]
@@ -17,17 +17,27 @@ impl InMemoryProjectStore {
         Self::default()
     }
 
-    fn now_ms(&self) -> u64 {
-        let mut next = self.next_modified_ms.write().unwrap();
+    fn now_ms(&self) -> Result<u64, StoreError> {
+        let mut next = self.next_modified_ms.write().map_err(lock_poisoned)?;
         let current = *next;
         *next += 1;
-        current
+        Ok(current)
     }
+}
+
+/// Map a lock poisoning error to [`StoreError::LockPoisoned`].
+fn lock_poisoned<T>(_: std::sync::PoisonError<RwLockWriteGuard<'_, T>>) -> StoreError {
+    StoreError::LockPoisoned
+}
+
+/// Map a read-lock poisoning error to [`StoreError::LockPoisoned`].
+fn lock_poisoned_read<T>(_: std::sync::PoisonError<RwLockReadGuard<'_, T>>) -> StoreError {
+    StoreError::LockPoisoned
 }
 
 impl ProjectStore for InMemoryProjectStore {
     fn list(&self, prefix: &str) -> Result<Vec<StoreEntry>, StoreError> {
-        let entries = self.entries.read().unwrap();
+        let entries = self.entries.read().map_err(lock_poisoned_read)?;
         Ok(entries
             .iter()
             .filter(|(p, _)| p.starts_with(prefix))
@@ -42,25 +52,29 @@ impl ProjectStore for InMemoryProjectStore {
     fn read(&self, path: &str) -> Result<Vec<u8>, StoreError> {
         self.entries
             .read()
-            .unwrap()
+            .map_err(lock_poisoned_read)?
             .get(path)
             .map(|(b, _)| b.clone())
             .ok_or_else(|| StoreError::NotFound(path.to_string()))
     }
 
     fn write(&self, path: &str, bytes: &[u8], _atomic: bool) -> Result<(), StoreError> {
-        let mut entries = self.entries.write().unwrap();
-        entries.insert(path.to_string(), (bytes.to_vec(), self.now_ms()));
+        let mut entries = self.entries.write().map_err(lock_poisoned)?;
+        entries.insert(path.to_string(), (bytes.to_vec(), self.now_ms()?));
         Ok(())
     }
 
     fn delete(&self, path: &str) -> Result<(), StoreError> {
-        self.entries.write().unwrap().remove(path);
+        self.entries.write().map_err(lock_poisoned)?.remove(path);
         Ok(())
     }
 
     fn exists(&self, path: &str) -> Result<bool, StoreError> {
-        Ok(self.entries.read().unwrap().contains_key(path))
+        Ok(self
+            .entries
+            .read()
+            .map_err(lock_poisoned_read)?
+            .contains_key(path))
     }
 }
 
