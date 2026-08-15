@@ -1,4 +1,11 @@
-import { Suspense, lazy, useEffect, useState, useCallback, useMemo } from "react";
+import {
+  Suspense,
+  lazy,
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+} from "react";
 import "./styles.css";
 import { initEngine, isEngineReady } from "./engine-bridge";
 import { useSceneState, SceneDocument } from "./hooks/useSceneState";
@@ -35,9 +42,7 @@ import CheatSheet, {
 import OnboardingBanner from "./components/OnboardingBanner";
 import type { NavigationTarget } from "./types/navigation";
 
-const LogicGraphEditor = lazy(
-  () => import("./components/LogicGraphEditor"),
-);
+const LogicGraphEditor = lazy(() => import("./components/LogicGraphEditor"));
 const CodeEditor = lazy(() => import("./components/CodeEditor"));
 import { useCanvasViewport } from "./hooks/useCanvasViewport";
 import { useDockResize } from "./hooks/useDockResize";
@@ -1474,12 +1479,20 @@ function AppInner() {
           />
         )}
         {editorMode === "logic" && (
-          <Suspense fallback={<div className="surface-loading">Loading logic graph...</div>}>
+          <Suspense
+            fallback={
+              <div className="surface-loading">Loading logic graph...</div>
+            }
+          >
             <LogicGraphEditor editorMode={editorMode} />
           </Suspense>
         )}
         {editorMode === "code" && (
-          <Suspense fallback={<div className="surface-loading">Loading source editor...</div>}>
+          <Suspense
+            fallback={
+              <div className="surface-loading">Loading source editor...</div>
+            }
+          >
             <CodeEditor
               navigationTarget={pendingNavigation}
               onEditorReady={() => setPendingNavigation(null)}
