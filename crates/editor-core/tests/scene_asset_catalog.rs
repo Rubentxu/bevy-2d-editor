@@ -4,8 +4,9 @@
 use editor_core::scene_asset::SceneAssetRole;
 use editor_core::scene_asset_catalog::{
     CatalogError, SceneAssetCatalog, SceneAssetCatalogEntry, mint_asset_id, normalize_logical_path,
-    validate_logical_path,
+    random_hex_8, validate_logical_path,
 };
+use editor_core::test_helpers::FakeClock;
 
 fn entry(
     asset_id: &str,
@@ -439,7 +440,13 @@ fn update_version_validates_monotonic() {
 
 #[test]
 fn mint_asset_id_produces_distinct_ids() {
-    let ids: Vec<String> = (0..100).map(|_| mint_asset_id()).collect();
+    let clock = FakeClock::new();
+    let ids: Vec<String> = (0..100)
+        .map(|i| {
+            clock.advance(1);
+            mint_asset_id(&clock, &random_hex_8())
+        })
+        .collect();
     // All should be unique
     let unique_count = ids.iter().collect::<std::collections::HashSet<_>>().len();
     assert_eq!(unique_count, 100);
