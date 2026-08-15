@@ -50,6 +50,7 @@ mod state;
 pub mod tile_layer;
 pub mod tileset;
 pub mod time;
+pub mod transaction_bridge;
 mod wasm_auto_layer;
 mod wasm_bsn;
 mod wasm_export;
