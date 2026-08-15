@@ -55,16 +55,28 @@ impl DocumentSelection {
 
 /// Minimal explicit per-document history scope.
 ///
-/// In v1 this holds only a revision counter. PR E (TransactionKernel) will
-/// attach the real history container. The type exists so that history ownership
-/// is session-scoped from day one (ADR-0031 rule: "operation histories are
-/// scoped explicitly").
+/// In v1 this holds a revision counter and the metadata of the most recently
+/// applied change. The type exists so that history ownership is session-scoped
+/// from day one (ADR-0031 rule: "operation histories are scoped explicitly").
+///
+/// The revision and last-change metadata are updated by
+/// [`TransactionKernel::apply_atomic`](super::transaction::TransactionKernel::apply_atomic).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HistoryScope {
     revision: u64,
+    /// Metadata about the most recently applied change, if any.
+    last_change: Option<super::transaction::AppliedChangeMeta>,
 }
 
 impl HistoryScope {
+    /// Construct a new history scope with revision 0 and no prior change.
+    pub fn new() -> Self {
+        Self {
+            revision: 0,
+            last_change: None,
+        }
+    }
+
     /// Returns the current revision number.
     pub fn revision(&self) -> u64 {
         self.revision
@@ -75,6 +87,25 @@ impl HistoryScope {
         let next = self.revision + 1;
         self.revision = next;
         next
+    }
+
+    /// Returns metadata about the most recently applied change, if any.
+    pub fn last_change(&self) -> Option<&super::transaction::AppliedChangeMeta> {
+        self.last_change.as_ref()
+    }
+
+    /// Record metadata about an applied change.
+    ///
+    /// Called by [`TransactionKernel::apply_atomic`](super::transaction::TransactionKernel::apply_atomic)
+    /// after a successful apply to record provenance.
+    pub fn record_applied(&mut self, meta: super::transaction::AppliedChangeMeta) {
+        self.last_change = Some(meta);
+    }
+}
+
+impl Default for HistoryScope {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -215,7 +246,7 @@ impl EditorSession {
         // Create history scope if absent (idempotent).
         self.history_scopes
             .entry(path.clone())
-            .or_insert_with(|| HistoryScope { revision: 0 });
+            .or_insert_with(|| HistoryScope::new());
 
         self.active_document = Some(DocumentSelection::new(path, now));
     }

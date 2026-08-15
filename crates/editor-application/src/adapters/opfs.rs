@@ -617,8 +617,8 @@ mod tests {
         OpfsProjectStore::new_for_tests()
     }
 
-    #[tokio::test]
-    async fn test_contract_write_and_read() {
+    #[test]
+    fn test_contract_write_and_read() {
         let store = make_store();
         store.write("a/test.txt", b"hello", false).unwrap();
         store.write("a/sub/b.txt", b"world", false).unwrap();
@@ -630,24 +630,24 @@ mod tests {
         assert_eq!(store.read("a/sub/b.txt").unwrap(), b"world");
     }
 
-    #[tokio::test]
-    async fn test_contract_list_empty_prefix() {
+    #[test]
+    fn test_contract_list_empty_prefix() {
         let store = make_store();
         store.write("a/test.txt", b"hello", false).unwrap();
         let entries = store.list("nonexistent/").unwrap();
         assert!(entries.is_empty());
     }
 
-    #[tokio::test]
-    async fn test_contract_exists() {
+    #[test]
+    fn test_contract_exists() {
         let store = make_store();
         store.write("exists.txt", b"content", false).unwrap();
         assert!(store.exists("exists.txt").unwrap());
         assert!(!store.exists("missing.txt").unwrap());
     }
 
-    #[tokio::test]
-    async fn test_contract_delete() {
+    #[test]
+    fn test_contract_delete() {
         let store = make_store();
         store.write("to_delete.txt", b"temp", false).unwrap();
         assert!(store.exists("to_delete.txt").unwrap());
@@ -661,8 +661,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_contract_list_after_delete() {
+    #[test]
+    fn test_contract_list_after_delete() {
         let store = make_store();
         store.write("dir/file.txt", b"data", false).unwrap();
         assert_eq!(store.list("dir/").unwrap().len(), 1);
@@ -671,8 +671,8 @@ mod tests {
         assert!(store.list("dir/").unwrap().is_empty());
     }
 
-    #[tokio::test]
-    async fn test_contract_read_missing() {
+    #[test]
+    fn test_contract_read_missing() {
         let store = make_store();
         match store.read("definitely_missing_12345.txt") {
             Err(StoreError::NotFound(path)) => {
@@ -682,8 +682,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_contract_write_metadata() {
+    #[test]
+    fn test_contract_write_metadata() {
         let store = make_store();
         store.write("meta.txt", b"hello", false).unwrap();
         let entries = store.list("").unwrap();
@@ -692,8 +692,8 @@ mod tests {
         assert_eq!(entry.path, "meta.txt");
     }
 
-    #[tokio::test]
-    async fn test_contract_overwrite() {
+    #[test]
+    fn test_contract_overwrite() {
         let store = make_store();
         store.write("over.txt", b"original", false).unwrap();
         store.write("over.txt", b"updated", false).unwrap();
