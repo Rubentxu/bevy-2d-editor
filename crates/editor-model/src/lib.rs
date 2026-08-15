@@ -13,6 +13,7 @@ pub mod scene_instance;
 pub mod schema;
 pub mod tile_layer;
 pub mod tileset;
+pub mod time;
 
 // Re-export all public types at the root for ergonomic use.
 pub use auto_layer::{
@@ -43,3 +44,4 @@ pub use tileset::{
     AsepriteFrame, AsepriteMetadata, AsepriteSlice, AsepriteTag, TileCoord, TileGrid, TileRef,
     TilesetAsset, TilesetId, TilesetManager, TilesetMetadata,
 };
+pub use time::{Clock, Timestamp};
