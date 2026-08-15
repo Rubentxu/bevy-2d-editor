@@ -2493,7 +2493,10 @@ pub async fn create_scene_asset(name: &str, role: &str) -> Result<String, JsValu
     };
 
     let normalized_path = scene_asset_catalog::normalize_logical_path(name);
-    let asset_id = scene_asset_catalog::mint_asset_id();
+    let asset_id = scene_asset_catalog::mint_asset_id(
+        &crate::time::JsSysClock::new(),
+        &scene_asset_catalog::random_hex_8(),
+    );
 
     // Check for duplicate path
     let duplicate = with_asset_catalog(|cat| cat.resolve_path(&normalized_path).is_some());
@@ -2684,7 +2687,10 @@ pub async fn duplicate_scene_asset(asset_id: &str) -> Result<String, JsValue> {
         .map_err(|e| JsValue::from_str(&e))?;
 
     // Mint new id
-    let new_id = scene_asset_catalog::mint_asset_id();
+    let new_id = scene_asset_catalog::mint_asset_id(
+        &crate::time::JsSysClock::new(),
+        &scene_asset_catalog::random_hex_8(),
+    );
     let new_path = derive_duplicate_path(&source_entry.logical_path);
 
     let now = crate::time::now_millis();
@@ -3265,6 +3271,11 @@ mod validation_center_tests {
         let parsed: ValidationCategory = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed, ValidationCategory::Logic);
     }
+}
+
+/// Test helpers re-exported from editor-model for integration tests.
+pub mod test_helpers {
+    pub use editor_model::time::FakeClock;
 }
 
 // ===== Rust-source-integration tests =====
