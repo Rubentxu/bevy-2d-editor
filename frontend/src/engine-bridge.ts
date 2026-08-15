@@ -340,6 +340,12 @@ export async function initEngine(
   (window as any).opfs_save_binary = opfsSaveBinary;
   (window as any).opfs_load_binary = opfsLoadBinary;
 
+  // Initialize the Rust-side project store: eagerly hydrates the OPFS mirror
+  // through the window.opfs_* bridge installed above (ADR-0031 composition
+  // root, single hydrate). Must run before any scene/persistence call.
+  await wasm.init_project_store();
+  console.log("[bridge] Project store hydrated");
+
   // Step 1: Create buses BEFORE starting engine
   wasm.create_buses();
   console.log("[bridge] Buses created");

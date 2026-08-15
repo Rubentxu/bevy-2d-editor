@@ -953,202 +953,119 @@ pub fn get_event_bus_len() -> u32 {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// OPFS Persistence — wasm_bindgen externs + high-level functions
+// OPFS Persistence — editor-application OpfsProjectStore delegation
+// ADR-0031: ONE sanctioned ambient store in the WASM composition root (transition).
+// All 7 wrappers delegate to PROJECT_STORE thread_local; the actual JS interop
+// lives in crates/editor-application/src/adapters/opfs.rs (wasm module).
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[cfg(target_arch = "wasm32")]
-/// Helper: await a JS Promise and return its resolved JsValue.
-async fn js_await(promise: js_sys::Promise) -> Result<JsValue, JsValue> {
-    let fut = JsFuture::from(promise);
-    fut.await
-        .map_err(|e| JsValue::from_str(&format!("JS promise rejected: {:?}", e)))
+use editor_application::{OpfsProjectStore, ProjectStore};
+#[cfg(target_arch = "wasm32")]
+use std::sync::Arc;
+
+/// WASM composition root: the OPFS-backed project store.
+///
+/// ## Initialization
+///
+/// Must be initialized once at WASM startup via [`init_project_store()`].
+/// All 7 `js_*` wrappers below delegate to this store.
+#[cfg(target_arch = "wasm32")]
+thread_local! {
+    static PROJECT_STORE: std::cell::RefCell<Option<Arc<OpfsProjectStore>>> =
+        const { std::cell::RefCell::new(None) };
 }
 
+/// Initialize the project store (call once at WASM startup).
+///
+/// Uses the JS bridge (`window.opfs_*`) and `js_sys::Date` for timestamps.
+/// Calls `hydrate()` to eagerly load all OPFS files into the mirror.
+///
+/// This function is exported as `#[wasm_bindgen]` so the TS startup code can
+/// invoke it after the WASM module is loaded (before any editor operations).
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
-extern "C" {
-    /// JS-side: `window.opfs_save_file(path, contents) -> Promise<{ok, error?}>`
-    #[wasm_bindgen(js_namespace = window, js_name = opfs_save_file)]
-    pub fn opfs_save_file_raw(path: &str, contents: &str) -> js_sys::Promise;
-
-    /// JS-side: `window.opfs_load_file(path) -> Promise<{ok, value?, error?}>`
-    #[wasm_bindgen(js_namespace = window, js_name = opfs_load_file)]
-    pub fn opfs_load_file_raw(path: &str) -> js_sys::Promise;
-
-    /// JS-side: `window.opfs_list_files(path) -> Promise<{ok, value?, error?}>`
-    #[wasm_bindgen(js_namespace = window, js_name = opfs_list_files)]
-    pub fn opfs_list_files_raw(path: &str) -> js_sys::Promise;
-
-    /// JS-side: `window.opfs_exists(path) -> Promise<boolean>`
-    #[wasm_bindgen(js_namespace = window, js_name = opfs_exists)]
-    pub fn opfs_exists_raw(path: &str) -> js_sys::Promise;
-
-    /// JS-side: `window.opfs_delete_file(path) -> Promise<{ok, error?}>`
-    #[wasm_bindgen(js_namespace = window, js_name = opfs_delete_file)]
-    pub fn opfs_delete_file_raw(path: &str) -> js_sys::Promise;
-
-    /// JS-side: `window.opfs_save_binary(path, Uint8Array) -> Promise<{ok, error?}>`
-    #[wasm_bindgen(js_namespace = window, js_name = opfs_save_binary)]
-    pub fn opfs_save_binary_raw(path: &str, contents: &js_sys::Uint8Array) -> js_sys::Promise;
-
-    /// JS-side: `window.opfs_load_binary(path) -> Promise<{ok, value: Uint8Array, error?}>`
-    #[wasm_bindgen(js_namespace = window, js_name = opfs_load_binary)]
-    pub fn opfs_load_binary_raw(path: &str) -> js_sys::Promise;
+pub async fn init_project_store() -> Result<(), JsValue> {
+    let store = OpfsProjectStore::new();
+    store.hydrate().await.map_err(|e| JsValue::from_str(&*e))?;
+    PROJECT_STORE.with(|cell| {
+        *cell.borrow_mut() = Some(Arc::new(store));
+    });
+    Ok(())
 }
 
+/// Returns an error string if the project store is not yet initialized.
+#[cfg(target_arch = "wasm32")]
+fn project_store_error() -> String {
+    "project store not initialized — call init_project_store() at startup".to_string()
+}
+
+/// Get a clone of the project store Arc, or return the error.
+#[cfg(target_arch = "wasm32")]
+fn with_project_store<T>(f: impl FnOnce(&Arc<OpfsProjectStore>) -> T) -> Result<T, String> {
+    PROJECT_STORE
+        .try_with(|cell| match cell.borrow().as_ref() {
+            Some(store) => Ok(f(store)),
+            None => Err(project_store_error()),
+        })
+        .map_err(|_| project_store_error())?
+}
+
+/// Save a text file to OPFS and flush (durability-preserving).
 #[cfg(target_arch = "wasm32")]
 pub(crate) async fn js_save_file(path: &str, contents: &str) -> Result<(), String> {
-    let promise = opfs_save_file_raw(path, contents);
-    let result = js_await(promise).await.map_err(|e| format!("{:?}", e))?;
-    let val: serde_json::Value = serde_wasm_bindgen::from_value(result)
-        .map_err(|e| format!("Bad bridge response: {}", e))?;
-    if val.get("ok").and_then(|v| v.as_bool()) == Some(true) {
-        Ok(())
-    } else {
-        Err(val
-            .get("error")
-            .and_then(|v| v.as_str())
-            .unwrap_or("Unknown error")
-            .to_string())
-    }
+    let store = with_project_store(|s| Arc::clone(s))?;
+    store
+        .write(path, contents.as_bytes(), false)
+        .map_err(|e| e.to_string())?;
+    store.flush().await.map_err(|e| e.to_string())
 }
 
+/// Load a text file from OPFS (mirror read).
 #[cfg(target_arch = "wasm32")]
 pub(crate) async fn js_load_file(path: &str) -> Result<String, String> {
-    let promise = opfs_load_file_raw(path);
-    let result = js_await(promise).await.map_err(|e| format!("{:?}", e))?;
-    let val: serde_json::Value = serde_wasm_bindgen::from_value(result)
-        .map_err(|e| format!("Bad bridge response: {}", e))?;
-    if val.get("ok").and_then(|v| v.as_bool()) == Some(true) {
-        val.get("value")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
-            .ok_or_else(|| "Missing value in bridge response".to_string())
-    } else {
-        Err(val
-            .get("error")
-            .and_then(|v| v.as_str())
-            .unwrap_or("Unknown error")
-            .to_string())
-    }
+    let bytes = with_project_store(|s| s.read(path).map_err(|e| e.to_string()))??;
+    String::from_utf8(bytes).map_err(|e| format!("Not UTF-8: {}", e))
 }
 
+/// Check if a file exists in OPFS (mirror read).
 #[cfg(target_arch = "wasm32")]
-async fn js_exists(path: &str) -> bool {
-    let promise = opfs_exists_raw(path);
-    match js_await(promise).await {
-        Ok(v) => v.as_bool().unwrap_or(false),
-        Err(_) => false,
-    }
+pub(crate) async fn js_exists(path: &str) -> bool {
+    with_project_store(|s| s.exists(path).unwrap_or(false)).unwrap_or(false)
 }
 
+/// List files under a prefix in OPFS (mirror read).
 #[cfg(target_arch = "wasm32")]
-async fn js_list_files(path: &str) -> Result<Vec<String>, String> {
-    let promise = opfs_list_files_raw(path);
-    let result = js_await(promise).await.map_err(|e| format!("{:?}", e))?;
-    let val: serde_json::Value = serde_wasm_bindgen::from_value(result)
-        .map_err(|e| format!("Bad bridge response: {}", e))?;
-    if val.get("ok").and_then(|v| v.as_bool()) == Some(true) {
-        let arr = val
-            .get("value")
-            .and_then(|v| v.as_array())
-            .ok_or_else(|| "Missing value array".to_string())?;
-        Ok(arr
-            .iter()
-            .filter_map(|v| v.as_str().map(String::from))
-            .collect())
-    } else {
-        Err(val
-            .get("error")
-            .and_then(|v| v.as_str())
-            .unwrap_or("Unknown error")
-            .to_string())
-    }
+pub(crate) async fn js_list_files(path: &str) -> Result<Vec<String>, String> {
+    with_project_store(|s| {
+        s.list(path)
+            .map(|entries| entries.into_iter().map(|e| e.path).collect())
+            .map_err(|e| e.to_string())
+    })?
 }
 
+/// Delete a file from OPFS and flush (durability-preserving).
 #[cfg(target_arch = "wasm32")]
-async fn js_delete_file(path: &str) -> Result<(), String> {
-    let promise = opfs_delete_file_raw(path);
-    let result = js_await(promise).await.map_err(|e| format!("{:?}", e))?;
-    let val: serde_json::Value = serde_wasm_bindgen::from_value(result)
-        .map_err(|e| format!("Bad bridge response: {}", e))?;
-    if val.get("ok").and_then(|v| v.as_bool()) == Some(true) {
-        Ok(())
-    } else {
-        Err(val
-            .get("error")
-            .and_then(|v| v.as_str())
-            .unwrap_or("Unknown error")
-            .to_string())
-    }
+pub(crate) async fn js_delete_file(path: &str) -> Result<(), String> {
+    let store = with_project_store(|s| Arc::clone(s))?;
+    store.delete(path).map_err(|e| e.to_string())?;
+    store.flush().await.map_err(|e| e.to_string())
 }
 
-/// Save binary bytes to OPFS at the given path.
-/// Returns `Ok(())` on success.
+/// Save binary bytes to OPFS and flush (durability-preserving).
 #[cfg(target_arch = "wasm32")]
-async fn js_save_binary(path: &str, contents: &[u8]) -> Result<(), String> {
-    let js_bytes = js_sys::Uint8Array::new_with_length(contents.len() as u32);
-    js_bytes.copy_from(contents);
-    let promise = opfs_save_binary_raw(path, &js_bytes);
-    let result = js_await(promise).await.map_err(|e| format!("{:?}", e))?;
-    let val: serde_json::Value = serde_wasm_bindgen::from_value(result)
-        .map_err(|e| format!("Bad bridge response: {}", e))?;
-    if val.get("ok").and_then(|v| v.as_bool()) == Some(true) {
-        Ok(())
-    } else {
-        Err(val
-            .get("error")
-            .and_then(|v| v.as_str())
-            .unwrap_or("Unknown error")
-            .to_string())
-    }
+pub(crate) async fn js_save_binary(path: &str, contents: &[u8]) -> Result<(), String> {
+    let store = with_project_store(|s| Arc::clone(s))?;
+    store
+        .write(path, contents, false)
+        .map_err(|e| e.to_string())?;
+    store.flush().await.map_err(|e| e.to_string())
 }
 
-/// Load binary bytes from OPFS at the given path.
-/// Returns `Ok(Vec<u8>)` on success.
+/// Load binary bytes from OPFS (mirror read).
 #[cfg(target_arch = "wasm32")]
-async fn js_load_binary(path: &str) -> Result<Vec<u8>, String> {
-    let promise = opfs_load_binary_raw(path);
-    let result = js_await(promise).await.map_err(|e| format!("{:?}", e))?;
-    // Binary response: {ok: true, value: Uint8Array} — must extract bytes manually
-    // Cannot use serde_wasm_bindgen for Vec<u8> from Uint8Array.
-    let obj = js_sys::Object::from(result);
-    // MED-13: Reflect::get returns Result; propagate via ? instead of unwrap so
-    // a JS exception (e.g., getter throws on a malformed object) becomes an
-    // Err to the caller instead of a panic that would unwind into the WASM
-    // bridge and poison subsequent calls.
-    let ok = js_sys::Reflect::get(&obj, &"ok".into())
-        .map_err(|e| format!("Reflect::get('ok') failed: {:?}", e))?;
-    if ok.as_bool() == Some(true) {
-        let value = js_sys::Reflect::get(&obj, &"value".into())
-            .map_err(|e| format!("Reflect::get('value') failed: {:?}", e))?;
-        let bytes: Vec<u8> = js_sys::Uint8Array::new(&value).to_vec();
-        Ok(bytes)
-    } else {
-        let err = js_sys::Reflect::get(&obj, &"error".into())
-            .map_err(|e| format!("Reflect::get('error') failed: {:?}", e))?;
-        Err(err
-            .as_string()
-            .unwrap_or_else(|| "Unknown error".to_string()))
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-async fn update_project_metadata(scene_name: &str) -> Result<(), String> {
-    let project = if js_exists(PROJECT_FILE).await {
-        match js_load_file(PROJECT_FILE).await {
-            Ok(json_str) => serde_json::from_str::<ProjectMetadata>(&json_str).unwrap_or_default(),
-            Err(_) => ProjectMetadata::default(),
-        }
-    } else {
-        ProjectMetadata::default()
-    };
-    let mut project = project;
-    if !project.scenes.contains(&scene_name.to_string()) {
-        project.scenes.push(scene_name.to_string());
-    }
-    let json = serde_json::to_string(&project).map_err(|e| e.to_string())?;
-    js_save_file(PROJECT_FILE, &json).await
+pub(crate) async fn js_load_binary(path: &str) -> Result<Vec<u8>, String> {
+    with_project_store(|s| s.read(path).map_err(|e| e.to_string()))?
 }
 
 /// List all scene names from `project.json`.
@@ -1172,6 +1089,53 @@ pub async fn list_scenes() -> Result<JsValue, JsValue> {
 #[wasm_bindgen]
 pub async fn project_exists() -> bool {
     js_exists(PROJECT_FILE).await
+}
+
+/// Internal helper: await a JS Promise and return its resolved JsValue.
+/// Used only by update_project_metadata (which needs direct OPFS access for now).
+#[cfg(target_arch = "wasm32")]
+async fn js_await(promise: js_sys::Promise) -> Result<JsValue, JsValue> {
+    let fut = JsFuture::from(promise);
+    fut.await
+        .map_err(|e| JsValue::from_str(&format!("JS promise rejected: {:?}", e)))
+}
+
+/// `window.opfs_*` externs — used by update_project_metadata for direct OPFS
+/// access during the transition period (ADR-0031 WASM clause).
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = window, js_name = opfs_save_file)]
+    fn opfs_save_file_raw(path: &str, contents: &str) -> js_sys::Promise;
+
+    #[wasm_bindgen(js_namespace = window, js_name = opfs_load_file)]
+    fn opfs_load_file_raw(path: &str) -> js_sys::Promise;
+
+    #[wasm_bindgen(js_namespace = window, js_name = opfs_exists)]
+    fn opfs_exists_raw(path: &str) -> js_sys::Promise;
+
+    #[wasm_bindgen(js_namespace = window, js_name = opfs_delete_file)]
+    fn opfs_delete_file_raw(path: &str) -> js_sys::Promise;
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn update_project_metadata(scene_name: &str) -> Result<(), String> {
+    // Direct OPFS calls during transition — this function will also migrate
+    // to PROJECT_STORE in a future PR.
+    let project = if js_exists(PROJECT_FILE).await {
+        match js_load_file(PROJECT_FILE).await {
+            Ok(json_str) => serde_json::from_str::<ProjectMetadata>(&json_str).unwrap_or_default(),
+            Err(_) => ProjectMetadata::default(),
+        }
+    } else {
+        ProjectMetadata::default()
+    };
+    let mut project = project;
+    if !project.scenes.contains(&scene_name.to_string()) {
+        project.scenes.push(scene_name.to_string());
+    }
+    let json = serde_json::to_string(&project).map_err(|e| e.to_string())?;
+    js_save_file(PROJECT_FILE, &json).await
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
