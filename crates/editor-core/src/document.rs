@@ -35,38 +35,10 @@ impl fmt::Display for StableId {
     }
 }
 
-/// Local identifier for an entity within a scene.
-/// Uses #[serde(transparent)] so it serializes as a plain string.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(transparent)]
-#[derive(Default)]
-pub struct LocalId(String);
-
-impl LocalId {
-    pub fn new(id: impl Into<String>) -> Self {
-        Self(id.into())
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-}
-
-impl fmt::Display for LocalId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-// T-02-14 LocalId collapse: canonical definition moved to editor_model::ids::LocalId.
-// This duplicate is kept for backward compatibility during the transition.
-// All new code should use editor_model::ids::LocalId directly.
-#[deprecated(since = "0.87.0", note = "Use editor_model::ids::LocalId instead")]
-pub type DeprecatedLocalId = editor_model::ids::LocalId;
+// T-02-14 LocalId collapse (completed in v0.88): canonical definition lives in
+// editor_model::ids::LocalId. This re-export keeps `editor_core::document::LocalId`
+// paths compiling; the API is identical (new/as_str/is_empty/Display, serde transparent).
+pub use editor_model::ids::LocalId;
 
 /// 2D vector with x and y components.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
