@@ -2072,11 +2072,10 @@ pub async fn load_project() -> Result<(), JsValue> {
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn save_scene(name: &str) -> Result<String, JsValue> {
-    let doc_json = scene_session::snapshot_active_doc()
-        .as_ref()
+    let doc = scene_session::snapshot_active_doc()
         .ok_or_else(|| JsValue::from_str("No scene loaded — call load_scene_json first"))?;
-    let doc_json = serde_json::to_string(doc_json)
-        .map_err(|e| JsValue::from_str(&format!("serialize: {e}")))?;
+    let doc_json =
+        serde_json::to_string(&doc).map_err(|e| JsValue::from_str(&format!("serialize: {e}")))?;
 
     let path = persistence::scene_path(name);
     js_save_file(&path, &doc_json)
