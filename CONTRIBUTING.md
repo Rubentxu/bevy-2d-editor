@@ -124,15 +124,15 @@ Before opening a pull request, run the relevant commands:
 
 ```sh
 cargo fmt --all -- --check
-cargo clippy --all-targets -- -D warnings
 cargo test --workspace --all-targets --release --locked
+cargo check -p editor-core --target wasm32-unknown-unknown --locked
 cd frontend && npm run lint
 cd frontend && npm run format:check
+cd frontend && npx tsc --noEmit
 cd frontend && npm run build:check
-just test                  # full Playwright suite
+cd tools/docs-check && npm run check
+cd tools/archcheck && npm run check
 ```
-
-The CI Rust lint job is temporarily advisory because existing warnings are noisy; new code should still avoid adding warnings.
 
 ## SDDK workflow (non-trivial capabilities)
 

@@ -1,0 +1,19 @@
+{
+  "name": "archcheck",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Architecture fitness assertions for the Bevy 2D Editor.",
+  "type": "module",
+  "bin": {
+    "archcheck": "./check.ts"
+  },
+  "scripts": {
+    "check": "tsx check.ts",
+    "test": "tsx check.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.7.0"
+  }
+}
