@@ -2375,9 +2375,14 @@ name = "editor-application"
 version = "0.1.0"
 dependencies = [
  "editor-model",
+ "js-sys",
  "serde",
+ "serde-wasm-bindgen",
  "serde_json",
  "thiserror 2.0.18",
+ "tokio",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]
@@ -2386,6 +2391,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "console_error_panic_hook",
+ "editor-application",
  "editor-model",
  "js-sys",
  "rand 0.9.4",

@@ -9,5 +9,6 @@ pub mod ports;
 pub mod session;
 
 pub use adapters::in_memory::InMemoryProjectStore;
+pub use adapters::opfs::OpfsProjectStore;
 pub use ports::project_store::{ProjectStore, StoreEntry, StoreError};
 pub use session::{CacheEntry, DocumentSelection, EditorSession, HistoryScope};
