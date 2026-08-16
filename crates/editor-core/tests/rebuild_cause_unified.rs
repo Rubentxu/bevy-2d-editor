@@ -15,11 +15,15 @@ use std::sync::{Arc, Mutex};
 struct FakeSession {
     tunable_baselines: BTreeMap<String, serde_json::Value>,
     runtime_delta_buffer: std::collections::VecDeque<editor_model::RuntimeDelta>,
-    pending_causality_edges: BTreeMap<StableId, Vec<CausalityEdge>>,
+    pending_causality_edges: BTreeMap<editor_model::StableId, Vec<CausalityEdge>>,
     last_rebuild_cause: Option<RebuildCause>,
     scene_states: BTreeMap<String, editor_model::SceneSessionState>,
     asset_states: BTreeMap<String, editor_model::AssetSessionState>,
     logic_states: BTreeMap<String, editor_model::LogicSessionState>,
+    preview_inspector: editor_model::PreviewInspectorState,
+    source_files: editor_model::SourceFilesCache,
+    recent_change_sets: BTreeMap<String, Vec<editor_model::ChangeSetSummary>>,
+    logic_activation_ring: std::collections::VecDeque<editor_model::logic_activation::LogicActivationEvent>,
 }
 
 impl EditorSessionPort for FakeSession {
@@ -52,6 +56,18 @@ impl EditorSessionPort for FakeSession {
             .entry(path.to_string())
             .or_insert_with(editor_model::LogicSessionState::default)
     }
+    fn preview_inspector_mut(&mut self) -> &mut editor_model::PreviewInspectorState {
+        &mut self.preview_inspector
+    }
+    fn source_files_mut(&mut self) -> &mut editor_model::SourceFilesCache {
+        &mut self.source_files
+    }
+    fn recent_change_sets_for(&self, scene_path: &str) -> Vec<editor_model::ChangeSetSummary> {
+        self.recent_change_sets.get(scene_path).cloned().unwrap_or_default()
+    }
+    fn logic_activation_ring_mut(&mut self) -> &mut std::collections::VecDeque<editor_model::logic_activation::LogicActivationEvent> {
+        &mut self.logic_activation_ring
+    }
 }
 
 fn fresh_session() {
@@ -63,6 +79,10 @@ fn fresh_session() {
         scene_states: BTreeMap::new(),
         asset_states: BTreeMap::new(),
         logic_states: BTreeMap::new(),
+        preview_inspector: editor_model::PreviewInspectorState::default(),
+        source_files: editor_model::SourceFilesCache::default(),
+        recent_change_sets: BTreeMap::new(),
+        logic_activation_ring: std::collections::VecDeque::with_capacity(64),
     };
     let arc: Arc<Mutex<dyn EditorSessionPort>> = Arc::new(Mutex::new(session));
     editor_model::ports::register_editor_session(arc);

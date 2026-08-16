@@ -25,13 +25,16 @@ use crate::scene_instance_overrides::{remove_override, resync, upsert_override};
 /// Context passed to commands that need to resolve external resources
 /// (HD-1 cleanup).
 ///
-/// ## PR2a Migration Note (T-02-03)
+/// ## v0.90 PR5 (T-05-11)
 ///
-/// As of v0.89, [`ProcessorContext::from_globals`] is deprecated in favor of
-/// explicit context construction. Callers at the WASM boundary (where
-/// `EditorSession` state is accessible) should use
-/// [`ProcessorContext::with_asset_body`] to pass pre-resolved asset bodies.
-/// For commands that don't need external resources, use [`ProcessorContext::empty`].
+/// `ProcessorContext::from_globals` was REMOVED in v0.90. The function was
+/// deprecated in v0.89 (T-02-03) and the migration window has now closed.
+/// Callers at the WASM boundary must use
+/// [`ProcessorContext::with_asset_body`] (passing the asset body explicitly
+/// from `EditorSession`) or [`ProcessorContext::empty`] (for commands that
+/// don't need external resources). The thread-local lookups that
+/// `from_globals` used (SCENE_ASSET_CATALOG, ASSET_BODY_CACHE) are slated
+/// for v0.91 migration.
 ///
 /// All fields are optional: when `None`, commands that need the resource
 /// silently no-op the resync step (preserving legacy behavior).
@@ -43,34 +46,6 @@ pub struct ProcessorContext {
 }
 
 impl ProcessorContext {
-    /// Build a context from the live global thread-locals.
-    ///
-    /// DEPRECATED (T-02-03): This function reads from thread-local stores
-    /// in editor-core, which violates the PR2a goal of zero ambient state.
-    /// Calls that need the asset body for ReplaceInstanceAsset commands
-    /// should instead resolve the asset body from EditorSession state
-    /// (accessible at the WASM boundary) and pass it explicitly via
-    /// [`ProcessorContext::with_asset_body`](Self::with_asset_body).
-    ///
-    /// This function will be removed in a future PR once all callers
-    /// have been migrated to pass explicit context.
-    #[deprecated(
-        since = "0.89.0",
-        note = "use ProcessorContext::empty() or ProcessorContext::with_asset_body() instead"
-    )]
-    pub fn from_globals(asset_ref: &str) -> Self {
-        // Resolve path → asset_id (clone to detach lifetime).
-        let asset_id =
-            crate::with_asset_catalog(|cat| cat.resolve_path(asset_ref).map(|s| s.to_string()));
-        // Resolve asset_id → catalog entry.
-        let entry = asset_id.and_then(|id| crate::with_asset_catalog(|cat| cat.get(&id).cloned()));
-        // Resolve entry.logical_path → body cache entry.
-        let asset_body = entry.and_then(|e| {
-            crate::with_asset_body_cache(|cache| cache.get(&e.logical_path).cloned())
-        });
-        ProcessorContext { asset_body }
-    }
-
     /// Construct an empty context for commands that don't need external resources.
     pub fn empty() -> Self {
         ProcessorContext::default()

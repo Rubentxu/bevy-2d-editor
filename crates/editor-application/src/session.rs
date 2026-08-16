@@ -271,9 +271,9 @@ pub struct EditorSession {
     /// Per-logic-graph-path session state (LOGIC_GRAPH_DOC etc.).
     logic_states: BTreeMap<String, LocalLogicSessionState>,
     /// Runtime preview inspector state (PREVIEW_METRICS etc.).
-    preview_inspector: PreviewInspectorState,
+    preview_inspector: editor_model::PreviewInspectorState,
     /// Source file contents cache (SOURCE_FILE_REGISTRY).
-    source_files: SourceFilesCache,
+    source_files: editor_model::SourceFilesCache,
     /// Recent change-set summaries per scene path (capped at 50 per scene).
     recent_change_sets: BTreeMap<String, RecentChangeSetsBuffer>,
     /// Pending causality edges collected during a preview rebuild.
@@ -333,8 +333,8 @@ impl EditorSession {
             scene_states: BTreeMap::new(),
             asset_states: BTreeMap::new(),
             logic_states: BTreeMap::new(),
-            preview_inspector: PreviewInspectorState::default(),
-            source_files: SourceFilesCache::default(),
+            preview_inspector: editor_model::PreviewInspectorState::default(),
+            source_files: editor_model::SourceFilesCache::default(),
             recent_change_sets: BTreeMap::new(),
             pending_causality_edges: BTreeMap::new(),
             runtime_delta_buffer: VecDeque::with_capacity(64),
@@ -416,22 +416,22 @@ impl EditorSession {
     }
 
     /// Returns a reference to the source files cache.
-    pub fn source_files(&self) -> &SourceFilesCache {
+    pub fn source_files(&self) -> &editor_model::SourceFilesCache {
         &self.source_files
     }
 
     /// Returns a mutable reference to the source files cache.
-    pub fn source_files_mut(&mut self) -> &mut SourceFilesCache {
+    pub fn source_files_mut(&mut self) -> &mut editor_model::SourceFilesCache {
         &mut self.source_files
     }
 
     /// Returns a reference to the preview inspector state.
-    pub fn preview_inspector(&self) -> &PreviewInspectorState {
+    pub fn preview_inspector(&self) -> &editor_model::PreviewInspectorState {
         &self.preview_inspector
     }
 
     /// Returns a mutable reference to the preview inspector state.
-    pub fn preview_inspector_mut(&mut self) -> &mut PreviewInspectorState {
+    pub fn preview_inspector_mut(&mut self) -> &mut editor_model::PreviewInspectorState {
         &mut self.preview_inspector
     }
 
@@ -795,5 +795,28 @@ impl EditorSessionPort for EditorSession {
         self.logic_states
             .entry(path.to_string())
             .or_insert_with(editor_model::LogicSessionState::default)
+    }
+
+    fn preview_inspector_mut(&mut self) -> &mut editor_model::PreviewInspectorState {
+        &mut self.preview_inspector
+    }
+
+    fn source_files_mut(&mut self) -> &mut editor_model::SourceFilesCache {
+        &mut self.source_files
+    }
+
+    fn recent_change_sets_for(&self, scene_path: &str) -> Vec<editor_model::ChangeSetSummary> {
+        // PR5: read from the in-session map. The OperationLog poll
+        // (which was the v0.89 read path) is deferred to v0.91 — the
+        // RecentChangeSetsBuffer is populated externally via
+        // `EditorSession::push_recent_change_set` (added separately).
+        self.recent_change_sets
+            .get(scene_path)
+            .map(|b| b.entries().to_vec())
+            .unwrap_or_default()
+    }
+
+    fn logic_activation_ring_mut(&mut self) -> &mut VecDeque<editor_model::logic_activation::LogicActivationEvent> {
+        &mut self.logic_activation_ring
     }
 }

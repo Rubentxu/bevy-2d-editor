@@ -140,3 +140,52 @@ pub struct LogicSessionState {
     /// `AssetSessionState::operation_log_bytes` for rationale).
     pub operation_log_bytes: Vec<u8>,
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v0.90 PR5: Move ChangeSetSummary from editor-application to editor-model.
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// editor-model::EditorSessionPort::recent_change_sets_for needs this type in
+// its signature. Moving it here keeps editor-model the single source of truth
+// for editor session state (per the v0.88 PR B architecture).
+
+use serde::{Deserialize, Serialize};
+
+/// A query-friendly summary of a recently applied change set.
+///
+/// Returned by [`OperationLog::recent_change_sets_for`](crate::operation_log::OperationLog::recent_change_sets_for).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChangeSetSummary {
+    /// Where the change originated.
+    pub origin: String,
+    /// Who authored this change.
+    pub actor: String,
+    /// Timestamp when the change was applied (Unix milliseconds).
+    pub applied_at_ms: u64,
+    /// Number of operations in this entry that touched the queried stable ID.
+    pub ops_touched: usize,
+}
+
+// v0.90 PR5: PreviewInspectorState and SourceFilesCache moved from
+// editor-application to editor-model (they are referenced by the
+// EditorSessionPort trait's new methods).
+
+/// Runtime preview inspector state (live preview world data).
+#[derive(Debug, Clone, Default)]
+pub struct PreviewInspectorState {
+    /// Live runtime metrics (FPS, frame time, rebuild count) as JSON.
+    pub metrics: serde_json::Value,
+    /// Per-instance runtime-to-editor ID mapping.
+    pub mapping: Vec<serde_json::Value>,
+    /// Per-StableId provenance records from play mode.
+    pub provenance: std::collections::BTreeMap<String, serde_json::Value>,
+    /// Last rebuild cause (§6).
+    pub last_rebuild_cause: Option<crate::rebuild_cause::RebuildCause>,
+}
+
+/// In-memory cache for source file contents.
+#[derive(Debug, Clone, Default)]
+pub struct SourceFilesCache {
+    /// File path → file content.
+    pub files: std::collections::BTreeMap<String, String>,
+}

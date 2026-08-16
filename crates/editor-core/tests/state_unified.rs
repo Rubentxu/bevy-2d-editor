@@ -51,6 +51,20 @@ impl EditorSessionPort for FakeSession {
     ) -> &mut std::collections::VecDeque<editor_model::RuntimeDelta> {
         unimplemented!()
     }
+    fn preview_inspector_mut(&mut self) -> &mut editor_model::PreviewInspectorState {
+        unimplemented!()
+    }
+    fn source_files_mut(&mut self) -> &mut editor_model::SourceFilesCache {
+        unimplemented!()
+    }
+    fn recent_change_sets_for(&self, _scene_path: &str) -> Vec<editor_model::ChangeSetSummary> {
+        Vec::new()
+    }
+    fn logic_activation_ring_mut(
+        &mut self,
+    ) -> &mut std::collections::VecDeque<editor_model::logic_activation::LogicActivationEvent> {
+        unimplemented!()
+    }
 }
 
 fn fresh_session() {
@@ -118,3 +132,10 @@ fn separate_paths_get_separate_states() {
     assert_eq!(ca, 1);
     assert_eq!(cb, 99);
 }
+
+// v0.90 PR5: New EditorSessionPort methods (preview_inspector_mut,
+// source_files_mut, recent_change_sets_for, logic_activation_ring_mut).
+// The FakeSession must implement them all.
+
+use editor_model::ChangeSetSummary;
+use editor_model::logic_activation::{LogicActivationEvent, LogicActivationRing};
