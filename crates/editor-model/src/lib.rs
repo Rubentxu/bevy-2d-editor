@@ -6,12 +6,15 @@
 #![deny(missing_docs)]
 
 pub mod auto_layer;
+pub mod causality;
 pub mod component;
 pub mod document;
 pub mod ids;
+pub mod logic_activation;
 pub mod logic_graph;
 pub mod pending_change_set;
 pub mod ports;
+pub mod rebuild_cause;
 pub mod scene_asset;
 pub mod scene_instance;
 pub mod schema;
@@ -59,3 +62,9 @@ pub use transaction::{
     TransactionKernel, ValidationReport,
 };
 pub use transaction::{ApplyReceipt, KernelError};
+// §6 new types
+pub use causality::{CausalityEdge, CausalityEdgeKind};
+pub use logic_activation::{
+    LOGIC_ACTIVATION_RING_CAP, LogicActivationEvent, LogicActivationRing, ring_push,
+};
+pub use rebuild_cause::RebuildCause;

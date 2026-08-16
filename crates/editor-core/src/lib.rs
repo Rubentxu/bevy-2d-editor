@@ -209,6 +209,9 @@ pub use persistence::{
     TILESETS_DIR, asset_path, tileset_path, validate_logical_path,
 };
 pub use preview_inspector::{PreviewMappingEntry, PreviewMetrics, PreviewProvenance};
+// §6: CausalityEdge + RebuildCause re-exported from editor-model for preview_inspector.rs.
+pub use editor_model::RebuildCause;
+pub use editor_model::causality::{CausalityEdge, CausalityEdgeKind};
 pub use preview_runtime::in_play_mode;
 pub use scene_asset::{
     AssetReference, ExposedProperty, LayerId, LevelLayer, LocalId, RelationshipKind, RoleWarning,

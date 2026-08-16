@@ -242,6 +242,36 @@ pub fn get_change_set_summaries() -> Result<JsValue, JsValue> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// §6 Runtime Causality WASM exports
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Get the last rebuild cause recorded by §6.
+///
+/// Returns `JsValue::NULL` if no rebuild cause has been recorded yet.
+#[wasm_bindgen]
+pub fn get_rebuild_cause_wasm() -> Result<JsValue, JsValue> {
+    let sess = session()?;
+    let guard = sess.lock().map_err(|e| JsValue::from_str(&e.to_string()))?;
+    match guard.last_rebuild_cause() {
+        Some(cause) => serde_wasm_bindgen::to_value(cause)
+            .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e))),
+        None => Ok(JsValue::NULL),
+    }
+}
+
+/// Get all logic activation events from the ring buffer.
+///
+/// Returns a JSON array of [`editor_model::logic_activation::LogicActivationEvent`].
+#[wasm_bindgen]
+pub fn get_logic_activation_events_wasm() -> Result<JsValue, JsValue> {
+    let sess = session()?;
+    let guard = sess.lock().map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let events: Vec<_> = guard.logic_activation_ring().iter().cloned().collect();
+    serde_wasm_bindgen::to_value(&events)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Project store + session initialization
 // ─────────────────────────────────────────────────────────────────────────────
 

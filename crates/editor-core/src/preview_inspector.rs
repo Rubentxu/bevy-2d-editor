@@ -46,6 +46,8 @@ pub struct PreviewProvenance {
     pub asset_ref: AssetReference,
     pub components: Vec<String>,
     pub is_from_instance: bool,
+    /// §6: Causality edges — typed provenance links to other editor entities.
+    pub causality_edges: Vec<crate::CausalityEdge>,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -68,6 +70,15 @@ thread_local! {
     /// Per-instance provenance details. Replaced atomically on each
     /// `rebuild_preview_world` call.
     static PREVIEW_PROVENANCE: RefCell<BTreeMap<StableId, PreviewProvenance>> =
+        const { RefCell::new(BTreeMap::new()) };
+
+    /// Last rebuild cause recorded by §6. Written by `record_rebuild_cause`.
+    static LAST_REBUILD_CAUSE: RefCell<Option<crate::RebuildCause>> = const { RefCell::new(None) };
+
+    /// Pending causality edges collected during logic evaluation (§6).
+    /// Keyed by target StableId; drained and applied to PREVIEW_PROVENANCE
+    /// at the end of each preview rebuild.
+    static PENDING_CAUSALITY_EDGES: RefCell<BTreeMap<StableId, Vec<crate::CausalityEdge>>> =
         const { RefCell::new(BTreeMap::new()) };
 }
 
@@ -110,6 +121,54 @@ pub fn get_mapping() -> Vec<PreviewMappingEntry> {
 pub fn get_provenance(stable_id: &str) -> Option<PreviewProvenance> {
     let sid = StableId::new(stable_id);
     PREVIEW_PROVENANCE.with(|p| p.borrow().get(&sid).cloned())
+}
+
+// ─── §6 RebuildCause ─────────────────────────────────────────────────────────
+
+/// Record a rebuild cause (§6). Called by `rebuild_preview_world` and
+/// `process_commands` (legacy sprite-move) to stamp the last trigger.
+pub fn record_rebuild_cause(cause: crate::RebuildCause) {
+    LAST_REBUILD_CAUSE.with(|c| *c.borrow_mut() = Some(cause));
+}
+
+/// Read the last recorded rebuild cause, if any.
+pub fn last_rebuild_cause() -> Option<crate::RebuildCause> {
+    LAST_REBUILD_CAUSE.with(|c| c.borrow().clone())
+}
+
+// ─── §6 CausalityEdge ─────────────────────────────────────────────────────────
+
+/// Record a [`CausalityEdge`] to be attached to a [`PreviewProvenance`] entry.
+///
+/// Edges are buffered in a thread-local and applied to `PREVIEW_PROVENANCE`
+/// when `apply_pending_causality_edges` is called at the end of a preview rebuild.
+pub fn stamp_provenance(stable_id: StableId, edge: crate::CausalityEdge) {
+    PENDING_CAUSALITY_EDGES.with(|edges| {
+        let mut map = edges.borrow_mut();
+        map.entry(stable_id).or_insert_with(Vec::new).push(edge);
+    });
+}
+
+/// Apply all pending causality edges to `PREVIEW_PROVENANCE`.
+///
+/// Called at the end of `push_preview_inspector_state` so that edges recorded
+/// during logic evaluation are attached to the correct provenance entries.
+pub fn apply_pending_causality_edges() {
+    // Take the pending map out of the RefCell, leaving an empty one behind.
+    let pending_map = PENDING_CAUSALITY_EDGES.with(|pending| {
+        std::mem::take(&mut *pending.borrow_mut())
+    });
+    // Apply edges to provenance entries.
+    if !pending_map.is_empty() {
+        PREVIEW_PROVENANCE.with(|prov| {
+            let mut prov_map = prov.borrow_mut();
+            for (sid, edges) in pending_map {
+                if let Some(entry) = prov_map.get_mut(&sid) {
+                    entry.causality_edges.extend(edges);
+                }
+            }
+        });
+    }
 }
 
 #[cfg(test)]
