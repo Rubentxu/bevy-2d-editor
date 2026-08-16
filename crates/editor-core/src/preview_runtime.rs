@@ -52,29 +52,16 @@ use crate::document::ComponentInstance;
 pub struct EditorComponent(pub ComponentInstance);
 
 /// Stores the last-computed tunable baselines as a JSON string.
-/// Populated by `capture_tunable_baselines` in `process_play_mode_request`
-/// and consumed by `get_tunable_baselines_wasm`.
+///
+/// **v0.90 PR1 migration**: this thread_local is now a SECONDARY read cache.
+/// The canonical owner is `EditorSession.tunable_baselines`, written via
+/// `editor_model::ports::with_session_mut` from `capture_tunable_baselines_internal`
+/// below. The canonical WASM export (`get_tunable_baselines_wasm`) is in
+/// `editor-application::wasm` (v0.89 PR4); this thread_local exists only for
+/// the in-process call from `editor-core`'s Bevy systems. Removed in v0.91
+/// once the Bevy side reads from the session directly.
 thread_local! {
     static TUNABLE_BASELINES: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
-}
-
-/// Expose tunable baselines to WASM. Returns the JSON string and clears
-/// the internal buffer so the same baselines are not returned twice.
-///
-/// Called by the WASM layer after `PlayModeEnter` has been processed,
-/// to persist the baselines into `EditorSession.tunable_baselines`.
-///
-/// # Safety
-///
-/// Must be called from WASM (single-threaded). Panics if serialization fails.
-#[wasm_bindgen]
-pub fn get_tunable_baselines_wasm() -> String {
-    let mut result = String::new();
-    TUNABLE_BASELINES.with(|cell| {
-        result = cell.borrow().clone();
-        *cell.borrow_mut() = String::new();
-    });
-    result
 }
 
 /// Capture tunable baselines synchronously from `SCENE_DOC`.
@@ -342,6 +329,26 @@ fn process_play_mode_request(
             PLAY_MODE_REQUEST.with(|r| *r.borrow_mut() = None);
         }
         Some(PlayModeRequest::Exit) => {
+            // v0.90 PR1: compute runtime deltas BEFORE restoring transforms,
+            // so the comparison reads the post-play-mode values from
+            // EditorComponent. The closure reads each instance's current
+            // EditorComponent from the Bevy query.
+            let now_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0);
+            let _count = compute_runtime_deltas_internal(
+                |instance_id| {
+                    for (editor_comp, instance_child) in baseline_components.iter() {
+                        if instance_child.instance_id.as_str() == instance_id {
+                            return Some(editor_comp.0.clone());
+                        }
+                    }
+                    None
+                },
+                now_ms,
+            );
+
             // Restore transforms from snapshot
             for (entity, mut transform) in scene_transforms.p1().iter_mut() {
                 if let Some(saved) = snapshot.transforms.get(&entity) {
@@ -356,6 +363,12 @@ fn process_play_mode_request(
 }
 
 /// Internal helper — captures baselines from the given query (avoid generic in Bevy system).
+///
+/// v0.90 PR1: writes to `EditorSession.tunable_baselines` (canonical owner) via
+/// the `EditorSessionPort` trait. The session is the single source of truth
+/// for the apply-back pipeline. The `TUNABLE_BASELINES` thread_local is also
+/// updated as a secondary read cache (kept for backward compat with the
+/// `get_tunable_baselines_wasm` export; can be removed in v0.91).
 fn capture_tunable_baselines_internal(
     editor_components: &Query<(&EditorComponent, &SceneInstanceChild)>,
 ) {
@@ -368,8 +381,182 @@ fn capture_tunable_baselines_internal(
         baselines.insert(key, editor_comp.0.values.clone());
     }
 
+    // v0.90 PR1: write to session (canonical).
+    let _ = editor_model::ports::with_session_mut(|sess| {
+        *sess.tunable_baselines_mut() = baselines.clone();
+    });
+
+    // Keep thread_local in sync (secondary read cache).
     let json = serde_json::to_string(&baselines).unwrap_or_default();
     TUNABLE_BASELINES.with(|cell| *cell.borrow_mut() = json);
+}
+
+/// Recursive field-level diff. Emits one `RuntimeDelta` per leaf key whose
+/// value differs from the current (or that is missing in current).
+fn diff_recursive(
+    instance_id: &str,
+    component_type_id: &str,
+    field_path: &str,
+    baseline: &serde_json::Value,
+    current: Option<&serde_json::Value>,
+    now_ms: u64,
+    out: &mut Vec<editor_model::RuntimeDelta>,
+) {
+    match (baseline, current) {
+        // Both are objects → recurse into the keys.
+        (serde_json::Value::Object(b), Some(serde_json::Value::Object(c))) => {
+            for (k, v) in b {
+                let nested_path = format!("{field_path}.{k}");
+                let cur = c.get(k);
+                diff_recursive(
+                    instance_id,
+                    component_type_id,
+                    &nested_path,
+                    v,
+                    cur,
+                    now_ms,
+                    out,
+                );
+            }
+            // Keys present in current but not in baseline → runtime-only changes,
+            // not part of the apply-back delta stream (we report baseline→current
+            // only). The user can still edit them in the editor.
+        }
+        // Baseline is an object, current is not (e.g. was removed) → one delta
+        // for the whole path.
+        (serde_json::Value::Object(_), Some(other)) => {
+            out.push(editor_model::RuntimeDelta {
+                instance_id: instance_id.to_string(),
+                target_local_id: String::new(),
+                component_type_id: component_type_id.to_string(),
+                field_path: field_path.to_string(),
+                baseline_value: baseline.clone(),
+                runtime_value: other.clone(),
+                captured_at_ms: now_ms,
+                apply_back_eligible: true,
+            });
+        }
+        // Leaf values: compare and emit delta on difference.
+        _ => {
+            if Some(baseline) != current {
+                out.push(editor_model::RuntimeDelta {
+                    instance_id: instance_id.to_string(),
+                    target_local_id: String::new(),
+                    component_type_id: component_type_id.to_string(),
+                    field_path: field_path.to_string(),
+                    baseline_value: baseline.clone(),
+                    runtime_value: current.cloned().unwrap_or(serde_json::Value::Null),
+                    captured_at_ms: now_ms,
+                    apply_back_eligible: true,
+                });
+            }
+        }
+    }
+}
+
+/// Compute runtime deltas (v0.90 PR1) — pure function for testability.
+///
+/// Compares the baselines captured at `PlayModeEnter` (in
+/// `EditorSession.tunable_baselines`) against the current `EditorComponent`
+/// values from the Bevy query, and appends a `RuntimeDelta` to
+/// `EditorSession.runtime_delta_buffer` for every instance whose values
+/// changed.
+///
+/// The runtime getter `current_values` is a closure that maps an instance id
+/// to its current `ComponentInstance` (typically queried from Bevy ECS). The
+/// function does NOT depend on Bevy ECS directly — only the closure does —
+/// which makes it testable from `crates/editor-application/tests/` without
+/// spinning up a Bevy App.
+///
+/// The `apply_back_eligible` field on each delta is set to `true` for any
+/// field whose baseline differs from the current value. (Field-level
+/// diff granularity is a v0.91 follow-up; v0.90 PR1 emits one delta per
+/// instance with `field_path = "*"`.)
+///
+/// Returns the number of deltas appended.
+pub fn compute_runtime_deltas_internal<F>(current_values: F, now_ms: u64) -> usize
+where
+    F: Fn(&str) -> Option<crate::document::ComponentInstance>,
+{
+    use crate::document::ComponentInstance;
+
+    // Snapshot the baselines out of the session (release the lock before
+    // taking the runtime values).
+    let baselines: std::collections::BTreeMap<String, serde_json::Value> =
+        match editor_model::ports::with_session_mut(|sess| sess.tunable_baselines_mut().clone()) {
+            Some(b) => b,
+            None => return 0,
+        };
+
+    let mut deltas: Vec<editor_model::RuntimeDelta> = Vec::new();
+
+    for (instance_id, baseline_value) in &baselines {
+        let current = current_values(instance_id);
+        let (current_obj, baseline_obj) = match (current, baseline_value.as_object()) {
+            (Some(c), Some(b)) => (c.values, b.clone()),
+            _ => continue,
+        };
+
+        // Field-level diff (recursive). Each component at the top level is
+        // keyed by component_type_id. Nested fields are walked recursively:
+        // e.g. {"editor.Transform2D": {"translation": {"x": 10.0, "y": 5.0}}}
+        // emits one delta per leaf key (e.g. "translation.x", "translation.y")
+        // when the value differs from the current.
+        for (component_type_id, baseline_comp_value) in &baseline_obj {
+            let baseline_comp = match baseline_comp_value.as_object() {
+                Some(o) => o,
+                None => continue,
+            };
+            let current_comp = current_obj
+                .get(component_type_id)
+                .and_then(|v| v.as_object());
+
+            let mut leaf_deltas: Vec<editor_model::RuntimeDelta> = Vec::new();
+            for (field_name, baseline_field_value) in baseline_comp {
+                let current_field_value = current_comp.and_then(|c| c.get(field_name));
+                diff_recursive(
+                    instance_id,
+                    component_type_id,
+                    field_name,
+                    baseline_field_value,
+                    current_field_value,
+                    now_ms,
+                    &mut leaf_deltas,
+                );
+            }
+            // If the component was present in baseline but missing in current,
+            // emit one delta per top-level field with runtime_value = Null.
+            if current_comp.is_none() {
+                for (field_name, baseline_field_value) in baseline_comp {
+                    leaf_deltas.push(editor_model::RuntimeDelta {
+                        instance_id: instance_id.clone(),
+                        target_local_id: String::new(),
+                        component_type_id: component_type_id.clone(),
+                        field_path: field_name.clone(),
+                        baseline_value: baseline_field_value.clone(),
+                        runtime_value: serde_json::Value::Null,
+                        captured_at_ms: now_ms,
+                        apply_back_eligible: true,
+                    });
+                }
+            }
+            deltas.extend(leaf_deltas);
+        }
+        // Suppress unused-variable lint when ComponentInstance import is only
+        // used in the closure signature above.
+        let _ = std::marker::PhantomData::<ComponentInstance>;
+    }
+
+    let appended = deltas.len();
+    if appended > 0 {
+        let _ = editor_model::ports::with_session_mut(|sess| {
+            let buffer = sess.runtime_delta_buffer_mut();
+            for d in deltas {
+                buffer.push_back(d);
+            }
+        });
+    }
+    appended
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
