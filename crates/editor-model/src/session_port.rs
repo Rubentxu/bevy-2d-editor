@@ -44,6 +44,18 @@ pub trait EditorSessionPort {
     /// Logic session state (per logic graph path).
     fn logic_state_mut(&mut self, path: &str) -> &mut crate::session::LogicSessionState;
 
+    /// Preview inspector state (FPS, mapping, provenance, last rebuild cause).
+    fn preview_inspector_mut(&mut self) -> &mut crate::session::PreviewInspectorState;
+
+    /// Source files cache.
+    fn source_files_mut(&mut self) -> &mut crate::session::SourceFilesCache;
+
+    /// Recent change-set summaries per scene path (capped at 50 per scene).
+    fn recent_change_sets_for(&self, scene_path: &str) -> Vec<crate::session::ChangeSetSummary>;
+
+    /// Logic activation ring (capped at 64).
+    fn logic_activation_ring_mut(&mut self) -> &mut VecDeque<crate::logic_activation::LogicActivationEvent>;
+
     /// Authoring baselines captured at `PlayModeEnter`.
     ///
     /// Map key is a stable identifier for the (instance, component, field) triple.

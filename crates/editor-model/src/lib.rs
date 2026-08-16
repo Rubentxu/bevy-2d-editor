@@ -53,7 +53,8 @@ pub use schema::{
     ComponentSchema, ComponentTypeId, Constraint, FieldDef, FieldType, SchemaKind, SourceLocation,
 };
 pub use session::{
-    AppliedChangeMeta, AssetSessionState, HistoryScope, LogicSessionState, SceneSessionState,
+    AppliedChangeMeta, AssetSessionState, ChangeSetSummary, HistoryScope, LogicSessionState,
+    PreviewInspectorState, SceneSessionState, SourceFilesCache,
 };
 pub use tile_layer::TileLayer;
 pub use tileset::{
