@@ -235,6 +235,13 @@ pub fn reject_change_set(change_id: &str) -> Result<(), JsValue> {
 /// empty array — the ChangeWorkbench panel only displays pending rows, not
 /// historical summaries. The export exists here so the WASM-bound name is
 /// stable while the legacy `OPERATION_LOG` query in editor-core is phased out.
+///
+/// v0.90 PR6: kept as a stop-gap returning an empty array. The wiring to
+/// `EditorSession.recent_change_sets` (populated by the
+/// `OperationLog::recent_change_sets_for` poll loop) is deferred to v0.91
+/// per the v0.90 cycle amendment. The trait seam
+/// (`EditorSessionPort::recent_change_sets_for`) is in place and tested
+/// (see `crates/editor-core/tests/state_unified.rs`).
 #[wasm_bindgen]
 pub fn get_change_set_summaries() -> Result<JsValue, JsValue> {
     let summaries: Vec<PendingChangeSetSummary> = Vec::new();

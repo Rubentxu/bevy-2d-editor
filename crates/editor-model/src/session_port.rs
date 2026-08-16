@@ -54,7 +54,9 @@ pub trait EditorSessionPort {
     fn recent_change_sets_for(&self, scene_path: &str) -> Vec<crate::session::ChangeSetSummary>;
 
     /// Logic activation ring (capped at 64).
-    fn logic_activation_ring_mut(&mut self) -> &mut VecDeque<crate::logic_activation::LogicActivationEvent>;
+    fn logic_activation_ring_mut(
+        &mut self,
+    ) -> &mut VecDeque<crate::logic_activation::LogicActivationEvent>;
 
     /// Authoring baselines captured at `PlayModeEnter`.
     ///

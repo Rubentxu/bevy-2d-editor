@@ -282,9 +282,13 @@ pub fn apply(
                 .ok_or_else(|| AssetCommandError::EntityNotFound(local_id.clone()))?;
             let removed = doc.entities.remove(pos);
 
-            // ponytail: Relationships referencing the removed entity are NOT
-            // cleaned up here — relationships are read-only in this cut and
-            // dangling refs are deferred to the Validation Center (Capability 4).
+            // v0.90 PR6: rewritten the v0.86-era ponytail marker. The original
+            // marker pointed to a non-scheduled "Validation Center Capability 4"
+            // with no concrete trigger. Validation Center is still not in any
+            // current roadmap cycle, so the relationship-cleanup work remains
+            // deferred. The dangling-relationship lint that the original
+            // marker promised to add in that cycle is not yet implemented;
+            // consumers should treat the warning as a known limitation.
 
             Ok(AssetCommand::AddEntity {
                 local_id: removed.local_id.as_str().to_string(),

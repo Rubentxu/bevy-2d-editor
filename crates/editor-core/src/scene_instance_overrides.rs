@@ -152,22 +152,6 @@ fn json_kind(v: &serde_json::Value) -> &'static str {
     }
 }
 
-/// Build a map from `local_path` suffix → `LocalId` (scaffolded, unused in spike).
-#[allow(dead_code)]
-fn build_path_index(asset: &SceneAssetDocument) -> BTreeMap<String, LocalId> {
-    let mut idx = BTreeMap::new();
-    for e in &asset.entities {
-        idx.insert(e.local_path.clone(), e.local_id.clone());
-    }
-    idx
-}
-
-/// Check if `orphan_path` could rebind to `candidate_path` via suffix match (scaffolded).
-#[allow(dead_code)]
-fn suffix_match(orphan_path: &str, candidate_path: &str) -> bool {
-    orphan_path.ends_with(candidate_path) || candidate_path.ends_with(orphan_path)
-}
-
 // ---------------------------------------------------------------------------
 // Public Functions
 // ---------------------------------------------------------------------------
