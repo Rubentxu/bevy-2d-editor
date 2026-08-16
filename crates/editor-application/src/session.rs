@@ -100,53 +100,58 @@ impl CacheEntry {
 // Sub-state types (ADR-0031 — PR2a consolidation)
 // ---------------------------------------------------------------------------
 //
-// NOTE: These types hold plain data (serde_json::Value) for domain objects
-// because EditorSession lives in editor-application and editor-core domain types
-// (SceneDocument, OperationLog, etc.) cannot be directly stored here due to
-// the editor-application ↔ editor-core dependency boundary.
-//
-// The actual domain object migration will be completed in follow-up PRs once
-// the EditorSession kernel API is established.
+// PR2a progress: SceneSessionState.document now uses real SceneDocument
+// from editor_model. The operation log is kept as Value (OperationLog
+// lives in editor-core — full migration to editor_model is future work).
 //
 // RecentChangeSetsBuffer uses ChangeSetSummary from editor_application::transaction.
 
 use crate::transaction::ChangeSetSummary;
+use editor_model::document::SceneDocument;
+use editor_model::logic_graph::LogicGraphAsset;
+use editor_model::scene_asset::SceneAssetDocument;
 use serde_json::Value;
 
-/// Session state for one active scene document.
+/// Session state for one active scene document (PR2a real types).
 ///
-/// In PR2a this holds serialised forms. The real `SceneDocument` and
-/// `OperationLog` live in `editor_core` and are accessed via the kernel API.
+/// `document` uses the real `SceneDocument` from editor_model.
+/// `log` is kept as serialized Value since OperationLog lives in editor-core
+/// (future migration to editor_model is tracked separately).
 #[derive(Debug, Clone, Default)]
 pub struct SceneSessionState {
-    /// Serialised scene document (None when not loaded).
-    pub document: Option<Value>,
+    /// The active scene document (None when not loaded).
+    pub document: Option<SceneDocument>,
     /// Serialised operation log (None when not loaded).
+    /// TODO: Replace with real OperationLog after OperationLog moves to editor_model.
     pub log: Option<Value>,
 }
 
-/// Session state for the scene asset subsystem (PR2a placeholder).
+/// Session state for the scene asset subsystem (PR2a).
+///
+/// Uses real types from editor_model where available.
 #[derive(Debug, Clone, Default)]
 pub struct AssetSessionState {
-    /// Catalog state for scene assets.
-    pub catalog: Option<Value>,
     /// Active asset document being edited.
-    pub active_document: Option<Value>,
-    /// Cached asset bodies.
-    pub body_cache: Option<Value>,
-    /// Resync reports indexed by stable ID.
+    pub active_document: Option<SceneAssetDocument>,
+    /// Cached asset bodies (asset_ref → serialized SceneAssetDocument body).
+    /// TODO: Replace with real cache after catalog moves to editor_model.
+    pub body_cache: BTreeMap<String, SceneAssetDocument>,
+    /// Resync reports indexed by stable ID (key is StableId string).
     pub resync_reports: Vec<(String, Value)>,
     /// Validation issues for this asset scope.
     pub validation_issues: Vec<Value>,
 }
 
-/// Session state for the logic graph subsystem (PR2a placeholder).
+/// Session state for the logic graph subsystem (PR2a).
+///
+/// Uses real types from editor_model where available.
 #[derive(Debug, Clone, Default)]
 pub struct LogicSessionState {
     /// Active logic graph being edited.
-    pub active_graph: Option<Value>,
-    /// Logic graph catalog.
-    pub catalog: Option<Value>,
+    pub active_graph: Option<LogicGraphAsset>,
+    /// Logic graph catalog (path → serialized catalog).
+    /// TODO: Replace with real catalog after catalog moves to editor_model.
+    pub catalog: BTreeMap<String, Value>,
 }
 
 /// Session state for the runtime preview inspector (PR2a).

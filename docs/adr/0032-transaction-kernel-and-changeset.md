@@ -38,3 +38,11 @@ Single-document command groups use direct rollback/inverses. Multi-resource chan
 ## Consequences
 
 Undo/redo, AI proposals, importer reimports, runtime apply-back and migration previews can share one review/audit language.
+
+## Amendment (2026-08-16)
+
+**Kernel types relocated to editor-model** — `ChangeSet`, `Applier`, `ApprovalPolicy`, `TransactionKernel`, `ApplyReceipt`, `KernelError`, `EffectsSummary`, `DiffSummary`, `ValidationReport`, `ResourceRef` moved from `editor-application` to `editor-model/src/transaction.rs`.
+
+**Rationale**: This breaks the `editor-core → editor-application` circular dependency that blocked the ADR-0031 EditorSession migration. The kernel mechanics are pure domain logic with no Bevy/WASM dependencies, so they belong in `editor-model` (the bottom of the dependency chain). `editor-application` now imports `editor_model::transaction` types for use in its `EditorSession` and `TransactionBridge`.
+
+**Status**: Ratified by owner — 2026-08-16.
