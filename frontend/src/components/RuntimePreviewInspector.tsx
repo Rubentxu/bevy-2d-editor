@@ -236,9 +236,7 @@ export default function RuntimePreviewInspector({ onJumpToSource }: Props) {
                     {ev.type === "hot-reload-source" ? "src" : "asset"}
                   </span>
                   <span className="rpi-timeline-detail">
-                    {ev.type === "hot-reload-source"
-                      ? (ev as any).fileId
-                      : (ev as any).assetId}
+                    {ev.type === "hot-reload-source" ? ev.fileId : ev.assetId}
                   </span>
                 </li>
               ))}
