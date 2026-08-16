@@ -24,8 +24,8 @@ struct FakeSession {
     logic_states: BTreeMap<String, editor_model::LogicSessionState>,
     preview_inspector: editor_model::PreviewInspectorState,
     source_files: editor_model::SourceFilesCache,
-    recent_change_sets: BTreeMap<String, Vec<editor_model::ChangeSetSummary>>,
     logic_activation_ring: VecDeque<LogicActivationEvent>,
+    recent_change_sets: BTreeMap<String, Vec<editor_model::ChangeSetSummary>>,
 }
 
 impl EditorSessionPort for FakeSession {
@@ -75,6 +75,23 @@ impl EditorSessionPort for FakeSession {
     }
     fn logic_activation_ring_mut(&mut self) -> &mut VecDeque<LogicActivationEvent> {
         &mut self.logic_activation_ring
+    }
+
+    fn all_recent_change_sets(&self) -> Vec<editor_model::ChangeSetSummary> {
+        self.recent_change_sets
+            .values()
+            .flat_map(|v| v.iter().cloned())
+            .collect()
+    }
+    fn push_recent_change_set(
+        &mut self,
+        scene_path: &str,
+        summary: editor_model::ChangeSetSummary,
+    ) {
+        self.recent_change_sets
+            .entry(scene_path.to_string())
+            .or_insert_with(Vec::new)
+            .push(summary);
     }
 }
 
@@ -198,7 +215,13 @@ fn compute_runtime_deltas_diff_finds_changed_field() {
     assert_eq!(delta.field_path, "translation.x");
     assert_eq!(delta.baseline_value, serde_json::json!(10.0));
     assert_eq!(delta.runtime_value, serde_json::json!(20.0));
-    assert!(delta.apply_back_eligible);
+    // v0.91 PR1: editor.Transform2D's built-in seed has apply_back: Never
+    // (per D4 conservative default). The delta is captured but NOT eligible.
+    // The ApplyBackPanel filters out ineligible deltas at display time.
+    assert!(
+        !delta.apply_back_eligible,
+        "editor.Transform2D's built-in policy is Never — delta must be ineligible"
+    );
     assert_eq!(delta.captured_at_ms, 12345);
 }
 

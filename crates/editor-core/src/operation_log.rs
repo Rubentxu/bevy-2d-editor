@@ -243,6 +243,15 @@ impl OperationLog {
     ///
     /// The caller is responsible for bounding the result (e.g., the
     /// `EditorSession.recent_change_sets` deque is capped at 50).
+    /// Snapshot all log entries (most recent first, v0.91 PR1).
+    ///
+    /// Used by `poll_recent_change_sets_inner` in editor-core to populate
+    /// `EditorSession.recent_change_sets` from the in-process `OPERATION_LOG`.
+    /// Returns a Vec of `LogEntry` clones ordered by recency (newest first).
+    pub fn snapshot_entries(&self) -> Vec<LogEntry> {
+        self.entries.iter().rev().cloned().collect()
+    }
+
     pub fn recent_change_sets_for(&self, stable_id: &StableId) -> Vec<RecentChangeSummary> {
         let mut results = Vec::new();
         for entry in self.entries.iter().rev() {
