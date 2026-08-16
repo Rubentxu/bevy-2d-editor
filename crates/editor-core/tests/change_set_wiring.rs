@@ -12,13 +12,13 @@
 //! - THEN `OperationLog` entries MUST be byte-identical to v0.88 legacy path
 //! - AND `E1.translation` MUST equal `(10,10)`
 
-use editor_application::session::HistoryScope;
-use editor_application::transaction::{ChangeOrigin, ChangeSet};
 use editor_core::command::{Command, CommandEnvelope, CommandMetadata};
 use editor_core::document::{ComponentInstance, Entity, LocalId, SceneDocument, StableId};
 use editor_core::operation_log::OperationLog;
 use editor_core::processor;
 use editor_core::transaction_bridge::scene_transaction_kernel;
+use editor_model::session::HistoryScope;
+use editor_model::transaction::{ChangeOrigin, ChangeSet};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -99,7 +99,12 @@ fn test_kernel_and_legacy_produce_same_inverse() {
     let mut kernel_doc_clone = kernel_doc.clone();
     let mut history = HistoryScope::new();
 
-    let mut cs = ChangeSet::new("cs-test-1", ChangeOrigin::Human, "test-user", "move entity");
+    let mut cs = ChangeSet::new(
+        "cs-test-1".into(),
+        ChangeOrigin::Human,
+        "test-user".into(),
+        "move entity".into(),
+    );
     cs.add_resource("scene", "scenes/test.json");
     cs.push_op(cmd.clone());
 
@@ -151,7 +156,12 @@ fn test_kernel_undo_restores_original() {
     let mut history = HistoryScope::new();
     let mut log = OperationLog::new_const();
 
-    let mut cs = ChangeSet::new("cs-test-2", ChangeOrigin::Human, "test-user", "move entity");
+    let mut cs = ChangeSet::new(
+        "cs-test-2".into(),
+        ChangeOrigin::Human,
+        "test-user".into(),
+        "move entity".into(),
+    );
     cs.add_resource("scene", "scenes/test.json");
     cs.push_op(cmd.clone());
 
@@ -200,7 +210,12 @@ fn test_kernel_undo_then_redo_restores_new() {
     let mut history = HistoryScope::new();
     let mut log = OperationLog::new_const();
 
-    let mut cs = ChangeSet::new("cs-test-3", ChangeOrigin::Human, "test-user", "move entity");
+    let mut cs = ChangeSet::new(
+        "cs-test-3".into(),
+        ChangeOrigin::Human,
+        "test-user".into(),
+        "move entity".into(),
+    );
     cs.add_resource("scene", "scenes/test.json");
     cs.push_op(cmd.clone());
 
@@ -256,7 +271,12 @@ fn test_scene_dispatch_byte_equivalent_undo() {
     let mut history = HistoryScope::new();
     let mut log = OperationLog::new_const();
 
-    let mut cs = ChangeSet::new("cs-spec-1", ChangeOrigin::Human, "test-user", "move entity");
+    let mut cs = ChangeSet::new(
+        "cs-spec-1".into(),
+        ChangeOrigin::Human,
+        "test-user".into(),
+        "move entity".into(),
+    );
     cs.add_resource("scene", "scenes/test.json");
     cs.push_op(cmd.clone());
 

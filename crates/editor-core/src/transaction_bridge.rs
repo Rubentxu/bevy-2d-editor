@@ -1,6 +1,6 @@
 //! `*CommandApplier` — bridges `TransactionKernel` to the three domain command systems.
 //!
-//! Implements [`editor_application::transaction::Applier`] for each domain:
+//! Implements [`editor_model::transaction::Applier`] for each domain:
 //! - `SceneCommandApplier`: `Command` / `SceneDocument`
 //! - `AssetCommandApplier`: `AssetCommand` / `SceneAssetDocument`
 //! - `LogicCommandApplier`: `LogicCommand` / `LogicGraphAsset`
@@ -18,7 +18,8 @@ use crate::logic_graph::LogicGraphAsset;
 use crate::processor;
 use crate::scene_asset::SceneAssetDocument;
 
-use editor_application::transaction::{
+// All kernel types from editor_model (the model layer).
+use editor_model::transaction::{
     Applier, ApprovalPolicy, ChangeOrigin, ChangeSet, DiffSummary, EffectsSummary, KernelError,
     ResourceRef, TransactionKernel, ValidationReport,
 };
@@ -119,6 +120,7 @@ impl Applier for SceneCommandApplier {
                     removed,
                     modified
                 )],
+                ..Default::default()
             },
             DiffSummary {
                 added,
@@ -187,6 +189,7 @@ impl Applier for AssetCommandApplier {
                 runtime_rebuild_required: false,
                 build_output_changed: false,
                 notes: vec![format!("{} asset ops", ops.len())],
+                ..Default::default()
             },
             DiffSummary {
                 added: ops
@@ -268,6 +271,7 @@ impl Applier for LogicCommandApplier {
                 runtime_rebuild_required: false,
                 build_output_changed: false,
                 notes: vec![format!("{} logic ops", ops.len())],
+                ..Default::default()
             },
             DiffSummary {
                 added: ops
@@ -327,7 +331,7 @@ mod tests {
     use super::*;
     use crate::command::Command;
     use crate::document::{Entity, LocalId, SceneDocument, StableId};
-    use editor_application::session::HistoryScope;
+    use editor_model::session::HistoryScope;
 
     /// Helper: empty scene document for tests.
     fn empty_doc() -> SceneDocument {
@@ -362,10 +366,10 @@ mod tests {
         let mut history = HistoryScope::new();
 
         let mut cs = ChangeSet::new(
-            "cs-scene-1",
+            "cs-scene-1".into(),
             ChangeOrigin::Human,
-            "test-user",
-            "create entity and rename it",
+            "test-user".into(),
+            "create entity and rename it".into(),
         );
         cs.add_resource("scene", "scenes/test.json");
         cs.push_op(Command::CreateEntity {
@@ -416,10 +420,10 @@ mod tests {
         let mut history = HistoryScope::new();
 
         let mut cs = ChangeSet::new(
-            "cs-scene-2",
+            "cs-scene-2".into(),
             ChangeOrigin::Human,
-            "test-user",
-            "rename existing then rename non-existent",
+            "test-user".into(),
+            "rename existing then rename non-existent".into(),
         );
         // Op 0: rename ent-1 to "NewName" — preflight succeeds
         cs.push_op(Command::RenameEntity {
@@ -455,10 +459,10 @@ mod tests {
         let mut history = HistoryScope::new();
 
         let mut cs = ChangeSet::new(
-            "cs-scene-3",
+            "cs-scene-3".into(),
             ChangeOrigin::Agent,
-            "ai-agent",
-            "agent proposes creating an entity",
+            "ai-agent".into(),
+            "agent proposes creating an entity".into(),
         );
         cs.set_approval(ApprovalPolicy::RequiresHuman {
             approver_hint: Some("Scene will be modified".to_string()),
@@ -487,10 +491,10 @@ mod tests {
         let mut history = HistoryScope::new();
 
         let mut cs = ChangeSet::new(
-            "cs-scene-4",
+            "cs-scene-4".into(),
             ChangeOrigin::Agent,
-            "ai-agent",
-            "agent proposes creating an entity",
+            "ai-agent".into(),
+            "agent proposes creating an entity".into(),
         );
         cs.set_approval(ApprovalPolicy::RequiresHuman {
             approver_hint: Some("Scene will be modified".to_string()),
@@ -516,10 +520,10 @@ mod tests {
         let doc = empty_doc();
 
         let mut cs = ChangeSet::new(
-            "cs-scene-5",
+            "cs-scene-5".into(),
             ChangeOrigin::Human,
-            "test",
-            "add unknown component",
+            "test".into(),
+            "add unknown component".into(),
         );
         cs.push_op(Command::AddComponent {
             entity_id: StableId::new("ent-doesnt-exist"),

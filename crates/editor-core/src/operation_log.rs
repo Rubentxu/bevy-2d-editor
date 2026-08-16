@@ -11,7 +11,7 @@
 //! - FIFO eviction when over max_size
 
 use crate::command::{Command, CommandEnvelope, CommandMetadata};
-use crate::document::SceneDocument;
+use crate::document::{SceneDocument, StableId};
 use crate::processor;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -22,14 +22,30 @@ pub struct LogEntry {
     pub forward: Command,
     pub inverse: Command,
     pub metadata: CommandMetadata,
+    /// Where the originating ChangeSet came from (ADR-0032 ChangeOrigin).
+    /// Serialized as a plain string — "Human", "Agent", "Recipe", etc.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
+    /// Actor who authored the originating ChangeSet.
+    /// Typically the same as `metadata.authorship`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor: Option<String>,
 }
 
 impl LogEntry {
-    pub fn new(forward: Command, inverse: Command, metadata: CommandMetadata) -> Self {
+    pub fn new(
+        forward: Command,
+        inverse: Command,
+        metadata: CommandMetadata,
+        origin: Option<String>,
+        actor: Option<String>,
+    ) -> Self {
         Self {
             forward,
             inverse,
             metadata,
+            origin,
+            actor,
         }
     }
 }
@@ -74,21 +90,72 @@ impl OperationLog {
     }
 
     /// Record a command that was just applied externally to the document.
+    ///
     /// The caller is responsible for actually mutating the document (typically
     /// via `processor::apply`). This method only handles log bookkeeping:
     /// truncating the redo branch, appending the entry, evicting old entries,
     /// and advancing the cursor.
+    ///
+    /// `origin` and `actor` are stored in the log entry for later querying via
+    /// [`recent_change_sets_for`](Self::recent_change_sets_for). If not available
+    /// (e.g., direct command dispatch without a ChangeSet), this method infers them
+    /// from `metadata.authorship`.
     pub fn record(&mut self, envelope: &CommandEnvelope, inverse: Command) {
+        self._record(envelope, inverse, None, None)
+    }
+
+    /// Record a command with explicit provenance (origin and actor).
+    ///
+    /// Use this method when the `ChangeSet` origin and actor are available
+    /// (e.g., when routing through `TransactionKernel::apply_atomic`).
+    pub fn record_with_provenance(
+        &mut self,
+        envelope: &CommandEnvelope,
+        inverse: Command,
+        origin: String,
+        actor: String,
+    ) {
+        self._record(envelope, inverse, Some(origin), Some(actor))
+    }
+
+    fn _record(
+        &mut self,
+        envelope: &CommandEnvelope,
+        inverse: Command,
+        origin: Option<String>,
+        actor: Option<String>,
+    ) {
         // Truncate redo branch: drop entries after current cursor
         if self.cursor < self.entries.len() as isize - 1 {
             let keep = (self.cursor + 1) as usize;
             self.entries.truncate(keep);
         }
+
+        // Infer origin and actor from metadata.authorship if not provided.
+        let (origin, actor) = match (origin, actor) {
+            (Some(o), Some(a)) => (o, a),
+            _ => {
+                let actor = envelope.metadata.authorship.clone();
+                let origin = if actor == "user" {
+                    "Human".to_string()
+                } else if actor.starts_with("agent:") {
+                    "Agent".to_string()
+                } else if actor == "system" {
+                    "Migration".to_string()
+                } else {
+                    "Human".to_string()
+                };
+                (origin, actor)
+            }
+        };
+
         // Append new entry
         self.entries.push(LogEntry::new(
             envelope.command.clone(),
             inverse,
             envelope.metadata.clone(),
+            Some(origin),
+            Some(actor),
         ));
         // Evict oldest if over max
         while self.entries.len() > self.max_size {
@@ -154,11 +221,91 @@ impl OperationLog {
         self.entries.clear();
         self.cursor = CURSOR_BEFORE_START;
     }
+
+    /// Query the recent change sets that touched a specific entity.
+    ///
+    /// Returns summaries of all log entries whose forward command (or any
+    /// nested batch command) references the given `stable_id`. Entries are
+    /// returned in reverse chronological order (most recent first).
+    ///
+    /// Each summary includes the origin, actor, applied-at timestamp (from
+    /// `metadata.timestamp`), and the count of operations in this entry
+    /// that touch the entity.
+    ///
+    /// The caller is responsible for bounding the result (e.g., the
+    /// `EditorSession.recent_change_sets` deque is capped at 50).
+    pub fn recent_change_sets_for(&self, stable_id: &StableId) -> Vec<RecentChangeSummary> {
+        let mut results = Vec::new();
+        for entry in self.entries.iter().rev() {
+            let ops_touched = count_ops_touching_stable_id(&entry.forward, stable_id);
+            if ops_touched > 0 {
+                results.push(RecentChangeSummary {
+                    // origin/actor are stored as Some(...) since _record always sets them
+                    origin: entry.origin.clone().unwrap_or_else(|| "Human".to_string()),
+                    actor: entry
+                        .actor
+                        .clone()
+                        .unwrap_or_else(|| entry.metadata.authorship.clone()),
+                    applied_at: entry.metadata.timestamp,
+                    ops_touched,
+                });
+            }
+        }
+        results
+    }
 }
 
 impl Default for OperationLog {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// A summary of one log entry for the recent-change-sets query.
+///
+/// Returned by [`OperationLog::recent_change_sets_for`].
+///
+/// The `applied_at` field uses Unix milliseconds (matching `CommandMetadata.timestamp`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RecentChangeSummary {
+    /// Where the originating ChangeSet came from (e.g. "Human", "Agent").
+    pub origin: String,
+    /// Who authored the change (e.g., "user" or "agent:foo").
+    pub actor: String,
+    /// Unix milliseconds when the command was issued.
+    pub applied_at: u64,
+    /// Number of operations in this entry that touched the queried stable ID.
+    pub ops_touched: usize,
+}
+
+/// Count how many operations in a command touch a specific stable_id.
+///
+/// Handles Batch commands recursively. Returns 0 if the command does not
+/// reference the entity.
+fn count_ops_touching_stable_id(cmd: &Command, stable_id: &StableId) -> usize {
+    match cmd {
+        Command::CreateEntity { id, .. } if id == stable_id => 1,
+        Command::DeleteEntity { id, .. } if id == stable_id => 1,
+        Command::AddComponent { entity_id, .. } if entity_id == stable_id => 1,
+        Command::RemoveComponent { entity_id, .. } if entity_id == stable_id => 1,
+        Command::SetComponentField { entity_id, .. } if entity_id == stable_id => 1,
+        Command::SetComponentFieldOnMultiple { entity_ids, .. }
+            if entity_ids.iter().any(|id| id == stable_id) =>
+        {
+            1
+        }
+        Command::ReparentEntity { entity_id, .. } if entity_id == stable_id => 1,
+        Command::RenameEntity { entity_id, .. } if entity_id == stable_id => 1,
+        Command::PlaceInstance { instance_id, .. } if instance_id == stable_id => 1,
+        Command::RemoveInstance { instance_id, .. } if instance_id == stable_id => 1,
+        Command::ReplaceInstanceAsset { instance_id, .. } if instance_id == stable_id => 1,
+        Command::UpsertOverride { instance_id, .. } if instance_id == stable_id => 1,
+        Command::RevertOverride { instance_id, .. } if instance_id == stable_id => 1,
+        Command::Batch { commands, .. } => commands
+            .iter()
+            .map(|c| count_ops_touching_stable_id(c, stable_id))
+            .sum(),
+        _ => 0,
     }
 }
 
@@ -229,6 +376,8 @@ mod tests {
                 id: StableId::new("e1"),
             },
             CommandMetadata::now("user").with_rationale("test"),
+            Some("Human".to_string()),
+            Some("user".to_string()),
         );
         let json = serde_json::to_string(&entry).unwrap();
         let rt: LogEntry = serde_json::from_str(&json).unwrap();
