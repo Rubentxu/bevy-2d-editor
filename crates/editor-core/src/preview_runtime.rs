@@ -427,6 +427,7 @@ fn push_preview_inspector_state(doc: &SceneDocument, projected: &[PreviewEntity]
                         .map(|c| c.type_id.clone())
                         .collect(),
                     is_from_instance: true,
+                    causality_edges: Vec::new(), // §6: stamped by submit_actuator_output
                 },
             );
         }
@@ -434,6 +435,11 @@ fn push_preview_inspector_state(doc: &SceneDocument, projected: &[PreviewEntity]
 
     set_mapping(mapping);
     set_provenance(provenance);
+    // §6: Apply any causality edges collected during logic evaluation.
+    // Note: full BevyEntity→StableId mapping requires Query iteration;
+    // edges stamped by submit_actuator_output are stored by entity bits
+    // and converted using the scene_entity query in apply_actuator_outputs.
+    crate::preview_inspector::apply_pending_causality_edges();
     crate::preview_inspector::increment_rebuild_count();
 }
 
@@ -713,6 +719,11 @@ fn process_commands(
     // non-scene sprite that pre-dates the SceneInstance pipeline.
     mut sprites: Query<&mut Transform, (With<Sprite>, Without<SceneEntity>)>,
 ) {
+    // §6 D7: Stamp the rebuild cause so rebuild_preview_world records it.
+    crate::preview_inspector::record_rebuild_cause(crate::RebuildCause::UserEdit {
+        command_id: "legacy_sprite_move".to_string(),
+    });
+
     let cmds = crate::COMMAND_BUS.with(|b| {
         b.borrow_mut()
             .as_mut()

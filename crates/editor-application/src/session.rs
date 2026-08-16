@@ -20,6 +20,8 @@ use std::sync::Arc;
 use crate::RuntimeDelta;
 use crate::ports::project_store::ProjectStore;
 use editor_model::PendingChangeSet;
+use editor_model::RebuildCause;
+use editor_model::logic_activation::{LogicActivationEvent, LogicActivationRing, ring_push};
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -166,6 +168,8 @@ pub struct PreviewInspectorState {
     pub mapping: Vec<Value>,
     /// Per-StableId provenance records from play mode.
     pub provenance: BTreeMap<String, Value>,
+    /// Last rebuild cause (§6).
+    pub last_rebuild_cause: Option<RebuildCause>,
 }
 
 /// In-memory cache for source file contents.
@@ -294,6 +298,8 @@ pub struct EditorSession {
     /// Pending ChangeSets awaiting user approval in the ChangeWorkbench (ADR-0039).
     /// Key = change-set ID (e.g. "agent:12345" or "cmd:1234567890").
     pending_change_sets: BTreeMap<String, PendingChangeSet>,
+    /// Logic activation event ring — capped at 64 entries (§6).
+    logic_activation_ring: LogicActivationRing,
 }
 
 impl std::fmt::Debug for EditorSession {
@@ -311,6 +317,10 @@ impl std::fmt::Debug for EditorSession {
             .field("recent_change_sets", &self.recent_change_sets)
             .field("runtime_delta_buffer_len", &self.runtime_delta_buffer.len())
             .field("pending_change_sets_len", &self.pending_change_sets.len())
+            .field(
+                "logic_activation_ring_len",
+                &self.logic_activation_ring.len(),
+            )
             .finish()
     }
 }
@@ -335,6 +345,7 @@ impl EditorSession {
             recent_change_sets: BTreeMap::new(),
             runtime_delta_buffer: VecDeque::with_capacity(64),
             pending_change_sets: BTreeMap::new(),
+            logic_activation_ring: VecDeque::with_capacity(64),
         }
     }
 
@@ -409,6 +420,28 @@ impl EditorSession {
     /// Returns a mutable reference to the preview inspector state.
     pub fn preview_inspector_mut(&mut self) -> &mut PreviewInspectorState {
         &mut self.preview_inspector
+    }
+
+    // ─── §6 Runtime Causality accessors ────────────────────────────────────────
+
+    /// Returns a reference to the logic activation ring.
+    pub fn logic_activation_ring(&self) -> &LogicActivationRing {
+        &self.logic_activation_ring
+    }
+
+    /// Push an event onto the logic activation ring, evicting the oldest if at cap.
+    pub fn push_logic_activation(&mut self, event: LogicActivationEvent) {
+        ring_push(&mut self.logic_activation_ring, event);
+    }
+
+    /// Returns the last rebuild cause recorded by §6.
+    pub fn last_rebuild_cause(&self) -> Option<&RebuildCause> {
+        self.preview_inspector.last_rebuild_cause.as_ref()
+    }
+
+    /// Records a rebuild cause (§6).
+    pub fn set_last_rebuild_cause(&mut self, cause: RebuildCause) {
+        self.preview_inspector.last_rebuild_cause = Some(cause);
     }
 
     /// Returns a reference to the project store.
