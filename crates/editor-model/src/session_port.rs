@@ -35,6 +35,15 @@ use std::collections::{BTreeMap, VecDeque};
 /// EditorSessionPort` is valid) so the global registry in
 /// `editor_model::ports` can hold a type-erased session.
 pub trait EditorSessionPort {
+    /// Scene session state (per scene path).
+    fn scene_state_mut(&mut self, path: &str) -> &mut crate::session::SceneSessionState;
+
+    /// Asset session state (per asset path).
+    fn asset_state_mut(&mut self, path: &str) -> &mut crate::session::AssetSessionState;
+
+    /// Logic session state (per logic graph path).
+    fn logic_state_mut(&mut self, path: &str) -> &mut crate::session::LogicSessionState;
+
     /// Authoring baselines captured at `PlayModeEnter`.
     ///
     /// Map key is a stable identifier for the (instance, component, field) triple.

@@ -52,7 +52,9 @@ pub use scene_instance::{
 pub use schema::{
     ComponentSchema, ComponentTypeId, Constraint, FieldDef, FieldType, SchemaKind, SourceLocation,
 };
-pub use session::{AppliedChangeMeta, HistoryScope};
+pub use session::{
+    AppliedChangeMeta, AssetSessionState, HistoryScope, LogicSessionState, SceneSessionState,
+};
 pub use tile_layer::TileLayer;
 pub use tileset::{
     AsepriteFrame, AsepriteMetadata, AsepriteSlice, AsepriteTag, TileCoord, TileGrid, TileRef,

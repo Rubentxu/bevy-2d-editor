@@ -18,6 +18,9 @@ struct FakeSession {
     runtime_delta_buffer: VecDeque<RuntimeDelta>,
     pending_causality_edges: BTreeMap<StableId, Vec<editor_model::CausalityEdge>>,
     last_rebuild_cause: Option<editor_model::RebuildCause>,
+    scene_states: BTreeMap<String, editor_model::SceneSessionState>,
+    asset_states: BTreeMap<String, editor_model::AssetSessionState>,
+    logic_states: BTreeMap<String, editor_model::LogicSessionState>,
 }
 
 impl EditorSessionPort for FakeSession {
@@ -33,11 +36,25 @@ impl EditorSessionPort for FakeSession {
         &mut self.pending_causality_edges
     }
     fn runtime_delta_buffer_mut(&mut self) -> &mut VecDeque<RuntimeDelta> {
-        // Enforce 64-entry cap on every access (matches EditorSession impl).
         while self.runtime_delta_buffer.len() > 64 {
             self.runtime_delta_buffer.pop_front();
         }
         &mut self.runtime_delta_buffer
+    }
+    fn scene_state_mut(&mut self, path: &str) -> &mut editor_model::SceneSessionState {
+        self.scene_states
+            .entry(path.to_string())
+            .or_insert_with(editor_model::SceneSessionState::default)
+    }
+    fn asset_state_mut(&mut self, path: &str) -> &mut editor_model::AssetSessionState {
+        self.asset_states
+            .entry(path.to_string())
+            .or_insert_with(editor_model::AssetSessionState::default)
+    }
+    fn logic_state_mut(&mut self, path: &str) -> &mut editor_model::LogicSessionState {
+        self.logic_states
+            .entry(path.to_string())
+            .or_insert_with(editor_model::LogicSessionState::default)
     }
 }
 
@@ -47,6 +64,9 @@ fn fresh_session() {
         runtime_delta_buffer: VecDeque::with_capacity(64),
         pending_causality_edges: BTreeMap::new(),
         last_rebuild_cause: None,
+        scene_states: BTreeMap::new(),
+        asset_states: BTreeMap::new(),
+        logic_states: BTreeMap::new(),
     };
     let arc: Arc<Mutex<dyn EditorSessionPort>> = Arc::new(Mutex::new(session));
     editor_model::ports::register_editor_session(arc);
