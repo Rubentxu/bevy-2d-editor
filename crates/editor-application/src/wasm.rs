@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;
 
+use editor_core::hot_reload_state::{PLAY_MODE_REQUEST, PlayModeRequest};
 use editor_model::PendingChangeSet;
 use editor_model::PendingChangeSetSummary;
 use editor_model::ports::register_project_store;
@@ -289,6 +290,139 @@ pub fn get_logic_activation_events_wasm() -> Result<JsValue, JsValue> {
 // ─────────────────────────────────────────────────────────────────────────────
 // Project store + session initialization
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Runtime Apply-Back — Play Mode Enter/Exit (ADR-0042)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Enter play mode: snapshot tunable baselines and set PlayModeRequest.
+///
+/// Captures baselines synchronously from `SCENE_DOC` (before setting the
+/// request) so they are stored in `EditorSession.tunable_baselines` immediately.
+/// Bevy's `process_play_mode_request` will re-capture via the Bevy query path
+/// into `TUNABLE_BASELINES` thread-local, but those are not used since we
+/// already stored them from the scene document directly.
+#[wasm_bindgen]
+pub fn enter_play_mode() -> Result<(), JsValue> {
+    // Capture tunable baselines from the scene document BEFORE setting the request.
+    // This is the synchronous path — Bevy may not have run yet.
+    let baselines_json = editor_core::preview_runtime::capture_baselines_from_scene_doc();
+
+    // Store in session (the session is Arc<Mutex<EditorSession>>).
+    let sess = session()?;
+    let mut guard = sess
+        .lock()
+        .map_err(|e| JsValue::from_str(&format!("Session lock poisoned: {}", e)))?;
+    let baselines: BTreeMap<String, serde_json::Value> =
+        serde_json::from_str(&baselines_json).unwrap_or_default();
+    guard.snapshot_tunable_baselines(baselines);
+
+    // Signal Bevy to enter play mode (processed on next animation frame).
+    PLAY_MODE_REQUEST.with(|r| *r.borrow_mut() = Some(PlayModeRequest::Enter));
+
+    Ok(())
+}
+
+/// Exit play mode: set PlayModeRequest to trigger transform restore.
+#[wasm_bindgen]
+pub fn exit_play_mode() -> Result<(), JsValue> {
+    PLAY_MODE_REQUEST.with(|r| *r.borrow_mut() = Some(PlayModeRequest::Exit));
+    Ok(())
+}
+
+/// Get the current tunable baselines stored in the session.
+///
+/// Used by the frontend to display baseline vs. current values in the
+/// Runtime Apply-Back UI before the user approves or rejects deltas.
+#[wasm_bindgen]
+pub fn get_tunable_baselines_wasm() -> Result<String, JsValue> {
+    let sess = session()?;
+    let guard = sess
+        .lock()
+        .map_err(|e| JsValue::from_str(&format!("Session lock poisoned: {}", e)))?;
+    let baselines = guard.tunable_baselines();
+    serde_json::to_string(baselines)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+}
+
+/// Get runtime deltas computed on the last PlayModeExit.
+#[wasm_bindgen]
+pub fn get_runtime_deltas_wasm() -> Result<String, JsValue> {
+    let sess = session()?;
+    let guard = sess
+        .lock()
+        .map_err(|e| JsValue::from_str(&format!("Session lock poisoned: {}", e)))?;
+    let deltas: Vec<_> = guard.runtime_delta_buffer().iter().cloned().collect();
+    serde_json::to_string(&deltas)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+}
+
+/// Create an apply-back ChangeSet from the current runtime deltas and store it
+/// in the pending ChangeSets map (ADR-0042).
+///
+/// Returns the ChangeSet ID.
+#[wasm_bindgen]
+pub fn create_apply_back_change_set_wasm(rationale: &str) -> Result<String, JsValue> {
+    use editor_model::PendingChangeSet;
+    use editor_model::PendingChangeSetSummary;
+
+    let sess = session()?;
+    let deltas = {
+        let guard = sess
+            .lock()
+            .map_err(|e| JsValue::from_str(&format!("Session lock poisoned: {}", e)))?;
+        guard
+            .runtime_delta_buffer()
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+
+    if deltas.is_empty() {
+        return Err(JsValue::from_str("No runtime deltas to apply back"));
+    }
+
+    // Build SceneCommands from deltas (one per changed field).
+    let ops: Vec<serde_json::Value> = deltas
+        .iter()
+        .map(|delta| {
+            serde_json::json!({
+                "UpdateComponent": {
+                    "instance_id": delta.instance_id,
+                    "component_type_id": delta.component_type_id,
+                    "field_path": delta.field_path,
+                    "value": delta.runtime_value,
+                }
+            })
+        })
+        .collect();
+
+    let change_id = format!(
+        "apply-back:{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+    );
+
+    let cs = PendingChangeSet {
+        id: change_id.clone(),
+        origin: "RuntimeApplyBack".to_string(),
+        actor: "runtime:apply-back".to_string(),
+        rationale: rationale.to_string(),
+        ops,
+        submitted_at_ms: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64,
+    };
+
+    with_pending_change_sets_mut(|map| {
+        map.insert(change_id.clone(), cs);
+    })?;
+
+    Ok(change_id)
+}
 
 /// Initialize the project store and the global `EditorSession`.
 ///

@@ -656,6 +656,7 @@ All Hito 1 items completed in v0.12-v0.20. Deferred items:
 | ADR-0049 | Dual Dispatch Gate — TransactionKernel Adoption Is Flag-Reversible | Draft (2026-08-16) — v0.89 |
 | ADR-0051 | ChangeWorkbenchPanel Lives in Bottom-Dock as an Internal Tab (ADR-0039/0024) | Draft (2026-08-16) — v0.89 PR2b |
 | ADR-0052 | Runtime Causality — RebuildCause + LogicActivationRing + CausalityEdge (v0.89 PR3) | Draft (2026-08-16) — v0.89 PR3 |
+| ADR-0050 | Apply-Back Policy — Mirror-Pair in editor-core/editor-application, Not in editor-model (v0.89 PR4) | Draft (2026-08-16) — v0.89 PR4 |
 
 ---
 

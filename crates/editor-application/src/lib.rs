@@ -16,7 +16,7 @@ pub mod wasm;
 pub use adapters::in_memory::InMemoryProjectStore;
 pub use adapters::opfs::OpfsProjectStore;
 pub use ports::project_store::{ProjectStore, StoreEntry, StoreError};
-pub use runtime_delta::{ApplyBackPolicy, RuntimeDelta};
+pub use runtime_delta::{ApplyBackPolicy, ApplyBackScope, RuntimeDelta};
 pub use session::{CacheEntry, DocumentSelection, EditorSession};
 // Re-export session and transaction types from editor_model (the model layer).
 // This allows editor-core to import these types without a circular dependency.

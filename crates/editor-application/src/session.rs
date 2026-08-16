@@ -295,6 +295,10 @@ pub struct EditorSession {
     recent_change_sets: BTreeMap<String, RecentChangeSetsBuffer>,
     /// Runtime delta buffer for play-mode apply-back (capped at 64).
     runtime_delta_buffer: VecDeque<RuntimeDelta>,
+    /// Baseline values for Tunable fields, captured on PlayModeEnter.
+    ///
+    /// Key = composite `"instance_id|component_type_id|field_path"`, value = JSON baseline.
+    tunable_baselines: BTreeMap<String, serde_json::Value>,
     /// Pending ChangeSets awaiting user approval in the ChangeWorkbench (ADR-0039).
     /// Key = change-set ID (e.g. "agent:12345" or "cmd:1234567890").
     pending_change_sets: BTreeMap<String, PendingChangeSet>,
@@ -316,6 +320,7 @@ impl std::fmt::Debug for EditorSession {
             .field("source_files", &self.source_files)
             .field("recent_change_sets", &self.recent_change_sets)
             .field("runtime_delta_buffer_len", &self.runtime_delta_buffer.len())
+            .field("tunable_baselines_len", &self.tunable_baselines.len())
             .field("pending_change_sets_len", &self.pending_change_sets.len())
             .field(
                 "logic_activation_ring_len",
@@ -344,6 +349,7 @@ impl EditorSession {
             source_files: SourceFilesCache::default(),
             recent_change_sets: BTreeMap::new(),
             runtime_delta_buffer: VecDeque::with_capacity(64),
+            tunable_baselines: BTreeMap::new(),
             pending_change_sets: BTreeMap::new(),
             logic_activation_ring: VecDeque::with_capacity(64),
         }
@@ -400,6 +406,24 @@ impl EditorSession {
             self.runtime_delta_buffer.pop_front();
         }
         &mut self.runtime_delta_buffer
+    }
+
+    /// Capture the authoring baseline for every field marked Tunable.
+    ///
+    /// Called by `process_play_mode_request(PlayModeEnter)`. The captured
+    /// baseline is later used to compute `RuntimeDelta` on `PlayModeExit`.
+    pub fn snapshot_tunable_baselines(&mut self, baselines: BTreeMap<String, serde_json::Value>) {
+        self.tunable_baselines = baselines;
+    }
+
+    /// Returns a reference to the tunable baselines map.
+    pub fn tunable_baselines(&self) -> &BTreeMap<String, serde_json::Value> {
+        &self.tunable_baselines
+    }
+
+    /// Clear all tunable baselines (called after PlayModeExit delta computation).
+    pub fn clear_tunable_baselines(&mut self) {
+        self.tunable_baselines.clear();
     }
 
     /// Returns a reference to the source files cache.

@@ -9,6 +9,36 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 use thiserror::Error;
 
+/// Policy governing whether and how a component's runtime values may be
+/// applied back to the authoring state (ADR-0050, ADR-0042).
+///
+/// Serialized as part of `ComponentSchema`. Defaults to `Never` for all
+/// existing schemas (per D4 — conservative default). Defined in `editor-core`
+/// because `ComponentSchema` is editor-core's authoring type; editor-application
+/// re-exports the enum for downstream consumers.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ApplyBackPolicy {
+    /// Never apply runtime values back to authoring state.
+    #[default]
+    Never,
+    /// Apply back only when explicitly requested by the user.
+    ExplicitOnly,
+    /// Apply back is suggested; user may tune the value.
+    Tunable,
+}
+
+/// Scope of an apply-back operation (ADR-0050).
+///
+/// v1 only supports `ThisInstance` — apply-back targets the same scene
+/// instance that produced the delta.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ApplyBackScope {
+    /// Apply back only to the same scene instance that produced the delta.
+    ThisInstance,
+}
+
 /// Opaque component type identifier used by the Component Schema Registry.
 /// Transparent so it serializes as a plain string, e.g. `editor.Transform2D`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -131,6 +161,12 @@ pub struct ComponentSchema {
     /// explicit opt-in. Defaults to `true` for SceneComponent schemas.
     #[serde(default = "default_auto_spawn")]
     pub auto_spawn: bool,
+    /// Apply-back policy for fields of this component (ADR-0042, ADR-0050).
+    ///
+    /// Defaults to `Never` — runtime values are never applied back to the
+    /// authoring state unless the schema explicitly opts in.
+    #[serde(default)]
+    pub apply_back: ApplyBackPolicy,
 }
 
 fn default_auto_spawn() -> bool {
@@ -150,6 +186,7 @@ impl Default for ComponentSchema {
             kind: SchemaKind::default(), // Simple
             bound_scene_asset_ref: None,
             auto_spawn: default_auto_spawn(), // true
+            apply_back: ApplyBackPolicy::Never,
         }
     }
 }
@@ -220,6 +257,7 @@ impl ComponentSchemaRegistry {
             kind: SchemaKind::Simple,
             bound_scene_asset_ref: None,
             auto_spawn: true,
+            apply_back: ApplyBackPolicy::Never,
         })?;
 
         // editor.Transform2D
@@ -251,6 +289,7 @@ impl ComponentSchemaRegistry {
             kind: SchemaKind::Simple,
             bound_scene_asset_ref: None,
             auto_spawn: true,
+            apply_back: ApplyBackPolicy::Never,
         })?;
 
         // editor.Sprite2D
@@ -282,6 +321,7 @@ impl ComponentSchemaRegistry {
             kind: SchemaKind::Simple,
             bound_scene_asset_ref: None,
             auto_spawn: true,
+            apply_back: ApplyBackPolicy::Never,
         })?;
 
         // editor.Visible
@@ -299,6 +339,7 @@ impl ComponentSchemaRegistry {
             kind: SchemaKind::Simple,
             bound_scene_asset_ref: None,
             auto_spawn: true,
+            apply_back: ApplyBackPolicy::Never,
         })?;
 
         // editor.Locked
@@ -316,6 +357,7 @@ impl ComponentSchemaRegistry {
             kind: SchemaKind::Simple,
             bound_scene_asset_ref: None,
             auto_spawn: true,
+            apply_back: ApplyBackPolicy::Never,
         })?;
 
         // editor.LogicBinding — binds a Scene Instance to a LogicGraphAsset
@@ -341,6 +383,7 @@ impl ComponentSchemaRegistry {
             kind: SchemaKind::Simple,
             bound_scene_asset_ref: None,
             auto_spawn: true,
+            apply_back: ApplyBackPolicy::Never,
         })?;
 
         Ok(registry)
