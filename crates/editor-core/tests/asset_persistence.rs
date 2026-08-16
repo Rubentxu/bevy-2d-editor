@@ -5,7 +5,7 @@
 //! pure Rust persistence and catalog functions directly.
 
 use editor_core::scene_asset::SceneAssetRole;
-use editor_core::scene_asset_catalog::{
+use editor_model::scene_asset_catalog::{
     SceneAssetCatalog, SceneAssetCatalogEntry, mint_asset_id, random_hex_8,
 };
 use editor_core::test_helpers::FakeClock;
@@ -156,7 +156,7 @@ fn catalog_register_duplicate_path_rejected() {
         .expect_err("duplicate path should fail");
     assert!(matches!(
         err,
-        editor_core::scene_asset_catalog::CatalogError::DuplicateLogicalPath { path }
+        editor_model::scene_asset_catalog::CatalogError::DuplicateLogicalPath { path }
         if path == "player"
     ));
 }
@@ -171,7 +171,7 @@ fn catalog_register_duplicate_asset_id_rejected() {
     let err = catalog.register(e2).expect_err("duplicate id should fail");
     assert!(matches!(
         err,
-        editor_core::scene_asset_catalog::CatalogError::DuplicateAssetId { id }
+        editor_model::scene_asset_catalog::CatalogError::DuplicateAssetId { id }
         if id == "id_1"
     ));
 }
@@ -206,7 +206,7 @@ fn catalog_update_version_rejects_downgrade() {
         .expect_err("downgrade should fail");
     assert!(matches!(
         err,
-        editor_core::scene_asset_catalog::CatalogError::InvalidVersion { current: 2, new: 1 }
+        editor_model::scene_asset_catalog::CatalogError::InvalidVersion { current: 2, new: 1 }
     ));
 }
 
@@ -261,7 +261,7 @@ fn catalog_duplicate_entry_with_unique_id() {
     // The error is DuplicateLogicalPath
     assert!(matches!(
         err,
-        editor_core::scene_asset_catalog::CatalogError::DuplicateLogicalPath { .. }
+        editor_model::scene_asset_catalog::CatalogError::DuplicateLogicalPath { .. }
     ));
 }
 
@@ -292,7 +292,7 @@ fn catalog_unregister_missing_returns_not_found() {
         .expect_err("missing should fail");
     assert!(matches!(
         err,
-        editor_core::scene_asset_catalog::CatalogError::NotFound { id }
+        editor_model::scene_asset_catalog::CatalogError::NotFound { id }
         if id == "nonexistent"
     ));
 }

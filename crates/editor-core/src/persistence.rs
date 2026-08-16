@@ -17,7 +17,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::scene_asset_catalog::SceneAssetCatalogEntry;
+use editor_model::scene_asset_catalog::SceneAssetCatalogEntry;
 
 /// Filename for the project metadata file at OPFS root.
 pub const PROJECT_FILE: &str = "project.json";

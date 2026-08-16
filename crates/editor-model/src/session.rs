@@ -117,13 +117,17 @@ pub struct SceneSessionState {
 /// Per-asset session state. Replaces the `SCENE_ASSET_CATALOG`
 /// thread_local in editor-core (line 19) and the per-asset
 /// `ASSET_OPERATION_LOG` (line 662 of asset_command.rs).
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default)]
 pub struct AssetSessionState {
-    /// Cached scene asset bodies keyed by asset path.
-    pub asset_bodies: std::collections::BTreeMap<String, crate::scene_asset::SceneAssetDocument>,
+    /// The current scene asset catalog for this asset path (None = no asset loaded).
+    /// v0.91 PR2: replaces `SCENE_ASSET_CATALOG` thread_local.
+    pub catalog: Option<crate::scene_asset_catalog::SceneAssetCatalog>,
+    /// Catalog warnings accumulated during the last build/refresh.
+    /// v0.91 PR2: replaces `SCENE_ASSET_CATALOG_WARNINGS` thread_local.
+    pub catalog_warnings: Vec<crate::scene_asset_catalog::CatalogWarning>,
     /// Pending operation log for asset commands (one log per asset path).
     /// **v0.90 PR4 placeholder**: stored as serialized bytes until
-    /// `OperationLog` itself moves from `editor-core` to `editor-model` in
+    /// `OperationLog` itself moves from `editor-core` to `editor_model` in
     /// PR5. `Vec::new()` means "no log yet"; load via `AssetSessionState::deserialize_log`.
     pub operation_log_bytes: Vec<u8>,
 }

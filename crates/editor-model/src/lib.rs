@@ -17,6 +17,7 @@ pub mod ports;
 pub mod rebuild_cause;
 pub mod runtime_delta;
 pub mod scene_asset;
+pub mod scene_asset_catalog;
 pub mod scene_instance;
 pub mod schema;
 pub mod session;
@@ -44,6 +45,10 @@ pub use scene_asset::{
     AssetReference, ExposedProperty, LevelLayer, RelationshipKind, RoleWarning, SceneAssetDocument,
     SceneAssetEntity, SceneAssetRelationship, SceneAssetRole, SceneInstanceLayer,
     SceneInstanceLayerKind,
+};
+pub use scene_asset_catalog::{
+    CatalogError, CatalogWarning, SceneAssetCatalog, SceneAssetCatalogEntry, mint_asset_id,
+    normalize_logical_path,
 };
 pub use scene_instance::{
     ComponentOverride, ComponentOverrideStatus, SceneInstance,

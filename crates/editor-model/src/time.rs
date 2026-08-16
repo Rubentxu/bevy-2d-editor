@@ -81,3 +81,13 @@ impl Clock for FakeClock {
         Timestamp(self.current_ms.load(Ordering::SeqCst))
     }
 }
+
+/// Returns the current Unix time in milliseconds (v0.91 PR2: moved from
+/// editor-core for use by the new scene_asset_catalog module).
+pub fn now_millis() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}

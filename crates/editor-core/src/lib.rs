@@ -11,7 +11,7 @@ use wasm_bindgen_futures::JsFuture;
 pub mod actuator_bus;
 pub mod asset_command;
 pub mod asset_files;
-mod asset_state;
+pub mod asset_state;
 pub mod auto_layer;
 mod bevy_anchor;
 pub mod bevy_logic_binding;
@@ -39,7 +39,10 @@ pub mod preview_inspector;
 pub mod preview_runtime;
 pub mod processor;
 pub mod scene_asset;
-pub mod scene_asset_catalog;
+pub use editor_model::scene_asset_catalog::{
+    CatalogError, CatalogWarning, SceneAssetCatalog, SceneAssetCatalogEntry, mint_asset_id,
+    normalize_logical_path,
+};
 pub mod scene_instance;
 pub mod scene_instance_overrides;
 pub mod scene_session;
@@ -218,9 +221,6 @@ pub use scene_asset::{
     SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata, SceneAssetRelationship,
     SceneAssetRole, SceneInstanceLayer, SceneInstanceLayerKind, validate_role,
 };
-pub use scene_asset_catalog::{
-    CatalogError, CatalogWarning, SceneAssetCatalog, SceneAssetCatalogEntry, mint_asset_id,
-};
 pub use scene_instance::{
     ComponentOverride, ComponentOverrideStatus, SceneInstance,
     component_override_status_after_field_rename,
@@ -302,13 +302,12 @@ pub struct TransformSnapshot {
 // callers in lib.rs continue to work without modification.
 use crate::state::{
     ASSET_BODY_CACHE, ASSET_OPERATION_LOG, DIRTY_FLAG, HOT_RELOAD_BUS, HotReloadRequest,
-    LOGIC_GRAPH_DOC, LOGIC_OPERATION_LOG, PLAY_MODE_REQUEST, PlayModeRequest, RESYNC_REPORTS,
-    SCENE_ASSET_CATALOG, SCENE_ASSET_CATALOG_WARNINGS, SCENE_ASSET_DOC, SCENE_REGISTRY,
-    VALIDATION_ISSUES, clear_asset_catalog_warnings, get_asset_catalog_warnings, mark_dirty,
-    with_asset_body_cache, with_asset_body_cache_mut, with_asset_catalog, with_asset_catalog_mut,
-    with_asset_doc, with_asset_doc_mut, with_asset_log, with_asset_log_mut, with_logic_graph,
-    with_logic_graph_catalog, with_logic_graph_catalog_mut, with_logic_graph_mut, with_logic_log,
-    with_logic_log_mut, with_registry, with_registry_mut,
+    LOGIC_OPERATION_LOG, PLAY_MODE_REQUEST, PlayModeRequest, RESYNC_REPORTS, SCENE_ASSET_DOC,
+    SCENE_REGISTRY, VALIDATION_ISSUES, clear_asset_catalog_warnings, get_asset_catalog_warnings,
+    mark_dirty, with_asset_body_cache, with_asset_body_cache_mut, with_asset_catalog,
+    with_asset_catalog_mut, with_asset_doc, with_asset_doc_mut, with_asset_log, with_asset_log_mut,
+    with_logic_graph, with_logic_graph_catalog, with_logic_graph_catalog_mut, with_logic_graph_mut,
+    with_logic_log, with_logic_log_mut, with_registry, with_registry_mut,
 };
 
 /// Mutably access the asset body cache from integration tests.
@@ -916,7 +915,7 @@ pub fn get_validation_issues_wasm() -> Result<String, JsValue> {
     }
 
     // 3. Logic graph validation
-    with_logic_graph(|doc_opt| {
+    with_logic_graph_mut(|doc_opt| {
         if let Some(asset) = doc_opt {
             let logic_issues = validate_logic_graph(asset, global_node_registry());
             for li in logic_issues {
@@ -1989,11 +1988,8 @@ async fn warm_asset_body_cache() {
     use crate::scene_asset::SceneAssetDocument;
 
     // Access the catalog that was just loaded
-    let entries: Vec<crate::scene_asset_catalog::SceneAssetCatalogEntry> = SCENE_ASSET_CATALOG
-        .with(|cell| match &*cell.borrow() {
-            Some(cat) => cat.list_all().into_iter().cloned().collect(),
-            None => Vec::new(),
-        });
+    let entries: Vec<crate::editor_model::scene_asset_catalog::SceneAssetCatalogEntry> =
+        crate::asset_state::with_asset_catalog(|cat| cat.list_all().into_iter().cloned().collect());
 
     for entry in entries {
         let path = &entry.logical_path;
@@ -2112,8 +2108,12 @@ pub async fn load_project() -> Result<(), JsValue> {
                 asset_id: Some(entry.asset_id.clone()),
                 logical_path: Some(lp.clone()),
             };
-            SCENE_ASSET_CATALOG_WARNINGS.with(|cell| {
-                cell.borrow_mut().push(warning);
+            // Push warning to the session (v0.91 PR2).
+            let warning_clone = warning.clone();
+            let _ = editor_model::ports::with_session_mut(|sess| {
+                sess.asset_state_mut(crate::asset_state::ACTIVE_ASSET_PATH)
+                    .catalog_warnings
+                    .push(warning_clone);
             });
         }
         // Register the entry (keep it regardless of orphan status)
@@ -2125,14 +2125,20 @@ pub async fn load_project() -> Result<(), JsValue> {
                 asset_id: Some(entry.asset_id.clone()),
                 logical_path: Some(lp.clone()),
             };
-            SCENE_ASSET_CATALOG_WARNINGS.with(|cell| {
-                cell.borrow_mut().push(warning);
+            // Push warning to the session (v0.91 PR2).
+            let warning_clone = warning.clone();
+            let _ = editor_model::ports::with_session_mut(|sess| {
+                sess.asset_state_mut(crate::asset_state::ACTIVE_ASSET_PATH)
+                    .catalog_warnings
+                    .push(warning_clone);
             });
         }
     }
-    // Store the rebuilt catalog in the thread-local holder
-    SCENE_ASSET_CATALOG.with(|cell| {
-        *cell.borrow_mut() = Some(catalog);
+    // Store the rebuilt catalog in the session (v0.91 PR2).
+    let catalog_clone = catalog.clone();
+    let _ = editor_model::ports::with_session_mut(|sess| {
+        sess.asset_state_mut(crate::asset_state::ACTIVE_ASSET_PATH)
+            .catalog = Some(catalog_clone);
     });
 
     // Step D4: Warm ASSET_BODY_CACHE with all scene asset bodies
@@ -2526,7 +2532,7 @@ pub fn get_logic_log_state() -> String {
 /// Get the active LogicGraphAsset as JSON.
 #[wasm_bindgen]
 pub fn get_logic_graph() -> Result<String, JsValue> {
-    with_logic_graph(|doc_opt| {
+    with_logic_graph_mut(|doc_opt| {
         let doc = doc_opt
             .as_ref()
             .ok_or_else(|| JsValue::from_str("No logic graph open"))?;
@@ -2691,10 +2697,10 @@ pub async fn create_scene_asset(name: &str, role: &str) -> Result<String, JsValu
         _ => return Err(JsValue::from_str(&format!("Unknown role: {}", role))),
     };
 
-    let normalized_path = scene_asset_catalog::normalize_logical_path(name);
-    let asset_id = scene_asset_catalog::mint_asset_id(
+    let normalized_path = editor_model::scene_asset_catalog::normalize_logical_path(name);
+    let asset_id = editor_model::scene_asset_catalog::mint_asset_id(
         &crate::time::JsSysClock::new(),
-        &scene_asset_catalog::random_hex_8(),
+        &editor_model::scene_asset_catalog::random_hex_8(),
     );
 
     // Check for duplicate path
@@ -2708,7 +2714,7 @@ pub async fn create_scene_asset(name: &str, role: &str) -> Result<String, JsValu
 
     let now = crate::time::now_millis();
 
-    let entry = scene_asset_catalog::SceneAssetCatalogEntry {
+    let entry = editor_model::scene_asset_catalog::SceneAssetCatalogEntry {
         asset_id: asset_id.clone(),
         logical_path: normalized_path.clone(),
         role,
@@ -2777,8 +2783,9 @@ pub async fn import_bsn_asset_wasm(name: &str, bsn_text: &str) -> Result<String,
 
     // Create an empty asset to get the asset_id and logical_path
     let entry_json = create_scene_asset(name, "fragment").await?;
-    let entry: scene_asset_catalog::SceneAssetCatalogEntry = serde_json::from_str(&entry_json)
-        .map_err(|e| JsValue::from_str(&format!("Failed to parse created entry: {}", e)))?;
+    let entry: editor_model::scene_asset_catalog::SceneAssetCatalogEntry =
+        serde_json::from_str(&entry_json)
+            .map_err(|e| JsValue::from_str(&format!("Failed to parse created entry: {}", e)))?;
 
     // Override the imported doc's ids to match the created asset
     doc.asset_id = entry.asset_id.clone();
@@ -2800,7 +2807,7 @@ pub async fn import_bsn_asset_wasm(name: &str, bsn_text: &str) -> Result<String,
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn rename_scene_asset(asset_id: &str, new_path: &str) -> Result<String, JsValue> {
-    let new_path_normalized = scene_asset_catalog::normalize_logical_path(new_path);
+    let new_path_normalized = editor_model::scene_asset_catalog::normalize_logical_path(new_path);
 
     // Get old entry
     let old_entry = with_asset_catalog(|cat| cat.get(asset_id).cloned())
@@ -2886,15 +2893,15 @@ pub async fn duplicate_scene_asset(asset_id: &str) -> Result<String, JsValue> {
         .map_err(|e| JsValue::from_str(&e))?;
 
     // Mint new id
-    let new_id = scene_asset_catalog::mint_asset_id(
+    let new_id = editor_model::scene_asset_catalog::mint_asset_id(
         &crate::time::JsSysClock::new(),
-        &scene_asset_catalog::random_hex_8(),
+        &editor_model::scene_asset_catalog::random_hex_8(),
     );
     let new_path = derive_duplicate_path(&source_entry.logical_path);
 
     let now = crate::time::now_millis();
 
-    let new_entry = scene_asset_catalog::SceneAssetCatalogEntry {
+    let new_entry = editor_model::scene_asset_catalog::SceneAssetCatalogEntry {
         asset_id: new_id.clone(),
         logical_path: new_path.clone(),
         role: source_entry.role,
@@ -2966,7 +2973,7 @@ pub async fn delete_scene_asset(asset_id: &str) -> Result<(), JsValue> {
 /// List all Scene Assets, optionally filtered by role.
 #[wasm_bindgen]
 pub fn list_scene_assets(role_filter: Option<String>) -> Result<String, JsValue> {
-    let entries: Vec<scene_asset_catalog::SceneAssetCatalogEntry> =
+    let entries: Vec<editor_model::scene_asset_catalog::SceneAssetCatalogEntry> =
         with_asset_catalog(|cat| match role_filter {
             Some(role) => {
                 use crate::scene_asset::SceneAssetRole;
@@ -3228,7 +3235,7 @@ fn derive_duplicate_path(original: &str) -> String {
 /// Update project.json with a modified scene_assets list.
 #[cfg(target_arch = "wasm32")]
 async fn update_project_metadata_for_asset(
-    entry: &scene_asset_catalog::SceneAssetCatalogEntry,
+    entry: &editor_model::scene_asset_catalog::SceneAssetCatalogEntry,
     _operation: &str,
 ) -> Result<(), JsValue> {
     let mut project = load_project_metadata().await?;
@@ -3275,15 +3282,20 @@ async fn load_project_metadata() -> Result<ProjectMetadata, JsValue> {
 mod validation_center_tests {
     use super::*;
 
-    /// Test helper: set LOGIC_GRAPH_DOC for testing.
+    /// Test helper: set with_logic_graph for testing.
     #[cfg(test)]
     pub(crate) fn set_logic_graph_for_test(asset: Option<LogicGraphAsset>) {
-        LOGIC_GRAPH_DOC.with(|cell| {
-            *cell.borrow_mut() = asset;
+        editor_model::ports::with_session_mut(|sess| {
+            sess.logic_state_mut(crate::logic_state::ACTIVE_LOGIC_GRAPH_PATH)
+                .graph_docs
+                .insert("_active".to_string(), asset.unwrap_or_else(|| {
+                    // Empty graph fallback — tests should provide their own.
+                    LogicGraphAsset::default()
+                }));
         });
     }
 
-    /// Test helper: clear LOGIC_GRAPH_DOC after each test.
+    /// Test helper: clear with_logic_graph after each test.
     fn clear_logic_graph() {
         set_logic_graph_for_test(None);
     }
@@ -3375,7 +3387,7 @@ mod validation_center_tests {
         clear_logic_graph();
     }
 
-    // Test 2: LOGIC_GRAPH_DOC is None → no logic issues
+    // Test 2: with_logic_graph is None → no logic issues
     #[test]
     fn wasm_validation_no_logic_issues_when_no_graph() {
         clear_logic_graph();
