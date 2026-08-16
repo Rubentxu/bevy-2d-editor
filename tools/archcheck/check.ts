@@ -203,8 +203,8 @@ const ASSERTIONS: Assertion[] = [
       const entries = readdirSync(appSrc, { withFileTypes: true });
       for (const entry of entries) {
         if (!entry.isFile() || !entry.name.endsWith(".rs")) continue;
-        // adapters/opfs.rs is cfg-gated wasm32 stub — skip
-        if (entry.name === "adapters" || entry.name === "opfs.rs") continue;
+        // Sanctioned exceptions (ADR-0031): wasm.rs is the WASM composition root.
+        if (entry.name === "wasm.rs") continue;
         const wasmPattern = /(?:wasm_bindgen|web_sys|js_sys)/;
         const content = readFileSync(join(appSrc, entry.name), "utf8");
         if (wasmPattern.test(content)) {
