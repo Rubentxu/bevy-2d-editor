@@ -52,17 +52,11 @@ use crate::document::ComponentInstance;
 pub struct EditorComponent(pub ComponentInstance);
 
 /// Stores the last-computed tunable baselines as a JSON string.
-///
-/// **v0.90 PR1 migration**: this thread_local is now a SECONDARY read cache.
-/// The canonical owner is `EditorSession.tunable_baselines`, written via
-/// `editor_model::ports::with_session_mut` from `capture_tunable_baselines_internal`
-/// below. The canonical WASM export (`get_tunable_baselines_wasm`) is in
-/// `editor-application::wasm` (v0.89 PR4); this thread_local exists only for
-/// the in-process call from `editor-core`'s Bevy systems. Removed in v0.91
-/// once the Bevy side reads from the session directly.
-thread_local! {
-    static TUNABLE_BASELINES: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
-}
+// v0.90 PR3: TUNABLE_BASELINES thread_local removed. The canonical owner is
+// `EditorSession.tunable_baselines`, written/read via
+// `editor_model::ports::with_session_mut` from `capture_tunable_baselines_internal`
+// below. The WASM export `get_tunable_baselines_wasm` lives in
+// `editor-application::wasm` (reads from the session). No more dual-write.
 
 /// Capture tunable baselines synchronously from `SCENE_DOC`.
 ///
@@ -381,14 +375,12 @@ fn capture_tunable_baselines_internal(
         baselines.insert(key, editor_comp.0.values.clone());
     }
 
-    // v0.90 PR1: write to session (canonical).
+    // v0.90 PR3: write ONLY to the session (single source of truth).
+    // The TUNABLE_BASELINES thread_local has been removed; the
+    // session is the canonical owner (per ADR-0031).
     let _ = editor_model::ports::with_session_mut(|sess| {
-        *sess.tunable_baselines_mut() = baselines.clone();
+        *sess.tunable_baselines_mut() = baselines;
     });
-
-    // Keep thread_local in sync (secondary read cache).
-    let json = serde_json::to_string(&baselines).unwrap_or_default();
-    TUNABLE_BASELINES.with(|cell| *cell.borrow_mut() = json);
 }
 
 /// Recursive field-level diff. Emits one `RuntimeDelta` per leaf key whose
