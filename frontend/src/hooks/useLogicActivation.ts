@@ -1,19 +1,42 @@
 /**
- * useLogicActivation — typed hook for the Logic Graph log state from WASM.
+ * useLogicActivation — typed hook for the §6 Logic Activation ring buffer
+ * and the legacy logic log state, polled from WASM.
  *
- * Provides a polling interface to the `window.get_logic_log_state()` WASM bridge,
- * returning a typed `LogicLogState`. Falls back to `null` gracefully when WASM
- * is not yet ready (matching the pattern in useLogicGraph.ts:147-155).
+ * Provides:
+ * - `events`: the last ≤ 64 `LogicActivationEvent` entries (ring buffer).
+ * - `rebuildCause`: the most recent `RebuildCause` (one of 6 variants).
+ * - `legacy`: the legacy `LogicLogState` (size/can_undo/can_redo/cursor)
+ *   from `get_logic_log_state()`. Kept for backward compatibility with the
+ *   RuntimePreviewInspector.
  *
- * PR4 correction: replaces the inline `(window as any).get_logic_log_state()` cast
- * in RuntimePreviewInspector.tsx with a typed, tested abstraction (design.md:131).
+ * The hook returns `{ events, rebuildCause, legacy, refresh }` and is null-safe
+ * when WASM is not yet ready (matches useLogicGraph.ts:147-155 fallback pattern).
  *
- * NOTE: The WASM function `get_logic_log_state()` returns undo/redo metadata
- * (size, can_undo, can_redo, cursor) — not an entries array. The hook types
- * reflect the actual WASM return shape.
+ * PR3 (v0.89): rewritten to consume the new `get_rebuild_cause_wasm` and
+ * `get_logic_activation_events_wasm` exports added in editor-application.
  */
 
 import { useCallback, useEffect, useState } from "react";
+
+// ─── Types mirroring editor-model::RebuildCause ──────────────────────────────
+
+export type RebuildCause =
+  | { kind: "user_edit"; command_id: string }
+  | { kind: "hot_reload"; file_id: string }
+  | { kind: "play_mode_enter" }
+  | { kind: "play_mode_exit" }
+  | { kind: "scene_switch"; from: string; to: string }
+  | { kind: "asset_resync"; asset_ref: string };
+
+// ─── Types mirroring editor-model::logic_activation::LogicActivationEvent ────
+
+export interface LogicActivationEvent {
+  node_id: string;
+  triggered_at_ms: number;
+  payload_summary?: string;
+}
+
+// ─── Legacy logic log state (kept for RuntimePreviewInspector compat) ──────
 
 export interface LogicLogState {
   size: number;
@@ -27,42 +50,88 @@ interface UseLogicActivationOptions {
   pollIntervalMs?: number;
 }
 
+interface UseLogicActivationResult {
+  events: LogicActivationEvent[];
+  rebuildCause: RebuildCause | null;
+  legacy: LogicLogState | null;
+  refresh: () => Promise<void>;
+}
+
+const EMPTY_EVENTS: LogicActivationEvent[] = [];
+
 /**
- * Hook that polls `window.get_logic_log_state()` and returns a typed snapshot.
- *
- * Returns `{ snapshot: null, refresh }` when WASM is not yet ready.
- * After a successful poll, `snapshot` is a `LogicLogState`.
+ * Hook that polls the §6 logic activation ring + rebuild cause + legacy
+ * logic log state, returning typed snapshots.
  *
  * @example
- * const { snapshot, refresh } = useLogicActivation({ pollIntervalMs: 2000 });
- * if (snapshot) {
- *   console.log("Logic log size:", snapshot.size, "can_undo:", snapshot.can_undo);
+ * const { events, rebuildCause, legacy } = useLogicActivation({ pollIntervalMs: 2000 });
+ * if (rebuildCause?.kind === "user_edit") {
+ *   console.log("last edit:", rebuildCause.command_id);
  * }
  */
-export function useLogicActivation(options: UseLogicActivationOptions = {}): {
-  snapshot: LogicLogState | null;
-  refresh: () => Promise<void>;
-} {
+export function useLogicActivation(
+  options: UseLogicActivationOptions = {},
+): UseLogicActivationResult {
   const { pollIntervalMs = 1000 } = options;
 
-  const [snapshot, setSnapshot] = useState<LogicLogState | null>(null);
+  const [events, setEvents] = useState<LogicActivationEvent[]>(EMPTY_EVENTS);
+  const [rebuildCause, setRebuildCause] = useState<RebuildCause | null>(null);
+  const [legacy, setLegacy] = useState<LogicLogState | null>(null);
 
   const refresh = useCallback(async () => {
-    try {
-      const stateJson = await (window as any).get_logic_log_state();
-      setSnapshot(JSON.parse(stateJson) as LogicLogState);
-    } catch {
-      // WASM not ready or function not exposed — leave snapshot as null.
-      // This matches the graceful-fallback pattern in useLogicGraph.ts:147-155.
-      setSnapshot(null);
+    const w = window as unknown as {
+      get_rebuild_cause_wasm?: () => unknown;
+      get_logic_activation_events_wasm?: () => unknown;
+      get_logic_log_state?: () => unknown;
+    };
+
+    if (typeof w.get_rebuild_cause_wasm === "function") {
+      try {
+        const raw = await w.get_rebuild_cause_wasm();
+        if (raw == null || raw === "null" || raw === "undefined") {
+          setRebuildCause(null);
+        } else {
+          const parsed =
+            typeof raw === "string" ? JSON.parse(raw) : (raw as RebuildCause);
+          setRebuildCause(parsed);
+        }
+      } catch {
+        // ignore — refresh will retry on next tick
+      }
+    }
+
+    if (typeof w.get_logic_activation_events_wasm === "function") {
+      try {
+        const raw = await w.get_logic_activation_events_wasm();
+        const parsed =
+          typeof raw === "string"
+            ? JSON.parse(raw)
+            : (raw as LogicActivationEvent[]);
+        setEvents(Array.isArray(parsed) ? parsed : EMPTY_EVENTS);
+      } catch {
+        setEvents(EMPTY_EVENTS);
+      }
+    }
+
+    if (typeof w.get_logic_log_state === "function") {
+      try {
+        const raw = await w.get_logic_log_state();
+        const parsed =
+          typeof raw === "string" ? JSON.parse(raw) : (raw as LogicLogState);
+        setLegacy(parsed);
+      } catch {
+        setLegacy(null);
+      }
     }
   }, []);
 
   useEffect(() => {
-    refresh();
-    const id = setInterval(refresh, pollIntervalMs);
-    return () => clearInterval(id);
-  }, [refresh, pollIntervalMs]);
+    void refresh();
+    const id = window.setInterval(() => {
+      void refresh();
+    }, pollIntervalMs);
+    return () => window.clearInterval(id);
+  }, [pollIntervalMs, refresh]);
 
-  return { snapshot, refresh };
+  return { events, rebuildCause, legacy, refresh };
 }

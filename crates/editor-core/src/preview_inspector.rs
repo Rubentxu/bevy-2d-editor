@@ -155,9 +155,8 @@ pub fn stamp_provenance(stable_id: StableId, edge: crate::CausalityEdge) {
 /// during logic evaluation are attached to the correct provenance entries.
 pub fn apply_pending_causality_edges() {
     // Take the pending map out of the RefCell, leaving an empty one behind.
-    let pending_map = PENDING_CAUSALITY_EDGES.with(|pending| {
-        std::mem::take(&mut *pending.borrow_mut())
-    });
+    let pending_map =
+        PENDING_CAUSALITY_EDGES.with(|pending| std::mem::take(&mut *pending.borrow_mut()));
     // Apply edges to provenance entries.
     if !pending_map.is_empty() {
         PREVIEW_PROVENANCE.with(|prov| {

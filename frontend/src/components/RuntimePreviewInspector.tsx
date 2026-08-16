@@ -40,11 +40,12 @@ export default function RuntimePreviewInspector({ onJumpToSource }: Props) {
     data: PreviewProvenance;
   } | null>(null);
   // PR4 correction: use useLogicActivation hook instead of inline (window as any) cast
-  const { snapshot: logicLog } = useLogicActivation({ pollIntervalMs: 500 });
+  const { snapshot: logicLog, rebuildCause } = useLogicActivation({
+    pollIntervalMs: 500,
+  });
   const [hotReloadEvents, setHotReloadEvents] = useState<HotReloadEvent[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [showTimeline, setShowTimeline] = useState(false);
-  const [lastRebuildCause, setLastRebuildCause] = useState<string | null>(null);
   const eventBuffer = useRef<HotReloadEvent[]>([]);
 
   const { lastReloadedAt } = useHotReloadStatus();
@@ -62,11 +63,6 @@ export default function RuntimePreviewInspector({ onJumpToSource }: Props) {
       // Runtime-facing warnings from metrics (demoted from errors)
       if (m && m.warnings && m.warnings.length > 0) {
         setWarnings(m.warnings);
-      }
-
-      // Rebuild cause from metrics if available
-      if (m && (m as any).last_rebuild_cause) {
-        setLastRebuildCause((m as any).last_rebuild_cause);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -153,10 +149,10 @@ export default function RuntimePreviewInspector({ onJumpToSource }: Props) {
       )}
 
       {/* Last rebuild cause */}
-      {lastRebuildCause && (
+      {rebuildCause && (
         <div className="rpi-rebuild-cause" data-testid="rpi-rebuild-cause">
           <span className="rpi-rebuild-cause-label">Last rebuild:</span>
-          <span className="rpi-rebuild-cause-value">{lastRebuildCause}</span>
+          <span className="rpi-rebuild-cause-value">{rebuildCause.kind}</span>
         </div>
       )}
 

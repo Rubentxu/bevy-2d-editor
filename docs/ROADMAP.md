@@ -655,6 +655,7 @@ All Hito 1 items completed in v0.12-v0.20. Deferred items:
 | ADR-0048 | ProjectStore v1 Is a Synchronous Port | Accepted (2026-08-15) — v0.87 |
 | ADR-0049 | Dual Dispatch Gate — TransactionKernel Adoption Is Flag-Reversible | Draft (2026-08-16) — v0.89 |
 | ADR-0051 | ChangeWorkbenchPanel Lives in Bottom-Dock as an Internal Tab (ADR-0039/0024) | Draft (2026-08-16) — v0.89 PR2b |
+| ADR-0052 | Runtime Causality — RebuildCause + LogicActivationRing + CausalityEdge (v0.89 PR3) | Draft (2026-08-16) — v0.89 PR3 |
 
 ---
 

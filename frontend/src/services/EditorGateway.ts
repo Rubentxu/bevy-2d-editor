@@ -155,6 +155,10 @@ interface WindowWithBridge {
   ) => Promise<string> | string;
   reject_change_set?: (id: string) => Promise<string> | string;
   get_change_set_summaries?: () => Promise<string> | string;
+  // §6 Runtime Causality WASM exports (ADR-0052)
+  get_rebuild_cause_wasm?: () => Promise<string> | string | null;
+  get_logic_activation_events_wasm?: () => Promise<string> | string | null;
+  get_preview_provenance_wasm?: () => Promise<string> | string | null;
   __bevyEngineStarted?: boolean;
 }
 
