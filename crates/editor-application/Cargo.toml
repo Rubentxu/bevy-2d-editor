@@ -7,6 +7,10 @@ repository = "https://github.com/Rubentxu/bevy-2d-editor"
 license = "MIT OR Apache-2.0"
 
 [lib]
+crate-type = ["cdylib", "rlib"]
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
 
 [dependencies]
 editor-model = { path = "../editor-model" }
