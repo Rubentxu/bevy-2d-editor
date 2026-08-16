@@ -108,7 +108,7 @@ impl CacheEntry {
 // Sub-state types (ADR-0031 — PR2a consolidation)
 // ---------------------------------------------------------------------------
 //
-// PR2a progress: SceneSessionState.document now uses real SceneDocument
+// PR2a progress: LocalSceneSessionState.document now uses real SceneDocument
 // from editor_model. The operation log is kept as Value (OperationLog
 // lives in editor-core — full migration to editor_model is future work).
 //
@@ -122,45 +122,25 @@ use serde_json::Value;
 
 /// Session state for one active scene document (PR2a real types).
 ///
-/// `document` uses the real `SceneDocument` from editor_model.
-/// `log` is kept as serialized Value since OperationLog lives in editor-core
-/// (future migration to editor_model is tracked separately).
-#[derive(Debug, Clone, Default)]
-pub struct SceneSessionState {
-    /// The active scene document (None when not loaded).
-    pub document: Option<SceneDocument>,
-    /// Serialised operation log (None when not loaded).
-    /// TODO: Replace with real OperationLog after OperationLog moves to editor_model.
-    pub log: Option<Value>,
-}
+/// v0.90 PR4: this type is now defined in `editor_model::session` (single
+/// source of truth). The local struct is removed; any downstream consumer
+/// that used the old field names must be updated to the new ones
+/// (`scene_doc`, `reload_count` instead of `document`, `log`).
+pub type LocalSceneSessionState = editor_model::SceneSessionState;
 
 /// Session state for the scene asset subsystem (PR2a).
 ///
-/// Uses real types from editor_model where available.
-#[derive(Debug, Clone, Default)]
-pub struct AssetSessionState {
-    /// Active asset document being edited.
-    pub active_document: Option<SceneAssetDocument>,
-    /// Cached asset bodies (asset_ref → serialized SceneAssetDocument body).
-    /// TODO: Replace with real cache after catalog moves to editor_model.
-    pub body_cache: BTreeMap<String, SceneAssetDocument>,
-    /// Resync reports indexed by stable ID (key is StableId string).
-    pub resync_reports: Vec<(String, Value)>,
-    /// Validation issues for this asset scope.
-    pub validation_issues: Vec<Value>,
-}
+/// v0.90 PR4: type now defined in `editor_model::session`. Old field names
+/// (`active_document`, `body_cache`, `resync_reports`, `validation_issues`)
+/// are replaced by `asset_bodies` + `operation_log_bytes`.
+pub type LocalAssetSessionState = editor_model::AssetSessionState;
 
 /// Session state for the logic graph subsystem (PR2a).
 ///
-/// Uses real types from editor_model where available.
-#[derive(Debug, Clone, Default)]
-pub struct LogicSessionState {
-    /// Active logic graph being edited.
-    pub active_graph: Option<LogicGraphAsset>,
-    /// Logic graph catalog (path → serialized catalog).
-    /// TODO: Replace with real catalog after catalog moves to editor_model.
-    pub catalog: BTreeMap<String, Value>,
-}
+/// v0.90 PR4: type now defined in `editor_model::session`. Old field names
+/// (`active_graph`, `catalog`) are replaced by `graph_docs` +
+/// `operation_log_bytes`.
+pub type LocalLogicSessionState = editor_model::LogicSessionState;
 
 /// Session state for the runtime preview inspector (PR2a).
 #[derive(Debug, Clone, Default)]
@@ -285,11 +265,11 @@ pub struct EditorSession {
     caches: BTreeMap<String, CacheEntry>,
     // ─── Sub-state maps (PR2a — ADR-0031 consolidation) ───────────────────────
     /// Per-scene session state: document + operation log (SCENE_DOC + OPERATION_LOG).
-    scene_states: BTreeMap<String, SceneSessionState>,
+    scene_states: BTreeMap<String, LocalSceneSessionState>,
     /// Per-asset-path session state (SCENE_ASSET_CATALOG etc.).
-    asset_states: BTreeMap<String, AssetSessionState>,
+    asset_states: BTreeMap<String, LocalAssetSessionState>,
     /// Per-logic-graph-path session state (LOGIC_GRAPH_DOC etc.).
-    logic_states: BTreeMap<String, LogicSessionState>,
+    logic_states: BTreeMap<String, LocalLogicSessionState>,
     /// Runtime preview inspector state (PREVIEW_METRICS etc.).
     preview_inspector: PreviewInspectorState,
     /// Source file contents cache (SOURCE_FILE_REGISTRY).
@@ -371,26 +351,26 @@ impl EditorSession {
     ///
     /// This is the primary entry point for migrating `scene_session.rs` to use
     /// `EditorSession` as the owning store instead of `thread_local!`.
-    pub fn scene_state_mut(&mut self, path: &str) -> &mut SceneSessionState {
+    pub fn scene_state_mut(&mut self, path: &str) -> &mut LocalSceneSessionState {
         self.scene_states
             .entry(path.to_string())
-            .or_insert_with(SceneSessionState::default)
+            .or_insert_with(LocalSceneSessionState::default)
     }
 
     /// Returns a mutable reference to the asset session state for the given path,
     /// creating it if absent.
-    pub fn asset_state_mut(&mut self, path: &str) -> &mut AssetSessionState {
+    pub fn asset_state_mut(&mut self, path: &str) -> &mut LocalAssetSessionState {
         self.asset_states
             .entry(path.to_string())
-            .or_insert_with(AssetSessionState::default)
+            .or_insert_with(LocalAssetSessionState::default)
     }
 
     /// Returns a mutable reference to the logic session state for the given path,
     /// creating it if absent.
-    pub fn logic_state_mut(&mut self, path: &str) -> &mut LogicSessionState {
+    pub fn logic_state_mut(&mut self, path: &str) -> &mut LocalLogicSessionState {
         self.logic_states
             .entry(path.to_string())
-            .or_insert_with(LogicSessionState::default)
+            .or_insert_with(LocalLogicSessionState::default)
     }
 
     /// Returns the recent change-set summaries for the given scene path.
@@ -797,5 +777,23 @@ impl EditorSessionPort for EditorSession {
             self.runtime_delta_buffer.pop_front();
         }
         &mut self.runtime_delta_buffer
+    }
+
+    fn scene_state_mut(&mut self, path: &str) -> &mut editor_model::SceneSessionState {
+        self.scene_states
+            .entry(path.to_string())
+            .or_insert_with(editor_model::SceneSessionState::default)
+    }
+
+    fn asset_state_mut(&mut self, path: &str) -> &mut editor_model::AssetSessionState {
+        self.asset_states
+            .entry(path.to_string())
+            .or_insert_with(editor_model::AssetSessionState::default)
+    }
+
+    fn logic_state_mut(&mut self, path: &str) -> &mut editor_model::LogicSessionState {
+        self.logic_states
+            .entry(path.to_string())
+            .or_insert_with(editor_model::LogicSessionState::default)
     }
 }
