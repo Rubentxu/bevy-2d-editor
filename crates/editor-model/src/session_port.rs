@@ -53,6 +53,24 @@ pub trait EditorSessionPort {
     /// Recent change-set summaries per scene path (capped at 50 per scene).
     fn recent_change_sets_for(&self, scene_path: &str) -> Vec<crate::session::ChangeSetSummary>;
 
+    /// All recent change-set summaries across all scene paths (v0.91 PR1).
+    /// Returns a flattened Vec of the entries from every scene's buffer,
+    /// most recent first within each buffer. Used by the `get_change_set_summaries`
+    /// WASM export to power the ApplyBackPanel's "Recent History" view.
+    fn all_recent_change_sets(&self) -> Vec<crate::session::ChangeSetSummary>;
+
+    /// Push a `ChangeSetSummary` to the per-scene buffer (v0.91 PR1).
+    ///
+    /// Called by the `poll_recent_change_sets` Bevy system in editor-core after
+    /// each successful `TransactionKernel::apply_atomic` (or directly from tests).
+    /// The buffer is capped at 50 entries per scene path; the oldest entry is
+    /// evicted on overflow.
+    fn push_recent_change_set(
+        &mut self,
+        scene_path: &str,
+        summary: crate::session::ChangeSetSummary,
+    );
+
     /// Logic activation ring (capped at 64).
     fn logic_activation_ring_mut(
         &mut self,

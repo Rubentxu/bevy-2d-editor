@@ -236,15 +236,16 @@ pub fn reject_change_set(change_id: &str) -> Result<(), JsValue> {
 /// historical summaries. The export exists here so the WASM-bound name is
 /// stable while the legacy `OPERATION_LOG` query in editor-core is phased out.
 ///
-/// v0.90 PR6: kept as a stop-gap returning an empty array. The wiring to
-/// `EditorSession.recent_change_sets` (populated by the
-/// `OperationLog::recent_change_sets_for` poll loop) is deferred to v0.91
-/// per the v0.90 cycle amendment. The trait seam
-/// (`EditorSessionPort::recent_change_sets_for`) is in place and tested
-/// (see `crates/editor-core/tests/state_unified.rs`).
+/// v0.91 PR1: reads from `EditorSession` via the
+/// `EditorSessionPort::all_recent_change_sets` trait method. The buffer
+/// is populated by `EditorSession::push_recent_change_set` (called by the
+/// `poll_recent_change_sets` Bevy system in editor-core, added separately
+/// in v0.91). Returns an empty array if the session is not initialized or
+/// no ChangeSets have been recorded yet.
 #[wasm_bindgen]
 pub fn get_change_set_summaries() -> Result<JsValue, JsValue> {
-    let summaries: Vec<PendingChangeSetSummary> = Vec::new();
+    let summaries: Vec<editor_model::ChangeSetSummary> =
+        editor_model::ports::with_session(|sess| sess.all_recent_change_sets()).unwrap_or_default();
     serde_wasm_bindgen::to_value(&summaries)
         .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
 }

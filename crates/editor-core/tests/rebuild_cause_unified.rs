@@ -22,9 +22,9 @@ struct FakeSession {
     logic_states: BTreeMap<String, editor_model::LogicSessionState>,
     preview_inspector: editor_model::PreviewInspectorState,
     source_files: editor_model::SourceFilesCache,
-    recent_change_sets: BTreeMap<String, Vec<editor_model::ChangeSetSummary>>,
     logic_activation_ring:
         std::collections::VecDeque<editor_model::logic_activation::LogicActivationEvent>,
+    recent_change_sets: BTreeMap<String, Vec<editor_model::ChangeSetSummary>>,
 }
 
 impl EditorSessionPort for FakeSession {
@@ -74,6 +74,22 @@ impl EditorSessionPort for FakeSession {
     ) -> &mut std::collections::VecDeque<editor_model::logic_activation::LogicActivationEvent> {
         &mut self.logic_activation_ring
     }
+    fn all_recent_change_sets(&self) -> Vec<editor_model::ChangeSetSummary> {
+        self.recent_change_sets
+            .values()
+            .flat_map(|v| v.iter().cloned())
+            .collect()
+    }
+    fn push_recent_change_set(
+        &mut self,
+        scene_path: &str,
+        summary: editor_model::ChangeSetSummary,
+    ) {
+        self.recent_change_sets
+            .entry(scene_path.to_string())
+            .or_insert_with(Vec::new)
+            .push(summary);
+    }
 }
 
 fn fresh_session() {
@@ -87,8 +103,8 @@ fn fresh_session() {
         logic_states: BTreeMap::new(),
         preview_inspector: editor_model::PreviewInspectorState::default(),
         source_files: editor_model::SourceFilesCache::default(),
-        recent_change_sets: BTreeMap::new(),
         logic_activation_ring: std::collections::VecDeque::with_capacity(64),
+        recent_change_sets: BTreeMap::new(),
     };
     let arc: Arc<Mutex<dyn EditorSessionPort>> = Arc::new(Mutex::new(session));
     editor_model::ports::register_editor_session(arc);

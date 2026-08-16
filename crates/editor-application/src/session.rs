@@ -451,6 +451,29 @@ impl EditorSession {
         ring_push(&mut self.logic_activation_ring, event);
     }
 
+    /// Push a `ChangeSetSummary` to the per-scene buffer (v0.91 PR1).
+    ///
+    /// Called by the `poll_recent_change_sets` Bevy system in editor-core
+    /// after each successful `TransactionKernel::apply_atomic` (or directly
+    /// from tests). The buffer is capped at 50 entries per scene path; the
+    /// oldest entry is evicted on overflow.
+    pub fn push_recent_change_set(&mut self, scene_path: &str, summary: ChangeSetSummary) {
+        self.recent_change_sets
+            .entry(scene_path.to_string())
+            .or_insert_with(|| RecentChangeSetsBuffer::new(50))
+            .push(summary);
+    }
+
+    /// Returns all `ChangeSetSummary` entries for the given scene path
+    /// (most recent first). Empty Vec if no entries (or session not initialized).
+    pub fn all_recent_change_sets(&self) -> Vec<editor_model::ChangeSetSummary> {
+        let mut all = Vec::new();
+        for buf in self.recent_change_sets.values() {
+            all.extend(buf.entries());
+        }
+        all
+    }
+
     /// Returns the last rebuild cause recorded by §6.
     pub fn last_rebuild_cause(&self) -> Option<&RebuildCause> {
         self.preview_inspector.last_rebuild_cause.as_ref()
@@ -813,11 +836,30 @@ impl EditorSessionPort for EditorSession {
         // PR5: read from the in-session map. The OperationLog poll
         // (which was the v0.89 read path) is deferred to v0.91 — the
         // RecentChangeSetsBuffer is populated externally via
-        // `EditorSession::push_recent_change_set` (added separately).
+        // `EditorSession::push_recent_change_set` (added in v0.91 PR1).
         self.recent_change_sets
             .get(scene_path)
             .map(|b| b.entries().to_vec())
             .unwrap_or_default()
+    }
+
+    fn all_recent_change_sets(&self) -> Vec<editor_model::ChangeSetSummary> {
+        let mut all = Vec::new();
+        for buf in self.recent_change_sets.values() {
+            all.extend(buf.entries());
+        }
+        all
+    }
+
+    fn push_recent_change_set(
+        &mut self,
+        scene_path: &str,
+        summary: editor_model::ChangeSetSummary,
+    ) {
+        self.recent_change_sets
+            .entry(scene_path.to_string())
+            .or_insert_with(|| RecentChangeSetsBuffer::new(50))
+            .push(summary);
     }
 
     fn logic_activation_ring_mut(

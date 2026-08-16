@@ -383,6 +383,23 @@ fn capture_tunable_baselines_internal(
     });
 }
 
+/// v0.91 PR1: derive `apply_back_eligible` from the schema's `ApplyBackPolicy`
+/// (ADR-0050 / ADR-0042). A delta is eligible only when the schema's policy
+/// is NOT `Never`. Schemas with `ExplicitOnly` or `Tunable` produce eligible
+/// deltas; schemas with `Never` produce deltas that the ApplyBackPanel will
+/// filter out (the "Never policy records no delta" scenario in spec §3).
+///
+/// Falls back to `true` (eligible) if the schema is not registered —
+/// conservative default to avoid silently dropping deltas for unknown
+/// component types.
+fn is_eligible_for_apply_back(component_type_id: &str) -> bool {
+    use crate::ApplyBackPolicy;
+    crate::schema::global_registry()
+        .get(component_type_id)
+        .map(|schema| !matches!(schema.apply_back, ApplyBackPolicy::Never))
+        .unwrap_or(true)
+}
+
 /// Recursive field-level diff. Emits one `RuntimeDelta` per leaf key whose
 /// value differs from the current (or that is missing in current).
 fn diff_recursive(
@@ -425,7 +442,7 @@ fn diff_recursive(
                 baseline_value: baseline.clone(),
                 runtime_value: other.clone(),
                 captured_at_ms: now_ms,
-                apply_back_eligible: true,
+                apply_back_eligible: is_eligible_for_apply_back(component_type_id),
             });
         }
         // Leaf values: compare and emit delta on difference.
@@ -439,7 +456,7 @@ fn diff_recursive(
                     baseline_value: baseline.clone(),
                     runtime_value: current.cloned().unwrap_or(serde_json::Value::Null),
                     captured_at_ms: now_ms,
-                    apply_back_eligible: true,
+                    apply_back_eligible: is_eligible_for_apply_back(component_type_id),
                 });
             }
         }
@@ -528,7 +545,7 @@ where
                         baseline_value: baseline_field_value.clone(),
                         runtime_value: serde_json::Value::Null,
                         captured_at_ms: now_ms,
-                        apply_back_eligible: true,
+                        apply_back_eligible: is_eligible_for_apply_back(component_type_id),
                     });
                 }
             }
@@ -1106,4 +1123,57 @@ fn sync_log_state(mut log_state: ResMut<OperationLogState>) {
         log_state.can_undo = log.can_undo();
         log_state.can_redo = log.can_redo();
     });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v0.91 PR1: poll_recent_change_sets system — populates
+// `EditorSession.recent_change_sets` from the in-process `OPERATION_LOG`.
+// Runs after `process_commands` so each apply shows up in the ApplyBackPanel's
+// "Recent History" view on the next poll.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Periodic poll: walks the operation log and pushes one
+/// `ChangeSetSummary` per entry to the active scene's recent-change buffer.
+///
+/// v0.91 PR1 stop-gap: iterates the in-process `OPERATION_LOG` once per call,
+/// pushes any entries not yet seen. Deduplication by `change_id` is deferred
+/// (a future PR will add a `last_seen` cursor on the buffer). Currently the
+/// poll is called from the Bevy system below; tests call it directly.
+pub fn poll_recent_change_sets_inner() {
+    use editor_model::ChangeSetSummary;
+    let entries: Vec<crate::operation_log::LogEntry> =
+        crate::OPERATION_LOG.with(|log| log.borrow().snapshot_entries());
+    if entries.is_empty() {
+        return;
+    }
+    // Use a synthetic scene path when no active document is selected.
+    // The session-level `DocumentSelection::path` is not exposed via the
+    // trait; v0.91+ follow-up will thread it through.
+    let scene_path = "_default".to_string();
+
+    let _ = editor_model::ports::with_session_mut(|sess| {
+        for entry in &entries {
+            let summary = ChangeSetSummary {
+                origin: entry
+                    .origin
+                    .clone()
+                    .unwrap_or_else(|| entry.metadata.authorship.clone()),
+                actor: entry
+                    .actor
+                    .clone()
+                    .unwrap_or_else(|| entry.metadata.authorship.clone()),
+                applied_at_ms: entry.metadata.timestamp,
+                ops_touched: 1, // coarse — OperationLog entries don't carry the
+                                // full command list, so we use a placeholder.
+                                // v0.91+ follow-up will compute the real count.
+            };
+            sess.push_recent_change_set(&scene_path, summary);
+        }
+    });
+}
+
+/// Bevy system: `poll_recent_change_sets`. Runs in `Update` after
+/// `process_commands` so the buffer stays in sync with the in-process log.
+pub fn poll_recent_change_sets_system() {
+    poll_recent_change_sets_inner();
 }

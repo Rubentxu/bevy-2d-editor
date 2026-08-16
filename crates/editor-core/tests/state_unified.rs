@@ -15,6 +15,7 @@ struct FakeSession {
     scene_states: BTreeMap<String, SceneSessionState>,
     asset_states: BTreeMap<String, AssetSessionState>,
     logic_states: BTreeMap<String, LogicSessionState>,
+    recent_change_sets: BTreeMap<String, Vec<editor_model::ChangeSetSummary>>,
 }
 
 impl EditorSessionPort for FakeSession {
@@ -22,6 +23,9 @@ impl EditorSessionPort for FakeSession {
         self.scene_states
             .entry(path.to_string())
             .or_insert_with(SceneSessionState::default)
+    }
+    fn recent_change_sets_for(&self, _scene_path: &str) -> Vec<editor_model::ChangeSetSummary> {
+        Vec::new()
     }
     fn asset_state_mut(&mut self, path: &str) -> &mut AssetSessionState {
         self.asset_states
@@ -55,13 +59,27 @@ impl EditorSessionPort for FakeSession {
     fn source_files_mut(&mut self) -> &mut editor_model::SourceFilesCache {
         unimplemented!()
     }
-    fn recent_change_sets_for(&self, _scene_path: &str) -> Vec<editor_model::ChangeSetSummary> {
-        Vec::new()
-    }
     fn logic_activation_ring_mut(
         &mut self,
     ) -> &mut std::collections::VecDeque<editor_model::logic_activation::LogicActivationEvent> {
         unimplemented!()
+    }
+
+    fn all_recent_change_sets(&self) -> Vec<editor_model::ChangeSetSummary> {
+        self.recent_change_sets
+            .values()
+            .flat_map(|v| v.iter().cloned())
+            .collect()
+    }
+    fn push_recent_change_set(
+        &mut self,
+        scene_path: &str,
+        summary: editor_model::ChangeSetSummary,
+    ) {
+        self.recent_change_sets
+            .entry(scene_path.to_string())
+            .or_insert_with(Vec::new)
+            .push(summary);
     }
 }
 
@@ -70,6 +88,7 @@ fn fresh_session() {
         scene_states: BTreeMap::new(),
         asset_states: BTreeMap::new(),
         logic_states: BTreeMap::new(),
+        recent_change_sets: BTreeMap::new(),
     };
     let arc: Arc<Mutex<dyn EditorSessionPort>> = Arc::new(Mutex::new(session));
     editor_model::ports::register_editor_session(arc);
