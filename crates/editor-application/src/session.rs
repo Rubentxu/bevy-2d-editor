@@ -12,9 +12,10 @@
 //!   + [`FakeClock`](editor_model::time::FakeClock).
 
 use editor_model::time::{Clock, Timestamp};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 
+use crate::RuntimeDelta;
 use crate::ports::project_store::ProjectStore;
 
 // ---------------------------------------------------------------------------
@@ -52,62 +53,10 @@ impl DocumentSelection {
 }
 
 // ---------------------------------------------------------------------------
+// HistoryScope — imported from editor_model::session (the model layer)
+// ---------------------------------------------------------------------------
 
-/// Minimal explicit per-document history scope.
-///
-/// In v1 this holds a revision counter and the metadata of the most recently
-/// applied change. The type exists so that history ownership is session-scoped
-/// from day one (ADR-0031 rule: "operation histories are scoped explicitly").
-///
-/// The revision and last-change metadata are updated by
-/// [`TransactionKernel::apply_atomic`](super::transaction::TransactionKernel::apply_atomic).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HistoryScope {
-    revision: u64,
-    /// Metadata about the most recently applied change, if any.
-    last_change: Option<super::transaction::AppliedChangeMeta>,
-}
-
-impl HistoryScope {
-    /// Construct a new history scope with revision 0 and no prior change.
-    pub fn new() -> Self {
-        Self {
-            revision: 0,
-            last_change: None,
-        }
-    }
-
-    /// Returns the current revision number.
-    pub fn revision(&self) -> u64 {
-        self.revision
-    }
-
-    /// Returns the next revision number and increments the stored value.
-    pub fn next_revision(&mut self) -> u64 {
-        let next = self.revision + 1;
-        self.revision = next;
-        next
-    }
-
-    /// Returns metadata about the most recently applied change, if any.
-    pub fn last_change(&self) -> Option<&super::transaction::AppliedChangeMeta> {
-        self.last_change.as_ref()
-    }
-
-    /// Record metadata about an applied change.
-    ///
-    /// Called by [`TransactionKernel::apply_atomic`](super::transaction::TransactionKernel::apply_atomic)
-    /// after a successful apply to record provenance.
-    pub fn record_applied(&mut self, meta: super::transaction::AppliedChangeMeta) {
-        self.last_change = Some(meta);
-    }
-}
-
-impl Default for HistoryScope {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+pub use editor_model::session::HistoryScope;
 
 // ---------------------------------------------------------------------------
 
@@ -144,6 +93,134 @@ impl CacheEntry {
     /// Bump the generation to the next number, signalling cache invalidation.
     pub fn invalidate(&mut self) {
         self.generation += 1;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Sub-state types (ADR-0031 — PR2a consolidation)
+// ---------------------------------------------------------------------------
+//
+// NOTE: These types hold plain data (serde_json::Value) for domain objects
+// because EditorSession lives in editor-application and editor-core domain types
+// (SceneDocument, OperationLog, etc.) cannot be directly stored here due to
+// the editor-application ↔ editor-core dependency boundary.
+//
+// The actual domain object migration will be completed in follow-up PRs once
+// the EditorSession kernel API is established.
+//
+// RecentChangeSetsBuffer uses ChangeSetSummary from editor_application::transaction.
+
+use crate::transaction::ChangeSetSummary;
+use serde_json::Value;
+
+/// Session state for one active scene document.
+///
+/// In PR2a this holds serialised forms. The real `SceneDocument` and
+/// `OperationLog` live in `editor_core` and are accessed via the kernel API.
+#[derive(Debug, Clone, Default)]
+pub struct SceneSessionState {
+    /// Serialised scene document (None when not loaded).
+    pub document: Option<Value>,
+    /// Serialised operation log (None when not loaded).
+    pub log: Option<Value>,
+}
+
+/// Session state for the scene asset subsystem (PR2a placeholder).
+#[derive(Debug, Clone, Default)]
+pub struct AssetSessionState {
+    /// Catalog state for scene assets.
+    pub catalog: Option<Value>,
+    /// Active asset document being edited.
+    pub active_document: Option<Value>,
+    /// Cached asset bodies.
+    pub body_cache: Option<Value>,
+    /// Resync reports indexed by stable ID.
+    pub resync_reports: Vec<(String, Value)>,
+    /// Validation issues for this asset scope.
+    pub validation_issues: Vec<Value>,
+}
+
+/// Session state for the logic graph subsystem (PR2a placeholder).
+#[derive(Debug, Clone, Default)]
+pub struct LogicSessionState {
+    /// Active logic graph being edited.
+    pub active_graph: Option<Value>,
+    /// Logic graph catalog.
+    pub catalog: Option<Value>,
+}
+
+/// Session state for the runtime preview inspector (PR2a).
+#[derive(Debug, Clone, Default)]
+pub struct PreviewInspectorState {
+    /// Live runtime metrics (FPS, frame time, rebuild count).
+    pub metrics: Value,
+    /// Per-instance runtime-to-editor ID mapping.
+    pub mapping: Vec<Value>,
+    /// Per-StableId provenance records from play mode.
+    pub provenance: BTreeMap<String, Value>,
+}
+
+/// In-memory cache for source file contents.
+#[derive(Debug, Clone, Default)]
+pub struct SourceFilesCache {
+    /// File path → file content.
+    pub files: BTreeMap<String, String>,
+}
+
+/// Recent change-set summary buffer (capped at 50 entries per scene path).
+///
+/// Populated by polling `OperationLog::recent_change_sets_for` per scene path.
+/// The UI uses this for the Change Workbench history view.
+#[derive(Debug, Clone)]
+pub struct RecentChangeSetsBuffer {
+    entries: VecDeque<ChangeSetSummary>,
+    capacity: usize,
+}
+
+impl RecentChangeSetsBuffer {
+    /// Construct a new buffer with the given capacity.
+    pub fn new(capacity: usize) -> Self {
+        Self {
+            entries: VecDeque::new(),
+            capacity,
+        }
+    }
+
+    /// Push a new entry, evicting the oldest if over capacity.
+    pub fn push(&mut self, summary: ChangeSetSummary) {
+        if self.entries.len() >= self.capacity {
+            self.entries.pop_front();
+        }
+        self.entries.push_back(summary);
+    }
+
+    /// Drain entries and replace with a new set of summaries (used for rebuild).
+    pub fn refresh(&mut self, summaries: Vec<ChangeSetSummary>) {
+        self.entries.clear();
+        for summary in summaries {
+            self.push(summary);
+        }
+    }
+
+    /// Returns a copy of all entries (most recent first).
+    pub fn entries(&self) -> Vec<ChangeSetSummary> {
+        self.entries.iter().cloned().collect()
+    }
+
+    /// Number of entries currently stored.
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Whether the buffer is empty.
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+}
+
+impl Default for RecentChangeSetsBuffer {
+    fn default() -> Self {
+        Self::new(50)
     }
 }
 
@@ -191,6 +268,21 @@ pub struct EditorSession {
     /// Named caches with owner tracking (ADR-0031 rule: "caches have named
     /// owners and invalidation methods").
     caches: BTreeMap<String, CacheEntry>,
+    // ─── Sub-state maps (PR2a — ADR-0031 consolidation) ───────────────────────
+    /// Per-scene session state: document + operation log (SCENE_DOC + OPERATION_LOG).
+    scene_states: BTreeMap<String, SceneSessionState>,
+    /// Per-asset-path session state (SCENE_ASSET_CATALOG etc.).
+    asset_states: BTreeMap<String, AssetSessionState>,
+    /// Per-logic-graph-path session state (LOGIC_GRAPH_DOC etc.).
+    logic_states: BTreeMap<String, LogicSessionState>,
+    /// Runtime preview inspector state (PREVIEW_METRICS etc.).
+    preview_inspector: PreviewInspectorState,
+    /// Source file contents cache (SOURCE_FILE_REGISTRY).
+    source_files: SourceFilesCache,
+    /// Recent change-set summaries per scene path (capped at 50 per scene).
+    recent_change_sets: BTreeMap<String, RecentChangeSetsBuffer>,
+    /// Runtime delta buffer for play-mode apply-back (capped at 64).
+    runtime_delta_buffer: VecDeque<RuntimeDelta>,
 }
 
 impl std::fmt::Debug for EditorSession {
@@ -200,6 +292,13 @@ impl std::fmt::Debug for EditorSession {
             .field("active_document", &self.active_document)
             .field("history_scopes", &self.history_scopes)
             .field("caches", &self.caches)
+            .field("scene_states", &self.scene_states)
+            .field("asset_states", &self.asset_states)
+            .field("logic_states", &self.logic_states)
+            .field("preview_inspector", &self.preview_inspector)
+            .field("source_files", &self.source_files)
+            .field("recent_change_sets", &self.recent_change_sets)
+            .field("runtime_delta_buffer_len", &self.runtime_delta_buffer.len())
             .finish()
     }
 }
@@ -215,7 +314,88 @@ impl EditorSession {
             active_document: None,
             history_scopes: BTreeMap::new(),
             caches: BTreeMap::new(),
+            // Sub-state maps (PR2a — initialized empty; populated on first access)
+            scene_states: BTreeMap::new(),
+            asset_states: BTreeMap::new(),
+            logic_states: BTreeMap::new(),
+            preview_inspector: PreviewInspectorState::default(),
+            source_files: SourceFilesCache::default(),
+            recent_change_sets: BTreeMap::new(),
+            runtime_delta_buffer: VecDeque::with_capacity(64),
         }
+    }
+
+    // ─── Sub-state accessors (PR2a) ──────────────────────────────────────────
+
+    /// Returns a mutable reference to the scene session state for the given path,
+    /// creating it if absent (idempotent).
+    ///
+    /// This is the primary entry point for migrating `scene_session.rs` to use
+    /// `EditorSession` as the owning store instead of `thread_local!`.
+    pub fn scene_state_mut(&mut self, path: &str) -> &mut SceneSessionState {
+        self.scene_states
+            .entry(path.to_string())
+            .or_insert_with(SceneSessionState::default)
+    }
+
+    /// Returns a mutable reference to the asset session state for the given path,
+    /// creating it if absent.
+    pub fn asset_state_mut(&mut self, path: &str) -> &mut AssetSessionState {
+        self.asset_states
+            .entry(path.to_string())
+            .or_insert_with(AssetSessionState::default)
+    }
+
+    /// Returns a mutable reference to the logic session state for the given path,
+    /// creating it if absent.
+    pub fn logic_state_mut(&mut self, path: &str) -> &mut LogicSessionState {
+        self.logic_states
+            .entry(path.to_string())
+            .or_insert_with(LogicSessionState::default)
+    }
+
+    /// Returns the recent change-set summaries for the given scene path.
+    ///
+    /// Returns an empty buffer if no entries have been recorded for this path.
+    pub fn recent_change_sets_for(&self, scene_path: &str) -> Vec<ChangeSetSummary> {
+        self.recent_change_sets
+            .get(scene_path)
+            .map(|b| b.entries())
+            .unwrap_or_default()
+    }
+
+    /// Returns a reference to the runtime delta buffer.
+    pub fn runtime_delta_buffer(&self) -> &VecDeque<RuntimeDelta> {
+        &self.runtime_delta_buffer
+    }
+
+    /// Returns a mutable reference to the runtime delta buffer.
+    pub fn runtime_delta_buffer_mut(&mut self) -> &mut VecDeque<RuntimeDelta> {
+        // Enforce 64-entry cap
+        while self.runtime_delta_buffer.len() > 64 {
+            self.runtime_delta_buffer.pop_front();
+        }
+        &mut self.runtime_delta_buffer
+    }
+
+    /// Returns a reference to the source files cache.
+    pub fn source_files(&self) -> &SourceFilesCache {
+        &self.source_files
+    }
+
+    /// Returns a mutable reference to the source files cache.
+    pub fn source_files_mut(&mut self) -> &mut SourceFilesCache {
+        &mut self.source_files
+    }
+
+    /// Returns a reference to the preview inspector state.
+    pub fn preview_inspector(&self) -> &PreviewInspectorState {
+        &self.preview_inspector
+    }
+
+    /// Returns a mutable reference to the preview inspector state.
+    pub fn preview_inspector_mut(&mut self) -> &mut PreviewInspectorState {
+        &mut self.preview_inspector
     }
 
     /// Returns a reference to the project store.

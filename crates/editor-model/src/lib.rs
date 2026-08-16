@@ -10,12 +10,15 @@ pub mod component;
 pub mod document;
 pub mod ids;
 pub mod logic_graph;
+pub mod ports;
 pub mod scene_asset;
 pub mod scene_instance;
 pub mod schema;
+pub mod session;
 pub mod tile_layer;
 pub mod tileset;
 pub mod time;
+pub mod transaction;
 
 // Re-export all public types at the root for ergonomic use.
 pub use auto_layer::{
@@ -29,6 +32,7 @@ pub use logic_graph::{
     PortId, count_logic_bindings, editor_logic_binding_component, find_dangling_edge_nodes,
     find_duplicate_node_id,
 };
+pub use ports::{ProjectStore, StoreEntry, StoreError};
 pub use scene_asset::{
     AssetReference, ExposedProperty, LevelLayer, RelationshipKind, RoleWarning, SceneAssetDocument,
     SceneAssetEntity, SceneAssetRelationship, SceneAssetRole, SceneInstanceLayer,
@@ -41,9 +45,15 @@ pub use scene_instance::{
 pub use schema::{
     ComponentSchema, ComponentTypeId, Constraint, FieldDef, FieldType, SchemaKind, SourceLocation,
 };
+pub use session::{AppliedChangeMeta, HistoryScope};
 pub use tile_layer::TileLayer;
 pub use tileset::{
     AsepriteFrame, AsepriteMetadata, AsepriteSlice, AsepriteTag, TileCoord, TileGrid, TileRef,
     TilesetAsset, TilesetId, TilesetManager, TilesetMetadata,
 };
 pub use time::{Clock, Timestamp};
+pub use transaction::{
+    Applier, ApprovalPolicy, ChangeOrigin, ChangeSet, DiffSummary, EffectsSummary, ResourceRef,
+    TransactionKernel, ValidationReport,
+};
+pub use transaction::{ApplyReceipt, KernelError};

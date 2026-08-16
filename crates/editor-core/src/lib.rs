@@ -535,8 +535,8 @@ pub fn dispatch_command(json: &str) -> Result<String, JsValue> {
 /// Kernel path: route a command envelope through SceneTransactionKernel.
 fn dispatch_command_via_kernel(envelope: CommandEnvelope) -> Result<String, JsValue> {
     use crate::transaction_bridge::scene_transaction_kernel;
-    use editor_application::session::HistoryScope;
-    use editor_application::transaction::{Applier, ChangeOrigin, ChangeSet};
+    use editor_model::session::HistoryScope;
+    use editor_model::transaction::{Applier, ChangeOrigin, ChangeSet};
 
     // Determine ChangeOrigin from authorship metadata.
     let origin = match envelope.metadata.authorship.as_str() {
@@ -549,7 +549,7 @@ fn dispatch_command_via_kernel(envelope: CommandEnvelope) -> Result<String, JsVa
     // Wrap single command in a ChangeSet.
     let mut cs = ChangeSet::new(
         format!("cmd-{}", envelope.metadata.timestamp),
-        origin,
+        origin.clone(),
         envelope.metadata.authorship.clone(),
         envelope.metadata.rationale.clone().unwrap_or_default(),
     );
@@ -586,8 +586,14 @@ fn dispatch_command_via_kernel(envelope: CommandEnvelope) -> Result<String, JsVa
                 });
 
         // Record in OperationLog for undo/redo (byte-equality with legacy path).
+        // Use record_with_provenance to pass origin and actor from the ChangeSet.
         OPERATION_LOG.with(|l| {
-            l.borrow_mut().record(&envelope, inverse.clone());
+            l.borrow_mut().record_with_provenance(
+                &envelope,
+                inverse.clone(),
+                format!("{:?}", origin),
+                envelope.metadata.authorship.clone(),
+            );
         });
 
         // Return the inverse and post-apply snapshot.
@@ -1087,68 +1093,43 @@ pub fn get_event_bus_len() -> u32 {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// OPFS Persistence — editor-application OpfsProjectStore delegation
-// ADR-0031: ONE sanctioned ambient store in the WASM composition root (transition).
-// All 7 wrappers delegate to PROJECT_STORE thread_local; the actual JS interop
-// lives in crates/editor-application/src/adapters/opfs.rs (wasm module).
+// OPFS Persistence — dynamic ProjectStore via editor_model registry (ADR-0031).
+//
+// ## Architecture
+//
+// `PROJECT_STORE` lives in `editor_model::ports` (shared by both crates).
+// `editor_application::wasm::init_project_store()` creates OpfsProjectStore,
+// hydrates it, and calls `editor_model::ports::register_project_store()`.
+// `editor_core`'s js_* wrappers call `editor_model::ports::with_project_store()`.
+//
+// This breaks the `editor_core → editor_application` compile-time dependency
+// for OPFS, while keeping the WASM composition root pattern intact.
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[cfg(target_arch = "wasm32")]
-use editor_application::{OpfsProjectStore, ProjectStore};
+use editor_model::ports::{ProjectStore, with_project_store};
+#[cfg(target_arch = "wasm32")]
+use std::future::Future;
 #[cfg(target_arch = "wasm32")]
 use std::sync::Arc;
 
-/// WASM composition root: the OPFS-backed project store.
+/// Initialize the project store — MUST be called before any editor operations.
 ///
-/// ## Initialization
-///
-/// Must be initialized once at WASM startup via [`init_project_store()`].
-/// All 7 `js_*` wrappers below delegate to this store.
-#[cfg(target_arch = "wasm32")]
-thread_local! {
-    static PROJECT_STORE: std::cell::RefCell<Option<Arc<OpfsProjectStore>>> =
-        const { std::cell::RefCell::new(None) };
-}
-
-/// Initialize the project store (call once at WASM startup).
-///
-/// Uses the JS bridge (`window.opfs_*`) and `js_sys::Date` for timestamps.
-/// Calls `hydrate()` to eagerly load all OPFS files into the mirror.
-///
-/// This function is exported as `#[wasm_bindgen]` so the TS startup code can
-/// invoke it after the WASM module is loaded (before any editor operations).
+/// The concrete `OpfsProjectStore` is constructed and registered by
+/// `editor_application::wasm::init_project_store()`. This stub is kept for
+/// ABI compatibility but always errors, directing callers to the correct path.
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn init_project_store() -> Result<(), JsValue> {
-    let store = OpfsProjectStore::new();
-    store.hydrate().await.map_err(|e| JsValue::from_str(&*e))?;
-    PROJECT_STORE.with(|cell| {
-        *cell.borrow_mut() = Some(Arc::new(store));
-    });
-    Ok(())
-}
-
-/// Returns an error string if the project store is not yet initialized.
-#[cfg(target_arch = "wasm32")]
-fn project_store_error() -> String {
-    "project store not initialized — call init_project_store() at startup".to_string()
-}
-
-/// Get a clone of the project store Arc, or return the error.
-#[cfg(target_arch = "wasm32")]
-fn with_project_store<T>(f: impl FnOnce(&Arc<OpfsProjectStore>) -> T) -> Result<T, String> {
-    PROJECT_STORE
-        .try_with(|cell| match cell.borrow().as_ref() {
-            Some(store) => Ok(f(store)),
-            None => Err(project_store_error()),
-        })
-        .map_err(|_| project_store_error())?
+    Err(JsValue::from_str(
+        "use editor_application::wasm::init_project_store() — not this function",
+    ))
 }
 
 /// Save a text file to OPFS and flush (durability-preserving).
 #[cfg(target_arch = "wasm32")]
 pub(crate) async fn js_save_file(path: &str, contents: &str) -> Result<(), String> {
-    let store = with_project_store(|s| Arc::clone(s))?;
+    let store = with_project_store().ok_or_else(|| "project store not initialized")?;
     store
         .write(path, contents.as_bytes(), false)
         .map_err(|e| e.to_string())?;
@@ -1158,30 +1139,35 @@ pub(crate) async fn js_save_file(path: &str, contents: &str) -> Result<(), Strin
 /// Load a text file from OPFS (mirror read).
 #[cfg(target_arch = "wasm32")]
 pub(crate) async fn js_load_file(path: &str) -> Result<String, String> {
-    let bytes = with_project_store(|s| s.read(path).map_err(|e| e.to_string()))??;
+    let bytes = with_project_store()
+        .ok_or_else(|| "project store not initialized")?
+        .read(path)
+        .map_err(|e| e.to_string())?;
     String::from_utf8(bytes).map_err(|e| format!("Not UTF-8: {}", e))
 }
 
 /// Check if a file exists in OPFS (mirror read).
 #[cfg(target_arch = "wasm32")]
 pub(crate) async fn js_exists(path: &str) -> bool {
-    with_project_store(|s| s.exists(path).unwrap_or(false)).unwrap_or(false)
+    with_project_store()
+        .map(|s| s.exists(path).unwrap_or(false))
+        .unwrap_or(false)
 }
 
 /// List files under a prefix in OPFS (mirror read).
 #[cfg(target_arch = "wasm32")]
 pub(crate) async fn js_list_files(path: &str) -> Result<Vec<String>, String> {
-    with_project_store(|s| {
-        s.list(path)
-            .map(|entries| entries.into_iter().map(|e| e.path).collect())
-            .map_err(|e| e.to_string())
-    })?
+    with_project_store()
+        .ok_or_else(|| "project store not initialized")?
+        .list(path)
+        .map(|entries| entries.into_iter().map(|e| e.path).collect())
+        .map_err(|e| e.to_string())
 }
 
 /// Delete a file from OPFS and flush (durability-preserving).
 #[cfg(target_arch = "wasm32")]
 pub(crate) async fn js_delete_file(path: &str) -> Result<(), String> {
-    let store = with_project_store(|s| Arc::clone(s))?;
+    let store = with_project_store().ok_or_else(|| "project store not initialized")?;
     store.delete(path).map_err(|e| e.to_string())?;
     store.flush().await.map_err(|e| e.to_string())
 }
@@ -1189,7 +1175,7 @@ pub(crate) async fn js_delete_file(path: &str) -> Result<(), String> {
 /// Save binary bytes to OPFS and flush (durability-preserving).
 #[cfg(target_arch = "wasm32")]
 pub(crate) async fn js_save_binary(path: &str, contents: &[u8]) -> Result<(), String> {
-    let store = with_project_store(|s| Arc::clone(s))?;
+    let store = with_project_store().ok_or_else(|| "project store not initialized")?;
     store
         .write(path, contents, false)
         .map_err(|e| e.to_string())?;
@@ -1199,7 +1185,10 @@ pub(crate) async fn js_save_binary(path: &str, contents: &[u8]) -> Result<(), St
 /// Load binary bytes from OPFS (mirror read).
 #[cfg(target_arch = "wasm32")]
 pub(crate) async fn js_load_binary(path: &str) -> Result<Vec<u8>, String> {
-    with_project_store(|s| s.read(path).map_err(|e| e.to_string()))?
+    with_project_store()
+        .ok_or_else(|| "project store not initialized")?
+        .read(path)
+        .map_err(|e| e.to_string())
 }
 
 /// List all scene names from `project.json`.
@@ -2284,8 +2273,8 @@ pub fn dispatch_asset_command(cmd_json: &str) -> Result<String, JsValue> {
 /// Kernel path: route an asset command through AssetTransactionKernel.
 fn dispatch_asset_command_via_kernel(cmd: AssetCommand) -> Result<String, JsValue> {
     use crate::transaction_bridge::asset_transaction_kernel;
-    use editor_application::session::HistoryScope;
-    use editor_application::transaction::{ChangeOrigin, ChangeSet};
+    use editor_model::session::HistoryScope;
+    use editor_model::transaction::{ChangeOrigin, ChangeSet};
 
     let timestamp = crate::time::now_nanos();
 
@@ -2427,8 +2416,8 @@ pub fn dispatch_logic_command(cmd_json: &str) -> Result<String, JsValue> {
 /// Kernel path: route a logic command through LogicTransactionKernel.
 fn dispatch_logic_command_via_kernel(cmd: LogicCommand) -> Result<String, JsValue> {
     use crate::transaction_bridge::logic_transaction_kernel;
-    use editor_application::session::HistoryScope;
-    use editor_application::transaction::{ChangeOrigin, ChangeSet};
+    use editor_model::session::HistoryScope;
+    use editor_model::transaction::{ChangeOrigin, ChangeSet};
 
     let timestamp = crate::time::now_nanos();
 
