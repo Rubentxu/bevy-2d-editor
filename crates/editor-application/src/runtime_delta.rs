@@ -1,22 +1,21 @@
-//! Runtime delta types for play-mode apply-back (ADR-0042, ADR-0036).
+//! Apply-back policy + scope types (ADR-0042, ADR-0050).
 //!
-//! `RuntimeDelta` captures the diff between the authoring baseline (captured at
-//! `PlayModeEnter`) and the runtime value observed at `PlayModeExit`. Each delta
-//! is stored in `EditorSession.runtime_delta_buffer` (ring capped at 64) and is
-//! consumed by the ApplyBack workflow.
+//! `ApplyBackPolicy` and `ApplyBackScope` live canonically in `editor-application`
+//! (this file). `editor-core::ComponentSchema` carries a parallel pair of enums
+//! (defined in `crates/editor-core/src/schema.rs`) that is serde-compatible with
+//! these. The mirror is forced by the dep direction (`editor-application → editor-core`,
+//! not the reverse) — see ADR-0050 §"Why a Mirror Pair Instead of Single Source".
 //!
-//! Per ADR-0036, `RuntimeDelta` MUST NOT contain any Bevy Entity identifiers.
-//!
-//! `ApplyBackPolicy` and `ApplyBackScope` are defined in the application layer
-//! (here). `editor_core::ComponentSchema` carries a parallel
-//! `editor_core::ApplyBackPolicy` enum that is serde-compatible with this one
-//! (identical tag names, default = Never). The two enums live in different
-//! crates because `editor-application` cannot import from `editor-core` in
-//! non-wasm32 builds (per ADR-0031/0032 dependency rules). ADR-0050 documents
-//! this duplication and the convention that any new variant must be added to
-//! BOTH enums in the same change.
+//! `RuntimeDelta` was moved to `editor-model` in v0.90 PR1 so that Bevy systems
+//! in `editor-core` can write to `EditorSession.runtime_delta_buffer` through the
+//! `EditorSessionPort` trait without importing `editor-application`.
 
 use serde::{Deserialize, Serialize};
+
+// Re-export RuntimeDelta so existing editor-application code can keep using
+// `crate::RuntimeDelta` (and downstream code in editor-core can use
+// `editor_model::RuntimeDelta`).
+pub use editor_model::RuntimeDelta;
 
 /// Policy governing whether and how a component's runtime values may be
 /// applied back to the authoring state (ADR-0042, ADR-0050).
@@ -51,30 +50,4 @@ pub enum ApplyBackPolicy {
 pub enum ApplyBackScope {
     /// Apply back only to the same scene instance that produced the delta.
     ThisInstance,
-}
-
-/// A single field-level delta recorded during play mode.
-///
-/// Captured when a `Tunable` field's runtime value differs from its authoring
-/// baseline. The `apply_back` workflow presents this as a selectable delta.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct RuntimeDelta {
-    /// Stable ID of the scene instance carrying this field.
-    pub instance_id: String,
-    /// Local ID of the target entity within the instance.
-    pub target_local_id: String,
-    /// Component type identifier (e.g., `"editor.Transform2D"`).
-    pub component_type_id: String,
-    /// Dotted field path within the component (e.g., `"translation.x"`).
-    pub field_path: String,
-    /// JSON value of the field at authoring time (snapshot on `PlayModeEnter`).
-    pub baseline_value: serde_json::Value,
-    /// JSON value of the field at `PlayModeExit`.
-    pub runtime_value: serde_json::Value,
-    /// Unix milliseconds when this delta was captured.
-    pub captured_at_ms: u64,
-    /// Whether this field is eligible for apply-back.
-    ///
-    /// `false` when `apply_back` policy is `Never` for this component schema.
-    pub apply_back_eligible: bool,
 }

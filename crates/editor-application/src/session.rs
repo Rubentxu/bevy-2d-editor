@@ -19,8 +19,11 @@ use std::sync::Arc;
 
 use crate::RuntimeDelta;
 use crate::ports::project_store::ProjectStore;
+use editor_model::CausalityEdge;
+use editor_model::EditorSessionPort;
 use editor_model::PendingChangeSet;
 use editor_model::RebuildCause;
+use editor_model::StableId;
 use editor_model::logic_activation::{LogicActivationEvent, LogicActivationRing, ring_push};
 
 // ---------------------------------------------------------------------------
@@ -293,6 +296,11 @@ pub struct EditorSession {
     source_files: SourceFilesCache,
     /// Recent change-set summaries per scene path (capped at 50 per scene).
     recent_change_sets: BTreeMap<String, RecentChangeSetsBuffer>,
+    /// Pending causality edges collected during a preview rebuild.
+    /// Keyed by target StableId; drained and applied to `PreviewProvenance`
+    /// at the end of each rebuild (v0.90 PR2 consolidates this from
+    /// `editor-core::preview_inspector::PENDING_CAUSALITY_EDGES`).
+    pending_causality_edges: BTreeMap<StableId, Vec<CausalityEdge>>,
     /// Runtime delta buffer for play-mode apply-back (capped at 64).
     runtime_delta_buffer: VecDeque<RuntimeDelta>,
     /// Baseline values for Tunable fields, captured on PlayModeEnter.
@@ -348,6 +356,7 @@ impl EditorSession {
             preview_inspector: PreviewInspectorState::default(),
             source_files: SourceFilesCache::default(),
             recent_change_sets: BTreeMap::new(),
+            pending_causality_edges: BTreeMap::new(),
             runtime_delta_buffer: VecDeque::with_capacity(64),
             tunable_baselines: BTreeMap::new(),
             pending_change_sets: BTreeMap::new(),
@@ -756,5 +765,37 @@ mod tests {
             .read("roundtrip/test.txt")
             .expect("read should succeed");
         assert_eq!(bytes, b"hello world");
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EditorSessionPort impl (v0.90 PR1)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// editor-core (Bevy systems) accesses the session through this trait via
+// `editor_model::ports::with_session_mut(|s| { ... })`. The trait is in
+// editor-model so editor-core can import it without depending on
+// editor-application. The dyn-trait object also lets the global registry
+// hold a type-erased session.
+
+impl EditorSessionPort for EditorSession {
+    fn tunable_baselines_mut(&mut self) -> &mut BTreeMap<String, serde_json::Value> {
+        &mut self.tunable_baselines
+    }
+
+    fn last_rebuild_cause_mut(&mut self) -> &mut Option<RebuildCause> {
+        &mut self.preview_inspector.last_rebuild_cause
+    }
+
+    fn pending_causality_edges_mut(&mut self) -> &mut BTreeMap<StableId, Vec<CausalityEdge>> {
+        &mut self.pending_causality_edges
+    }
+
+    fn runtime_delta_buffer_mut(&mut self) -> &mut VecDeque<RuntimeDelta> {
+        // Enforce 64-entry cap on every access.
+        while self.runtime_delta_buffer.len() > 64 {
+            self.runtime_delta_buffer.pop_front();
+        }
+        &mut self.runtime_delta_buffer
     }
 }

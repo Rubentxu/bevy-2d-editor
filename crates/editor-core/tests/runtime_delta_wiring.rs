@@ -1,0 +1,204 @@
+//! v0.90 PR1 (MUST) — RuntimeDelta wiring regression test (spec §3).
+//!
+//! This test lives in `editor-core` because `compute_runtime_deltas_internal`
+//! is defined in `editor_core::preview_runtime` and `editor-application` does
+//! not have a non-wasm32 dependency on `editor-core` (per ADR-0031/0032
+//! dep direction). The test uses an inline fake `EditorSessionPort` impl to
+//! avoid the cross-crate cycle.
+
+use editor_model::EditorSessionPort;
+use editor_model::RuntimeDelta;
+use editor_model::StableId;
+use std::collections::{BTreeMap, VecDeque};
+use std::sync::{Arc, Mutex};
+
+/// Inline fake session impl used by the test harness.
+struct FakeSession {
+    tunable_baselines: BTreeMap<String, serde_json::Value>,
+    runtime_delta_buffer: VecDeque<RuntimeDelta>,
+    pending_causality_edges: BTreeMap<StableId, Vec<editor_model::CausalityEdge>>,
+    last_rebuild_cause: Option<editor_model::RebuildCause>,
+}
+
+impl EditorSessionPort for FakeSession {
+    fn tunable_baselines_mut(&mut self) -> &mut BTreeMap<String, serde_json::Value> {
+        &mut self.tunable_baselines
+    }
+    fn last_rebuild_cause_mut(&mut self) -> &mut Option<editor_model::RebuildCause> {
+        &mut self.last_rebuild_cause
+    }
+    fn pending_causality_edges_mut(
+        &mut self,
+    ) -> &mut BTreeMap<StableId, Vec<editor_model::CausalityEdge>> {
+        &mut self.pending_causality_edges
+    }
+    fn runtime_delta_buffer_mut(&mut self) -> &mut VecDeque<RuntimeDelta> {
+        // Enforce 64-entry cap on every access (matches EditorSession impl).
+        while self.runtime_delta_buffer.len() > 64 {
+            self.runtime_delta_buffer.pop_front();
+        }
+        &mut self.runtime_delta_buffer
+    }
+}
+
+fn fresh_session() {
+    let session = FakeSession {
+        tunable_baselines: BTreeMap::new(),
+        runtime_delta_buffer: VecDeque::with_capacity(64),
+        pending_causality_edges: BTreeMap::new(),
+        last_rebuild_cause: None,
+    };
+    let arc: Arc<Mutex<dyn EditorSessionPort>> = Arc::new(Mutex::new(session));
+    editor_model::ports::register_editor_session(arc);
+}
+
+#[test]
+fn register_session_via_trait_object() {
+    fresh_session();
+    let result = editor_model::ports::with_session_mut(|s| s.tunable_baselines_mut().len());
+    assert!(result.is_some(), "session should be registered");
+    assert_eq!(result.unwrap(), 0);
+}
+
+#[test]
+fn tunable_baselines_written_via_with_session_mut() {
+    fresh_session();
+    let mut baselines = BTreeMap::new();
+    baselines.insert(
+        "E1".to_string(),
+        serde_json::json!({"editor.Transform2D": {"translation": {"x": 10.0}}}),
+    );
+    let _ = editor_model::ports::with_session_mut(|s| {
+        *s.tunable_baselines_mut() = baselines;
+    });
+    let len = editor_model::ports::with_session_mut(|s| s.tunable_baselines_mut().len());
+    assert_eq!(len, Some(1));
+}
+
+#[test]
+fn runtime_delta_buffer_cap_holds_at_64() {
+    fresh_session();
+    for i in 0..70 {
+        let _ = editor_model::ports::with_session_mut(|s| {
+            s.runtime_delta_buffer_mut().push_back(RuntimeDelta {
+                instance_id: format!("E{i}"),
+                target_local_id: String::new(),
+                component_type_id: "editor.Transform2D".to_string(),
+                field_path: "translation.x".to_string(),
+                baseline_value: serde_json::json!(0.0),
+                runtime_value: serde_json::json!(1.0),
+                captured_at_ms: i as u64,
+                apply_back_eligible: true,
+            });
+        });
+    }
+    let len = editor_model::ports::with_session_mut(|s| s.runtime_delta_buffer_mut().len());
+    assert_eq!(len, Some(64), "cap should hold at 64");
+}
+
+#[test]
+fn compute_runtime_deltas_diff_finds_changed_field() {
+    // Set baselines with 1 instance, 1 component, 2 fields.
+    fresh_session();
+    let mut baselines = BTreeMap::new();
+    baselines.insert(
+        "inst1".to_string(),
+        serde_json::json!({
+            "editor.Transform2D": {
+                "translation": {"x": 10.0, "y": 5.0}
+            }
+        }),
+    );
+    let _ = editor_model::ports::with_session_mut(|s| {
+        *s.tunable_baselines_mut() = baselines;
+    });
+
+    // Call the diff function with a fake runtime getter.
+    use editor_core::document::ComponentInstance;
+    let appended = editor_core::preview_runtime::compute_runtime_deltas_internal(
+        |instance_id| {
+            if instance_id == "inst1" {
+                let mut values = serde_json::Map::new();
+                let mut translation = serde_json::Map::new();
+                translation.insert("x".to_string(), serde_json::json!(20.0));
+                translation.insert("y".to_string(), serde_json::json!(5.0));
+                let mut component_obj = serde_json::Map::new();
+                component_obj.insert(
+                    "translation".to_string(),
+                    serde_json::Value::Object(translation),
+                );
+                values.insert(
+                    "editor.Transform2D".to_string(),
+                    serde_json::Value::Object(component_obj),
+                );
+                Some(ComponentInstance {
+                    type_id: "editor.Transform2D".to_string(),
+                    values: serde_json::Value::Object(values),
+                })
+            } else {
+                None
+            }
+        },
+        12345,
+    );
+    assert_eq!(appended, 1, "one field changed → one delta");
+
+    let len = editor_model::ports::with_session_mut(|s| s.runtime_delta_buffer_mut().len());
+    assert_eq!(len, Some(1));
+    let first =
+        editor_model::ports::with_session_mut(|s| s.runtime_delta_buffer_mut().front().cloned())
+            .unwrap();
+    let delta = first.expect("at least one delta");
+    assert_eq!(delta.instance_id, "inst1");
+    assert_eq!(delta.component_type_id, "editor.Transform2D");
+    assert_eq!(delta.field_path, "translation.x");
+    assert_eq!(delta.baseline_value, serde_json::json!(10.0));
+    assert_eq!(delta.runtime_value, serde_json::json!(20.0));
+    assert!(delta.apply_back_eligible);
+    assert_eq!(delta.captured_at_ms, 12345);
+}
+
+#[test]
+fn compute_runtime_deltas_unchanged_returns_zero() {
+    fresh_session();
+    let mut baselines = BTreeMap::new();
+    baselines.insert(
+        "inst1".to_string(),
+        serde_json::json!({
+            "editor.Transform2D": {"translation": {"x": 10.0}}
+        }),
+    );
+    let _ = editor_model::ports::with_session_mut(|s| {
+        *s.tunable_baselines_mut() = baselines;
+    });
+
+    use editor_core::document::ComponentInstance;
+    let appended = editor_core::preview_runtime::compute_runtime_deltas_internal(
+        |instance_id| {
+            if instance_id == "inst1" {
+                let mut values = serde_json::Map::new();
+                let mut translation = serde_json::Map::new();
+                translation.insert("x".to_string(), serde_json::json!(10.0));
+                let mut component_obj = serde_json::Map::new();
+                component_obj.insert(
+                    "translation".to_string(),
+                    serde_json::Value::Object(translation),
+                );
+                values.insert(
+                    "editor.Transform2D".to_string(),
+                    serde_json::Value::Object(component_obj),
+                );
+                Some(ComponentInstance {
+                    type_id: "editor.Transform2D".to_string(),
+                    values: serde_json::Value::Object(values),
+                })
+            } else {
+                None
+            }
+        },
+        12345,
+    );
+    assert_eq!(appended, 0);
+    let len = editor_model::ports::with_session_mut(|s| s.runtime_delta_buffer_mut().len());
+    assert_eq!(len, Some(0));
+}

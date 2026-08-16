@@ -1,17 +1,18 @@
-//! ProjectStore port — the file-system abstraction for the editor.
+//! ProjectStore + EditorSession ports — the cross-crate abstractions for the editor.
 //!
-//! `editor_application` provides the concrete implementation
-//! (`OpfsProjectStore` for WASM, `InMemoryProjectStore` for tests).
+//! `editor_application` provides the concrete implementations
+//! (`OpfsProjectStore` + `EditorSession` for WASM, `InMemoryProjectStore` for tests).
 //!
 //! ## Architecture
 //!
-//! `PROJECT_STORE` lives here (not in `editor_core`) to break the circular
-//! dependency: both `editor_application` and `editor_core` can access it via
-//! `editor_model::ports` without depending on each other.
+//! `PROJECT_STORE` and `EDITOR_SESSION` live here (not in `editor_core`) to break
+//! the circular dependency: both `editor_application` and `editor_core` can access
+//! them via `editor_model::ports` without depending on each other.
 
+use crate::session_port::EditorSessionPort;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// A single entry in the project store (file + metadata).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -92,6 +93,66 @@ pub fn register_project_store(store: Arc<dyn ProjectStore>) {
 pub fn with_project_store() -> Option<Arc<dyn ProjectStore>> {
     PROJECT_STORE
         .try_with(|cell| cell.borrow().clone())
+        .ok()
+        .flatten()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EditorSession registry (v0.90 PR1)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Same pattern as `PROJECT_STORE` above. `editor_application::wasm::init_project_store`
+// registers the session once at WASM startup; `editor-core` (Bevy systems) can
+// then read/write the session through the `EditorSessionPort` trait without
+// importing `editor-application`. The registry holds `Arc<Mutex<dyn
+// EditorSessionPort>>` (trait object) so the concrete session type stays in
+// `editor-application`.
+
+thread_local! {
+    /// The global `EditorSession` — set once at WASM startup via
+    /// [`register_editor_session`]. Same ownership semantics as `PROJECT_STORE`.
+    static EDITOR_SESSION: std::cell::RefCell<Option<Arc<Mutex<dyn EditorSessionPort>>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Register the editor session (call once at WASM startup).
+///
+/// Takes ownership of the `Arc<Mutex<dyn EditorSessionPort>>`. The session stays
+/// alive as long as either the caller keeps its `Arc` clone alive OR this
+/// registration is held.
+pub fn register_editor_session(session: Arc<Mutex<dyn EditorSessionPort>>) {
+    EDITOR_SESSION.with(|cell| {
+        *cell.borrow_mut() = Some(session);
+    });
+}
+
+/// Run a closure with mutable access to the global `EditorSession`.
+///
+/// Returns `None` if the session is not yet initialized (callers should treat
+/// this as a no-op and continue). The closure's return value is passed through.
+///
+/// Locks are released as soon as the closure returns. Callers MUST drop any
+/// reference returned by the closure before calling another function that takes
+/// the session lock.
+pub fn with_session_mut<R, F: FnOnce(&mut dyn EditorSessionPort) -> R>(f: F) -> Option<R> {
+    EDITOR_SESSION
+        .try_with(|cell| {
+            cell.borrow()
+                .as_ref()
+                .and_then(|arc| arc.lock().ok().map(|mut g| f(&mut *g)))
+        })
+        .ok()
+        .flatten()
+}
+
+/// Read-only counterpart to [`with_session_mut`].
+pub fn with_session<R, F: FnOnce(&dyn EditorSessionPort) -> R>(f: F) -> Option<R> {
+    EDITOR_SESSION
+        .try_with(|cell| {
+            cell.borrow()
+                .as_ref()
+                .and_then(|arc| arc.lock().ok().map(|g| f(&*g)))
+        })
         .ok()
         .flatten()
 }

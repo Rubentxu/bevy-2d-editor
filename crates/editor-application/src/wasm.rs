@@ -446,7 +446,23 @@ pub async fn init_project_store() -> Result<(), JsValue> {
         store_arc,
         Arc::new(SysClock::new()) as Arc<dyn Clock>,
     )));
-    let _ = SESSION.set(session);
+    let _ = SESSION.set(session.clone());
+
+    // v0.90 PR1: also register the session with the editor-model port so
+    // editor-core (Bevy systems) can access it via
+    // `editor_model::ports::with_session_mut(|s| ...)` without importing
+    // editor-application. The trait object is the canonical seam.
+    // We need a `Box<dyn EditorSessionPort>` to register, so we coerce
+    // the session via a temporary closure that downcasts through the
+    // concrete `EditorSession` (which already implements the trait).
+    register_session_via_port(&session);
 
     Ok(())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn register_session_via_port(session: &Arc<Mutex<EditorSession>>) {
+    use editor_model::EditorSessionPort;
+    let arc: Arc<Mutex<dyn EditorSessionPort>> = session.clone();
+    editor_model::ports::register_editor_session(arc);
 }

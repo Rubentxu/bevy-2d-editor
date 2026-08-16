@@ -15,10 +15,12 @@ pub mod logic_graph;
 pub mod pending_change_set;
 pub mod ports;
 pub mod rebuild_cause;
+pub mod runtime_delta;
 pub mod scene_asset;
 pub mod scene_instance;
 pub mod schema;
 pub mod session;
+pub mod session_port;
 pub mod tile_layer;
 pub mod tileset;
 pub mod time;
@@ -68,3 +70,6 @@ pub use logic_activation::{
     LOGIC_ACTIVATION_RING_CAP, LogicActivationEvent, LogicActivationRing, ring_push,
 };
 pub use rebuild_cause::RebuildCause;
+// v0.90 PR1: EditorSessionPort trait + RuntimeDelta
+pub use runtime_delta::RuntimeDelta;
+pub use session_port::EditorSessionPort;
