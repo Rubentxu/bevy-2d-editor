@@ -326,3 +326,17 @@ pub fn replace_with_empty(id: &str) {
 /// Re-export the dirty-flag accessors so the four coupled invariants
 /// can be touched through one namespace.
 pub use scene_state::{clear_dirty, is_dirty, mark_dirty};
+
+// v0.91 PR3 NOTE: SCENE_DOC migration is deferred. The call-site analysis
+// (apply_command, undo, redo, snapshot_active_doc, replace_active_doc) shows
+// that the trait-based replacement is non-trivial (the closures hold
+// `&mut SceneDocument` across `processor::apply` calls, which themselves may
+// want the session lock for logging). The mechanical sed migration attempted
+// in PR3 broke the type checker in 8 places. A careful manual migration
+// is tracked for a follow-up PR — the trait seam is in place so the
+// migration is feasible, just not a single-shot sed.
+//
+// The session-based accessors (`sess.scene_state_mut(ACTIVE_DOC_PATH)`) and
+// the `EditorSession::scene_doc` storage are ready. The deferred migration
+// is: replace `SCENE_DOC.with(|cell| { ... })` with explicit take/return
+// patterns that don't hold the session lock across user closures.
