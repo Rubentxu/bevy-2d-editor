@@ -1,27 +1,13 @@
-//! WASM glue — initializes the OPFS project store and registers it with `editor_model::ports`.
+//! WASM glue — editor_application's WASM-specific initialization.
 //!
-//! `OpfsProjectStore` is constructed here, then registered with the global
-//! `PROJECT_STORE` in `editor_model::ports`. Both `editor_core` and
-//! `editor_application` access it via `editor_model::ports::with_project_store()`.
-
-use crate::OpfsProjectStore;
-use editor_model::ports::register_project_store;
-use wasm_bindgen::prelude::*;
-
-/// Initialize the project store (called from TypeScript at WASM startup).
-///
-/// Creates `OpfsProjectStore`, hydrates from OPFS, then registers it
-/// with `editor_model::ports::register_project_store()`.
-#[wasm_bindgen]
-pub async fn init_project_store() -> Result<(), wasm_bindgen::JsValue> {
-    let store = OpfsProjectStore::new();
-    store
-        .hydrate()
-        .await
-        .map_err(|e| wasm_bindgen::JsValue::from_str(&*e))?;
-
-    // Wrap in Arc<dyn ProjectStore> and register.
-    let arc_store: std::sync::Arc<dyn editor_model::ProjectStore> = std::sync::Arc::new(store);
-    register_project_store(arc_store);
-    Ok(())
-}
+//! `editor_application` is NOT directly compiled to WASM (wasm-pack builds `editor_core`).
+//! This module is compiled for wasm32 when `editor_application` is built as part of the
+//! workspace, but is NOT part of the wasm-pack WASM output.
+//!
+//! The ChangeWorkbench session bridge is set up in the JavaScript glue layer
+//! (frontend/src/engine-bridge.ts) by calling `set_workbench_session_ptr`
+//! exported from `editor_core::wasm`.
+//
+//! NOTE: `editor_core::wasm::init_project_store()` handles project store initialization
+//! for the WASM binary. `editor_application::wasm::init_project_store` is NOT called
+//! by the frontend (the WASM binary is `editor_core`, not `editor_application`).

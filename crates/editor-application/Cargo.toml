@@ -19,6 +19,7 @@ wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
 serde-wasm-bindgen = "0.6"
+editor-core = { path = "../editor-core", features = ["dispatch-via-kernel"] }
 
 [dev-dependencies]
 wasm-bindgen = "0.2"

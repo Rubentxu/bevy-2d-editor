@@ -10,6 +10,7 @@ pub mod component;
 pub mod document;
 pub mod ids;
 pub mod logic_graph;
+pub mod pending_change_set;
 pub mod ports;
 pub mod scene_asset;
 pub mod scene_instance;
@@ -32,6 +33,7 @@ pub use logic_graph::{
     PortId, count_logic_bindings, editor_logic_binding_component, find_dangling_edge_nodes,
     find_duplicate_node_id,
 };
+pub use pending_change_set::{PendingChangeSet, PendingChangeSetSummary};
 pub use ports::{ProjectStore, StoreEntry, StoreError};
 pub use scene_asset::{
     AssetReference, ExposedProperty, LevelLayer, RelationshipKind, RoleWarning, SceneAssetDocument,

@@ -30,6 +30,10 @@ pub struct LogEntry {
     /// Typically the same as `metadata.authorship`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub actor: Option<String>,
+    /// ID of the ChangeSet this entry belongs to (e.g. "cmd-1234567890").
+    /// Used by the ChangeWorkbench to correlate log entries with ChangeSet summaries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub change_id: Option<String>,
 }
 
 impl LogEntry {
@@ -39,6 +43,7 @@ impl LogEntry {
         metadata: CommandMetadata,
         origin: Option<String>,
         actor: Option<String>,
+        change_id: Option<String>,
     ) -> Self {
         Self {
             forward,
@@ -46,6 +51,7 @@ impl LogEntry {
             metadata,
             origin,
             actor,
+            change_id,
         }
     }
 }
@@ -101,7 +107,7 @@ impl OperationLog {
     /// (e.g., direct command dispatch without a ChangeSet), this method infers them
     /// from `metadata.authorship`.
     pub fn record(&mut self, envelope: &CommandEnvelope, inverse: Command) {
-        self._record(envelope, inverse, None, None)
+        self._record(envelope, inverse, None, None, None)
     }
 
     /// Record a command with explicit provenance (origin and actor).
@@ -114,8 +120,9 @@ impl OperationLog {
         inverse: Command,
         origin: String,
         actor: String,
+        change_id: Option<String>,
     ) {
-        self._record(envelope, inverse, Some(origin), Some(actor))
+        self._record(envelope, inverse, Some(origin), Some(actor), change_id)
     }
 
     fn _record(
@@ -124,6 +131,7 @@ impl OperationLog {
         inverse: Command,
         origin: Option<String>,
         actor: Option<String>,
+        change_id: Option<String>,
     ) {
         // Truncate redo branch: drop entries after current cursor
         if self.cursor < self.entries.len() as isize - 1 {
@@ -156,6 +164,7 @@ impl OperationLog {
             envelope.metadata.clone(),
             Some(origin),
             Some(actor),
+            change_id,
         ));
         // Evict oldest if over max
         while self.entries.len() > self.max_size {
@@ -241,6 +250,7 @@ impl OperationLog {
             if ops_touched > 0 {
                 results.push(RecentChangeSummary {
                     // origin/actor are stored as Some(...) since _record always sets them
+                    change_id: entry.change_id.clone(),
                     origin: entry.origin.clone().unwrap_or_else(|| "Human".to_string()),
                     actor: entry
                         .actor
@@ -268,6 +278,9 @@ impl Default for OperationLog {
 /// The `applied_at` field uses Unix milliseconds (matching `CommandMetadata.timestamp`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RecentChangeSummary {
+    /// ID of the ChangeSet this entry belongs to (e.g. "cmd-1234567890").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub change_id: Option<String>,
     /// Where the originating ChangeSet came from (e.g. "Human", "Agent").
     pub origin: String,
     /// Who authored the change (e.g., "user" or "agent:foo").
@@ -378,6 +391,7 @@ mod tests {
             CommandMetadata::now("user").with_rationale("test"),
             Some("Human".to_string()),
             Some("user".to_string()),
+            None,
         );
         let json = serde_json::to_string(&entry).unwrap();
         let rt: LogEntry = serde_json::from_str(&json).unwrap();

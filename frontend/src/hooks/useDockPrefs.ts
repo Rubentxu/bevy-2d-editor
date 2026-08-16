@@ -33,6 +33,9 @@
  * `migratePrefs` performs a lossless v2 → v3 migration by filling
  * `floats = {}` for users upgrading from v0.82 P1.
  *
+ * v0.89 (ADR-0051) adds `change-workbench` as a bottom-dock internal tab
+ * for the ChangeWorkbenchPanel. `schemaVersion` bumps from `3` to `4`.
+ *
  * Persistence is best-effort: errors are logged but never thrown so a
  * broken OPFS layer cannot crash the editor.
  */
@@ -65,7 +68,7 @@ const DEBOUNCE_MS = 500;
  * v1; v0.82 P1 bumps to v2 (ADR-0024) to add `panelRegions`; v0.82 P2
  * bumps to v3 (ADR-0025) to add `floats`.
  */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 /**
  * Persisted state for a single floating panel — the panel's last-known
@@ -95,7 +98,8 @@ export interface FloatingPanelState {
  * `right-outline`, etc.) so the v0.81 Tier 1c E2E tests keep their
  * existing wiring without churn.
  */
-export type PanelId = "assets" | "outline" | "properties" | "bottom";
+export type PanelId =
+  "assets" | "outline" | "properties" | "bottom" | "change-workbench";
 
 /**
  * Dockable regions. `center` is intentionally absent — it hosts the scene
@@ -116,6 +120,7 @@ export const DEFAULT_PANEL_REGIONS: Record<PanelId, DockableRegion> = {
   outline: "right",
   properties: "right",
   bottom: "bottom",
+  "change-workbench": "bottom",
 };
 
 const VALID_REGIONS: ReadonlySet<DockableRegion> = new Set([

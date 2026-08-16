@@ -1853,6 +1853,7 @@ function AppInner() {
           outline: outlineFloatingTitle,
           properties: propertiesFloatingTitle,
           bottom: "Tools",
+          "change-workbench": "Workbench",
         };
         return (
           <FloatingPanel

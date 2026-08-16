@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::ptr::NonNull;
 use std::sync::atomic::{AtomicBool, Ordering};
 use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
@@ -52,6 +53,8 @@ pub mod tile_layer;
 pub mod tileset;
 pub mod time;
 pub mod transaction_bridge;
+#[cfg(target_arch = "wasm32")]
+pub mod wasm;
 mod wasm_auto_layer;
 mod wasm_bsn;
 mod wasm_export;
@@ -96,6 +99,22 @@ pub fn is_dispatch_via_kernel() -> bool {
     DISPATCH_VIA_KERNEL.load(Ordering::SeqCst)
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Change Workbench — session bridge (ADR-0039)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// ADR-0031 amendment (2026-08-16): editor-core must not own workbench UI state.
+// The pending ChangeSet storage lives in EditorSession (editor_application::session).
+// We bridge via a thread-local raw pointer that editor_application::wasm sets
+// at init time. This keeps editor-core free of ambient mutable stores while
+// still allowing the WASM boundary (compiled from editor-core) to access them.
+
+/// Thread-local pointer to the active `EditorSession`'s pending_change_sets map.
+/// Set by `set_workbench_session_ptr` during WASM initialization.
+thread_local! {
+    static WORKBENCH_SESSION: RefCell<Option<NonNull<()>>> = const { RefCell::new(None) };
+}
+
 /// Set the dispatch mode. Use `"kernel"` to enable kernel routing or `"legacy"` to
 /// revert to the v0.88 path.
 ///
@@ -118,15 +137,217 @@ pub fn set_dispatch_mode_wasm(mode: &str) -> Result<(), JsValue> {
     }
 }
 
-/// Get the current dispatch mode as a string ("kernel" or "legacy").
+// ─────────────────────────────────────────────────────────────────────────────
+// Change Workbench WASM boundary (ADR-0039)
+//
+// ADR-0031 amendment: pending ChangeSets live in EditorSession, NOT in editor_core.
+// The session pointer is set by editor_application::wasm at init time via
+// `set_workbench_session_ptr`. The WASM exports below access it via WORKBENCH_SESSION.
+// ─────────────────────────────────────────────────────────────────────────────
+
+use editor_model::PendingChangeSet;
+use editor_model::PendingChangeSetSummary;
+
+/// Set the workbench session pointer (called by editor_application::wasm at init).
+///
+/// `ptr` is a raw u32 address of the session's `pending_change_sets` map.
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
-pub fn get_dispatch_mode_wasm() -> String {
-    if is_dispatch_via_kernel() {
-        "kernel".to_string()
+pub fn set_workbench_session_ptr(ptr: u32) {
+    let ptr = if ptr == 0 {
+        None
     } else {
-        "legacy".to_string()
+        Some(unsafe { NonNull::new_unchecked(ptr as *mut ()) })
+    };
+    WORKBENCH_SESSION.with(|cell| {
+        *cell.borrow_mut() = ptr;
+    });
+}
+
+/// Access the pending_change_sets map from the session pointer.
+#[cfg(target_arch = "wasm32")]
+fn with_pending_map<
+    R,
+    F: FnOnce(&mut std::collections::BTreeMap<String, PendingChangeSet>) -> R,
+>(
+    f: F,
+) -> Result<R, JsValue> {
+    WORKBENCH_SESSION.with(|cell| {
+        let mut borrow = cell.borrow_mut();
+        if let Some(ptr) = &mut *borrow {
+            // Safety: ptr is a valid BTreeMap<String, PendingChangeSet> allocated
+            // by the Rust global allocator. editor_application::wasm sets this pointer
+            // during init_project_store(). The pointer is only used here in WASM exports.
+            let map = unsafe {
+                &mut *(ptr.as_ptr() as *mut std::collections::BTreeMap<String, PendingChangeSet>)
+            };
+            Ok(f(map))
+        } else {
+            Err(JsValue::from_str("Workbench session not initialized"))
+        }
+    })
+}
+
+/// Submit a new pending ChangeSet for approval.
+///
+/// The ChangeSet JSON should have shape:
+/// ```json
+/// {
+///   "id": "agent:12345",
+///   "origin": "Agent",
+///   "actor": "agent:code-writer",
+///   "rationale": "Refactor entity naming",
+///   "ops": [{ /* SceneCommand as JSON */ }]
+/// }
+/// ```
+///
+/// Returns the change-set ID on success, or an error string.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn submit_pending_change_set(json: &str) -> Result<String, JsValue> {
+    let cs: PendingChangeSet = serde_json::from_str(json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid ChangeSet JSON: {}", e)))?;
+
+    if cs.ops.is_empty() {
+        return Err(JsValue::from_str(
+            "ChangeSet must have at least one operation",
+        ));
     }
+
+    let change_id = cs.id.clone();
+    with_pending_map(|map| {
+        map.insert(change_id.clone(), cs);
+    })?;
+
+    Ok(change_id)
+}
+
+/// Get all pending ChangeSets as a JSON array of summaries.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn get_pending_change_sets() -> Result<JsValue, JsValue> {
+    let summaries = with_pending_map(|map| {
+        map.values()
+            .map(PendingChangeSetSummary::from)
+            .collect::<Vec<_>>()
+    })?;
+
+    serde_wasm_bindgen::to_value(&summaries)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+}
+
+/// Approve all operations in a pending ChangeSet and apply them.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn approve_change_set(change_id: &str) -> Result<String, JsValue> {
+    let change_id = change_id.to_string();
+    let indices: Vec<usize> = with_pending_map(|map| {
+        map.get(&change_id)
+            .map(|cs| (0..cs.ops.len()).collect())
+            .unwrap_or_default()
+    })?;
+    approve_selected_ops_impl(&change_id, &indices)
+}
+
+/// Approve only the selected operation indices in a pending ChangeSet.
+///
+/// `indices` is a JSON array of zero-based op indices to apply (e.g. `[0, 2, 4]`).
+/// Ops not in the list are excluded from this approval and will remain pending.
+///
+/// Returns a JSON object with `applied` count and `remaining` ChangeSet (or null if none).
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn approve_selected_ops(change_id: &str, indices_json: &str) -> Result<String, JsValue> {
+    let indices: Vec<usize> = serde_json::from_str(indices_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid indices JSON: {}", e)))?;
+    let change_id = change_id.to_string();
+    approve_selected_ops_impl(&change_id, &indices)
+}
+
+/// Internal implementation of approve_selected_ops.
+///
+/// Dispatches each approved op as a `CommandEnvelope` through the normal command path,
+/// then removes the ChangeSet from the pending registry. Remaining (unapproved) ops
+/// are restored to the registry for retry.
+#[cfg(target_arch = "wasm32")]
+fn approve_selected_ops_impl(change_id: &str, indices: &[usize]) -> Result<String, JsValue> {
+    // Get and remove the pending ChangeSet.
+    let mut cs = with_pending_map(|map| map.remove(change_id))?
+        .ok_or_else(|| JsValue::from_str(&format!("ChangeSet not found: {}", change_id)))?;
+
+    // Dispatch each selected op.
+    let mut applied_count = 0;
+    for &idx in indices {
+        let op_json = cs.ops.get(idx).ok_or_else(|| {
+            JsValue::from_str(&format!(
+                "Op index {} out of bounds (max {})",
+                idx,
+                cs.ops.len() - 1
+            ))
+        })?;
+
+        let command: Command = serde_json::from_value(op_json.clone())
+            .map_err(|e| JsValue::from_str(&format!("Invalid op JSON at index {}: {}", idx, e)))?;
+
+        let envelope = CommandEnvelope {
+            command,
+            metadata: CommandMetadata {
+                timestamp: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as u64,
+                authorship: cs.actor.clone(),
+                rationale: Some(format!("[ChangeWorkbench] {}", cs.rationale)),
+            },
+        };
+
+        let result = dispatch_command_via_kernel(envelope);
+        match result {
+            Ok(_) => applied_count += 1,
+            Err(e) => {
+                // Restore remaining ops to the registry for retry.
+                let remaining_indices: Vec<usize> =
+                    (0..cs.ops.len()).filter(|i| !indices.contains(i)).collect();
+                let remaining_ops: Vec<serde_json::Value> = remaining_indices
+                    .iter()
+                    .filter_map(|&i| cs.ops.get(i).cloned())
+                    .collect();
+
+                if !remaining_ops.is_empty() {
+                    let restored_cs = PendingChangeSet {
+                        id: change_id.to_string(),
+                        origin: cs.origin.clone(),
+                        actor: cs.actor.clone(),
+                        rationale: cs.rationale.clone(),
+                        ops: remaining_ops,
+                        submitted_at_ms: cs.submitted_at_ms,
+                    };
+                    let _ = with_pending_map(|map| {
+                        map.insert(change_id.to_string(), restored_cs);
+                    });
+                }
+
+                return Err(e);
+            }
+        }
+    }
+
+    let response = serde_json::json!({
+        "applied": applied_count,
+        "remaining": (),
+    });
+
+    serde_json::to_string(&response)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+}
+
+/// Reject and discard a pending ChangeSet.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn reject_change_set(change_id: &str) -> Result<(), JsValue> {
+    let change_id = change_id.to_string();
+    let _ = with_pending_map(|map| map.remove(&change_id))?;
+    Ok(())
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -533,7 +754,11 @@ pub fn dispatch_command(json: &str) -> Result<String, JsValue> {
 }
 
 /// Kernel path: route a command envelope through SceneTransactionKernel.
-fn dispatch_command_via_kernel(envelope: CommandEnvelope) -> Result<String, JsValue> {
+///
+/// This is the internal dispatch function used by both the legacy WASM entry point
+/// and by `editor_application::wasm` for ChangeWorkbench approval.
+#[cfg(target_arch = "wasm32")]
+pub fn dispatch_command_via_kernel(envelope: CommandEnvelope) -> Result<String, JsValue> {
     use crate::transaction_bridge::scene_transaction_kernel;
     use editor_model::session::HistoryScope;
     use editor_model::transaction::{Applier, ChangeOrigin, ChangeSet};
@@ -586,13 +811,14 @@ fn dispatch_command_via_kernel(envelope: CommandEnvelope) -> Result<String, JsVa
                 });
 
         // Record in OperationLog for undo/redo (byte-equality with legacy path).
-        // Use record_with_provenance to pass origin and actor from the ChangeSet.
+        // Use record_with_provenance to pass origin, actor, and change_id from the ChangeSet.
         OPERATION_LOG.with(|l| {
             l.borrow_mut().record_with_provenance(
                 &envelope,
                 inverse.clone(),
                 format!("{:?}", origin),
                 envelope.metadata.authorship.clone(),
+                Some(cs.id.clone()),
             );
         });
 
@@ -1563,6 +1789,60 @@ pub fn get_scene_snapshot() -> JsValue {
         },
         None => JsValue::NULL,
     }
+}
+
+/// Get recent ChangeSet summaries from the operation log for the active scene.
+///
+/// Returns a JSON array of ChangeSetSummary objects (most recent first).
+/// Used by the ChangeWorkbench to display the recent change history.
+#[wasm_bindgen]
+pub fn get_change_set_summaries() -> Result<JsValue, JsValue> {
+    use crate::operation_log::OperationLog;
+
+    let summaries = OPERATION_LOG.with(|log| {
+        let log_ref = log.borrow();
+        // Get all StableIds from the active document to query the log.
+        let stable_ids: Vec<crate::document::StableId> = scene_session::snapshot_active_doc()
+            .as_ref()
+            .map(|doc| doc.entities.iter().map(|e| e.id.clone()).collect())
+            .unwrap_or_default();
+
+        let mut all_summaries: Vec<OperationLogSummary> = Vec::new();
+
+        for sid in &stable_ids {
+            let entries = log_ref.recent_change_sets_for(sid);
+            for entry in entries {
+                all_summaries.push(OperationLogSummary {
+                    change_id: entry.change_id.unwrap_or_default(),
+                    origin: entry.origin,
+                    actor: entry.actor,
+                    applied_at_ms: entry.applied_at,
+                    ops_touched: entry.ops_touched,
+                });
+            }
+        }
+
+        // Sort by applied_at descending, dedupe by change_id.
+        all_summaries.sort_by(|a, b| b.applied_at_ms.cmp(&a.applied_at_ms));
+        all_summaries.dedup_by(|a, b| a.change_id == b.change_id);
+
+        // Return top 50.
+        all_summaries.truncate(50);
+        all_summaries
+    });
+
+    serde_wasm_bindgen::to_value(&summaries)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+}
+
+/// A summary entry from the OperationLog's recent_change_sets_for query.
+#[derive(Debug, Clone, serde::Serialize)]
+struct OperationLogSummary {
+    change_id: String,
+    origin: String,
+    actor: String,
+    applied_at_ms: u64,
+    ops_touched: usize,
 }
 
 /// Export a SceneDocument JSON string to runnable Bevy 0.19 Rust source code.

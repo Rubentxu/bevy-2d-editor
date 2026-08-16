@@ -17,6 +17,7 @@ import ConsoleTab from "../ConsoleTab";
 import OutputTab from "../OutputTab";
 import ProblemsTab from "../ProblemsTab";
 import SearchTab from "../SearchTab";
+import ChangeWorkbenchPanel from "../ChangeWorkbenchPanel";
 import { stampDockPanelDrag } from "./drag-payload";
 import type { DockableRegion } from "../../hooks/useDockPrefs";
 import type { NavigationTarget } from "../../types/navigation";
@@ -51,7 +52,7 @@ interface Props {
   onSourceNavigate?: (target: NavigationTarget) => void;
 }
 
-type BottomDockTab = "console" | "search" | "output" | "problems";
+type BottomDockTab = "console" | "search" | "output" | "problems" | "workbench";
 
 const TABS: {
   id: BottomDockTab;
@@ -63,6 +64,7 @@ const TABS: {
   { id: "search", label: "Search", icon: "🔍", count: 0 },
   { id: "output", label: "Output", icon: "📤", count: 0 },
   { id: "problems", label: "Problems", icon: "⚠", count: 0 },
+  { id: "workbench", label: "Workbench", icon: "⚙", count: 0 },
 ];
 
 export default function BottomDock({
@@ -218,6 +220,7 @@ export default function BottomDock({
         )}
         {activeTab === "output" && <OutputTab />}
         {activeTab === "problems" && <ProblemsTab />}
+        {activeTab === "workbench" && <ChangeWorkbenchPanel />}
       </div>
     </aside>
   );
