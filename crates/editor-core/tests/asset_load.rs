@@ -6,7 +6,9 @@
 //! S19: catalog survives across calls without project.json write.
 
 use editor_core::scene_asset::SceneAssetRole;
-use editor_model::scene_asset_catalog::{CatalogWarning, SceneAssetCatalog, SceneAssetCatalogEntry};
+use editor_model::scene_asset_catalog::{
+    CatalogWarning, SceneAssetCatalog, SceneAssetCatalogEntry,
+};
 
 // ─────────────────────────────────────────────────────────────────────────
 // Helper: make a catalog entry

@@ -516,13 +516,11 @@ pub fn dispatch_command(json: &str) -> Result<String, JsValue> {
     let envelope: CommandEnvelope = serde_json::from_str(json)
         .map_err(|e| JsValue::from_str(&format!("Invalid command JSON: {}", e)))?;
 
-    if is_dispatch_via_kernel() {
-        // Route through TransactionKernel for preflight validation and approval gating.
-        dispatch_command_via_kernel(envelope)
-    } else {
-        // Legacy v0.88 path: direct to scene_session::apply_command.
-        dispatch_command_legacy(&envelope)
-    }
+    // v0.91 PR5: always route through TransactionKernel. The legacy v0.88
+    // path (via `is_dispatch_via_kernel() == false`) is removed; ADR-0032
+    // established the kernel as the single dispatch path. The `dispatch_*_legacy`
+    // functions are also removed below.
+    dispatch_command_via_kernel(envelope)
 }
 
 /// Kernel path: route a command envelope through SceneTransactionKernel.
@@ -607,27 +605,8 @@ pub fn dispatch_command_via_kernel(envelope: CommandEnvelope) -> Result<String, 
 }
 
 /// Legacy v0.88 path: direct dispatch through scene_session::apply_command.
-#[allow(dead_code)]
-fn dispatch_command_legacy(envelope: &CommandEnvelope) -> Result<String, JsValue> {
-    let result = scene_session::apply_command(envelope)
-        .map_err(|e| JsValue::from_str(&format!("dispatch_command failed: {e}")))?;
-    let inverse = result
-        .inverse
-        .map(|env| env.command)
-        .unwrap_or_else(|| Command::CreateEntity {
-            id: StableId::new("__no_inverse__"),
-            name: String::new(),
-            components: vec![],
-        });
-    let result_json = serde_json::to_string(&CommandResult {
-        inverse,
-        snapshot: result.snapshot,
-    })
-    .map_err(|e| JsValue::from_str(&format!("Failed to serialize result: {}", e)))?;
-
-    Ok(result_json)
-}
-
+/// v0.91 PR5: removed. ADR-0032 established the kernel as the single
+/// dispatch path; the legacy fallback is no longer reachable.
 /// Internal helper that wraps `scene_session::apply_command` and
 /// returns the post-apply snapshot directly. Used by
 /// `place_scene_instance` and `replace_scene_instance_asset` so they
@@ -2255,11 +2234,8 @@ pub fn dispatch_asset_command(cmd_json: &str) -> Result<String, JsValue> {
     let cmd: AssetCommand = serde_json::from_str(cmd_json)
         .map_err(|e| JsValue::from_str(&format!("Invalid command JSON: {}", e)))?;
 
-    if is_dispatch_via_kernel() {
-        dispatch_asset_command_via_kernel(cmd)
-    } else {
-        dispatch_asset_command_legacy(&cmd)
-    }
+    // v0.91 PR5: always route through AssetTransactionKernel. Legacy path removed.
+    dispatch_asset_command_via_kernel(cmd)
 }
 
 /// Kernel path: route an asset command through AssetTransactionKernel.
@@ -2316,27 +2292,7 @@ fn dispatch_asset_command_via_kernel(cmd: AssetCommand) -> Result<String, JsValu
 }
 
 /// Legacy v0.88 path: direct dispatch through asset_command::apply.
-#[allow(dead_code)]
-fn dispatch_asset_command_legacy(cmd: &AssetCommand) -> Result<String, JsValue> {
-    let result_json = with_asset_doc_mut(|doc_opt| {
-        let doc = doc_opt
-            .as_mut()
-            .ok_or_else(|| JsValue::from_str("No asset open — call open_scene_asset first"))?;
-
-        let inverse =
-            asset_command::apply(doc, cmd).map_err(|e| JsValue::from_str(&e.to_string()))?;
-
-        // Record in asset operation log
-        with_asset_log_mut(|log| {
-            log.record(cmd, inverse.clone());
-        });
-
-        serde_json::to_string(&inverse)
-            .map_err(|e| JsValue::from_str(&format!("Failed to serialize inverse: {}", e)))
-    })?;
-
-    Ok(result_json)
-}
+/// v0.91 PR5: removed. The kernel path is the only dispatch (ADR-0032).
 
 /// Undo the last asset command. Returns the inverse command JSON.
 #[wasm_bindgen]
@@ -2398,11 +2354,8 @@ pub fn dispatch_logic_command(cmd_json: &str) -> Result<String, JsValue> {
     let cmd: LogicCommand = serde_json::from_str(cmd_json)
         .map_err(|e| JsValue::from_str(&format!("Invalid command JSON: {}", e)))?;
 
-    if is_dispatch_via_kernel() {
-        dispatch_logic_command_via_kernel(cmd)
-    } else {
-        dispatch_logic_command_legacy(&cmd)
-    }
+    // v0.91 PR5: always route through LogicTransactionKernel. Legacy path removed.
+    dispatch_logic_command_via_kernel(cmd)
 }
 
 /// Kernel path: route a logic command through LogicTransactionKernel.
@@ -2459,27 +2412,7 @@ fn dispatch_logic_command_via_kernel(cmd: LogicCommand) -> Result<String, JsValu
 }
 
 /// Legacy v0.88 path: direct dispatch through logic_command::apply.
-#[allow(dead_code)]
-fn dispatch_logic_command_legacy(cmd: &LogicCommand) -> Result<String, JsValue> {
-    let result_json = with_logic_graph_mut(|doc_opt| {
-        let doc = doc_opt.as_mut().ok_or_else(|| {
-            JsValue::from_str("No logic graph open — call create_logic_graph_asset first")
-        })?;
-
-        let inverse =
-            logic_command::apply(doc, cmd).map_err(|e| JsValue::from_str(&e.to_string()))?;
-
-        // Record in logic operation log
-        with_logic_log_mut(|log| {
-            log.record(cmd, inverse.clone());
-        });
-
-        serde_json::to_string(&inverse)
-            .map_err(|e| JsValue::from_str(&format!("Failed to serialize inverse: {}", e)))
-    })?;
-
-    Ok(result_json)
-}
+/// v0.91 PR5: removed. The kernel path is the only dispatch (ADR-0032).
 
 /// Undo the last logic command.
 #[wasm_bindgen]
@@ -3288,10 +3221,13 @@ mod validation_center_tests {
         editor_model::ports::with_session_mut(|sess| {
             sess.logic_state_mut(crate::logic_state::ACTIVE_LOGIC_GRAPH_PATH)
                 .graph_docs
-                .insert("_active".to_string(), asset.unwrap_or_else(|| {
-                    // Empty graph fallback — tests should provide their own.
-                    LogicGraphAsset::default()
-                }));
+                .insert(
+                    "_active".to_string(),
+                    asset.unwrap_or_else(|| {
+                        // Empty graph fallback — tests should provide their own.
+                        LogicGraphAsset::default()
+                    }),
+                );
         });
     }
 
