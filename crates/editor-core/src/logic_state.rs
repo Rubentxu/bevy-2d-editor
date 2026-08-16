@@ -4,6 +4,11 @@
 //! LOGIC_OPERATION_LOG (per-graph undo/redo), and the LOGIC_GRAPH_CATALOG
 //! (catalog of all logic graph assets persisted in OPFS).
 
+/// v0.91 PR2 (transitional): reserved key for the "active logic graph" slot
+/// on `EditorSession::logic_states`. Used by test helpers to write to the
+/// session.
+pub const ACTIVE_LOGIC_GRAPH_PATH: &str = "_active";
+
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -51,7 +56,8 @@ impl LogicGraphCatalog {
                 id: entry.asset_id.clone(),
             });
         }
-        let normalized = crate::scene_asset_catalog::normalize_logical_path(&entry.logical_path);
+        let normalized =
+            editor_model::scene_asset_catalog::normalize_logical_path(&entry.logical_path);
         self.path_index.insert(normalized, entry.asset_id.clone());
         self.entries.insert(entry.asset_id.clone(), entry);
         Ok(())
@@ -61,7 +67,7 @@ impl LogicGraphCatalog {
     pub fn unregister(&mut self, asset_id: &str) -> Option<LogicGraphCatalogEntry> {
         if let Some(entry) = self.entries.remove(asset_id) {
             let normalized =
-                crate::scene_asset_catalog::normalize_logical_path(&entry.logical_path);
+                editor_model::scene_asset_catalog::normalize_logical_path(&entry.logical_path);
             self.path_index.remove(&normalized);
             Some(entry)
         } else {
@@ -73,7 +79,7 @@ impl LogicGraphCatalog {
     pub fn seed(&mut self, entries: Vec<LogicGraphCatalogEntry>) {
         for entry in entries {
             let normalized =
-                crate::scene_asset_catalog::normalize_logical_path(&entry.logical_path);
+                editor_model::scene_asset_catalog::normalize_logical_path(&entry.logical_path);
             self.path_index.insert(normalized, entry.asset_id.clone());
             self.entries.insert(entry.asset_id.clone(), entry);
         }
@@ -300,3 +306,9 @@ mod tests {
         assert_eq!(cat.get("g2").unwrap().logical_path, "logic/graph_two");
     }
 }
+
+// v0.91 PR2 NOTE: LOGIC_GRAPH_DOC migration is deferred to PR3 (causality
+// migration pass). The current implementation is correct (single-threaded
+// WASM, no contention), and the trait seam is in place — the migration
+// becomes a mechanical `SCENE_DOC.with → with_session_mut` substitution
+// once PR3 lands.

@@ -9,7 +9,7 @@
 
 use editor_core::ProjectMetadata;
 use editor_core::scene_asset::SceneAssetRole;
-use editor_core::scene_asset_catalog::{SceneAssetCatalog, SceneAssetCatalogEntry};
+use editor_model::scene_asset_catalog::{SceneAssetCatalog, SceneAssetCatalogEntry};
 
 fn entry(
     asset_id: &str,

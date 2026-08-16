@@ -26,12 +26,14 @@ pub use crate::scene_state::{
     DIRTY_FLAG, SCENE_REGISTRY, mark_dirty, with_registry, with_registry_mut,
 };
 
-// The thread-locals SCENE_ASSET_CATALOG, SCENE_ASSET_DOC, etc. are
-// referenced by name from lib.rs. The names live in asset_state now; we
-// re-export them via the module path so `SCENE_ASSET_CATALOG.with(...)` in
-// lib.rs resolves to crate::asset_state::SCENE_ASSET_CATALOG.
+// v0.91 PR2: SCENE_ASSET_CATALOG and SCENE_ASSET_CATALOG_WARNINGS are no longer
+// thread_locals — they live on `EditorSession::asset_states["_active"]` (see
+// `editor_model::AssetSessionState`). The remaining thread_locals (DOC,
+// OPERATION_LOG, BODY_CACHE, RESYNC_REPORTS, VALIDATION_ISSUES) stay for
+// PR3 (causality migration) and PR5 (`OperationLog` type move).
 pub use crate::asset_state::{
-    ASSET_BODY_CACHE, ASSET_OPERATION_LOG, RESYNC_REPORTS, SCENE_ASSET_CATALOG,
-    SCENE_ASSET_CATALOG_WARNINGS, SCENE_ASSET_DOC, VALIDATION_ISSUES,
+    ASSET_BODY_CACHE, ASSET_OPERATION_LOG, RESYNC_REPORTS, SCENE_ASSET_DOC, VALIDATION_ISSUES,
 };
-pub use crate::logic_state::{LOGIC_GRAPH_CATALOG, LOGIC_GRAPH_DOC, LOGIC_OPERATION_LOG};
+// v0.91 PR2: LOGIC_GRAPH_DOC is removed (migrated to session).
+// LOGIC_GRAPH_CATALOG and LOGIC_OPERATION_LOG stay as thread_locals (PR3/PR5).
+pub use crate::logic_state::{LOGIC_GRAPH_CATALOG, LOGIC_OPERATION_LOG};

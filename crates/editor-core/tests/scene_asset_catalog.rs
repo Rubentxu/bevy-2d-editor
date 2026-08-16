@@ -2,7 +2,7 @@
 //! Covers all 11 scenarios from design.md §Testing Strategy.
 
 use editor_core::scene_asset::SceneAssetRole;
-use editor_core::scene_asset_catalog::{
+use editor_model::scene_asset_catalog::{
     CatalogError, SceneAssetCatalog, SceneAssetCatalogEntry, mint_asset_id, normalize_logical_path,
     random_hex_8, validate_logical_path,
 };
