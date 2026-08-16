@@ -337,10 +337,14 @@ impl EditorSession {
             source_files: editor_model::SourceFilesCache::default(),
             recent_change_sets: BTreeMap::new(),
             pending_causality_edges: BTreeMap::new(),
-            runtime_delta_buffer: VecDeque::with_capacity(64),
+            runtime_delta_buffer: VecDeque::with_capacity(
+                crate::runtime_delta::RUNTIME_DELTA_BUFFER_CAP,
+            ),
             tunable_baselines: BTreeMap::new(),
             pending_change_sets: BTreeMap::new(),
-            logic_activation_ring: VecDeque::with_capacity(64),
+            logic_activation_ring: VecDeque::with_capacity(
+                editor_model::logic_activation::LOGIC_ACTIVATION_RING_CAP,
+            ),
         }
     }
 
@@ -390,8 +394,8 @@ impl EditorSession {
 
     /// Returns a mutable reference to the runtime delta buffer.
     pub fn runtime_delta_buffer_mut(&mut self) -> &mut VecDeque<RuntimeDelta> {
-        // Enforce 64-entry cap
-        while self.runtime_delta_buffer.len() > 64 {
+        // Enforce the cap on every access (v0.90 PR6: RUNTIME_DELTA_BUFFER_CAP).
+        while self.runtime_delta_buffer.len() > crate::runtime_delta::RUNTIME_DELTA_BUFFER_CAP {
             self.runtime_delta_buffer.pop_front();
         }
         &mut self.runtime_delta_buffer
@@ -772,8 +776,8 @@ impl EditorSessionPort for EditorSession {
     }
 
     fn runtime_delta_buffer_mut(&mut self) -> &mut VecDeque<RuntimeDelta> {
-        // Enforce 64-entry cap on every access.
-        while self.runtime_delta_buffer.len() > 64 {
+        // Enforce the cap on every access (v0.90 PR6: RUNTIME_DELTA_BUFFER_CAP).
+        while self.runtime_delta_buffer.len() > crate::runtime_delta::RUNTIME_DELTA_BUFFER_CAP {
             self.runtime_delta_buffer.pop_front();
         }
         &mut self.runtime_delta_buffer
@@ -816,7 +820,9 @@ impl EditorSessionPort for EditorSession {
             .unwrap_or_default()
     }
 
-    fn logic_activation_ring_mut(&mut self) -> &mut VecDeque<editor_model::logic_activation::LogicActivationEvent> {
+    fn logic_activation_ring_mut(
+        &mut self,
+    ) -> &mut VecDeque<editor_model::logic_activation::LogicActivationEvent> {
         &mut self.logic_activation_ring
     }
 }

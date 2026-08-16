@@ -17,6 +17,13 @@ use serde::{Deserialize, Serialize};
 // `editor_model::RuntimeDelta`).
 pub use editor_model::RuntimeDelta;
 
+/// Maximum number of deltas in `EditorSession.runtime_delta_buffer` (v0.90 PR6).
+///
+/// Used to cap the ring buffer at runtime-delta creation time and to
+/// enforce the cap on every mutable access (see the `EditorSessionPort`
+/// `runtime_delta_buffer_mut` impl in `editor-application::session`).
+pub const RUNTIME_DELTA_BUFFER_CAP: usize = 64;
+
 /// Policy governing whether and how a component's runtime values may be
 /// applied back to the authoring state (ADR-0042, ADR-0050).
 ///

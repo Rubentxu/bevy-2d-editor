@@ -7,9 +7,7 @@
 //! ASSET_OPERATION_LOG, LOGIC_GRAPH_DOC, LOGIC_OPERATION_LOG) is deferred to
 //! v0.90 PR5 — this PR provides the seam.
 
-use editor_model::{
-    AssetSessionState, EditorSessionPort, LogicSessionState, SceneSessionState,
-};
+use editor_model::{AssetSessionState, EditorSessionPort, LogicSessionState, SceneSessionState};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
@@ -85,9 +83,12 @@ fn scene_state_mut_idempotent() {
     let _ = editor_model::ports::with_session_mut(|s| {
         s.scene_state_mut(&p).reload_count = 1;
     });
-    let count = editor_model::ports::with_session_mut(|s| s.scene_state_mut(&p).reload_count)
-        .unwrap();
-    assert_eq!(count, 1, "second call returns the same entry, not a fresh default");
+    let count =
+        editor_model::ports::with_session_mut(|s| s.scene_state_mut(&p).reload_count).unwrap();
+    assert_eq!(
+        count, 1,
+        "second call returns the same entry, not a fresh default"
+    );
 }
 
 #[test]
@@ -97,9 +98,13 @@ fn asset_state_mut_idempotent() {
     let _ = editor_model::ports::with_session_mut(|s| {
         s.asset_state_mut(&p).operation_log_bytes = vec![1, 2, 3];
     });
-    let len = editor_model::ports::with_session_mut(|s| s.asset_state_mut(&p).operation_log_bytes.len())
-        .unwrap();
-    assert_eq!(len, 3, "second call returns the same map, not a fresh default");
+    let len =
+        editor_model::ports::with_session_mut(|s| s.asset_state_mut(&p).operation_log_bytes.len())
+            .unwrap();
+    assert_eq!(
+        len, 3,
+        "second call returns the same map, not a fresh default"
+    );
 }
 
 #[test]
@@ -111,9 +116,12 @@ fn logic_state_mut_idempotent() {
             .graph_docs
             .insert("g1".to_string(), editor_model::LogicGraphAsset::default());
     });
-    let len = editor_model::ports::with_session_mut(|s| s.logic_state_mut(&p).graph_docs.len())
-        .unwrap();
-    assert_eq!(len, 1, "second call returns the same map, not a fresh default");
+    let len =
+        editor_model::ports::with_session_mut(|s| s.logic_state_mut(&p).graph_docs.len()).unwrap();
+    assert_eq!(
+        len, 1,
+        "second call returns the same map, not a fresh default"
+    );
 }
 
 #[test]

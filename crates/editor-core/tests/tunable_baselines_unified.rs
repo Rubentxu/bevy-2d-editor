@@ -22,7 +22,8 @@ struct FakeSession {
     preview_inspector: editor_model::PreviewInspectorState,
     source_files: editor_model::SourceFilesCache,
     recent_change_sets: BTreeMap<String, Vec<editor_model::ChangeSetSummary>>,
-    logic_activation_ring: std::collections::VecDeque<editor_model::logic_activation::LogicActivationEvent>,
+    logic_activation_ring:
+        std::collections::VecDeque<editor_model::logic_activation::LogicActivationEvent>,
 }
 
 impl EditorSessionPort for FakeSession {
@@ -64,9 +65,14 @@ impl EditorSessionPort for FakeSession {
         &mut self.source_files
     }
     fn recent_change_sets_for(&self, scene_path: &str) -> Vec<editor_model::ChangeSetSummary> {
-        self.recent_change_sets.get(scene_path).cloned().unwrap_or_default()
+        self.recent_change_sets
+            .get(scene_path)
+            .cloned()
+            .unwrap_or_default()
     }
-    fn logic_activation_ring_mut(&mut self) -> &mut std::collections::VecDeque<editor_model::logic_activation::LogicActivationEvent> {
+    fn logic_activation_ring_mut(
+        &mut self,
+    ) -> &mut std::collections::VecDeque<editor_model::logic_activation::LogicActivationEvent> {
         &mut self.logic_activation_ring
     }
 }

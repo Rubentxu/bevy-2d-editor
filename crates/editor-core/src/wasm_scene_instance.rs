@@ -204,6 +204,6 @@ pub fn revert_override_wasm(
     serde_json::to_string(&snap).map_err(|e| JsValue::from_str(&format!("Serialize: {e}")))
 }
 
-// Suppress unused import warnings for items used only in some paths.
-#[allow(dead_code)]
-fn _ensure_component_instance_linked(_: ComponentInstance) {}
+// v0.90 PR6: removed pre-existing dead function
+// `_ensure_component_instance_linked` (scaffolded, no-op, no callers).
+// See debt-report from v0.89.
