@@ -10,6 +10,8 @@
 //! - **Test code creates isolated sessions**: each test constructs its own
 //!   [`EditorSession`] with its own [`InMemoryProjectStore`](crate::adapters::InMemoryProjectStore)
 //!   + [`FakeClock`](editor_model::time::FakeClock).
+//! - **ChangeWorkbench pending ChangeSets are session state**: see
+//!   [`EditorSession::pending_change_sets_mut`].
 
 use editor_model::time::{Clock, Timestamp};
 use std::collections::{BTreeMap, VecDeque};
@@ -17,6 +19,7 @@ use std::sync::Arc;
 
 use crate::RuntimeDelta;
 use crate::ports::project_store::ProjectStore;
+use editor_model::PendingChangeSet;
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -288,6 +291,9 @@ pub struct EditorSession {
     recent_change_sets: BTreeMap<String, RecentChangeSetsBuffer>,
     /// Runtime delta buffer for play-mode apply-back (capped at 64).
     runtime_delta_buffer: VecDeque<RuntimeDelta>,
+    /// Pending ChangeSets awaiting user approval in the ChangeWorkbench (ADR-0039).
+    /// Key = change-set ID (e.g. "agent:12345" or "cmd:1234567890").
+    pending_change_sets: BTreeMap<String, PendingChangeSet>,
 }
 
 impl std::fmt::Debug for EditorSession {
@@ -304,6 +310,7 @@ impl std::fmt::Debug for EditorSession {
             .field("source_files", &self.source_files)
             .field("recent_change_sets", &self.recent_change_sets)
             .field("runtime_delta_buffer_len", &self.runtime_delta_buffer.len())
+            .field("pending_change_sets_len", &self.pending_change_sets.len())
             .finish()
     }
 }
@@ -327,6 +334,7 @@ impl EditorSession {
             source_files: SourceFilesCache::default(),
             recent_change_sets: BTreeMap::new(),
             runtime_delta_buffer: VecDeque::with_capacity(64),
+            pending_change_sets: BTreeMap::new(),
         }
     }
 
@@ -489,6 +497,21 @@ impl EditorSession {
     /// Returns `None` if the cache is not registered.
     pub fn cache_generation(&self, name: &str) -> Option<u64> {
         self.caches.get(name).map(|e| e.generation())
+    }
+
+    // ─── ChangeWorkbench pending ChangeSets (ADR-0039) ─────────────────────────
+
+    /// Returns a mutable reference to the pending ChangeSets map.
+    ///
+    /// ADR-0031 rule: workbench UI state lives in the sanctioned composition root
+    /// (`EditorSession`), not in domain modules.
+    pub fn pending_change_sets_mut(&mut self) -> &mut BTreeMap<String, PendingChangeSet> {
+        &mut self.pending_change_sets
+    }
+
+    /// Returns a reference to the pending ChangeSets map.
+    pub fn pending_change_sets(&self) -> &BTreeMap<String, PendingChangeSet> {
+        &self.pending_change_sets
     }
 }
 

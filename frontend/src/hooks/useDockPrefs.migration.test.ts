@@ -8,7 +8,11 @@
  *   tests/ux-dock.spec.ts (migration smoke test)
  */
 
-import { migratePrefs, DEFAULT_DOCK_PREFS, SCHEMA_VERSION } from "./useDockPrefs";
+import {
+  migratePrefs,
+  DEFAULT_DOCK_PREFS,
+  SCHEMA_VERSION,
+} from "./useDockPrefs";
 
 // ---------------------------------------------------------------------------
 // Test: v3 fixture migrates to v4 with change-workbench in bottom region

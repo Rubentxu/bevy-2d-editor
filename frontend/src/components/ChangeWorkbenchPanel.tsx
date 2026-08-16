@@ -95,7 +95,9 @@ function PendingCard({
         <div className="cw-card-meta">
           <span className="cw-badge">{cs.origin}</span>
           <span className="cw-actor">{cs.actor}</span>
-          <span className="cw-op-count">{cs.op_count} op{cs.op_count !== 1 ? "s" : ""}</span>
+          <span className="cw-op-count">
+            {cs.op_count} op{cs.op_count !== 1 ? "s" : ""}
+          </span>
         </div>
         <div className="cw-card-actions">
           <button
@@ -120,9 +122,7 @@ function PendingCard({
         </div>
       </header>
 
-      {cs.rationale && (
-        <p className="cw-rationale">{cs.rationale}</p>
-      )}
+      {cs.rationale && <p className="cw-rationale">{cs.rationale}</p>}
 
       {expanded && (
         <div className="cw-card-body">
@@ -200,7 +200,9 @@ function HistoryItem({ entry }: HistoryItemProps) {
       <span className="cw-history-time" title={date.toISOString()}>
         {dateStr} {timeStr}
       </span>
-      <span className="cw-history-ops">{entry.ops_touched} op{entry.ops_touched !== 1 ? "s" : ""}</span>
+      <span className="cw-history-ops">
+        {entry.ops_touched} op{entry.ops_touched !== 1 ? "s" : ""}
+      </span>
     </li>
   );
 }
@@ -270,7 +272,10 @@ export default function ChangeWorkbenchPanel() {
               <p className="cw-empty cw-error">{state.error}</p>
             )}
             {pendingEmpty && !state.loading && (
-              <p className="cw-empty">No pending ChangeSets. Changes from agents will appear here for review.</p>
+              <p className="cw-empty">
+                No pending ChangeSets. Changes from agents will appear here for
+                review.
+              </p>
             )}
             {state.pending.length > 0 && (
               <div className="cw-pending-list">
@@ -282,7 +287,10 @@ export default function ChangeWorkbenchPanel() {
                     onSelectAll={() => selectAll(cs.id)}
                     onDeselectAll={() => deselectAll(cs.id)}
                     onApproveSelected={() =>
-                      void approveSelectedOps(cs.id, Array.from(cs.selectedIndices))
+                      void approveSelectedOps(
+                        cs.id,
+                        Array.from(cs.selectedIndices),
+                      )
                     }
                     onApproveAll={() => void approveChangeSet(cs.id)}
                     onReject={() => void rejectChangeSet(cs.id)}
@@ -298,7 +306,9 @@ export default function ChangeWorkbenchPanel() {
         {activeTab === "history" && (
           <>
             {historyEmpty && (
-              <p className="cw-empty">No recent ChangeSets in the operation log.</p>
+              <p className="cw-empty">
+                No recent ChangeSets in the operation log.
+              </p>
             )}
             {!historyEmpty && (
               <ul className="cw-history-list">

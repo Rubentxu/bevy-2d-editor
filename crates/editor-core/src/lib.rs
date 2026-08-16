@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::ptr::NonNull;
 use std::sync::atomic::{AtomicBool, Ordering};
 use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
@@ -52,6 +53,8 @@ pub mod tile_layer;
 pub mod tileset;
 pub mod time;
 pub mod transaction_bridge;
+#[cfg(target_arch = "wasm32")]
+pub mod wasm;
 mod wasm_auto_layer;
 mod wasm_bsn;
 mod wasm_export;
@@ -97,53 +100,19 @@ pub fn is_dispatch_via_kernel() -> bool {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Change Workbench — pending ChangeSet registry (ADR-0039)
+// Change Workbench — session bridge (ADR-0039)
 // ─────────────────────────────────────────────────────────────────────────────
+//
+// ADR-0031 amendment (2026-08-16): editor-core must not own workbench UI state.
+// The pending ChangeSet storage lives in EditorSession (editor_application::session).
+// We bridge via a thread-local raw pointer that editor_application::wasm sets
+// at init time. This keeps editor-core free of ambient mutable stores while
+// still allowing the WASM boundary (compiled from editor-core) to access them.
 
-use std::collections::HashMap;
-
+/// Thread-local pointer to the active `EditorSession`'s pending_change_sets map.
+/// Set by `set_workbench_session_ptr` during WASM initialization.
 thread_local! {
-    /// Pending ChangeSets awaiting user approval in the ChangeWorkbench.
-    /// Key = change-set ID (e.g. "agent:12345" or "cmd:1234567890").
-    static PENDING_CHANGE_SETS: RefCell<HashMap<String, PendingChangeSet>> = RefCell::new(HashMap::new());
-}
-
-/// A pending ChangeSet stored in the WASM registry while awaiting approval.
-///
-/// The ops are stored as `serde_json::Value` to avoid coupling the WASM boundary
-/// to the concrete `SceneCommand` type. When approved, the ops are deserialized
-/// to `Command` and dispatched through the normal command path.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-struct PendingChangeSet {
-    /// Unique change-set identifier.
-    id: String,
-    /// Where the change originated (e.g. "Human", "Agent", "Recipe").
-    origin: String,
-    /// Who authored this change (e.g. "user", "agent:foo").
-    actor: String,
-    /// Human-readable rationale.
-    rationale: String,
-    /// Operations in this ChangeSet, stored as JSON to decouple WASM boundary.
-    ops: Vec<serde_json::Value>,
-    /// When this ChangeSet was submitted (Unix ms).
-    submitted_at_ms: u64,
-}
-
-/// Summary of a pending ChangeSet returned to the frontend.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-struct PendingChangeSetSummary {
-    /// Change-set ID.
-    id: String,
-    /// Where the change originated.
-    origin: String,
-    /// Who authored this change.
-    actor: String,
-    /// Rationale description.
-    rationale: String,
-    /// Number of operations in this ChangeSet.
-    op_count: usize,
-    /// When submitted (Unix ms).
-    submitted_at_ms: u64,
+    static WORKBENCH_SESSION: RefCell<Option<NonNull<()>>> = const { RefCell::new(None) };
 }
 
 /// Set the dispatch mode. Use `"kernel"` to enable kernel routing or `"legacy"` to
@@ -170,7 +139,54 @@ pub fn set_dispatch_mode_wasm(mode: &str) -> Result<(), JsValue> {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Change Workbench WASM boundary (ADR-0039)
+//
+// ADR-0031 amendment: pending ChangeSets live in EditorSession, NOT in editor_core.
+// The session pointer is set by editor_application::wasm at init time via
+// `set_workbench_session_ptr`. The WASM exports below access it via WORKBENCH_SESSION.
 // ─────────────────────────────────────────────────────────────────────────────
+
+use editor_model::PendingChangeSet;
+use editor_model::PendingChangeSetSummary;
+
+/// Set the workbench session pointer (called by editor_application::wasm at init).
+///
+/// `ptr` is a raw u32 address of the session's `pending_change_sets` map.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn set_workbench_session_ptr(ptr: u32) {
+    let ptr = if ptr == 0 {
+        None
+    } else {
+        Some(unsafe { NonNull::new_unchecked(ptr as *mut ()) })
+    };
+    WORKBENCH_SESSION.with(|cell| {
+        *cell.borrow_mut() = ptr;
+    });
+}
+
+/// Access the pending_change_sets map from the session pointer.
+#[cfg(target_arch = "wasm32")]
+fn with_pending_map<
+    R,
+    F: FnOnce(&mut std::collections::BTreeMap<String, PendingChangeSet>) -> R,
+>(
+    f: F,
+) -> Result<R, JsValue> {
+    WORKBENCH_SESSION.with(|cell| {
+        let mut borrow = cell.borrow_mut();
+        if let Some(ptr) = &mut *borrow {
+            // Safety: ptr is a valid BTreeMap<String, PendingChangeSet> allocated
+            // by the Rust global allocator. editor_application::wasm sets this pointer
+            // during init_project_store(). The pointer is only used here in WASM exports.
+            let map = unsafe {
+                &mut *(ptr.as_ptr() as *mut std::collections::BTreeMap<String, PendingChangeSet>)
+            };
+            Ok(f(map))
+        } else {
+            Err(JsValue::from_str("Workbench session not initialized"))
+        }
+    })
+}
 
 /// Submit a new pending ChangeSet for approval.
 ///
@@ -199,10 +215,9 @@ pub fn submit_pending_change_set(json: &str) -> Result<String, JsValue> {
     }
 
     let change_id = cs.id.clone();
-    PENDING_CHANGE_SETS.with(|cell| {
-        let mut map = cell.borrow_mut();
+    with_pending_map(|map| {
         map.insert(change_id.clone(), cs);
-    });
+    })?;
 
     Ok(change_id)
 }
@@ -211,19 +226,11 @@ pub fn submit_pending_change_set(json: &str) -> Result<String, JsValue> {
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn get_pending_change_sets() -> Result<JsValue, JsValue> {
-    let summaries = PENDING_CHANGE_SETS.with(|cell| {
-        let map = cell.borrow();
+    let summaries = with_pending_map(|map| {
         map.values()
-            .map(|cs| PendingChangeSetSummary {
-                id: cs.id.clone(),
-                origin: cs.origin.clone(),
-                actor: cs.actor.clone(),
-                rationale: cs.rationale.clone(),
-                op_count: cs.ops.len(),
-                submitted_at_ms: cs.submitted_at_ms,
-            })
+            .map(PendingChangeSetSummary::from)
             .collect::<Vec<_>>()
-    });
+    })?;
 
     serde_wasm_bindgen::to_value(&summaries)
         .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
@@ -233,17 +240,13 @@ pub fn get_pending_change_sets() -> Result<JsValue, JsValue> {
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn approve_change_set(change_id: &str) -> Result<String, JsValue> {
-    let change_id_str = change_id.to_string();
-
-    // Extract all op indices (all ops approved).
-    let indices: Vec<usize> = PENDING_CHANGE_SETS.with(|cell| {
-        let map = cell.borrow();
-        map.get(&change_id_str)
+    let change_id = change_id.to_string();
+    let indices: Vec<usize> = with_pending_map(|map| {
+        map.get(&change_id)
             .map(|cs| (0..cs.ops.len()).collect())
             .unwrap_or_default()
-    });
-
-    approve_selected_ops_impl(&change_id_str, &indices)
+    })?;
+    approve_selected_ops_impl(&change_id, &indices)
 }
 
 /// Approve only the selected operation indices in a pending ChangeSet.
@@ -257,7 +260,6 @@ pub fn approve_change_set(change_id: &str) -> Result<String, JsValue> {
 pub fn approve_selected_ops(change_id: &str, indices_json: &str) -> Result<String, JsValue> {
     let indices: Vec<usize> = serde_json::from_str(indices_json)
         .map_err(|e| JsValue::from_str(&format!("Invalid indices JSON: {}", e)))?;
-
     let change_id = change_id.to_string();
     approve_selected_ops_impl(&change_id, &indices)
 }
@@ -266,18 +268,14 @@ pub fn approve_selected_ops(change_id: &str, indices_json: &str) -> Result<Strin
 ///
 /// Dispatches each approved op as a `CommandEnvelope` through the normal command path,
 /// then removes the ChangeSet from the pending registry. Remaining (unapproved) ops
-/// are discarded from the registry (they stay in the source agent's context).
+/// are restored to the registry for retry.
+#[cfg(target_arch = "wasm32")]
 fn approve_selected_ops_impl(change_id: &str, indices: &[usize]) -> Result<String, JsValue> {
-    // Get the pending ChangeSet.
-    let cs_opt = PENDING_CHANGE_SETS.with(|cell| {
-        let mut map = cell.borrow_mut();
-        map.remove(change_id)
-    });
+    // Get and remove the pending ChangeSet.
+    let mut cs = with_pending_map(|map| map.remove(change_id))?
+        .ok_or_else(|| JsValue::from_str(&format!("ChangeSet not found: {}", change_id)))?;
 
-    let mut cs =
-        cs_opt.ok_or_else(|| JsValue::from_str(&format!("ChangeSet not found: {}", change_id)))?;
-
-    // Dispatch each selected op as a command through the normal dispatch path.
+    // Dispatch each selected op.
     let mut applied_count = 0;
     for &idx in indices {
         let op_json = cs.ops.get(idx).ok_or_else(|| {
@@ -288,7 +286,6 @@ fn approve_selected_ops_impl(change_id: &str, indices: &[usize]) -> Result<Strin
             ))
         })?;
 
-        // Deserialize op to Command.
         let command: Command = serde_json::from_value(op_json.clone())
             .map_err(|e| JsValue::from_str(&format!("Invalid op JSON at index {}: {}", idx, e)))?;
 
@@ -304,12 +301,11 @@ fn approve_selected_ops_impl(change_id: &str, indices: &[usize]) -> Result<Strin
             },
         };
 
-        // Dispatch via the kernel path.
         let result = dispatch_command_via_kernel(envelope);
         match result {
             Ok(_) => applied_count += 1,
             Err(e) => {
-                // Restore the remaining ops to the registry for retry.
+                // Restore remaining ops to the registry for retry.
                 let remaining_indices: Vec<usize> =
                     (0..cs.ops.len()).filter(|i| !indices.contains(i)).collect();
                 let remaining_ops: Vec<serde_json::Value> = remaining_indices
@@ -326,8 +322,8 @@ fn approve_selected_ops_impl(change_id: &str, indices: &[usize]) -> Result<Strin
                         ops: remaining_ops,
                         submitted_at_ms: cs.submitted_at_ms,
                     };
-                    PENDING_CHANGE_SETS.with(|cell| {
-                        cell.borrow_mut().insert(change_id.to_string(), restored_cs);
+                    let _ = with_pending_map(|map| {
+                        map.insert(change_id.to_string(), restored_cs);
                     });
                 }
 
@@ -350,10 +346,7 @@ fn approve_selected_ops_impl(change_id: &str, indices: &[usize]) -> Result<Strin
 #[wasm_bindgen]
 pub fn reject_change_set(change_id: &str) -> Result<(), JsValue> {
     let change_id = change_id.to_string();
-    PENDING_CHANGE_SETS.with(|cell| {
-        let mut map = cell.borrow_mut();
-        map.remove(&change_id);
-    });
+    let _ = with_pending_map(|map| map.remove(&change_id))?;
     Ok(())
 }
 
@@ -761,7 +754,11 @@ pub fn dispatch_command(json: &str) -> Result<String, JsValue> {
 }
 
 /// Kernel path: route a command envelope through SceneTransactionKernel.
-fn dispatch_command_via_kernel(envelope: CommandEnvelope) -> Result<String, JsValue> {
+///
+/// This is the internal dispatch function used by both the legacy WASM entry point
+/// and by `editor_application::wasm` for ChangeWorkbench approval.
+#[cfg(target_arch = "wasm32")]
+pub fn dispatch_command_via_kernel(envelope: CommandEnvelope) -> Result<String, JsValue> {
     use crate::transaction_bridge::scene_transaction_kernel;
     use editor_model::session::HistoryScope;
     use editor_model::transaction::{Applier, ChangeOrigin, ChangeSet};

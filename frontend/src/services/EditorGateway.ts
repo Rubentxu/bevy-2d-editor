@@ -126,7 +126,10 @@ export interface EditorGateway {
   /** Approve all ops in a pending ChangeSet and apply them. */
   approveChangeSet(id: string): Promise<ReadResult<void>>;
   /** Approve only the selected op indices in a pending ChangeSet. */
-  approveSelectedOps(id: string, indices: number[]): Promise<ReadResult<ApproveSelectedOpsResult>>;
+  approveSelectedOps(
+    id: string,
+    indices: number[],
+  ): Promise<ReadResult<ApproveSelectedOpsResult>>;
   /** Reject and discard a pending ChangeSet. */
   rejectChangeSet(id: string): Promise<ReadResult<void>>;
   /** Get recent ChangeSet summaries from the operation log. */
@@ -146,7 +149,10 @@ interface WindowWithBridge {
   submit_pending_change_set?: (json: string) => Promise<string> | string;
   get_pending_change_sets?: () => Promise<string> | string;
   approve_change_set?: (id: string) => Promise<string> | string;
-  approve_selected_ops?: (id: string, indices_json: string) => Promise<string> | string;
+  approve_selected_ops?: (
+    id: string,
+    indices_json: string,
+  ) => Promise<string> | string;
   reject_change_set?: (id: string) => Promise<string> | string;
   get_change_set_summaries?: () => Promise<string> | string;
   __bevyEngineStarted?: boolean;
@@ -304,7 +310,10 @@ function createEditorGateway(): EditorGateway {
       await ensureReady();
       const w = readBridge();
       if (!w?.submit_pending_change_set) {
-        return { ok: false, error: "submit_pending_change_set export not available" };
+        return {
+          ok: false,
+          error: "submit_pending_change_set export not available",
+        };
       }
       try {
         const result = await w.submit_pending_change_set(JSON.stringify(cs));
@@ -335,14 +344,26 @@ function createEditorGateway(): EditorGateway {
       await ensureReady();
       const w = readBridge();
       if (!w?.approve_selected_ops) {
-        return { ok: false, error: "approve_selected_ops export not available" };
+        return {
+          ok: false,
+          error: "approve_selected_ops export not available",
+        };
       }
       try {
-        const result = await w.approve_selected_ops(id, JSON.stringify(indices));
+        const result = await w.approve_selected_ops(
+          id,
+          JSON.stringify(indices),
+        );
         try {
-          return { ok: true, value: JSON.parse(result) as ApproveSelectedOpsResult };
+          return {
+            ok: true,
+            value: JSON.parse(result) as ApproveSelectedOpsResult,
+          };
         } catch {
-          return { ok: true, value: result as unknown as ApproveSelectedOpsResult };
+          return {
+            ok: true,
+            value: result as unknown as ApproveSelectedOpsResult,
+          };
         }
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };

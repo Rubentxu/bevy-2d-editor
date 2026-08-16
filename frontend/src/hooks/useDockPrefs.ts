@@ -98,7 +98,8 @@ export interface FloatingPanelState {
  * `right-outline`, etc.) so the v0.81 Tier 1c E2E tests keep their
  * existing wiring without churn.
  */
-export type PanelId = "assets" | "outline" | "properties" | "bottom" | "change-workbench";
+export type PanelId =
+  "assets" | "outline" | "properties" | "bottom" | "change-workbench";
 
 /**
  * Dockable regions. `center` is intentionally absent — it hosts the scene
