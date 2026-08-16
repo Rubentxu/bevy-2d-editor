@@ -193,7 +193,9 @@ pub fn submit_pending_change_set(json: &str) -> Result<String, JsValue> {
         .map_err(|e| JsValue::from_str(&format!("Invalid ChangeSet JSON: {}", e)))?;
 
     if cs.ops.is_empty() {
-        return Err(JsValue::from_str("ChangeSet must have at least one operation"));
+        return Err(JsValue::from_str(
+            "ChangeSet must have at least one operation",
+        ));
     }
 
     let change_id = cs.id.clone();
@@ -272,13 +274,18 @@ fn approve_selected_ops_impl(change_id: &str, indices: &[usize]) -> Result<Strin
         map.remove(change_id)
     });
 
-    let mut cs = cs_opt.ok_or_else(|| JsValue::from_str(&format!("ChangeSet not found: {}", change_id)))?;
+    let mut cs =
+        cs_opt.ok_or_else(|| JsValue::from_str(&format!("ChangeSet not found: {}", change_id)))?;
 
     // Dispatch each selected op as a command through the normal dispatch path.
     let mut applied_count = 0;
     for &idx in indices {
         let op_json = cs.ops.get(idx).ok_or_else(|| {
-            JsValue::from_str(&format!("Op index {} out of bounds (max {})", idx, cs.ops.len() - 1))
+            JsValue::from_str(&format!(
+                "Op index {} out of bounds (max {})",
+                idx,
+                cs.ops.len() - 1
+            ))
         })?;
 
         // Deserialize op to Command.
@@ -303,9 +310,8 @@ fn approve_selected_ops_impl(change_id: &str, indices: &[usize]) -> Result<Strin
             Ok(_) => applied_count += 1,
             Err(e) => {
                 // Restore the remaining ops to the registry for retry.
-                let remaining_indices: Vec<usize> = (0..cs.ops.len())
-                    .filter(|i| !indices.contains(i))
-                    .collect();
+                let remaining_indices: Vec<usize> =
+                    (0..cs.ops.len()).filter(|i| !indices.contains(i)).collect();
                 let remaining_ops: Vec<serde_json::Value> = remaining_indices
                     .iter()
                     .filter_map(|&i| cs.ops.get(i).cloned())
@@ -1799,11 +1805,10 @@ pub fn get_change_set_summaries() -> Result<JsValue, JsValue> {
     let summaries = OPERATION_LOG.with(|log| {
         let log_ref = log.borrow();
         // Get all StableIds from the active document to query the log.
-        let stable_ids: Vec<crate::document::StableId> =
-            scene_session::snapshot_active_doc()
-                .as_ref()
-                .map(|doc| doc.entities.iter().map(|e| e.id.clone()).collect())
-                .unwrap_or_default();
+        let stable_ids: Vec<crate::document::StableId> = scene_session::snapshot_active_doc()
+            .as_ref()
+            .map(|doc| doc.entities.iter().map(|e| e.id.clone()).collect())
+            .unwrap_or_default();
 
         let mut all_summaries: Vec<OperationLogSummary> = Vec::new();
 

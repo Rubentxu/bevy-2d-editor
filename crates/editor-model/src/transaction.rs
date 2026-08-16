@@ -279,12 +279,10 @@ impl<O: Debug + Clone> ChangeSet<O> {
     pub fn is_approved(&self) -> bool {
         match &self.approval {
             ApprovalPolicy::Auto => true,
-            ApprovalPolicy::RequiresHuman { .. } => {
-                match &self.approved_indices {
-                    None => false,
-                    Some(indices) => indices.len() == self.ops.len(),
-                }
-            }
+            ApprovalPolicy::RequiresHuman { .. } => match &self.approved_indices {
+                None => false,
+                Some(indices) => indices.len() == self.ops.len(),
+            },
         }
     }
 
@@ -294,12 +292,10 @@ impl<O: Debug + Clone> ChangeSet<O> {
     pub fn is_op_approved(&self, index: usize) -> bool {
         match &self.approval {
             ApprovalPolicy::Auto => true,
-            ApprovalPolicy::RequiresHuman { .. } => {
-                match &self.approved_indices {
-                    None => false,
-                    Some(indices) => indices.contains(&index),
-                }
-            }
+            ApprovalPolicy::RequiresHuman { .. } => match &self.approved_indices {
+                None => false,
+                Some(indices) => indices.contains(&index),
+            },
         }
     }
 
@@ -335,12 +331,15 @@ impl<O: Debug + Clone> ChangeSet<O> {
             cs.push_op(self.ops[i].clone());
         }
         for r in self.resources.iter() {
-            cs.add_resource(r.kind(), match r {
-                ResourceRef::Scene(s) => s.as_str(),
-                ResourceRef::SceneAsset(s) => s.as_str(),
-                ResourceRef::LogicGraph(s) => s.as_str(),
-                ResourceRef::Project(s) => s.as_str(),
-            });
+            cs.add_resource(
+                r.kind(),
+                match r {
+                    ResourceRef::Scene(s) => s.as_str(),
+                    ResourceRef::SceneAsset(s) => s.as_str(),
+                    ResourceRef::LogicGraph(s) => s.as_str(),
+                    ResourceRef::Project(s) => s.as_str(),
+                },
+            );
         }
         cs
     }
@@ -351,11 +350,9 @@ impl<O: Debug + Clone> ChangeSet<O> {
     pub fn unapproved_indices(&self) -> Vec<usize> {
         match &self.approved_indices {
             None => (0..self.ops.len()).collect(),
-            Some(approved) => {
-                (0..self.ops.len())
-                    .filter(|i| !approved.contains(i))
-                    .collect()
-            }
+            Some(approved) => (0..self.ops.len())
+                .filter(|i| !approved.contains(i))
+                .collect(),
         }
     }
 }
@@ -641,7 +638,10 @@ impl<A: Applier> TransactionKernel<A> {
         // Validate selected indices are in bounds
         for &i in &sorted_selected {
             if i >= cs.ops.len() {
-                return Err(KernelError::Preflight(format!("op index {} out of bounds", i)));
+                return Err(KernelError::Preflight(format!(
+                    "op index {} out of bounds",
+                    i
+                )));
             }
         }
 
@@ -665,7 +665,7 @@ impl<A: Applier> TransactionKernel<A> {
         if let (Some(failed_idx), Some(cause)) = (failing_index, failing_cause) {
             // Rollback already-applied ops
             for (_rollback_idx, rollback_op) in inverses.into_iter().rev() {
-                    if let Err(rollback_err) = self.applier.apply(doc, &rollback_op) {
+                if let Err(rollback_err) = self.applier.apply(doc, &rollback_op) {
                     return Err(KernelError::RollbackFailed {
                         cause: rollback_err,
                     });
@@ -961,17 +961,16 @@ mod tests {
             }
         }
 
-        fn summarize(
-            &self,
-            _doc: &Doc,
-            ops: &[Self::Operation],
-        ) -> (EffectsSummary, DiffSummary) {
-            (EffectsSummary::empty(), DiffSummary {
-                added: ops.len() as u64,
-                removed: 0,
-                modified: 0,
-                notes: Vec::new(),
-            })
+        fn summarize(&self, _doc: &Doc, ops: &[Self::Operation]) -> (EffectsSummary, DiffSummary) {
+            (
+                EffectsSummary::empty(),
+                DiffSummary {
+                    added: ops.len() as u64,
+                    removed: 0,
+                    modified: 0,
+                    notes: Vec::new(),
+                },
+            )
         }
     }
 
@@ -994,7 +993,9 @@ mod tests {
             "ai-agent".into(),
             "agent batch proposal".into(),
         );
-        cs.set_approval(ApprovalPolicy::RequiresHuman { approver_hint: None });
+        cs.set_approval(ApprovalPolicy::RequiresHuman {
+            approver_hint: None,
+        });
         // 5 ops: A, B, C, D, E (Append operations)
         cs.push_op(Op::Append("A".into()));
         cs.push_op(Op::Append("B".into()));
@@ -1066,7 +1067,9 @@ mod tests {
             "ai-agent".into(),
             "three-op proposal".into(),
         );
-        cs.set_approval(ApprovalPolicy::RequiresHuman { approver_hint: None });
+        cs.set_approval(ApprovalPolicy::RequiresHuman {
+            approver_hint: None,
+        });
         cs.push_op(Op::Append("A".into())); // index 0
         cs.push_op(Op::Append("B".into())); // index 1
         cs.push_op(Op::Append("C".into())); // index 2

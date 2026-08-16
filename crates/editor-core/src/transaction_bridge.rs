@@ -496,15 +496,15 @@ mod tests {
             "ai-agent".into(),
             "agent proposes creating an entity".into(),
         );
-        cs.set_approval(ApprovalPolicy::RequiresHuman {
-            approver_hint: Some("Scene will be modified".to_string()),
-        });
-        cs.approve(); // Explicit human approval
         cs.push_op(Command::CreateEntity {
             id: StableId::new("ent-approved"),
             name: "ApprovedEntity".to_string(),
             components: Vec::new(),
         });
+        cs.set_approval(ApprovalPolicy::RequiresHuman {
+            approver_hint: Some("Scene will be modified".to_string()),
+        });
+        cs.approve(); // Explicit human approval (after op was pushed)
 
         let receipt = kernel.apply_atomic(&cs, &mut doc, &mut history).unwrap();
 

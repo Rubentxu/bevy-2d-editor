@@ -391,6 +391,7 @@ mod tests {
             CommandMetadata::now("user").with_rationale("test"),
             Some("Human".to_string()),
             Some("user".to_string()),
+            None,
         );
         let json = serde_json::to_string(&entry).unwrap();
         let rt: LogEntry = serde_json::from_str(&json).unwrap();
