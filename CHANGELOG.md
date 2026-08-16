@@ -22,6 +22,41 @@ All notable changes to Bevy 2D Editor are documented here. The project follows s
 
 - None.
 
+## v0.90.0 — Thread-Local Liquidation & Apply-Back Wiring (2026-08-16)
+
+Closes the v0.89 14-item debt-report backlog (PR2a cycle amendment deferred to v0.90). The cycle delivers the `EditorSessionPort` seam (10 accessors) for cross-crate session access, migrates 3 high-priority thread_locals to the session, and removes `ProcessorContext::from_globals()`. The full thread_local migration (18 thread_locals remain) is deferred to v0.91 — the seam is now in place to do the per-file migration mechanically.
+
+### New features
+
+- **`EditorSessionPort` trait** (`crates/editor-model/src/session_port.rs`): object-safe trait with 10 accessor methods (`tunable_baselines_mut`, `last_rebuild_cause_mut`, `pending_causality_edges_mut`, `runtime_delta_buffer_mut`, `scene_state_mut`, `asset_state_mut`, `logic_state_mut`, `preview_inspector_mut`, `source_files_mut`, `recent_change_sets_for`, `logic_activation_ring_mut`). `editor-application::EditorSession` is the canonical impl; `editor-core` Bevy systems access the session through `editor_model::ports::with_session_mut`.
+- **`editor_model::ports::{register_editor_session, with_session_mut, with_session}`**: pattern parallel to the existing `with_project_store`. WASM `init_project_store` registers the session; Bevy systems read/write via the trait.
+- **Sub-state types in `editor_model::session`**: `SceneSessionState`, `AssetSessionState`, `LogicSessionState`, `ChangeSetSummary`, `PreviewInspectorState`, `SourceFilesCache`. Replaces the v0.89 PR2a local structs in `editor-application::session`; the `EditorSession` maps now use the editor-model types.
+- **`RuntimeDelta` moved to `editor_model`**: pure data type, no Bevy/WASM deps. `editor-application` re-exports it.
+- **Per-field recursive diff** (`editor_core::preview_runtime::compute_runtime_deltas_internal`): compares baseline vs runtime values for each leaf key; pushes one `RuntimeDelta` per differing field. Closes the v0.89 OVERENG-2 functional gap (`ApplyBackPanel` will now show real data instead of always-empty state).
+- **ApplyBackPolicy mirror-pair serde-equivalence test** (PR6, D3 spec §8): guards the ADR-0050 invariant that `editor_core::ApplyBackPolicy` and `editor_application::ApplyBackPolicy` serialize byte-equal for all 3 variants.
+
+### Changed
+
+- `EditorSession` sub-state types unified on `editor_model` types (removes the v0.89 PR2a local structs in `editor-application::session`).
+- `get_rebuild_cause_wasm` reads ONLY from the session (the v0.89 dual-read fallback from the editor-core thread_local is gone).
+- `capture_tunable_baselines_internal` writes ONLY to the session (the v0.89 dual-write to the `TUNABLE_BASELINES` thread_local is gone).
+- `RUNTIME_DELTA_BUFFER_CAP` constant extracted from 4 hard-coded `64` literals (1 in `runtime_delta.rs`, 3 in `session.rs`).
+
+### Fixed
+
+- **Functional gap closed**: `ApplyBackPanel` will now show real `RuntimeDelta` records (was always empty in production because Bevy `process_play_mode_request(PlayModeExit)` wrote to a thread_local, never to the session). The diff is per-field recursive.
+- **ADR-0052 unification**: `LAST_REBUILD_CAUSE` + `PENDING_CAUSALITY_EDGES` thread_locals removed from `editor-core::preview_inspector`. Both now live canonically in `EditorSession` via the trait. The `document::StableId` ↔ `editor_model::StableId` conversion is via `as_str()`.
+- **`ProcessorContext::from_globals()` removed** (was deprecated in v0.89 T-02-03). Use `ProcessorContext::with_asset_body` or `ProcessorContext::empty`.
+- **Pre-existing dead code removed** (3 functions): `build_path_index`, `suffix_match` (both from 2026-06-28, 4 cycles old), `_ensure_component_instance_linked` (from 2026-07-18).
+- **No-trigger `ponytail:` marker rewritten** in `asset_command.rs:285` (was 3 cycles old, pointed to a non-scheduled Validation Center capability).
+
+### Known limitations (deferred to v0.91)
+
+- **18 `thread_local!` declarations remain in `editor-core`** (target was 5-6 per D2). The `EditorSessionPort` seam is complete and the per-file migration is now mechanical: for each thread_local, replace `XXX.with(|c| ...)` with `with_session_mut(|s| s.method_mut())` and delete the `thread_local!` declaration. The remaining thread_locals span: `scene_session` (SCENE_DOC), `asset_state` (SCENE_ASSET_CATALOG + WARNINGS), `asset_command` (ASSET_OPERATION_LOG), `logic_state` (LOGIC_GRAPH_DOC + LOGIC_OPERATION_LOG), `logic_command` (LOGIC_OPERATION_LOG), `preview_inspector` (PREVIEW_METRICS + MAPPING + PROVENANCE), `logic_evaluator` (global_node_registry), `logic_recipes` (BUILTIN_RECIPES), `schema` (COMPONENT_SCHEMA_REGISTRY), `source_files` (SOURCE_FILE_REGISTRY), `operation_log` (OPERATION_LOG), `actuator_bus` (ACTUATOR_OUTPUT_BUS), `hot_reload_state` (HOT_RELOAD_BUS), `preview_runtime` (DIRTY_FLAG).
+- **`get_change_set_summaries_wasm` is a stop-gap** returning `[]`. Wiring to `EditorSession.recent_change_sets` (populated by the `OperationLog::recent_change_sets_for` poll loop) is deferred to v0.91.
+- **Pre-existing TypeScript errors** in `editor_application.d.ts` (17 errors, lines 807-1015) caused by wasm-bindgen 0.2 + wasm-pack 0.14 generated JSDoc. `vite build` exits 0 (transpileOnly). Out of scope.
+- **`OperationLog` type itself not yet in `editor-model`**: the `AssetSessionState::operation_log_bytes` and `LogicSessionState::operation_log_bytes` fields are `Vec<u8>` placeholders. The real `OperationLog` type still lives in `editor-core`; moving it is a v0.91 task.
+
 ## v0.89.0 — Change & Runtime Workbench (2026-08-16)
 
 Closes the v0.88 deferred "TransactionKernel not yet wired into actual editor dispatch paths" and ships 3 epics: Change Workbench UI, Runtime Causality, Runtime Apply-Back. All 14 spec scenarios pass with covering runtime tests (PASS WITH WARNINGS); 8 tasks explicitly deferred to v0.90 per cycle amendment.
