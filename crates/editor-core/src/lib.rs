@@ -1548,60 +1548,6 @@ pub fn get_scene_snapshot() -> JsValue {
     }
 }
 
-/// Get recent ChangeSet summaries from the operation log for the active scene.
-///
-/// Returns a JSON array of ChangeSetSummary objects (most recent first).
-/// Used by the ChangeWorkbench to display the recent change history.
-#[wasm_bindgen]
-pub fn get_change_set_summaries() -> Result<JsValue, JsValue> {
-    use crate::operation_log::OperationLog;
-
-    let summaries = OPERATION_LOG.with(|log| {
-        let log_ref = log.borrow();
-        // Get all StableIds from the active document to query the log.
-        let stable_ids: Vec<crate::document::StableId> = scene_session::snapshot_active_doc()
-            .as_ref()
-            .map(|doc| doc.entities.iter().map(|e| e.id.clone()).collect())
-            .unwrap_or_default();
-
-        let mut all_summaries: Vec<OperationLogSummary> = Vec::new();
-
-        for sid in &stable_ids {
-            let entries = log_ref.recent_change_sets_for(sid);
-            for entry in entries {
-                all_summaries.push(OperationLogSummary {
-                    change_id: entry.change_id.unwrap_or_default(),
-                    origin: entry.origin,
-                    actor: entry.actor,
-                    applied_at_ms: entry.applied_at,
-                    ops_touched: entry.ops_touched,
-                });
-            }
-        }
-
-        // Sort by applied_at descending, dedupe by change_id.
-        all_summaries.sort_by(|a, b| b.applied_at_ms.cmp(&a.applied_at_ms));
-        all_summaries.dedup_by(|a, b| a.change_id == b.change_id);
-
-        // Return top 50.
-        all_summaries.truncate(50);
-        all_summaries
-    });
-
-    serde_wasm_bindgen::to_value(&summaries)
-        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
-}
-
-/// A summary entry from the OperationLog's recent_change_sets_for query.
-#[derive(Debug, Clone, serde::Serialize)]
-struct OperationLogSummary {
-    change_id: String,
-    origin: String,
-    actor: String,
-    applied_at_ms: u64,
-    ops_touched: usize,
-}
-
 /// Export a SceneDocument JSON string to runnable Bevy 0.19 Rust source code.
 /// Returns a JSON object with shape:
 /// `{ source: String, warnings: ExportWarning[] }`
