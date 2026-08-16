@@ -22,6 +22,80 @@ All notable changes to Bevy 2D Editor are documented here. The project follows s
 
 - None.
 
+## v0.91.0 — Thread-Local Migration Completion (2026-08-16)
+
+Closes the functional gaps from v0.90 and ships the post-v0.90 cleanup
+work. The cycle is intentionally narrow (3 PRs vs the 6-PR v0.90): the
+remaining v0.91 work is split out as a v0.92 follow-up.
+
+### New features
+
+- **`apply_back_eligible` derived from `ApplyBackPolicy`** (PR1): the
+  hardcoded `true` in the 3 RuntimeDelta capture sites is replaced with a
+  schema lookup. The 3 builtin schemas (including `editor.Transform2D`)
+  have `apply_back = Never` per D4, so their deltas are correctly flagged
+  ineligible. `ExplicitOnly` and `Tunable` schemas produce eligible
+  deltas. Falls back to `true` (conservative) for unknown schemas.
+- **`get_change_set_summaries_wasm` wired to session** (PR1): the v0.90
+  stub returning `[]` now reads from `EditorSession.recent_change_sets`
+  via the `EditorSessionPort::all_recent_change_sets` trait method.
+
+### Changed
+
+- `crates/editor-core/src/scene_asset_catalog.rs` moved to
+  `crates/editor-model/src/scene_asset_catalog.rs` (PR2): the data type
+  is editor-model canon per the v0.88 PR B architecture. Re-exports
+  updated in both editor-core and editor-application.
+- `SCENE_ASSET_CATALOG` and `SCENE_ASSET_CATALOG_WARNINGS` thread_locals
+  removed (PR2): both are now fields on `EditorSession::asset_states["_active"]`
+  (`catalog: Option<SceneAssetCatalog>` and `catalog_warnings: Vec<CatalogWarning>`).
+  The `with_asset_catalog`, `with_asset_catalog_mut`,
+  `get_asset_catalog_warnings`, `clear_asset_catalog_warnings` functions
+  are reimplemented as session accessors.
+- `dispatch_command`, `dispatch_asset_command`, `dispatch_logic_command`
+  simplified to always route through `TransactionKernel` (PR5): the legacy
+  pre-kernel `is_dispatch_via_kernel() == false` branch is removed.
+  ADR-0032 established the kernel as the single dispatch path; the
+  legacy fallback was never reachable in production since v0.89.
+- 3 legacy dispatch functions deleted (PR5): `dispatch_command_legacy`,
+  `dispatch_asset_command_legacy`, `dispatch_logic_command_legacy`.
+  ~80 LOC of pre-v0.89 dead code removed.
+
+### Known limitations (deferred to v0.92)
+
+- **3 thread_locals remain in editor-core** (the v0.91 cycle amendment's
+  remaining scope): `SCENE_DOC` (scene_session.rs), `LOGIC_GRAPH_DOC`
+  (logic_state.rs), `ASSET_OPERATION_LOG` (asset_state.rs). The trait
+  seam is in place; the migration is mechanical but requires a
+  re-entrancy analysis because the closures in `apply_command`, `undo`,
+  `redo` hold `&mut SceneDocument` across `processor::apply` calls, which
+  themselves want the session lock for logging. The current v0.91 trait
+  uses `Arc<Mutex<EditorSession>>` which cannot be re-entered from the
+  same thread. The next cycle should either (a) restructure
+  `apply_command` to take the document by value and write back
+  atomically, or (b) use a per-document `Arc<Mutex<SceneDocument>>` as
+  separate shared state (independent of EditorSession).
+- **EditorSession god-class split**: `editor-application/src/session.rs`
+  is 828 lines with 16 fields and 30+ accessors. Splitting into
+  `editor_session/{core, scene_state, asset_state, logic_state,
+  preview, change_sets, causality, runtime_delta, logic_activation}.rs`
+  is a deepening candidate; not a functional change.
+- **FakeSession test harness shared** (`crates/editor-core/tests/common/`):
+  5 test files duplicate the `FakeSession` impl. Extraction was attempted
+  in v0.91 PR4 but the migration broke re-entrancy patterns; the
+  `crates/editor-core/tests/common/mod.rs` module exists but the
+  per-file `mod common;` declarations are not in place. A follow-up PR
+  can complete this trivially once the per-file signature drift is
+  reconciled.
+- **Pre-existing TypeScript errors** in `editor_application.d.ts`
+  (17 errors, lines 807-1015). Pre-existing since v0.89 PR4; `vite build`
+  exits 0 (transpileOnly). Out of scope for v0.91.
+- **`OperationLog` type itself not yet in `editor-model`**: the
+  `AssetSessionState::operation_log_bytes` and
+  `LogicSessionState::operation_log_bytes` fields are `Vec<u8>` placeholders
+  (v0.90 PR4). The real `OperationLog` type still lives in
+  `editor-core`; moving it is a v0.92 task.
+
 ## v0.90.0 — Thread-Local Liquidation & Apply-Back Wiring (2026-08-16)
 
 Closes the v0.89 14-item debt-report backlog (PR2a cycle amendment deferred to v0.90). The cycle delivers the `EditorSessionPort` seam (10 accessors) for cross-crate session access, migrates 3 high-priority thread_locals to the session, and removes `ProcessorContext::from_globals()`. The full thread_local migration (18 thread_locals remain) is deferred to v0.91 — the seam is now in place to do the per-file migration mechanically.
