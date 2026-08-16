@@ -25,6 +25,8 @@ pub use editor_model::transaction::{
     Applier, ApprovalPolicy, ChangeOrigin, ChangeSet, DiffSummary, EffectsSummary, ResourceRef,
     ValidationReport,
 };
+// PartialApplyReceipt and PartialApplyWarning are used by the ChangeWorkbench WASM boundary.
+pub use editor_model::transaction::{PartialApplyReceipt, PartialApplyWarning};
 // editor-application's transaction module provides TransactionKernel and KernelError
 // (stateful, impl-specific) but re-exports the trait/types from editor_model.
 pub use transaction::{ChangeSetSummary, KernelError, TransactionKernel};

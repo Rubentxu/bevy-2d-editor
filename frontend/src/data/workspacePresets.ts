@@ -60,6 +60,7 @@ const BUILTIN_PANEL_REGIONS: Record<PanelId, DockableRegion> = {
   outline: "right",
   properties: "right",
   bottom: "bottom",
+  "change-workbench": "bottom",
 };
 
 /**

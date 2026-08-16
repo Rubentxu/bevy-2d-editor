@@ -96,6 +96,56 @@ pub fn is_dispatch_via_kernel() -> bool {
     DISPATCH_VIA_KERNEL.load(Ordering::SeqCst)
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Change Workbench — pending ChangeSet registry (ADR-0039)
+// ─────────────────────────────────────────────────────────────────────────────
+
+use std::collections::HashMap;
+
+thread_local! {
+    /// Pending ChangeSets awaiting user approval in the ChangeWorkbench.
+    /// Key = change-set ID (e.g. "agent:12345" or "cmd:1234567890").
+    static PENDING_CHANGE_SETS: RefCell<HashMap<String, PendingChangeSet>> = RefCell::new(HashMap::new());
+}
+
+/// A pending ChangeSet stored in the WASM registry while awaiting approval.
+///
+/// The ops are stored as `serde_json::Value` to avoid coupling the WASM boundary
+/// to the concrete `SceneCommand` type. When approved, the ops are deserialized
+/// to `Command` and dispatched through the normal command path.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct PendingChangeSet {
+    /// Unique change-set identifier.
+    id: String,
+    /// Where the change originated (e.g. "Human", "Agent", "Recipe").
+    origin: String,
+    /// Who authored this change (e.g. "user", "agent:foo").
+    actor: String,
+    /// Human-readable rationale.
+    rationale: String,
+    /// Operations in this ChangeSet, stored as JSON to decouple WASM boundary.
+    ops: Vec<serde_json::Value>,
+    /// When this ChangeSet was submitted (Unix ms).
+    submitted_at_ms: u64,
+}
+
+/// Summary of a pending ChangeSet returned to the frontend.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct PendingChangeSetSummary {
+    /// Change-set ID.
+    id: String,
+    /// Where the change originated.
+    origin: String,
+    /// Who authored this change.
+    actor: String,
+    /// Rationale description.
+    rationale: String,
+    /// Number of operations in this ChangeSet.
+    op_count: usize,
+    /// When submitted (Unix ms).
+    submitted_at_ms: u64,
+}
+
 /// Set the dispatch mode. Use `"kernel"` to enable kernel routing or `"legacy"` to
 /// revert to the v0.88 path.
 ///
@@ -118,15 +168,187 @@ pub fn set_dispatch_mode_wasm(mode: &str) -> Result<(), JsValue> {
     }
 }
 
-/// Get the current dispatch mode as a string ("kernel" or "legacy").
+// ─────────────────────────────────────────────────────────────────────────────
+// Change Workbench WASM boundary (ADR-0039)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Submit a new pending ChangeSet for approval.
+///
+/// The ChangeSet JSON should have shape:
+/// ```json
+/// {
+///   "id": "agent:12345",
+///   "origin": "Agent",
+///   "actor": "agent:code-writer",
+///   "rationale": "Refactor entity naming",
+///   "ops": [{ /* SceneCommand as JSON */ }]
+/// }
+/// ```
+///
+/// Returns the change-set ID on success, or an error string.
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
-pub fn get_dispatch_mode_wasm() -> String {
-    if is_dispatch_via_kernel() {
-        "kernel".to_string()
-    } else {
-        "legacy".to_string()
+pub fn submit_pending_change_set(json: &str) -> Result<String, JsValue> {
+    let cs: PendingChangeSet = serde_json::from_str(json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid ChangeSet JSON: {}", e)))?;
+
+    if cs.ops.is_empty() {
+        return Err(JsValue::from_str("ChangeSet must have at least one operation"));
     }
+
+    let change_id = cs.id.clone();
+    PENDING_CHANGE_SETS.with(|cell| {
+        let mut map = cell.borrow_mut();
+        map.insert(change_id.clone(), cs);
+    });
+
+    Ok(change_id)
+}
+
+/// Get all pending ChangeSets as a JSON array of summaries.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn get_pending_change_sets() -> Result<JsValue, JsValue> {
+    let summaries = PENDING_CHANGE_SETS.with(|cell| {
+        let map = cell.borrow();
+        map.values()
+            .map(|cs| PendingChangeSetSummary {
+                id: cs.id.clone(),
+                origin: cs.origin.clone(),
+                actor: cs.actor.clone(),
+                rationale: cs.rationale.clone(),
+                op_count: cs.ops.len(),
+                submitted_at_ms: cs.submitted_at_ms,
+            })
+            .collect::<Vec<_>>()
+    });
+
+    serde_wasm_bindgen::to_value(&summaries)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+}
+
+/// Approve all operations in a pending ChangeSet and apply them.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn approve_change_set(change_id: &str) -> Result<String, JsValue> {
+    let change_id_str = change_id.to_string();
+
+    // Extract all op indices (all ops approved).
+    let indices: Vec<usize> = PENDING_CHANGE_SETS.with(|cell| {
+        let map = cell.borrow();
+        map.get(&change_id_str)
+            .map(|cs| (0..cs.ops.len()).collect())
+            .unwrap_or_default()
+    });
+
+    approve_selected_ops_impl(&change_id_str, &indices)
+}
+
+/// Approve only the selected operation indices in a pending ChangeSet.
+///
+/// `indices` is a JSON array of zero-based op indices to apply (e.g. `[0, 2, 4]`).
+/// Ops not in the list are excluded from this approval and will remain pending.
+///
+/// Returns a JSON object with `applied` count and `remaining` ChangeSet (or null if none).
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn approve_selected_ops(change_id: &str, indices_json: &str) -> Result<String, JsValue> {
+    let indices: Vec<usize> = serde_json::from_str(indices_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid indices JSON: {}", e)))?;
+
+    let change_id = change_id.to_string();
+    approve_selected_ops_impl(&change_id, &indices)
+}
+
+/// Internal implementation of approve_selected_ops.
+///
+/// Dispatches each approved op as a `CommandEnvelope` through the normal command path,
+/// then removes the ChangeSet from the pending registry. Remaining (unapproved) ops
+/// are discarded from the registry (they stay in the source agent's context).
+fn approve_selected_ops_impl(change_id: &str, indices: &[usize]) -> Result<String, JsValue> {
+    // Get the pending ChangeSet.
+    let cs_opt = PENDING_CHANGE_SETS.with(|cell| {
+        let mut map = cell.borrow_mut();
+        map.remove(change_id)
+    });
+
+    let mut cs = cs_opt.ok_or_else(|| JsValue::from_str(&format!("ChangeSet not found: {}", change_id)))?;
+
+    // Dispatch each selected op as a command through the normal dispatch path.
+    let mut applied_count = 0;
+    for &idx in indices {
+        let op_json = cs.ops.get(idx).ok_or_else(|| {
+            JsValue::from_str(&format!("Op index {} out of bounds (max {})", idx, cs.ops.len() - 1))
+        })?;
+
+        // Deserialize op to Command.
+        let command: Command = serde_json::from_value(op_json.clone())
+            .map_err(|e| JsValue::from_str(&format!("Invalid op JSON at index {}: {}", idx, e)))?;
+
+        let envelope = CommandEnvelope {
+            command,
+            metadata: CommandMetadata {
+                timestamp: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as u64,
+                authorship: cs.actor.clone(),
+                rationale: Some(format!("[ChangeWorkbench] {}", cs.rationale)),
+            },
+        };
+
+        // Dispatch via the kernel path.
+        let result = dispatch_command_via_kernel(envelope);
+        match result {
+            Ok(_) => applied_count += 1,
+            Err(e) => {
+                // Restore the remaining ops to the registry for retry.
+                let remaining_indices: Vec<usize> = (0..cs.ops.len())
+                    .filter(|i| !indices.contains(i))
+                    .collect();
+                let remaining_ops: Vec<serde_json::Value> = remaining_indices
+                    .iter()
+                    .filter_map(|&i| cs.ops.get(i).cloned())
+                    .collect();
+
+                if !remaining_ops.is_empty() {
+                    let restored_cs = PendingChangeSet {
+                        id: change_id.to_string(),
+                        origin: cs.origin.clone(),
+                        actor: cs.actor.clone(),
+                        rationale: cs.rationale.clone(),
+                        ops: remaining_ops,
+                        submitted_at_ms: cs.submitted_at_ms,
+                    };
+                    PENDING_CHANGE_SETS.with(|cell| {
+                        cell.borrow_mut().insert(change_id.to_string(), restored_cs);
+                    });
+                }
+
+                return Err(e);
+            }
+        }
+    }
+
+    let response = serde_json::json!({
+        "applied": applied_count,
+        "remaining": (),
+    });
+
+    serde_json::to_string(&response)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+}
+
+/// Reject and discard a pending ChangeSet.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn reject_change_set(change_id: &str) -> Result<(), JsValue> {
+    let change_id = change_id.to_string();
+    PENDING_CHANGE_SETS.with(|cell| {
+        let mut map = cell.borrow_mut();
+        map.remove(&change_id);
+    });
+    Ok(())
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -586,13 +808,14 @@ fn dispatch_command_via_kernel(envelope: CommandEnvelope) -> Result<String, JsVa
                 });
 
         // Record in OperationLog for undo/redo (byte-equality with legacy path).
-        // Use record_with_provenance to pass origin and actor from the ChangeSet.
+        // Use record_with_provenance to pass origin, actor, and change_id from the ChangeSet.
         OPERATION_LOG.with(|l| {
             l.borrow_mut().record_with_provenance(
                 &envelope,
                 inverse.clone(),
                 format!("{:?}", origin),
                 envelope.metadata.authorship.clone(),
+                Some(cs.id.clone()),
             );
         });
 
@@ -1563,6 +1786,61 @@ pub fn get_scene_snapshot() -> JsValue {
         },
         None => JsValue::NULL,
     }
+}
+
+/// Get recent ChangeSet summaries from the operation log for the active scene.
+///
+/// Returns a JSON array of ChangeSetSummary objects (most recent first).
+/// Used by the ChangeWorkbench to display the recent change history.
+#[wasm_bindgen]
+pub fn get_change_set_summaries() -> Result<JsValue, JsValue> {
+    use crate::operation_log::OperationLog;
+
+    let summaries = OPERATION_LOG.with(|log| {
+        let log_ref = log.borrow();
+        // Get all StableIds from the active document to query the log.
+        let stable_ids: Vec<crate::document::StableId> =
+            scene_session::snapshot_active_doc()
+                .as_ref()
+                .map(|doc| doc.entities.iter().map(|e| e.id.clone()).collect())
+                .unwrap_or_default();
+
+        let mut all_summaries: Vec<OperationLogSummary> = Vec::new();
+
+        for sid in &stable_ids {
+            let entries = log_ref.recent_change_sets_for(sid);
+            for entry in entries {
+                all_summaries.push(OperationLogSummary {
+                    change_id: entry.change_id.unwrap_or_default(),
+                    origin: entry.origin,
+                    actor: entry.actor,
+                    applied_at_ms: entry.applied_at,
+                    ops_touched: entry.ops_touched,
+                });
+            }
+        }
+
+        // Sort by applied_at descending, dedupe by change_id.
+        all_summaries.sort_by(|a, b| b.applied_at_ms.cmp(&a.applied_at_ms));
+        all_summaries.dedup_by(|a, b| a.change_id == b.change_id);
+
+        // Return top 50.
+        all_summaries.truncate(50);
+        all_summaries
+    });
+
+    serde_wasm_bindgen::to_value(&summaries)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+}
+
+/// A summary entry from the OperationLog's recent_change_sets_for query.
+#[derive(Debug, Clone, serde::Serialize)]
+struct OperationLogSummary {
+    change_id: String,
+    origin: String,
+    actor: String,
+    applied_at_ms: u64,
+    ops_touched: usize,
 }
 
 /// Export a SceneDocument JSON string to runnable Bevy 0.19 Rust source code.

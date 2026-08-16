@@ -58,6 +58,7 @@ ADR numbering is monotonic and never reused. Superseded decisions keep their ori
 | [ADR-0046](./0046-semantic-editor-model-authority.md)                            | Semantic Editor Model Is the Authoritative Source of Truth                     | Accepted (2026-08-14)                                                |
 | [ADR-0047](./0047-logic-graph-model-split-bevy-adapter.md)                       | Logic Graph Model Split — Pure Types in editor-model, Bevy Adapter in editor-core | Accepted (2026-08-15) — v0.87 (`v0.87-architecture-foundation`)    |
 | [ADR-0048](./0048-projectstore-v1-is-synchronous.md)                              | ProjectStore v1 Is a Synchronous Port                                          | Accepted (2026-08-15) — v0.87 (`v0.87-architecture-foundation`)    |
+| [ADR-0051](./0051-change-workbench-bottom-dock-tab.md)                              | ChangeWorkbenchPanel Lives in Bottom-Dock as an Internal Tab (ADR-0039/0024)   | Draft (2026-08-16) — v0.89 PR2b (`feat/v0.89-pr2b-workbench`)              |
 
 ## Related Documents
 

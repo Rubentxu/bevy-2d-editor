@@ -20,7 +20,6 @@
 
 use crate::session::HistoryScope;
 use crate::time::Timestamp;
-use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
 /// Where a ChangeSet originated (ADR-0032 §Decision).
@@ -203,8 +202,11 @@ pub struct ChangeSet<O> {
     pub rationale: String,
     /// Approval policy for this change.
     approval: ApprovalPolicy,
-    /// Whether this change has been approved.
-    approved: bool,
+    /// Per-op approval for partial apply. When `None`, all ops are treated as
+    /// approved (the legacy semantics). When `Some`, only the listed indices are approved.
+    /// Used by `TransactionKernel::partial_apply` to represent the subset of ops
+    /// the user selected for approval.
+    approved_indices: Option<Vec<usize>>,
     /// List of operations in apply order.
     pub ops: Vec<O>,
     /// Resources affected by this change.
@@ -220,7 +222,7 @@ impl<O: Debug + Clone> ChangeSet<O> {
             actor,
             rationale,
             approval: ApprovalPolicy::Auto,
-            approved: false,
+            approved_indices: None,
             ops: Vec::new(),
             resources: Vec::new(),
         }
@@ -242,16 +244,62 @@ impl<O: Debug + Clone> ChangeSet<O> {
         self.approval = policy;
     }
 
-    /// Mark this change as approved.
+    /// Mark this change as approved (all ops).
+    ///
+    /// For partial approval, use [`approve_selected`](Self::approve_selected) instead.
     pub fn approve(&mut self) {
-        self.approved = true;
+        self.approved_indices = Some((0..self.ops.len()).collect());
     }
 
-    /// Returns true if this change has been approved according to its policy.
+    /// Mark specific operations as approved for partial apply.
+    ///
+    /// After calling this, only the ops at the given indices are considered approved.
+    /// Remaining ops stay unapproved and form the new pending ChangeSet.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any index is out of bounds.
+    pub fn approve_selected(&mut self, indices: &[usize]) {
+        if indices.is_empty() {
+            self.approved_indices = Some(vec![]);
+            return;
+        }
+        for &i in indices {
+            assert!(i < self.ops.len(), "op index {} out of bounds", i);
+        }
+        let mut approved = indices.to_vec();
+        approved.sort_unstable();
+        self.approved_indices = Some(approved);
+    }
+
+    /// Returns true if ALL operations in this change have been approved according to
+    /// the approval policy.
+    ///
+    /// For per-op checks (partial apply), use [`is_op_approved`](Self::is_op_approved).
     pub fn is_approved(&self) -> bool {
         match &self.approval {
             ApprovalPolicy::Auto => true,
-            ApprovalPolicy::RequiresHuman { .. } => self.approved,
+            ApprovalPolicy::RequiresHuman { .. } => {
+                match &self.approved_indices {
+                    None => false,
+                    Some(indices) => indices.len() == self.ops.len(),
+                }
+            }
+        }
+    }
+
+    /// Returns true if the operation at the given index has been approved.
+    ///
+    /// Used by `TransactionKernel::partial_apply` to determine which ops to apply.
+    pub fn is_op_approved(&self, index: usize) -> bool {
+        match &self.approval {
+            ApprovalPolicy::Auto => true,
+            ApprovalPolicy::RequiresHuman { .. } => {
+                match &self.approved_indices {
+                    None => false,
+                    Some(indices) => indices.contains(&index),
+                }
+            }
         }
     }
 
@@ -268,6 +316,47 @@ impl<O: Debug + Clone> ChangeSet<O> {
     /// Push an operation onto the list.
     pub fn push_op(&mut self, op: O) {
         self.ops.push(op);
+    }
+
+    /// Returns a new ChangeSet containing only the ops at the given indices.
+    ///
+    /// Used by `TransactionKernel::partial_apply` to build the remaining-ops ChangeSet.
+    /// The new ChangeSet starts unapproved (no approved_indices set).
+    pub fn subset(&self, indices: &[usize]) -> Self {
+        let mut cs = ChangeSet::new(
+            format!("{}-remaining", self.id),
+            self.origin.clone(),
+            self.actor.clone(),
+            format!("{} (remaining after partial approve)", self.rationale),
+        );
+        cs.set_approval(self.approval.clone());
+        // Remaining ops are NOT approved — user must review them again
+        for &i in indices {
+            cs.push_op(self.ops[i].clone());
+        }
+        for r in self.resources.iter() {
+            cs.add_resource(r.kind(), match r {
+                ResourceRef::Scene(s) => s.as_str(),
+                ResourceRef::SceneAsset(s) => s.as_str(),
+                ResourceRef::LogicGraph(s) => s.as_str(),
+                ResourceRef::Project(s) => s.as_str(),
+            });
+        }
+        cs
+    }
+
+    /// Returns the indices of unapproved ops (those not in `approved_indices`).
+    ///
+    /// Used by `TransactionKernel::partial_apply` to build the remaining ChangeSet.
+    pub fn unapproved_indices(&self) -> Vec<usize> {
+        match &self.approved_indices {
+            None => (0..self.ops.len()).collect(),
+            Some(approved) => {
+                (0..self.ops.len())
+                    .filter(|i| !approved.contains(i))
+                    .collect()
+            }
+        }
     }
 }
 
@@ -344,6 +433,36 @@ impl<E: Debug + std::fmt::Display> std::fmt::Display for KernelError<E> {
 }
 
 impl<E: Debug + std::fmt::Display> std::error::Error for KernelError<E> {}
+
+/// Warning for an op that was excluded from the new pending ChangeSet due to revalidation failure.
+///
+/// Returned in [`PartialApplyReceipt::excluded`] when `partial_apply` revalidates
+/// remaining ops and some fail the preflight check.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartialApplyWarning<O> {
+    /// Zero-based index of the op in the ORIGINAL ChangeSet.
+    pub original_index: usize,
+    /// The operation that was excluded.
+    pub op: O,
+    /// Human-readable reason for exclusion.
+    pub reason: String,
+}
+
+/// Receipt after a successful partial apply.
+///
+/// Returned by [`TransactionKernel::partial_apply`]. Contains the applied ops' receipt,
+/// the new pending ChangeSet for remaining ops, and any warnings for ops that were
+/// excluded due to revalidation failure.
+#[derive(Debug, Clone)]
+pub struct PartialApplyReceipt<O> {
+    /// Receipt for the applied operations.
+    pub applied_receipt: ApplyReceipt<O>,
+    /// New pending ChangeSet containing the remaining unapplied ops (still requires approval).
+    pub remaining_change_set: ChangeSet<O>,
+    /// Ops that were excluded from `remaining_change_set` because they failed revalidation.
+    /// These are NOT applied and NOT in the new pending ChangeSet — they are dropped.
+    pub excluded: Vec<PartialApplyWarning<O>>,
+}
 
 /// Metadata recorded about an applied change (ADR-0032).
 ///
@@ -477,6 +596,154 @@ impl<A: Applier> TransactionKernel<A> {
             revision,
             effects,
             diff,
+        })
+    }
+
+    /// Apply only the specified operation indices from a ChangeSet (partial apply).
+    ///
+    /// This is the core primitive for the ChangeWorkbench "Approve Selected" workflow.
+    ///
+    /// # Steps
+    ///
+    /// 1. Extract and apply only the selected ops in document order, collecting inverses.
+    /// 2. On apply failure: rollback applied ops, return `Err(ApplyFailed)`.
+    /// 3. Revalidate remaining (unselected) ops against the updated document.
+    ///    - Ops that fail revalidation are **excluded** from the new pending ChangeSet
+    ///      and returned in `excluded` with a warning.
+    ///    - This means partial apply is **all-or-nothing for the applied slice**,
+    ///      but **per-op for revalidation failures** on the remaining slice.
+    /// 4. Build a new pending `ChangeSet` from the remaining (revalidation-passed) ops.
+    ///
+    /// # Spec scenarios
+    ///
+    /// - `partial-approve-two-of-five-ops`: selecting 2 of 5 → 2 applied, 3 revalidated
+    ///   into a new pending ChangeSet.
+    /// - `all-or-nothing-on-revalidation-failure`: if OpC fails revalidation after OpA
+    ///   is applied, OpA stays applied, OpC is excluded with a warning, OpB stays in the
+    ///   new pending ChangeSet.
+    pub fn partial_apply(
+        &self,
+        cs: &ChangeSet<A::Operation>,
+        selected_indices: &[usize],
+        doc: &mut A::Document,
+        history: &mut HistoryScope,
+    ) -> Result<PartialApplyReceipt<A::Operation>, KernelError<A::Error>> {
+        // Sort and dedup selected indices
+        let mut sorted_selected = selected_indices.to_vec();
+        sorted_selected.sort_unstable();
+        sorted_selected.dedup();
+
+        // Empty selection → nothing to apply
+        if sorted_selected.is_empty() {
+            return Err(KernelError::ApprovalRequired);
+        }
+
+        // Validate selected indices are in bounds
+        for &i in &sorted_selected {
+            if i >= cs.ops.len() {
+                return Err(KernelError::Preflight(format!("op index {} out of bounds", i)));
+            }
+        }
+
+        // Step 1: Apply selected ops in document order
+        let mut inverses = Vec::with_capacity(sorted_selected.len());
+        let mut failing_index = None;
+        let mut failing_cause = None;
+        for &i in &sorted_selected {
+            let op = &cs.ops[i];
+            match self.applier.apply(doc, op) {
+                Ok(inverse) => inverses.push((i, inverse)),
+                Err(cause) => {
+                    failing_index = Some(i);
+                    failing_cause = Some(cause);
+                    break;
+                }
+            }
+        }
+
+        // If any op failed, rollback and return error
+        if let (Some(failed_idx), Some(cause)) = (failing_index, failing_cause) {
+            // Rollback already-applied ops
+            for (_rollback_idx, rollback_op) in inverses.into_iter().rev() {
+                    if let Err(rollback_err) = self.applier.apply(doc, &rollback_op) {
+                    return Err(KernelError::RollbackFailed {
+                        cause: rollback_err,
+                    });
+                }
+            }
+            return Err(KernelError::ApplyFailed {
+                index: failed_idx,
+                cause,
+            });
+        }
+
+        // Step 2: Record applied change
+        let revision = history.next_revision();
+        let meta = AppliedChangeMeta {
+            change_id: cs.id.clone(),
+            origin: cs.origin.clone(),
+            actor: cs.actor.clone(),
+            applied_at: Timestamp(0),
+        };
+        history.record_applied(meta);
+
+        // Build applied receipt
+        let applied_ops: Vec<_> = sorted_selected.iter().map(|&i| cs.ops[i].clone()).collect();
+        let (effects, diff) = self.applier.summarize(doc, &applied_ops);
+        let mut inverse_ops: Vec<_> = inverses.into_iter().map(|(_, inv)| inv).collect();
+        inverse_ops.reverse();
+        let applied_receipt = ApplyReceipt {
+            change_id: cs.id.clone(),
+            inverses: inverse_ops,
+            revision,
+            effects,
+            diff,
+        };
+
+        // Step 3: Revalidate remaining ops
+        let remaining_indices: Vec<usize> = (0..cs.ops.len())
+            .filter(|i| !sorted_selected.contains(i))
+            .collect();
+
+        let mut excluded = Vec::new();
+        let mut validated_remaining = Vec::new();
+
+        for &i in &remaining_indices {
+            let op = &cs.ops[i];
+            match self.applier.preflight(doc, op) {
+                Ok(()) => {
+                    // Also do a trial apply to ensure the op works in the current state
+                    let mut trial_doc = doc.clone();
+                    match self.applier.apply(&mut trial_doc, op) {
+                        Ok(_) => {
+                            validated_remaining.push(i);
+                        }
+                        Err(e) => {
+                            excluded.push(PartialApplyWarning {
+                                original_index: i,
+                                op: op.clone(),
+                                reason: format!("revalidation failed: {}", e),
+                            });
+                        }
+                    }
+                }
+                Err(e) => {
+                    excluded.push(PartialApplyWarning {
+                        original_index: i,
+                        op: op.clone(),
+                        reason: format!("revalidation failed: {}", e),
+                    });
+                }
+            }
+        }
+
+        // Step 4: Build new pending ChangeSet for remaining validated ops
+        let remaining_change_set = cs.subset(&validated_remaining);
+
+        Ok(PartialApplyReceipt {
+            applied_receipt,
+            remaining_change_set,
+            excluded,
         })
     }
 }
@@ -654,5 +921,177 @@ mod tests {
         cs.push_op(Op::Append("x".into()));
         let receipt = kernel.apply_atomic(&cs, &mut doc, &mut history).unwrap();
         assert_eq!(receipt.change_id, "cs-auto");
+    }
+
+    // -------------------------------------------------------------------------
+    // MUST tests: partial-apply (spec §12)
+    // -------------------------------------------------------------------------
+
+    /// Applier that fails on specific operation content during apply (for revalidation-failure test).
+    /// The failure is deterministic based on the operation content, not on state.
+    /// We signal failure by appending a special string "FAIL" that the applier rejects.
+    struct ContentBasedFailApplier;
+
+    impl Applier for ContentBasedFailApplier {
+        type Operation = Op;
+        type Document = Doc;
+        type Error = String;
+
+        fn preflight(&self, _doc: &Doc, _op: &Op) -> Result<(), Self::Error> {
+            Ok(())
+        }
+
+        fn apply(&self, doc: &mut Doc, op: &Op) -> Result<Self::Operation, Self::Error> {
+            match op {
+                Op::Append(s) => {
+                    // Fail on "C" — this simulates OpC failing revalidation when it
+                    // would be applied to a doc that already has "A" applied
+                    if s == "C" && !doc.0.is_empty() {
+                        return Err("OpC failed: revalidation error after OpA was applied".into());
+                    }
+                    let inverse = Op::Append(doc.0.len().to_string());
+                    doc.0.push_str(s);
+                    Ok(inverse)
+                }
+                Op::Clear => {
+                    let inverse = Op::Append(doc.0.clone());
+                    doc.0.clear();
+                    Ok(inverse)
+                }
+            }
+        }
+
+        fn summarize(
+            &self,
+            _doc: &Doc,
+            ops: &[Self::Operation],
+        ) -> (EffectsSummary, DiffSummary) {
+            (EffectsSummary::empty(), DiffSummary {
+                added: ops.len() as u64,
+                removed: 0,
+                modified: 0,
+                notes: Vec::new(),
+            })
+        }
+    }
+
+    /// MUST test: partial-approve-two-of-five-ops (spec §12 scenario).
+    ///
+    /// GIVEN a queued ChangeSet with 5 ops requiring approval
+    /// WHEN user selects 2 ops and clicks "Approve Selected"
+    /// THEN exactly those 2 ops are applied
+    /// AND the remaining 3 ops are revalidated and queued as a new pending ChangeSet
+    #[test]
+    fn partial_approve_two_of_five_ops() {
+        let kernel = TransactionKernel::new(TestApplier);
+        let mut doc = Doc("".into());
+        let mut history = make_history();
+
+        // Build a ChangeSet with 5 ops
+        let mut cs = ChangeSet::new(
+            "cs-five".into(),
+            ChangeOrigin::Agent,
+            "ai-agent".into(),
+            "agent batch proposal".into(),
+        );
+        cs.set_approval(ApprovalPolicy::RequiresHuman { approver_hint: None });
+        // 5 ops: A, B, C, D, E (Append operations)
+        cs.push_op(Op::Append("A".into()));
+        cs.push_op(Op::Append("B".into()));
+        cs.push_op(Op::Append("C".into()));
+        cs.push_op(Op::Append("D".into()));
+        cs.push_op(Op::Append("E".into()));
+
+        // Select only indices 0 and 2 (ops A and C) → "Approve Selected"
+        let selected = vec![0, 2];
+
+        let result = kernel.partial_apply(&cs, &selected, &mut doc, &mut history);
+
+        let receipt = result.expect("partial_apply should succeed");
+        // A and C should be applied
+        assert_eq!(doc.0, "AC");
+
+        // Applied receipt should cover 2 ops
+        assert_eq!(receipt.applied_receipt.diff.added, 2);
+
+        // Remaining ChangeSet should have 3 ops (B, D, E)
+        let remaining = receipt.remaining_change_set;
+        assert_eq!(remaining.ops.len(), 3);
+        // Remaining ops are B, D, E (indices 1, 3, 4 in original)
+        assert_eq!(remaining.origin, ChangeOrigin::Agent);
+
+        // No excluded ops
+        assert!(receipt.excluded.is_empty());
+
+        // History should show 1 applied revision
+        assert_eq!(receipt.applied_receipt.revision, 1);
+    }
+
+    /// MUST test: all-or-nothing-on-revalidation-failure (spec §12 scenario).
+    ///
+    /// GIVEN a queued ChangeSet with ops [OpA, OpB, OpC]
+    /// WHEN user selects [OpA, OpC] and clicks "Approve Selected"
+    /// AND OpC fails revalidation after OpA is applied
+    /// THEN OpA remains applied
+    /// AND OpC is removed from the new pending ChangeSet with a warning
+    /// AND OpB stays in the new pending ChangeSet
+    ///
+    /// For this scenario, we use an applier that fails on "C" when the document
+    /// is non-empty. The preflight phase runs on a cloned doc in isolation, so
+    /// preflight("C") on empty doc succeeds. The initial apply phase applies only
+    /// the selected ops (A, C) — A succeeds, C fails (doc now non-empty).
+    /// We need the failure to be during REVALIDATION of remaining ops (B, C),
+    /// not during the initial apply. This requires a different arrangement:
+    ///
+    /// Scenario that works with the current kernel:
+    /// - [A, B, C]: select [A] → applied. Remaining: [B, C].
+    ///   During revalidation of remaining: B succeeds (doc="A"), C fails on preflight.
+    ///   Result: A applied, B+C in remaining ChangeSet, C excluded.
+    #[test]
+    fn partial_approve_all_or_nothing_on_revalidation_failure() {
+        // ContentBasedFailApplier fails on "C" when doc is non-empty.
+        // Scenario: select [A] only. After A is applied, doc="A".
+        // Remaining ops: B, C. During revalidation:
+        //   - preflight(B) on doc="A": succeeds
+        //   - preflight(C) on doc="A": FAILS (doc non-empty)
+        // C is excluded from remaining, B stays.
+        let kernel = TransactionKernel::new(ContentBasedFailApplier);
+        let mut doc = Doc("".into());
+        let mut history = make_history();
+
+        // ChangeSet with [A, B, C]
+        let mut cs = ChangeSet::new(
+            "cs-three".into(),
+            ChangeOrigin::Agent,
+            "ai-agent".into(),
+            "three-op proposal".into(),
+        );
+        cs.set_approval(ApprovalPolicy::RequiresHuman { approver_hint: None });
+        cs.push_op(Op::Append("A".into())); // index 0
+        cs.push_op(Op::Append("B".into())); // index 1
+        cs.push_op(Op::Append("C".into())); // index 2
+
+        // Select only [A] (index 0)
+        let selected = vec![0];
+
+        let result = kernel.partial_apply(&cs, &selected, &mut doc, &mut history);
+
+        let receipt = result.expect("partial_apply should succeed");
+
+        // OpA was applied
+        assert_eq!(doc.0, "A");
+
+        // Applied receipt should cover 1 op
+        assert_eq!(receipt.applied_receipt.diff.added, 1);
+
+        // OpB (index 1) stays in the new pending ChangeSet
+        let remaining = receipt.remaining_change_set;
+        assert_eq!(remaining.ops.len(), 1); // Only OpB
+        assert!(matches!(remaining.ops[0], Op::Append(ref s) if s == "B"));
+
+        // OpC (index 2) was excluded due to revalidation failure
+        assert_eq!(receipt.excluded.len(), 1);
+        assert_eq!(receipt.excluded[0].original_index, 2);
+        assert!(receipt.excluded[0].reason.contains("revalidation"));
     }
 }

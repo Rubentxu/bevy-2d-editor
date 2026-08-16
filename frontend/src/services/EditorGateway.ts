@@ -67,6 +67,31 @@ export interface PlayModeState {
   startTransformCount: number;
 }
 
+/** Summary of a pending ChangeSet in the ChangeWorkbench. */
+export interface PendingChangeSetSummary {
+  id: string;
+  origin: string;
+  actor: string;
+  rationale: string;
+  op_count: number;
+  submitted_at_ms: number;
+}
+
+/** Summary of an applied ChangeSet from the operation log. */
+export interface ChangeSetSummary {
+  change_id: string;
+  origin: string;
+  actor: string;
+  applied_at_ms: number;
+  ops_touched: number;
+}
+
+/** Result of approving selected ops in a pending ChangeSet. */
+export interface ApproveSelectedOpsResult {
+  applied: number;
+  remaining: unknown;
+}
+
 export interface EditorGateway {
   /** Whether the gateway has been wired to a live WASM bridge. */
   isReady(): boolean;
@@ -93,6 +118,19 @@ export interface EditorGateway {
     schemas: string;
     sourceFiles?: ReadonlyArray<{ id: string; content: string }>;
   }): Promise<ReadResult<unknown>>;
+  /** Change Workbench — pending ChangeSet registry (ADR-0039). */
+  /** Submit a new pending ChangeSet for approval. Returns the change-set ID. */
+  submitPendingChangeSet(cs: unknown): Promise<ReadResult<string>>;
+  /** Get all pending ChangeSets awaiting approval. */
+  getPendingChangeSets(): Promise<ReadResult<PendingChangeSetSummary[]>>;
+  /** Approve all ops in a pending ChangeSet and apply them. */
+  approveChangeSet(id: string): Promise<ReadResult<void>>;
+  /** Approve only the selected op indices in a pending ChangeSet. */
+  approveSelectedOps(id: string, indices: number[]): Promise<ReadResult<ApproveSelectedOpsResult>>;
+  /** Reject and discard a pending ChangeSet. */
+  rejectChangeSet(id: string): Promise<ReadResult<void>>;
+  /** Get recent ChangeSet summaries from the operation log. */
+  getChangeSetSummaries(): Promise<ReadResult<ChangeSetSummary[]>>;
 }
 
 interface WindowWithBridge {
@@ -104,6 +142,13 @@ interface WindowWithBridge {
   enter_play_mode?: () => Promise<string> | string;
   exit_play_mode?: () => Promise<string> | string;
   propose?: (json: string) => Promise<string> | string;
+  // ChangeWorkbench WASM exports (ADR-0039)
+  submit_pending_change_set?: (json: string) => Promise<string> | string;
+  get_pending_change_sets?: () => Promise<string> | string;
+  approve_change_set?: (id: string) => Promise<string> | string;
+  approve_selected_ops?: (id: string, indices_json: string) => Promise<string> | string;
+  reject_change_set?: (id: string) => Promise<string> | string;
+  get_change_set_summaries?: () => Promise<string> | string;
   __bevyEngineStarted?: boolean;
 }
 
@@ -253,6 +298,73 @@ function createEditorGateway(): EditorGateway {
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
       }
+    },
+    // ─── Change Workbench (ADR-0039) ─────────────────────────────────────────
+    submitPendingChangeSet: async (cs) => {
+      await ensureReady();
+      const w = readBridge();
+      if (!w?.submit_pending_change_set) {
+        return { ok: false, error: "submit_pending_change_set export not available" };
+      }
+      try {
+        const result = await w.submit_pending_change_set(JSON.stringify(cs));
+        return { ok: true, value: result };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    },
+    getPendingChangeSets: async () => {
+      await ensureReady();
+      const w = readBridge();
+      return callNoArg<PendingChangeSetSummary[]>(w?.get_pending_change_sets);
+    },
+    approveChangeSet: async (id) => {
+      await ensureReady();
+      const w = readBridge();
+      if (!w?.approve_change_set) {
+        return { ok: false, error: "approve_change_set export not available" };
+      }
+      try {
+        await w.approve_change_set(id);
+        return { ok: true, value: undefined };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    },
+    approveSelectedOps: async (id, indices) => {
+      await ensureReady();
+      const w = readBridge();
+      if (!w?.approve_selected_ops) {
+        return { ok: false, error: "approve_selected_ops export not available" };
+      }
+      try {
+        const result = await w.approve_selected_ops(id, JSON.stringify(indices));
+        try {
+          return { ok: true, value: JSON.parse(result) as ApproveSelectedOpsResult };
+        } catch {
+          return { ok: true, value: result as unknown as ApproveSelectedOpsResult };
+        }
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    },
+    rejectChangeSet: async (id) => {
+      await ensureReady();
+      const w = readBridge();
+      if (!w?.reject_change_set) {
+        return { ok: false, error: "reject_change_set export not available" };
+      }
+      try {
+        await w.reject_change_set(id);
+        return { ok: true, value: undefined };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    },
+    getChangeSetSummaries: async () => {
+      await ensureReady();
+      const w = readBridge();
+      return callNoArg<ChangeSetSummary[]>(w?.get_change_set_summaries);
     },
   };
 }
