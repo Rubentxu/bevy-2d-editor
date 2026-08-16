@@ -5,6 +5,13 @@
 
 use serde::{Deserialize, Serialize};
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Apply-back policy types (ADR-0042, ADR-0050)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Policy governing whether and how a field may have its runtime value
+/// applied back to the authoring state.
+///
 /// Opaque identity for a component type (e.g. "editor.Transform2D").
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]

@@ -39,6 +39,90 @@ use crate::{
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// EditorComponent — JSON representation of component data (ADR-0042)
+// ─────────────────────────────────────────────────────────────────────────────
+
+use crate::document::ComponentInstance;
+
+/// A Bevy component that stores the full JSON representation of a component's
+/// field values. This is inserted on every scene entity so that
+/// `process_play_mode_request` can capture tunable baselines at PlayModeEnter
+/// without needing to re-run project_instances.
+#[derive(Component, Clone)]
+pub struct EditorComponent(pub ComponentInstance);
+
+/// Stores the last-computed tunable baselines as a JSON string.
+/// Populated by `capture_tunable_baselines` in `process_play_mode_request`
+/// and consumed by `get_tunable_baselines_wasm`.
+thread_local! {
+    static TUNABLE_BASELINES: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
+}
+
+/// Expose tunable baselines to WASM. Returns the JSON string and clears
+/// the internal buffer so the same baselines are not returned twice.
+///
+/// Called by the WASM layer after `PlayModeEnter` has been processed,
+/// to persist the baselines into `EditorSession.tunable_baselines`.
+///
+/// # Safety
+///
+/// Must be called from WASM (single-threaded). Panics if serialization fails.
+#[wasm_bindgen]
+pub fn get_tunable_baselines_wasm() -> String {
+    let mut result = String::new();
+    TUNABLE_BASELINES.with(|cell| {
+        result = cell.borrow().clone();
+        *cell.borrow_mut() = String::new();
+    });
+    result
+}
+
+/// Capture tunable baselines synchronously from `SCENE_DOC`.
+///
+/// This function reads the current scene document and uses `project_instances`
+/// to derive baseline values WITHOUT needing a Bevy world / query. It can be
+/// called from `enter_play_mode` in `wasm.rs` before setting the
+/// `PlayModeRequest`, ensuring baselines are available immediately.
+///
+/// Returns a JSON string: `BTreeMap<String, serde_json::Value>` keyed by
+/// `stable_id`.
+pub fn capture_baselines_from_scene_doc() -> String {
+    use crate::instance_projection::project_instances;
+    use crate::state::with_asset_body_cache;
+    use std::collections::BTreeMap;
+
+    let doc = crate::SCENE_DOC.with(|s| s.borrow().clone());
+    let doc = match doc {
+        Some(d) => d,
+        None => return String::new(),
+    };
+
+    let resolver = |asset_ref: &crate::scene_asset::AssetReference| -> Option<crate::scene_asset::SceneAssetDocument> {
+        with_asset_body_cache(|cache| cache.get(asset_ref.as_str()).cloned())
+    };
+
+    let projected = project_instances(&doc, &resolver);
+    let mut baselines: BTreeMap<String, serde_json::Value> = BTreeMap::new();
+
+    for preview in projected {
+        let mut merged = serde_json::Map::new();
+        for comp in &preview.component_values {
+            if let Some(obj) = comp.values.as_object() {
+                let nested: serde_json::Map<String, serde_json::Value> =
+                    obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                merged.insert(comp.type_id.clone(), serde_json::Value::Object(nested));
+            }
+        }
+        baselines.insert(
+            preview.stable_id.as_str().to_string(),
+            serde_json::Value::Object(merged),
+        );
+    }
+
+    serde_json::to_string(&baselines).unwrap_or_default()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Bus / event constants and default scene payload
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -240,6 +324,8 @@ fn process_play_mode_request(
         Query<(bevy::prelude::Entity, &Transform), With<SceneEntity>>,
         Query<(bevy::prelude::Entity, &mut Transform), With<SceneEntity>>,
     )>,
+    // ADR-0042: Query EditorComponent + SceneInstanceChild for tunable baseline capture.
+    baseline_components: Query<(&EditorComponent, &SceneInstanceChild)>,
 ) {
     let request = PLAY_MODE_REQUEST.with(|r| (*r.borrow()).clone());
 
@@ -250,6 +336,8 @@ fn process_play_mode_request(
             for (entity, transform) in scene_transforms.p0().iter() {
                 snapshot.transforms.insert(entity, *transform);
             }
+            // ADR-0042: Capture tunable baselines (component values at Enter time)
+            capture_tunable_baselines_internal(&baseline_components);
             *play_mode = PlayMode::Playing;
             PLAY_MODE_REQUEST.with(|r| *r.borrow_mut() = None);
         }
@@ -265,6 +353,23 @@ fn process_play_mode_request(
         }
         None => {}
     }
+}
+
+/// Internal helper — captures baselines from the given query (avoid generic in Bevy system).
+fn capture_tunable_baselines_internal(
+    editor_components: &Query<(&EditorComponent, &SceneInstanceChild)>,
+) {
+    use std::collections::BTreeMap;
+
+    let mut baselines: BTreeMap<String, serde_json::Value> = BTreeMap::new();
+
+    for (editor_comp, instance_child) in editor_components.iter() {
+        let key = instance_child.instance_id.as_str().to_string();
+        baselines.insert(key, editor_comp.0.values.clone());
+    }
+
+    let json = serde_json::to_string(&baselines).unwrap_or_default();
+    TUNABLE_BASELINES.with(|cell| *cell.borrow_mut() = json);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -689,6 +794,23 @@ fn spawn_preview_entity(commands: &mut Commands, preview: &PreviewEntity) {
         instance_id: preview.stable_id.clone(),
         local_id: preview.local_id.clone(),
     });
+
+    // ADR-0042: Store all component values as JSON so process_play_mode_request
+    // can capture tunable baselines at PlayModeEnter without re-running project_instances.
+    // Nested structure: { "editor.Transform2D": {"translation": {...}}, ... }
+    let mut merged_values = serde_json::Map::new();
+    for comp in &preview.component_values {
+        if let Some(obj) = comp.values.as_object() {
+            let nested: serde_json::Map<String, serde_json::Value> =
+                obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+            merged_values.insert(comp.type_id.clone(), serde_json::Value::Object(nested));
+        }
+    }
+    let merged = serde_json::Value::Object(merged_values);
+    cmd.insert(EditorComponent(ComponentInstance {
+        type_id: String::new(), // unused — values are self-contained
+        values: merged,
+    }));
 
     if let Some(n) = name {
         cmd.insert(n);

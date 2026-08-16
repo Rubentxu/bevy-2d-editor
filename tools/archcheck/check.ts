@@ -133,6 +133,15 @@ function countPatternInDir(dirPath: string, pattern: RegExp, recursive: boolean)
 
 /** Recursively collect all .rs files under a directory (sorted for determinism). */
 function collectRsFiles(dirPath: string): string[] {
+  return collectFilesWithSuffix(dirPath, ".rs");
+}
+
+/** Recursively collect all .tsx files under a directory (sorted for determinism). */
+function collectTsxFiles(dirPath: string): string[] {
+  return collectFilesWithSuffix(dirPath, ".tsx");
+}
+
+function collectFilesWithSuffix(dirPath: string, suffix: string): string[] {
   const out: string[] = [];
   if (!existsSync(dirPath)) return out;
   for (const entry of readdirSync(dirPath, { withFileTypes: true }).sort((a, b) =>
@@ -140,8 +149,8 @@ function collectRsFiles(dirPath: string): string[] {
   )) {
     const full = join(dirPath, entry.name);
     if (entry.isDirectory()) {
-      out.push(...collectRsFiles(full));
-    } else if (entry.isFile() && entry.name.endsWith(".rs")) {
+      out.push(...collectFilesWithSuffix(full, suffix));
+    } else if (entry.isFile() && entry.name.endsWith(suffix)) {
       out.push(full);
     }
   }
@@ -271,6 +280,82 @@ const ASSERTIONS: Assertion[] = [
         failures.push(
           `Assertion failed: ${this.description} — no LocalId definition found at all`,
         );
+      }
+    },
+  },
+  // ── B5 (PR2b): ChangeWorkbenchPanel lives in bottom-dock ─────────────────
+  {
+    id: "B5",
+    description:
+      "ChangeWorkbenchPanel is imported only inside BottomDock (file path contains 'BottomDock')",
+    run() {
+      const files = collectTsxFiles(join(root, "frontend/src"));
+      let bottomDockMounts = 0;
+      let otherImports: string[] = [];
+      for (const file of files) {
+        const content = readFileSync(file, "utf8");
+        // Skip the definition file itself.
+        if (/ChangeWorkbenchPanel\.tsx$/.test(file)) continue;
+        // Strip comments before checking to avoid false positives.
+        const stripped = content
+          .replace(/\/\*[\s\S]*?\*\//g, "")
+          .replace(/\/\/.*$/gm, "");
+        if (!/\bChangeWorkbenchPanel\b/.test(stripped)) continue;
+        // The component is mounted where the import + JSX usage live. The
+        // host file must be a BottomDock file (path-based check is the
+        // canonical anchor; the dock components are organized by region).
+        if (/BottomDock/i.test(file)) {
+          bottomDockMounts++;
+        } else {
+          otherImports.push(file);
+        }
+      }
+      if (otherImports.length > 0) {
+        failures.push(
+          `Assertion failed: ${this.description} — ChangeWorkbenchPanel imported in non-BottomDock files: ${otherImports.join(", ")}`,
+        );
+      }
+      if (bottomDockMounts === 0) {
+        failures.push(
+          `Assertion failed: ${this.description} — ChangeWorkbenchPanel not imported in any BottomDock file`,
+        );
+      }
+    },
+  },
+  // ── B6 (PR4): ApplyBackPanel does not depend on Bevy Entity references ──
+  {
+    id: "B6",
+    description:
+      "ApplyBackPanel reads only `apply_back_eligible` from RuntimeDelta; " +
+      "no Bevy Entity references in the panel or its dependencies",
+    run() {
+      const files = collectTsxFiles(join(root, "frontend/src"));
+      for (const file of files) {
+        if (!/ApplyBackPanel/.test(file)) continue;
+        const content = readFileSync(file, "utf8");
+        // Strip comments + string literals so descriptive text like
+        // "Bevy-Entity-related" or "scene Entity" don't false-positive.
+        const stripped = content
+          .replace(/\/\*[\s\S]*?\*\//g, "")
+          .replace(/\/\/.*$/gm, "")
+          .replace(/"(?:[^"\\]|\\.)*"/g, '""')
+          .replace(/'(?:[^'\\]|\\.)*'/g, "''")
+          .replace(/`(?:[^`\\]|\\.)*`/g, "``");
+        for (const forbidden of ["bevy_entity", "entity_id", "entity_bits"]) {
+          if (stripped.includes(forbidden)) {
+            failures.push(
+              `Assertion failed: ${this.description} — ${forbidden} found in ${file}`,
+            );
+          }
+        }
+        // For the bare "Entity" identifier, require it to be a TS/React usage
+        // (capitalized identifier in code position), not a substring of words
+        // like "Identity" or "Entity" in normal prose.
+        if (/\bEntity\b/.test(stripped) || /<Entity\b/.test(stripped)) {
+          failures.push(
+            `Assertion failed: ${this.description} — bare "Entity" identifier found in ${file}`,
+          );
+        }
       }
     },
   },

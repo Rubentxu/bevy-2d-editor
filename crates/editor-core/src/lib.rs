@@ -23,7 +23,7 @@ mod code_export;
 pub mod command;
 pub mod document;
 mod dynamic_scene;
-mod hot_reload_state;
+pub mod hot_reload_state;
 pub mod instance_projection;
 mod lock_utils;
 pub mod logic_command;
@@ -36,7 +36,7 @@ pub mod logic_validation;
 pub mod operation_log;
 mod persistence;
 pub mod preview_inspector;
-mod preview_runtime;
+pub mod preview_runtime;
 pub mod processor;
 pub mod scene_asset;
 pub mod scene_asset_catalog;
@@ -227,7 +227,7 @@ pub use scene_instance::{
 };
 pub use scene_instance_overrides::{OverrideIssue, ResyncReport};
 pub use scenes::{SceneInfo, SceneRegistry, SwitchResult};
-pub use schema::ComponentTypeId;
+pub use schema::{ApplyBackPolicy, ApplyBackScope, ComponentTypeId};
 pub use source_files::{SOURCES_DIR, SourceFile, SourceFileId};
 pub use tile_layer::{TileLayer, TileLayerId};
 pub use tileset::{

@@ -159,6 +159,14 @@ interface WindowWithBridge {
   get_rebuild_cause_wasm?: () => Promise<string> | string | null;
   get_logic_activation_events_wasm?: () => Promise<string> | string | null;
   get_preview_provenance_wasm?: () => Promise<string> | string | null;
+  // §7 Apply-Back WASM exports (ADR-0050)
+  get_runtime_deltas_wasm?: () => Promise<string> | string | null;
+  create_apply_back_change_set_wasm?: (
+    deltaIdsJson: string,
+  ) => Promise<string> | string;
+  get_tunable_baselines_wasm?: () => Promise<string> | string | null;
+  enter_play_mode?: () => Promise<string> | string;
+  exit_play_mode?: () => Promise<string> | string;
   __bevyEngineStarted?: boolean;
 }
 
