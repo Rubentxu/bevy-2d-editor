@@ -2390,7 +2390,6 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "console_error_panic_hook",
- "editor-application",
  "editor-model",
  "js-sys",
  "rand 0.9.4",
