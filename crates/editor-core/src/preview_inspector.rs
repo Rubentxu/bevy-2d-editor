@@ -72,14 +72,12 @@ thread_local! {
     static PREVIEW_PROVENANCE: RefCell<BTreeMap<StableId, PreviewProvenance>> =
         const { RefCell::new(BTreeMap::new()) };
 
-    /// Last rebuild cause recorded by §6. Written by `record_rebuild_cause`.
-    static LAST_REBUILD_CAUSE: RefCell<Option<crate::RebuildCause>> = const { RefCell::new(None) };
-
-    /// Pending causality edges collected during logic evaluation (§6).
-    /// Keyed by target StableId; drained and applied to PREVIEW_PROVENANCE
-    /// at the end of each preview rebuild.
-    static PENDING_CAUSALITY_EDGES: RefCell<BTreeMap<StableId, Vec<crate::CausalityEdge>>> =
-        const { RefCell::new(BTreeMap::new()) };
+    // v0.90 PR2: `LAST_REBUILD_CAUSE` and `PENDING_CAUSALITY_EDGES` thread_locals
+    // are removed. Both now live canonically in `EditorSession` (via the
+    // `EditorSessionPort` trait), reached from `editor-core` Bevy systems
+    // through `editor_model::ports::with_session_mut`. ADR-0052 ratifies this
+    // transition; the dual-write stance from v0.89 (thread_local + session
+    // field) is collapsed to a single owner.
 }
 
 /// Replace the live preview metrics. Called by `emit_events` and on rebuild.
@@ -123,29 +121,46 @@ pub fn get_provenance(stable_id: &str) -> Option<PreviewProvenance> {
     PREVIEW_PROVENANCE.with(|p| p.borrow().get(&sid).cloned())
 }
 
-// ─── §6 RebuildCause ─────────────────────────────────────────────────────────
+// ─── §6 RebuildCause (v0.90 PR2: migrated to EditorSession via EditorSessionPort) ──
 
 /// Record a rebuild cause (§6). Called by `rebuild_preview_world` and
 /// `process_commands` (legacy sprite-move) to stamp the last trigger.
+///
+/// v0.90 PR2: writes through `editor_model::ports::with_session_mut` to
+/// `EditorSession::preview_inspector.last_rebuild_cause` (the canonical
+/// owner per ADR-0052). Returns silently if the session is not yet
+/// initialized (Bevy systems may run before `init_project_store` in tests).
 pub fn record_rebuild_cause(cause: crate::RebuildCause) {
-    LAST_REBUILD_CAUSE.with(|c| *c.borrow_mut() = Some(cause));
+    let _ = editor_model::ports::with_session_mut(|sess| {
+        *sess.last_rebuild_cause_mut() = Some(cause);
+    });
 }
 
 /// Read the last recorded rebuild cause, if any.
+///
+/// v0.90 PR2: reads from the session via `EditorSessionPort`. Returns
+/// `None` if the session is not yet initialized.
 pub fn last_rebuild_cause() -> Option<crate::RebuildCause> {
-    LAST_REBUILD_CAUSE.with(|c| c.borrow().clone())
+    editor_model::ports::with_session_mut(|sess| sess.last_rebuild_cause_mut().clone()).flatten()
 }
 
-// ─── §6 CausalityEdge ─────────────────────────────────────────────────────────
+// ─── §6 CausalityEdge (v0.90 PR2: migrated to EditorSession via EditorSessionPort) ──
 
 /// Record a [`CausalityEdge`] to be attached to a [`PreviewProvenance`] entry.
 ///
-/// Edges are buffered in a thread-local and applied to `PREVIEW_PROVENANCE`
-/// when `apply_pending_causality_edges` is called at the end of a preview rebuild.
+/// v0.90 PR2: writes through `editor_model::ports::with_session_mut` to
+/// `EditorSession::pending_causality_edges`. The edges are drained and
+/// applied to `PREVIEW_PROVENANCE` by `apply_pending_causality_edges` at
+/// the end of a preview rebuild.
 pub fn stamp_provenance(stable_id: StableId, edge: crate::CausalityEdge) {
-    PENDING_CAUSALITY_EDGES.with(|edges| {
-        let mut map = edges.borrow_mut();
-        map.entry(stable_id).or_insert_with(Vec::new).push(edge);
+    // Convert document::StableId (editor-core mirror) to editor_model::StableId
+    // for the trait method signature.
+    let model_sid = editor_model::StableId::new(stable_id.as_str());
+    let _ = editor_model::ports::with_session_mut(|sess| {
+        sess.pending_causality_edges_mut()
+            .entry(model_sid)
+            .or_insert_with(Vec::new)
+            .push(edge);
     });
 }
 
@@ -153,15 +168,27 @@ pub fn stamp_provenance(stable_id: StableId, edge: crate::CausalityEdge) {
 ///
 /// Called at the end of `push_preview_inspector_state` so that edges recorded
 /// during logic evaluation are attached to the correct provenance entries.
+///
+/// v0.90 PR2: drains from `EditorSession::pending_causality_edges` instead
+/// of the removed `PENDING_CAUSALITY_EDGES` thread_local. The map keys are
+/// `editor_model::StableId`; the existing `PREVIEW_PROVENANCE` map keys are
+/// `document::StableId` (the editor-core mirror). The conversion via `.0` is
+/// safe because the inner `String` representation is identical.
 pub fn apply_pending_causality_edges() {
-    // Take the pending map out of the RefCell, leaving an empty one behind.
-    let pending_map =
-        PENDING_CAUSALITY_EDGES.with(|pending| std::mem::take(&mut *pending.borrow_mut()));
+    // Drain the pending map from the session.
+    let pending_map: BTreeMap<editor_model::StableId, Vec<crate::CausalityEdge>> =
+        match editor_model::ports::with_session_mut(|sess| {
+            std::mem::take(sess.pending_causality_edges_mut())
+        }) {
+            Some(m) => m,
+            None => return,
+        };
     // Apply edges to provenance entries.
     if !pending_map.is_empty() {
         PREVIEW_PROVENANCE.with(|prov| {
             let mut prov_map = prov.borrow_mut();
-            for (sid, edges) in pending_map {
+            for (model_sid, edges) in pending_map {
+                let sid = StableId::new(model_sid.as_str());
                 if let Some(entry) = prov_map.get_mut(&sid) {
                     entry.causality_edges.extend(edges);
                 }

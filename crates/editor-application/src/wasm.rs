@@ -248,28 +248,18 @@ pub fn get_change_set_summaries() -> Result<JsValue, JsValue> {
 
 /// Get the last rebuild cause recorded by §6.
 ///
-/// Returns `JsValue::NULL` if no rebuild cause has been recorded yet.
+/// Returns `JsValue::NULL` if no rebuild cause has been recorded yet, or if
+/// the session has not been initialized.
 ///
-/// Reads from the `editor-core` thread_local write path first (the canonical
-/// writer is `preview_runtime::process_commands` and friends in editor-core,
-/// which cannot access the editor-application `EditorSession` directly without
-/// a circular dependency). Falls back to the session field for completeness;
-/// the session field is currently unused (write path is the thread_local) and
-/// is slated for unification in v0.90 (see ADR-0052 §Architectural Note).
+/// v0.90 PR2: reads from the canonical `EditorSession::preview_inspector`
+/// field via the `EditorSessionPort` trait (no more dual-read fallback
+/// from the removed editor-core thread_local). ADR-0052.
 #[wasm_bindgen]
 pub fn get_rebuild_cause_wasm() -> Result<JsValue, JsValue> {
-    // Primary: read from the editor-core thread_local write path.
-    if let Some(cause) = editor_core::preview_inspector::last_rebuild_cause() {
-        return serde_wasm_bindgen::to_value(&cause)
-            .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)));
-    }
-    // Fallback: session field (future write path).
-    let sess = session()?;
-    let guard = sess
-        .lock()
-        .map_err(|e| JsValue::from_str(&format!("Session lock poisoned: {}", e)))?;
-    match guard.last_rebuild_cause() {
-        Some(cause) => serde_wasm_bindgen::to_value(cause)
+    let cause = editor_model::ports::with_session_mut(|sess| sess.last_rebuild_cause_mut().clone())
+        .flatten();
+    match cause {
+        Some(c) => serde_wasm_bindgen::to_value(&c)
             .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e))),
         None => Ok(JsValue::NULL),
     }
