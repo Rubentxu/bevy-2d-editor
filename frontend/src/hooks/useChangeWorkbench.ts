@@ -56,7 +56,10 @@ type Action =
   | { type: "DESELECT_ALL"; id: string }
   | { type: "REMOVE_PENDING"; id: string };
 
-function reducer(state: ChangeSetQueueState, action: Action): ChangeSetQueueState {
+function reducer(
+  state: ChangeSetQueueState,
+  action: Action,
+): ChangeSetQueueState {
   switch (action.type) {
     case "SET_PENDING":
       return { ...state, pending: action.pending, loading: false, error: null };
@@ -97,7 +100,9 @@ function reducer(state: ChangeSetQueueState, action: Action): ChangeSetQueueStat
         if (cs.id !== action.id) return cs;
         return {
           ...cs,
-          selectedIndices: new Set(Array.from({ length: cs.op_count }, (_, i) => i)),
+          selectedIndices: new Set(
+            Array.from({ length: cs.op_count }, (_, i) => i),
+          ),
         };
       });
       return { ...state, pending };
@@ -171,17 +176,23 @@ export function useChangeWorkbench() {
   }, [refreshPending, refreshHistory]);
 
   /** Approve all ops in a ChangeSet. */
-  const approveChangeSet = useCallback(async (id: string) => {
-    const gateway = getEditorGateway();
-    const result = await gateway.approveChangeSet(id);
-    if (!result.ok) {
-      dispatch({ type: "SET_ERROR", error: result.error ?? "Approve failed" });
-      return false;
-    }
-    dispatch({ type: "REMOVE_PENDING", id });
-    await refreshHistory();
-    return true;
-  }, [refreshHistory]);
+  const approveChangeSet = useCallback(
+    async (id: string) => {
+      const gateway = getEditorGateway();
+      const result = await gateway.approveChangeSet(id);
+      if (!result.ok) {
+        dispatch({
+          type: "SET_ERROR",
+          error: result.error ?? "Approve failed",
+        });
+        return false;
+      }
+      dispatch({ type: "REMOVE_PENDING", id });
+      await refreshHistory();
+      return true;
+    },
+    [refreshHistory],
+  );
 
   /** Approve only the selected op indices in a ChangeSet. */
   const approveSelectedOps = useCallback(
@@ -190,7 +201,10 @@ export function useChangeWorkbench() {
       const gateway = getEditorGateway();
       const result = await gateway.approveSelectedOps(id, indices);
       if (!result.ok) {
-        dispatch({ type: "SET_ERROR", error: result.error ?? "Approve failed" });
+        dispatch({
+          type: "SET_ERROR",
+          error: result.error ?? "Approve failed",
+        });
         return false;
       }
       dispatch({ type: "REMOVE_PENDING", id });

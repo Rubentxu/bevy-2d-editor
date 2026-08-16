@@ -1,8 +1,8 @@
 //! WASM glue for `editor_core` — thin wrapper only.
 //!
-//! All ChangeWorkbench WASM exports (submit_pending_change_set, get_pending_change_sets,
-//! approve_change_set, approve_selected_ops, reject_change_set) live in `lib.rs`.
-//! `init_project_store` also lives in `lib.rs` (line ~1349).
+//! NOTE: `editor_core` is NO LONGER the WASM cdylib. The cdylib is now
+//! `editor_application`. This file is kept for any future editor_core-specific
+//! WASM entry points that genuinely cannot live in `editor_application`.
 //!
-//! This file exists only for any `editor_core`-specific WASM entry points that
-//! genuinely cannot live in `lib.rs`.
+//! All ChangeWorkbench WASM exports have been moved to
+//! `crates/editor-application/src/wasm.rs`.

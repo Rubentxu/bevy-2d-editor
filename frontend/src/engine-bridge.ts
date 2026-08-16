@@ -67,7 +67,7 @@ export async function initEngine(
 ): Promise<void> {
   console.log("[bridge] Loading WASM module...");
 
-  const wasmModule = await import("./wasm/editor_core.js");
+  const wasmModule = await import("./wasm/editor_application.js");
   await wasmModule.default();
   wasm = wasmModule;
   console.log("[bridge] WASM module loaded");
