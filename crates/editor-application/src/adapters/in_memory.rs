@@ -2,6 +2,7 @@
 
 use crate::ports::project_store::{ProjectStore, StoreEntry, StoreError};
 use std::collections::HashMap;
+use std::pin::Pin;
 use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// In-memory project store backed by a `RwLock<HashMap>`.
@@ -75,6 +76,10 @@ impl ProjectStore for InMemoryProjectStore {
             .read()
             .map_err(lock_poisoned_read)?
             .contains_key(path))
+    }
+
+    fn flush(&self) -> Pin<Box<dyn Future<Output = Result<(), StoreError>> + '_>> {
+        Box::pin(async { Ok(()) })
     }
 }
 

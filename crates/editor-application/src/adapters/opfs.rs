@@ -23,6 +23,7 @@
 
 use crate::ports::project_store::{ProjectStore, StoreEntry, StoreError};
 use std::collections::{BTreeMap, VecDeque};
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -552,6 +553,34 @@ impl ProjectStore for OpfsProjectStore {
     fn exists(&self, path: &str) -> Result<bool, StoreError> {
         let core = self.core.try_lock().map_err(|_| StoreError::LockPoisoned)?;
         Ok(core.read(path).is_some())
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn flush(&self) -> Pin<Box<dyn Future<Output = Result<(), StoreError>> + '_>> {
+        Box::pin(async move {
+            let ops = {
+                let mut core = self.core.try_lock().map_err(|_| StoreError::LockPoisoned)?;
+                core.take_pending()
+            };
+
+            for op in ops {
+                let path = match &op {
+                    PendingOp::Write { path, .. } => path.clone(),
+                    PendingOp::Delete { path } => path.clone(),
+                };
+                wasm::flush_op(&path, op)
+                    .await
+                    .map_err(|e| StoreError::Io(e))?;
+            }
+            Ok(())
+        })
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn flush(&self) -> Pin<Box<dyn Future<Output = Result<(), StoreError>> + '_>> {
+        // Non-wasm32 OpfsProjectStore (tests) uses MemoryBridge which is synchronous.
+        // The in-memory flush is a no-op since MemoryBridge mutates immediately.
+        Box::pin(async { Ok(()) })
     }
 }
 
