@@ -8,9 +8,13 @@
 //! restored from a pre-batch snapshot (CRIT-2 fix).
 //!
 //! HD-1 context: Some commands need access to external state (asset catalog,
-//! asset body cache) for resync. This is provided via `ProcessorContext`,
-//! which callers can construct from the live globals via
-//! `ProcessorContext::from_globals()` or build explicitly for tests.
+//! asset body cache) for resync. This is provided via `ProcessorContext`.
+//!
+//! ## PR2a Migration (T-02-03)
+//!
+//! `ProcessorContext::from_globals()` is deprecated. Production callers should
+//! construct context explicitly via [`ProcessorContext::with_asset_body`] or use
+//! [`ProcessorContext::empty`] for commands that don't need external resources.
 
 use crate::command::{Command, CommandError};
 use crate::document::{ComponentInstance, Entity, LocalId, SceneDocument, StableId};
@@ -19,12 +23,18 @@ use crate::scene_instance::SceneInstance;
 use crate::scene_instance_overrides::{remove_override, resync, upsert_override};
 
 /// Context passed to commands that need to resolve external resources
-/// (HD-1 cleanup). Construct via `from_globals()` for production code,
-/// or build directly in tests to avoid touching the global thread-locals.
+/// (HD-1 cleanup).
+///
+/// ## PR2a Migration Note (T-02-03)
+///
+/// As of v0.89, [`ProcessorContext::from_globals`] is deprecated in favor of
+/// explicit context construction. Callers at the WASM boundary (where
+/// `EditorSession` state is accessible) should use
+/// [`ProcessorContext::with_asset_body`] to pass pre-resolved asset bodies.
+/// For commands that don't need external resources, use [`ProcessorContext::empty`].
 ///
 /// All fields are optional: when `None`, commands that need the resource
-/// silently no-op the resync step (preserving legacy behavior). Future
-/// versions will require Some(...) for the affected commands.
+/// silently no-op the resync step (preserving legacy behavior).
 #[derive(Debug, Default, Clone)]
 pub struct ProcessorContext {
     /// Resolved asset body for the current ReplaceInstanceAsset target,
@@ -33,9 +43,21 @@ pub struct ProcessorContext {
 }
 
 impl ProcessorContext {
-    /// Build a context from the live global thread-locals. Used by
-    /// production callers (dispatch_command, tests that go through
-    /// the full surface).
+    /// Build a context from the live global thread-locals.
+    ///
+    /// DEPRECATED (T-02-03): This function reads from thread-local stores
+    /// in editor-core, which violates the PR2a goal of zero ambient state.
+    /// Calls that need the asset body for ReplaceInstanceAsset commands
+    /// should instead resolve the asset body from EditorSession state
+    /// (accessible at the WASM boundary) and pass it explicitly via
+    /// [`ProcessorContext::with_asset_body`](Self::with_asset_body).
+    ///
+    /// This function will be removed in a future PR once all callers
+    /// have been migrated to pass explicit context.
+    #[deprecated(
+        since = "0.89.0",
+        note = "use ProcessorContext::empty() or ProcessorContext::with_asset_body() instead"
+    )]
     pub fn from_globals(asset_ref: &str) -> Self {
         // Resolve path → asset_id (clone to detach lifetime).
         let asset_id =
@@ -49,9 +71,17 @@ impl ProcessorContext {
         ProcessorContext { asset_body }
     }
 
-    /// Empty context for tests / callers that don't need external resources.
+    /// Construct an empty context for commands that don't need external resources.
     pub fn empty() -> Self {
         ProcessorContext::default()
+    }
+
+    /// Construct a context with an explicitly resolved asset body.
+    ///
+    /// Use this when the asset body is already available from EditorSession
+    /// state (e.g., when routing through the kernel at the WASM boundary).
+    pub fn with_asset_body(asset_body: Option<SceneAssetDocument>) -> Self {
+        ProcessorContext { asset_body }
     }
 }
 
@@ -332,11 +362,12 @@ pub fn validate(doc: &SceneDocument, cmd: &Command) -> Result<(), CommandError> 
 ///
 /// Validation runs first; if it fails, the document is unchanged.
 ///
-/// Uses `ProcessorContext::from_globals(&cmd.asset_ref_if_any())` to resolve
-/// external state. If a custom context is needed (e.g., for tests), use
-/// `apply_with_context`.
+/// NOTE (T-02-03): This function now uses [`ProcessorContext::empty()`]
+/// instead of `from_globals()`. For commands that need the asset body
+/// (ReplaceInstanceAsset), use [`apply_with_context`] and pass a context
+/// resolved from EditorSession state at the WASM boundary.
 pub fn apply(doc: &mut SceneDocument, cmd: &Command) -> Result<Command, CommandError> {
-    let ctx = ProcessorContext::from_globals(asset_ref_of(cmd));
+    let ctx = ProcessorContext::empty();
     apply_with_context(doc, cmd, &ctx)
 }
 

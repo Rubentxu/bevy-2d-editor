@@ -26,3 +26,13 @@ WASM may retain one target-specific `thread_local! RefCell<EditorRuntime>` in th
 ## Consequences
 
 This enables deterministic tests, future multiple projects/tabs, background work queues and more explicit concurrency decisions.
+
+## Amendment (2026-08-16)
+
+**EditorSession sub-states use editor-model domain types** — `SceneSessionState.document` now holds `Option<SceneDocument>` (real type from `editor_model::document`). `AssetSessionState` and `LogicSessionState` similarly use `SceneAssetDocument` and `LogicGraphAsset` from `editor_model`. `OperationLog` remains in `editor-core` (future migration to `editor_model` is tracked separately).
+
+**editor-core modules become state-parameterized** — `processor::apply` now uses `ProcessorContext::empty()` instead of `ProcessorContext::from_globals()`. The deprecated `from_globals()` will be removed once all callers migrate to explicit context passing. `ProcessorContext::with_asset_body()` provides explicit asset body injection for `ReplaceInstanceAsset` commands.
+
+**No new ambient stores** — The PR2a migration keeps the existing `thread_local!` stores in `editor-core` but no new ambient stores are introduced. Further migration of stores (SCENE_DOC, OPERATION_LOG, etc.) to `EditorSession` is progress toward the ADR's end-state of zero ambient mutable state.
+
+**Status**: Ratified by owner — 2026-08-16.

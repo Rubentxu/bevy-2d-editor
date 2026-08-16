@@ -34,3 +34,11 @@ The user may select browser-local or filesystem-backed mode. Neither mode change
 ## Consequences
 
 The product becomes Git-friendly without abandoning browser operation. Storage tests are contract tests shared across adapters.
+
+## Amendment (2026-08-16)
+
+**ProjectStore trait moved to editor-model** — `ProjectStore` trait is now defined in `editor-model/src/ports.rs`. The `OpfsProjectStore` implementation remains in `editor-application/adapters/opfs.rs`. `InMemoryProjectStore` stays in `editor-application` for testing.
+
+**Rationale**: `ProjectStore` is a pure interface with no Bevy/WASM dependencies, making it appropriate for `editor-model`. Moving it there breaks the `editor-application → editor-core → editor-application` circular dependency chain that blocked the ADR-0031 migration.
+
+**Status**: Ratified by owner — 2026-08-16.
