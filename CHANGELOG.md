@@ -22,6 +22,47 @@ All notable changes to Bevy 2D Editor are documented here. The project follows s
 
 - None.
 
+## v0.89.0 — Change & Runtime Workbench (2026-08-16)
+
+Closes the v0.88 deferred "TransactionKernel not yet wired into actual editor dispatch paths" and ships 3 epics: Change Workbench UI, Runtime Causality, Runtime Apply-Back. All 14 spec scenarios pass with covering runtime tests (PASS WITH WARNINGS); 8 tasks explicitly deferred to v0.90 per cycle amendment.
+
+### New features
+
+- **TransactionKernel adoption (D1, PR1, #145)**: `DISPATCH_VIA_KERNEL: AtomicBool` runtime flag + Cargo `dispatch-via-kernel` feature (default ON). `dispatch_command` / `dispatch_asset_command` / `dispatch_logic_command` route through `SceneTransactionKernel::apply_atomic` when the flag is set; v0.88 path stays as documented reference impl. `AssetCommandApplier` and `LogicCommandApplier` mirror `SceneCommandApplier` in `crates/editor-core/src/transaction_bridge.rs` (validate → apply → inverse → rollback). Byte-equality undo/redo test (spec §3) passes — kernel and legacy produce identical `OperationLog` entries.
+- **EditorSession consolidation (D2, PR2a, #146 + #147)**: kernel types live in `editor-model` (eliminates `editor-core → editor-application` dep that v0.88 introduced). `EditorSession` owns 6 sub-state maps (`scene_states`, `asset_states`, `logic_states`, `validation_issues`, `recent_change_sets: VecDeque<ChangeSetSummary>`, `runtime_delta_buffer: VecDeque<RuntimeDelta>`) plus `pending_change_sets`. `recent_change_sets_for(scene_path)` query wired. `ProcessorContext::from_globals()` deprecated in favor of `&EditorSession` parameter.
+- **ChangeWorkbench + Partial-Apply (D5+D8, PR2b, #149)**: `ChangeWorkbenchPanel` is a bottom-dock tab with `PanelId = "change-workbench"` and `useDockPrefs.SCHEMA_VERSION` bumped 3 → 4. `migratePrefs` defaults the new `panelRegions["change-workbench"] = "bottom"` for v3 fixtures. `SceneTransactionKernel::approve_selected(op_indices)` supports partial approval with revalidation per `docs/specs/change-workbench.md §Actions` — 2-of-5 + all-or-nothing-on-revalidation-failure tests pass.
+- **ChangeWorkbench WASM relocation (PR2b-fix, #150 + #151)**: the 6 workbench exports (`submit_pending_change_set`, `get_pending_change_sets`, `approve_change_set`, `approve_selected_ops`, `reject_change_set`, `get_change_set_summaries`) moved to `editor-application::wasm` accessing `EditorSession::pending_change_sets_mut()` through `OnceLock<Arc<Mutex<EditorSession>>>` — replaces the v0.88-era thread_local + unsafe raw-pointer bridge, restoring ADR-0031. WASM cdylib target moves from `editor-core` to `editor-application`.
+- **Runtime Causality (PR3, #152)**: `RebuildCause` 6-variant enum (`UserEdit{command_id}`, `HotReload{file_id}`, `PlayModeEnter`, `PlayModeExit`, `SceneSwitch{from,to}`, `AssetResync{asset_ref}`) recorded on every `rebuild_preview_world`. `LogicActivationEvent` ring buffer capped at 64 (FIFO evict). `CausalityEdge{Kind}` (5 variants: `Definition`, `Instance`, `Override`, `Logic`, `Source`) attached to `PreviewProvenance`. `RuntimeCausalityPanel` renders the rebuild cause + activation ring + provenance edges.
+- **Runtime Apply-Back ThisInstance (D4+D6+D8, PR4, #153)**: `ApplyBackPolicy` (`Never` default, `ExplicitOnly`, `Tunable`) attached to `ComponentSchema.apply_back` with `#[serde(default)]` (legacy v0.88 fixtures deserialize to `Never` per ADR-0050). `RuntimeDelta` ring (cap 64) on `EditorSession.runtime_delta_buffer` populated on `PlayModeExit`. `create_apply_back_change_set_wasm` emits one `Command::SetComponentField` per selected delta (scope `ThisInstance` only). `ApplyBackPanel` submits the resulting `ChangeSet` to the workbench. ADR-0050 establishes a documented mirror-pair for `ApplyBackPolicy` / `ApplyBackScope` (canonical in `editor-application`, parallel in `editor-core`).
+- **Architecture assertions extended (NFR-2, PR4, #153)**: `tools/archcheck` adds B5 (`ChangeWorkbenchPanel` only in `BottomDock`) and B6 (`ApplyBackPanel` no Bevy Entity references) — 8/8 assertions pass.
+- **Doc-completeness gate (NFR-4)**: `#![deny(missing_docs)]` enforced on `editor-application` post-PR4.
+
+### New ADRs
+
+- **ADR-0049** — Dual Dispatch Gate (TransactionKernel adoption is flag-reversible).
+- **ADR-0050** — Apply-Back Policy: mirror-pair in `editor-core` + `editor-application`, NOT in `editor-model` (cross-crate serde compatibility invariant).
+- **ADR-0051** — `ChangeWorkbenchPanel` lives in bottom-dock as an internal tab (ADR-0039/0024).
+- **ADR-0052** — Runtime Causality: `RebuildCause` + `LogicActivationRing` + `CausalityEdge` (with §Architectural Note documenting the transitional dual-write path for the rebuild cause).
+
+### Changed
+
+- **WASM binary target** moves from `editor-core` to `editor-application` (`crates/editor-application/Cargo.toml` gains `crate-type = ["cdylib", "rlib"]`; `editor-core` becomes rlib-only). `justfile` `editor_crate` updated.
+- **EditorGateway** (frontend) adds 5 workbench methods + 3 causality methods + 3 apply-back methods.
+
+### Fixed
+
+- ADR-0031 violation reintroduced by PR #150 (thread_local+unsafe bridge in `editor-application::wasm`). Restored by PR #151 (`OnceLock<Arc<Mutex<EditorSession>>>` accessor + no thread_local + no unsafe).
+- Functional bug in `get_rebuild_cause_wasm` (PR3 #152): the write path was `editor-core::preview_inspector::record_rebuild_cause` (thread_local), but the WASM export read from `EditorSession.last_rebuild_cause` (always None). Fixed in the post-merge follow-up to read from the thread_local first, session fallback.
+- `Cargo.lock` regenerated to include the v0.89 sub-state types and the new `editor-application` WASM target.
+
+### Known limitations (deferred to v0.90)
+
+- Deep `thread_local!` migration in `editor-core` (T-02-02, T-02-03, T-02-05): 14 thread_locals still in editor-core; the v0.88 → v0.89 cycle shipped 8 deferred tasks per the cycle amendment.
+- `EditorSession::runtime_delta_buffer` is the documented write path but Bevy's `process_play_mode_request` writes to `TUNABLE_BASELINES` thread_local and does not yet compute `RuntimeDelta`. `ApplyBackPanel` will show empty state in production until the Bevy→RuntimeDelta pipeline is wired.
+- `get_change_set_summaries` is a stub returning `[]`; to be sourced from `EditorSession::recent_change_sets` after the `OPERATION_LOG` thread_local migration.
+- Pre-existing TypeScript errors in `editor_application.d.ts` (wasm-bindgen 0.2 + wasm-pack 0.14 generated JSDoc) cause `tsc --noEmit` to fail. `vite build` exits 0 (transpileOnly).
+- ADR-0050 mirror-pair invariant (apply-back policy in 2 crates) is documented but not yet enforced by an automated serde-equivalence test.
+
 ## v0.88.0 — Architecture Debt (2026-08-15)
 
 Liquidates the tracked debt from v0.87 (4 verify WARNINGs, deferred ADR decisions) and lands the application-layer composition infrastructure for the v0.88 production-authoring epics.
