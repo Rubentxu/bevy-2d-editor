@@ -130,14 +130,13 @@ pub type LocalSceneSessionState = editor_model::SceneSessionState;
 ///
 /// v0.90 PR4: type now defined in `editor_model::session`. Old field names
 /// (`active_document`, `body_cache`, `resync_reports`, `validation_issues`)
-/// are replaced by `asset_bodies` + `operation_log_bytes`.
+/// are replaced by `asset_bodies`.
 pub type LocalAssetSessionState = editor_model::AssetSessionState;
 
 /// Session state for the logic graph subsystem (PR2a).
 ///
 /// v0.90 PR4: type now defined in `editor_model::session`. Old field names
-/// (`active_graph`, `catalog`) are replaced by `graph_docs` +
-/// `operation_log_bytes`.
+/// (`active_graph`, `catalog`) are replaced by `graph_docs`.
 pub type LocalLogicSessionState = editor_model::LogicSessionState;
 
 /// Recent change-set summary buffer (capped at 50 entries per scene path).

@@ -122,14 +122,20 @@ fn asset_state_mut_idempotent() {
     fresh_session();
     let p = "assets/level1/player.bsn".to_string();
     let _ = editor_model::ports::with_session_mut(|s| {
-        s.asset_state_mut(&p).operation_log_bytes = vec![1, 2, 3];
+        // First call creates the state; second call returns the same entry.
+        s.asset_state_mut(&p).catalog_warnings.push(
+            editor_model::scene_asset_catalog::CatalogWarning::MissingComponentSchema {
+                entity_id: "E1".to_string(),
+                component_type_id: "Transform2D".to_string(),
+            },
+        );
     });
-    let len =
-        editor_model::ports::with_session_mut(|s| s.asset_state_mut(&p).operation_log_bytes.len())
-            .unwrap();
+    let warnings_len = editor_model::ports::with_session_mut(|s| {
+        s.asset_state_mut(&p).catalog_warnings.len()
+    }).unwrap();
     assert_eq!(
-        len, 3,
-        "second call returns the same map, not a fresh default"
+        warnings_len, 1,
+        "second call returns the same state entry, not a fresh default"
     );
 }
 

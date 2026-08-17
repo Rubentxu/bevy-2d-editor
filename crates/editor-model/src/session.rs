@@ -115,8 +115,7 @@ pub struct SceneSessionState {
 }
 
 /// Per-asset session state. Replaces the `SCENE_ASSET_CATALOG`
-/// thread_local in editor-core (line 19) and the per-asset
-/// `ASSET_OPERATION_LOG` (line 662 of asset_command.rs).
+/// thread_local in editor-core.
 #[derive(Debug, Clone, Default)]
 pub struct AssetSessionState {
     /// The current scene asset catalog for this asset path (None = no asset loaded).
@@ -125,24 +124,14 @@ pub struct AssetSessionState {
     /// Catalog warnings accumulated during the last build/refresh.
     /// v0.91 PR2: replaces `SCENE_ASSET_CATALOG_WARNINGS` thread_local.
     pub catalog_warnings: Vec<crate::scene_asset_catalog::CatalogWarning>,
-    /// Pending operation log for asset commands (one log per asset path).
-    /// **v0.90 PR4 placeholder**: stored as serialized bytes until
-    /// `OperationLog` itself moves from `editor-core` to `editor_model` in
-    /// PR5. `Vec::new()` means "no log yet"; load via `AssetSessionState::deserialize_log`.
-    pub operation_log_bytes: Vec<u8>,
 }
 
-/// Per-logic-graph session state. Replaces the `LOGIC_GRAPH_DOC` +
-/// `LOGIC_OPERATION_LOG` thread_locals in editor-core (logic_state.rs:13
-/// and logic_state.rs:155; logic_command.rs:371).
+/// Per-logic-graph session state. Replaces the `LOGIC_GRAPH_DOC`
+/// thread_local in editor-core.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct LogicSessionState {
     /// Cached logic graph bodies keyed by logic graph path.
     pub graph_docs: std::collections::BTreeMap<String, crate::logic_graph::LogicGraphAsset>,
-    /// Pending operation log for logic commands.
-    /// **v0.90 PR4 placeholder**: stored as serialized bytes (see
-    /// `AssetSessionState::operation_log_bytes` for rationale).
-    pub operation_log_bytes: Vec<u8>,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
