@@ -91,10 +91,10 @@ Move orchestration to feature modules/controllers.
 
 ### SDK-060 extension registry
 ### SDK-061 capability permissions/versioning
-### IMPORT-060 ExternalSource model
-### IMPORT-061 Aseprite pipeline
-### IMPORT-062 LDtk pipeline
-### IMPORT-063 Tiled pipeline
+### IMPORT-060 ExternalSource model ✅ DONE (v0.93 PR1 — external_source.rs + importer.rs)
+### IMPORT-061 Aseprite pipeline ✅ DONE (v0.93 PR2 — aseprite.rs + builtin)
+### IMPORT-062 LDtk pipeline ✅ DONE (v0.93 PR3 — ldtk.rs + builtin)
+### IMPORT-063 Tiled pipeline ✅ DONE (v0.93 PR4 — tiled.rs + builtin)
 
 ## P7 — v1 hardening
 

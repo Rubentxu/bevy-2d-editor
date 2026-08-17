@@ -45,6 +45,36 @@ impl ExternalSourceKind {
     }
 }
 
+/// Policy applied when a reimport encounters conflicts between source and editor ownership.
+///
+/// Used by the reimport pipeline to decide how to route ChangeSets:
+/// - `AutoApply`: no human review needed
+/// - `HumanReview`: conflict must be reviewed via ChangeWorkbench
+/// - `SkipOnConflict`: if any conflict exists, skip the reimport entirely
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConflictPolicy {
+    /// Auto-apply when `modified_editor` and `ownership_conflicts` are both empty;
+    /// route to ChangeWorkbench otherwise.
+    #[default]
+    AutoApply,
+    /// Always route to ChangeWorkbench for human review regardless of conflict state.
+    HumanReview,
+    /// Skip the reimport entirely if any conflict is detected.
+    SkipOnConflict,
+}
+
+impl ConflictPolicy {
+    /// Returns `true` if the policy requires human review given the conflict state.
+    pub fn requires_review(&self, modified_editor_empty: bool, ownership_conflicts_empty: bool) -> bool {
+        match self {
+            ConflictPolicy::AutoApply => !modified_editor_empty || !ownership_conflicts_empty,
+            ConflictPolicy::HumanReview => true,
+            ConflictPolicy::SkipOnConflict => !modified_editor_empty || !ownership_conflicts_empty,
+        }
+    }
+}
+
 /// How an imported object is owned and whether it may be overwritten on reimport.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -156,6 +186,9 @@ pub struct ExternalSource {
     pub ownership_rules: Vec<OwnershipRule>,
     /// Schema version of this sidecar format (currently `1`).
     pub schema_version: u32,
+    /// Conflict policy for reimport decisions (per spec §6 — ADR-0041).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conflict_policy: Option<ConflictPolicy>,
 }
 
 impl ExternalSource {
@@ -178,6 +211,7 @@ impl ExternalSource {
             mappings: Vec::new(),
             ownership_rules: Vec::new(),
             schema_version: 1,
+            conflict_policy: None,
         }
     }
 }

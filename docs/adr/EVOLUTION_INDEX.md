@@ -15,7 +15,7 @@ Merge these entries into the repository's existing `docs/adr/README.md`; this fi
 | ADR-0038 | Workflow and Gameplay Recipes Compile Intent into Typed Changes | Accepted | Extends Logic Bricks/application workflows |
 | ADR-0039 | Change Workbench Is the Unified Review and Approval Surface | Accepted | Generalizes AI proposal review |
 | ADR-0040 | Editor Extension SDK Is Capability-First and Transactional | Accepted | New |
-| ADR-0041 | External Authoring Sources Use Provenance-Aware Import/Reimport Pipelines | Accepted | New |
+| ADR-0041 | External Authoring Sources Use Provenance-Aware Import/Reimport Pipelines | Accepted + Implemented (v0.93) | New |
 | ADR-0042 | Runtime Apply-Back Is Explicit, Scoped and Authorable-Field Only | Accepted | Extends play/runtime preview |
 | ADR-0043 | Agent Runtime Uses Replaceable Orchestration Behind Typed Editor Capabilities | Accepted | Refines ADR-0027/0028 |
 | ADR-0044 | CI and Architecture Fitness Gates Are Release-Critical | Accepted | Operational architecture |

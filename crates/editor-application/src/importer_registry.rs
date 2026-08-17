@@ -201,6 +201,16 @@ impl ImporterRegistry {
     pub fn is_empty(&self) -> bool {
         self.descriptors.is_empty()
     }
+
+    /// Returns an iterator over all registered importer IDs.
+    pub fn list_all_ids(&self) -> impl Iterator<Item = &String> {
+        self.descriptors.keys()
+    }
+
+    /// Returns the descriptor for a registered importer, if present.
+    pub fn get_descriptor(&self, id: &str) -> Option<&ImporterDescriptor> {
+        self.descriptors.get(id)
+    }
 }
 
 /// Return a stable string key for a kind (used for BTreeMap indexing).

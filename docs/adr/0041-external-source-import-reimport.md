@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — 2026-08-14
+Accepted + Implemented (v0.93) — 2026-08-17
 
 
 ## Context

@@ -20,7 +20,7 @@
 //! - `modified_editor` empty AND `ownership_conflicts` empty → auto-apply
 //! - `modified_source` only → auto-apply (source wins)
 
-use editor_model::external_source::{ExternalSource, ExternalSourceKind, ProvenanceDiff};
+use editor_model::external_source::{ConflictPolicy, ExternalSource, ExternalSourceKind, ProvenanceDiff};
 use editor_model::importer::{ImporterError, ImporterInput};
 use editor_model::ports::{ImporterRegistryPort, ProjectStore};
 use editor_model::PendingChangeSet;
@@ -270,6 +270,7 @@ pub fn reimport(
         old_sidecar.importer_version,
         now_fn,
         &parse_output,
+        old_sidecar.conflict_policy,
     );
 
     // Step 6: Compute ProvenanceDiff
@@ -278,8 +279,18 @@ pub fn reimport(
     // Step 7: Build ChangeSet and route to ChangeWorkbench
     let change_set_id = format!("importer:{}", uuid::Uuid::new_v4());
 
-    // Determine approval policy
-    let has_conflicts = !diff.modified_editor.is_empty() || !diff.ownership_conflicts.is_empty();
+    // Determine conflict state
+    let modified_editor_empty = diff.modified_editor.is_empty();
+    let ownership_conflicts_empty = diff.ownership_conflicts.is_empty();
+
+    // Determine approval policy using ConflictPolicy from sidecar (default: AutoApply)
+    let policy = old_sidecar.conflict_policy.unwrap_or_default();
+    let requires_review = policy.requires_review(modified_editor_empty, ownership_conflicts_empty);
+
+    // SkipOnConflict: if any conflict and policy says skip, return NoOp
+    if matches!(policy, ConflictPolicy::SkipOnConflict) && requires_review {
+        return Ok(ReimportResult::NoOp);
+    }
 
     let change_set = build_change_set_from_diff(
         &change_set_id,
@@ -288,7 +299,7 @@ pub fn reimport(
         source_uri,
     );
 
-    if has_conflicts {
+    if requires_review {
         // Route to ChangeWorkbench with RequiresHuman
         pending_change_sets.insert(change_set_id.clone(), change_set);
         Ok(ReimportResult::QueuedForReview {
@@ -343,6 +354,7 @@ fn build_new_sidecar(
     importer_version: editor_model::importer::ImporterVersion,
     now_fn: impl Fn() -> Timestamp,
     parse_output: &editor_model::importer::ParseOutput,
+    conflict_policy: Option<editor_model::external_source::ConflictPolicy>,
 ) -> ExternalSource {
     ExternalSource {
         kind: kind.clone(),
@@ -354,6 +366,7 @@ fn build_new_sidecar(
         mappings: parse_output.mappings.clone(),
         ownership_rules: parse_output.ownership_rules.clone(),
         schema_version: 1,
+        conflict_policy,
     }
 }
 
@@ -438,6 +451,7 @@ mod tests {
             mappings: vec![],
             ownership_rules: vec![],
             schema_version: 1,
+            conflict_policy: None,
         };
         let new = ExternalSource {
             mappings: vec![SourceMapping::new("entity:1", "scene.json", OwnershipRule::SourceOwned)],
@@ -461,6 +475,7 @@ mod tests {
             mappings: vec![SourceMapping::new("entity:1", "scene.json", OwnershipRule::SourceOwned)],
             ownership_rules: vec![],
             schema_version: 1,
+            conflict_policy: None,
         };
         let new = ExternalSource {
             mappings: vec![],
@@ -497,6 +512,7 @@ mod tests {
             ],
             ownership_rules: vec![],
             schema_version: 1,
+            conflict_policy: None,
         };
         let diff = compute_provenance_diff(&es, &es);
         assert!(diff.is_empty());

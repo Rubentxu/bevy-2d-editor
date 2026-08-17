@@ -14,6 +14,8 @@ Required automated checks:
 | concrete OPFS types do not leak into application signatures | fail CI |
 | `agent-runtime` cannot import storage/Bevy adapters directly | fail CI |
 | frontend feature code cannot access raw WASM module/global `window` API | fail CI after migration grace period |
+| importer crates (`editor-core::importer::*`) cannot import `EditorSession` directly (v0.93) | fail CI |
+| importers must use only the typed port traits (`ImporterRegistryPort`, `ProjectStore`) not mutable session access | fail CI |
 
 Implement with a combination of Cargo workspace dependency structure, `cargo metadata`, grep/static checks and targeted architectural tests.
 

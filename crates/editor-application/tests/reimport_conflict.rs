@@ -28,6 +28,7 @@ fn make_external_source(
         mappings,
         ownership_rules: vec![],
         schema_version: 1,
+        conflict_policy: None,
     }
 }
 

@@ -646,7 +646,7 @@ All Hito 1 items completed in v0.12-v0.20. Deferred items:
 | ADR-0038 | Workflow and Gameplay Recipes Compile Intent into Typed Changes | Accepted (2026-08-14) |
 | ADR-0039 | Change Workbench Is the Unified Review and Approval Surface | Accepted (2026-08-14) |
 | ADR-0040 | Editor Extension SDK Is Capability-First and Transactional | Accepted (2026-08-14) |
-| ADR-0041 | External Authoring Sources Use Provenance-Aware Import/Reimport Pipelines | Accepted (2026-08-14) |
+| ADR-0041 | External Authoring Sources Use Provenance-Aware Import/Reimport Pipelines | Accepted + Implemented (v0.93) |
 | ADR-0042 | Runtime Apply-Back Is Explicit, Scoped and Authorable-Field Only | Accepted (2026-08-14) |
 | ADR-0043 | Agent Runtime Uses Replaceable Orchestration Behind Typed Editor Capabilities | Accepted (2026-08-14) |
 | ADR-0044 | CI and Architecture Fitness Gates Are Release-Critical | Accepted (2026-08-14) |

@@ -24,6 +24,7 @@ pub mod command;
 pub mod document;
 mod dynamic_scene;
 pub mod hot_reload_state;
+pub mod importer;
 pub mod instance_projection;
 mod lock_utils;
 pub mod logic_command;

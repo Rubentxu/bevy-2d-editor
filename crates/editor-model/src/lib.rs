@@ -93,7 +93,7 @@ pub use session_port::EditorSessionPort;
 
 // v0.93 PR1: External source provenance (ADR-0041) + Importer protocol (ADR-0040 step 3)
 pub use external_source::{
-    ExternalSource, ExternalSourceKind, OwnershipRule, ProvenanceDiff, SourceMapping,
+    ConflictPolicy, ExternalSource, ExternalSourceKind, OwnershipRule, ProvenanceDiff, SourceMapping,
 };
 pub use importer::{
     BuildChangeSetOutput, Importer, ImporterDescriptor, ImporterError, ImporterHandle,
