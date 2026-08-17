@@ -3069,6 +3069,483 @@ pub async fn save_scene_asset() -> Result<String, JsValue> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// World Workspace WASM functions (ADR-0037 Slice 3)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Create a new World Document.
+///
+/// Body pattern mirrors `create_scene_asset`: body-write → catalog → project.json
+/// with rollback on metadata failure (ADR-0019).
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn create_world_wasm(name: &str) -> Result<String, JsValue> {
+    use crate::world_state::{self, with_world_catalog_mut, with_world_doc_mut};
+    use editor_model::scene_asset::SceneAssetRole;
+    use editor_model::scene_asset_catalog::SceneAssetCatalogEntry;
+    use editor_model::world::{LayoutPolicy, WorldCatalogEntry, WorldDocument, WorldId};
+    use editor_protocol::WorldSummary;
+
+    let normalized_path = name.to_string();
+    let world_id = WorldId::new(format!(
+        "world-{}",
+        normalized_path.to_lowercase().replace(' ', "-")
+    ));
+    let now = crate::time::now_millis();
+
+    // Catalog entry for WORLD_CATALOG (SceneAssetCatalog)
+    let catalog_entry = SceneAssetCatalogEntry {
+        asset_id: world_id.as_str().to_string(),
+        logical_path: normalized_path.clone(),
+        role: SceneAssetRole::Level,
+        current_version: 1,
+        tags: Vec::new(),
+        created_at: now,
+        updated_at: now,
+        preview_resource: None,
+    };
+
+    // WorldCatalogEntry for ProjectMetadata.worlds
+    let entry = WorldCatalogEntry {
+        world_id: world_id.clone(),
+        logical_path: normalized_path.clone(),
+        current_version: 1,
+        updated_at: now,
+        created_at: now,
+    };
+
+    // Create empty world document
+    let doc = WorldDocument {
+        id: world_id.clone(),
+        name: name.to_string(),
+        version: 1,
+        layout_policy: LayoutPolicy::Free,
+        levels: Vec::new(),
+        links: Vec::new(),
+        updated_at: now,
+    };
+
+    let doc_json = serde_json::to_string(&doc).map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    // Write body file first
+    js_save_file(&persistence::world_path(&normalized_path), &doc_json)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+
+    // Register in world catalog
+    with_world_catalog_mut(|cat| cat.register(catalog_entry))
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    // Set as active doc
+    world_state::set_world_doc(doc);
+
+    // Update project.json (awaited). On failure roll back the in-memory
+    // registration so we don't publish a ghost. ADR-0019.
+    if let Err(e) = update_project_metadata_for_world(&entry, "create").await {
+        with_world_catalog_mut(|cat| {
+            let _ = cat.unregister(world_id.as_str());
+        });
+        world_state::clear_world_doc();
+        return Err(e);
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    web_sys::console::log_1(&format!("world created: {}", world_id.as_str()).into());
+
+    // Return WorldSummary
+    let summary = WorldSummary {
+        id: world_id.clone(),
+        world_id: world_id.as_str().to_string(),
+        name: name.to_string(),
+        layout_policy: LayoutPolicy::Free,
+        levels: Vec::new(),
+        links: Vec::new(),
+        current_version: 1,
+        updated_at: now,
+    };
+    serde_json::to_string(&summary).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Save the active World Document: body-first, then catalog update.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn save_world_wasm() -> Result<String, JsValue> {
+    use crate::world_state::{self, with_world_catalog_mut, with_world_doc};
+    use editor_protocol::WorldSummary;
+
+    let doc_json = with_world_doc(|doc| {
+        serde_json::to_string(doc).map_err(|e| JsValue::from_str(&e.to_string()))
+    })?;
+
+    // Get world id and path from the doc
+    let (world_id, path, name, layout_policy, levels, links) = with_world_doc(|doc| {
+        Ok::<_, JsValue>((
+            doc.id.clone(),
+            doc.name.clone(),
+            doc.name.clone(),
+            doc.layout_policy.clone(),
+            doc.levels.clone(),
+            doc.links.clone(),
+        ))
+    })?;
+
+    // Step 1: Write body file first
+    js_save_file(&persistence::world_path(&path), &doc_json)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+
+    // Step 2: Bump version in world catalog
+    let new_version = with_world_catalog_mut(|cat| {
+        let current = cat
+            .get(world_id.as_str())
+            .ok_or_else(|| JsValue::from_str(&format!("World not found: {}", world_id.as_str())))?
+            .current_version;
+        let new_ver = current + 1;
+        cat.update_version(world_id.as_str(), new_ver)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        Ok::<_, JsValue>(new_ver)
+    })?;
+
+    // Step 3: Update project.json
+    let mut project = load_project_metadata().await?;
+    if let Some(existing) = project
+        .worlds
+        .iter_mut()
+        .find(|e| e.world_id.as_str() == world_id.as_str())
+    {
+        existing.current_version = new_version;
+        existing.updated_at = crate::time::now_millis();
+    }
+    let project_json =
+        serde_json::to_string(&project).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    js_save_file(persistence::PROJECT_FILE, &project_json)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+
+    #[cfg(target_arch = "wasm32")]
+    web_sys::console::log_1(&format!("world saved: {} v{}", world_id.as_str(), new_version).into());
+
+    // Return WorldSummary
+    let summary = WorldSummary {
+        id: world_id.clone(),
+        world_id: world_id.as_str().to_string(),
+        name,
+        layout_policy,
+        levels,
+        links,
+        current_version: new_version,
+        updated_at: crate::time::now_millis(),
+    };
+    serde_json::to_string(&summary).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Load a World Document by name into WORLD_DOC thread-local.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn load_world_wasm(name: &str) -> Result<String, JsValue> {
+    use crate::world_state::{self, with_world_doc_mut};
+    use editor_model::world::WorldDocument;
+    use editor_protocol::WorldSummary;
+
+    let path = name.to_string();
+
+    // Load body
+    let body_json = js_load_file(&persistence::world_path(&path))
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+
+    let doc: WorldDocument = serde_json::from_str(&body_json)
+        .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+
+    // Get catalog entry for version info
+    let (current_version, updated_at) = {
+        let entry = crate::world_state::with_world_catalog(|cat| cat.get(doc.id.as_str()).cloned())
+            .ok_or_else(|| {
+                JsValue::from_str(&format!("World not in catalog: {}", doc.id.as_str()))
+            })?;
+        (entry.current_version, entry.updated_at)
+    };
+
+    // Store in thread-local
+    world_state::set_world_doc(doc.clone());
+
+    #[cfg(target_arch = "wasm32")]
+    web_sys::console::log_1(&format!("world loaded: {}", doc.id.as_str()).into());
+
+    // Return WorldSummary
+    let summary = WorldSummary {
+        id: doc.id.clone(),
+        world_id: doc.id.as_str().to_string(),
+        name: doc.name,
+        layout_policy: doc.layout_policy,
+        levels: doc.levels,
+        links: doc.links,
+        current_version,
+        updated_at,
+    };
+    serde_json::to_string(&summary).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// List all world catalog entries.
+#[wasm_bindgen]
+pub fn list_worlds_wasm() -> Result<String, JsValue> {
+    use crate::world_state::with_world_catalog;
+
+    let entries = with_world_catalog(|cat| cat.list_all().into_iter().cloned().collect::<Vec<_>>());
+    serde_json::to_string(&entries).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Delete a World Document.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn delete_world_wasm(world_id: &str) -> Result<(), JsValue> {
+    use crate::world_state::{self, with_world_catalog, with_world_catalog_mut};
+    use editor_model::world::WorldCatalogEntry;
+
+    // Get entry
+    let entry = with_world_catalog(|cat| cat.get(world_id).cloned())
+        .ok_or_else(|| JsValue::from_str(&format!("World not found: {}", world_id)))?;
+
+    let path = entry.logical_path.clone();
+    let current_version = entry.current_version;
+    let created_at = entry.created_at;
+
+    // Delete body file
+    js_delete_file(&persistence::world_path(&path))
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+
+    // Unregister from world catalog
+    with_world_catalog_mut(|cat| cat.unregister(&entry.asset_id))
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    // Clear active doc if it matches
+    if world_state::is_world_doc_set() {
+        let current_id = crate::world_state::with_world_doc(|doc| doc.id.as_str().to_string());
+        if current_id == world_id {
+            world_state::clear_world_doc();
+        }
+    }
+
+    // Build WorldCatalogEntry for project metadata update
+    let world_entry = WorldCatalogEntry {
+        world_id: editor_model::world::WorldId::new(world_id.to_string()),
+        logical_path: path,
+        current_version,
+        updated_at: entry.updated_at,
+        created_at,
+    };
+
+    // Update project.json — awaited so subsequent reads observe the removal.
+    update_project_metadata_for_world(&world_entry, "delete").await?;
+
+    #[cfg(target_arch = "wasm32")]
+    web_sys::console::log_1(&format!("world deleted: {}", world_id).into());
+    Ok(())
+}
+
+/// Validate world topology and return issues.
+#[wasm_bindgen]
+pub fn validate_world_topology_wasm(world_id: &str) -> Result<String, JsValue> {
+    use crate::world_state::{with_world_catalog, with_world_doc_opt};
+    use editor_protocol::TopologyIssue;
+
+    let doc = with_world_doc_opt(|doc| {
+        if doc.id.as_str() == world_id {
+            Some(doc.clone())
+        } else {
+            None
+        }
+    })
+    .ok_or_else(|| JsValue::from_str(&format!("World not loaded: {}", world_id)))?;
+
+    let catalog = with_world_catalog(|cat| cat.clone());
+
+    let issues = crate::world_validation::validate_topology(doc.as_ref().unwrap(), &catalog);
+
+    // Log if there are issues
+    if !issues.is_empty() {
+        #[cfg(target_arch = "wasm32")]
+        web_sys::console::warn_1(
+            &format!(
+                "topology validation found {} issues for world {}",
+                issues.len(),
+                world_id
+            )
+            .into(),
+        );
+    }
+
+    serde_json::to_string(&issues).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Place a level in the active world at the given position.
+#[wasm_bindgen]
+pub fn place_level_in_world_wasm(level_id: &str, x: f32, y: f32) -> Result<String, JsValue> {
+    use crate::world_state::with_world_doc_mut;
+    use editor_model::world::{StreamingPolicy, WorldLevelRef};
+    use editor_protocol::WorldSummary;
+
+    let summary = with_world_doc_mut(|doc| {
+        // Find the level
+        let level = doc
+            .levels
+            .iter_mut()
+            .find(|l| l.level_id == level_id)
+            .ok_or_else(|| JsValue::from_str(&format!("Level not found in world: {}", level_id)))?;
+
+        // Update position
+        level.position = [x, y];
+
+        Ok::<_, JsValue>(WorldSummary {
+            id: doc.id.clone(),
+            world_id: doc.id.as_str().to_string(),
+            name: doc.name.clone(),
+            layout_policy: doc.layout_policy.clone(),
+            levels: doc.levels.clone(),
+            links: doc.links.clone(),
+            current_version: doc.version,
+            updated_at: doc.updated_at,
+        })
+    })?;
+
+    serde_json::to_string(&summary).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Connect two levels in the active world with a directional link.
+#[wasm_bindgen]
+pub fn connect_levels_wasm(
+    from: &str,
+    to: &str,
+    direction: &str,
+    kind: &str,
+) -> Result<String, JsValue> {
+    use crate::world_state::with_world_doc_mut;
+    use editor_model::world::{LinkDirection, WorldLink, WorldLinkKind};
+    use editor_protocol::WorldSummary;
+
+    let direction = match direction {
+        "north" => LinkDirection::North,
+        "south" => LinkDirection::South,
+        "east" => LinkDirection::East,
+        "west" => LinkDirection::West,
+        "undirected" => LinkDirection::Undirected,
+        other => return Err(JsValue::from_str(&format!("Unknown direction: {}", other))),
+    };
+
+    let kind = match kind {
+        "one_way" => WorldLinkKind::OneWay,
+        "bidirectional" => WorldLinkKind::Bidirectional,
+        other if other.starts_with("custom:") => {
+            let value = other.strip_prefix("custom:").unwrap().to_string();
+            WorldLinkKind::Custom { value }
+        }
+        other => return Err(JsValue::from_str(&format!("Unknown kind: {}", other))),
+    };
+
+    let link_id = format!("link-{}-{}", from, to);
+
+    let summary = with_world_doc_mut(|doc| {
+        // Add the link
+        doc.links.push(WorldLink {
+            id: link_id.clone(),
+            from: from.to_string(),
+            to: to.to_string(),
+            direction,
+            kind: kind.clone(),
+            entrance: None,
+            exit: None,
+        });
+
+        Ok::<_, JsValue>(WorldSummary {
+            id: doc.id.clone(),
+            world_id: doc.id.as_str().to_string(),
+            name: doc.name.clone(),
+            layout_policy: doc.layout_policy.clone(),
+            levels: doc.levels.clone(),
+            links: doc.links.clone(),
+            current_version: doc.version,
+            updated_at: doc.updated_at,
+        })
+    })?;
+
+    serde_json::to_string(&summary).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Remove a link from the active world.
+#[wasm_bindgen]
+pub fn remove_link_wasm(link_id: &str) -> Result<String, JsValue> {
+    use crate::world_state::with_world_doc_mut;
+    use editor_protocol::WorldSummary;
+
+    let summary = with_world_doc_mut(|doc| {
+        // Remove the link
+        doc.links.retain(|l| l.id != link_id);
+
+        Ok::<_, JsValue>(WorldSummary {
+            id: doc.id.clone(),
+            world_id: doc.id.as_str().to_string(),
+            name: doc.name.clone(),
+            layout_policy: doc.layout_policy.clone(),
+            levels: doc.levels.clone(),
+            links: doc.links.clone(),
+            current_version: doc.version,
+            updated_at: doc.updated_at,
+        })
+    })?;
+
+    serde_json::to_string(&summary).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Set the layout policy of the active world.
+#[wasm_bindgen]
+pub fn set_layout_policy_wasm(policy_json: &str) -> Result<String, JsValue> {
+    use crate::world_state::with_world_doc_mut;
+    use editor_model::world::LayoutPolicy;
+    use editor_protocol::WorldSummary;
+
+    let policy: LayoutPolicy = serde_json::from_str(policy_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid policy JSON: {}", e)))?;
+
+    let summary = with_world_doc_mut(|doc| {
+        doc.layout_policy = policy;
+
+        Ok::<_, JsValue>(WorldSummary {
+            id: doc.id.clone(),
+            world_id: doc.id.as_str().to_string(),
+            name: doc.name.clone(),
+            layout_policy: doc.layout_policy.clone(),
+            levels: doc.levels.clone(),
+            links: doc.links.clone(),
+            current_version: doc.version,
+            updated_at: doc.updated_at,
+        })
+    })?;
+
+    serde_json::to_string(&summary).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Open a level from the world workspace (switches to asset-authoring mode).
+///
+/// Returns the level's asset_ref so the caller can navigate to it.
+#[wasm_bindgen]
+pub fn open_level_from_world_wasm(level_id: &str) -> Result<String, JsValue> {
+    use crate::world_state::with_world_doc_opt;
+
+    let opt_result: Option<Result<String, JsValue>> = with_world_doc_opt(|doc| {
+        let level = doc
+            .levels
+            .iter()
+            .find(|l| l.level_id == level_id)
+            .ok_or_else(|| JsValue::from_str(&format!("Level not found in world: {}", level_id)))?;
+        Ok::<_, JsValue>(level.asset_ref.clone())
+    });
+
+    let asset_ref = opt_result.ok_or_else(|| JsValue::from_str("No world open"))??;
+
+    serde_json::to_string(&asset_ref).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Tileset Persistence (OPFS)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -3212,6 +3689,32 @@ async fn update_project_metadata_for_asset(
         *existing = entry.clone();
     } else {
         project.scene_assets.push(entry.clone());
+    }
+
+    let json = serde_json::to_string(&project).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    js_save_file(persistence::PROJECT_FILE, &json)
+        .await
+        .map_err(|e| JsValue::from_str(&e))?;
+    Ok(())
+}
+
+/// Update project.json with a modified worlds list.
+#[cfg(target_arch = "wasm32")]
+async fn update_project_metadata_for_world(
+    entry: &editor_model::world::WorldCatalogEntry,
+    _operation: &str,
+) -> Result<(), JsValue> {
+    let mut project = load_project_metadata().await?;
+
+    // Find and replace or add entry
+    if let Some(existing) = project
+        .worlds
+        .iter_mut()
+        .find(|e| e.world_id == entry.world_id)
+    {
+        *existing = entry.clone();
+    } else {
+        project.worlds.push(entry.clone());
     }
 
     let json = serde_json::to_string(&project).map_err(|e| JsValue::from_str(&e.to_string()))?;
