@@ -20,6 +20,7 @@ use std::sync::{Arc, Mutex};
 use crate::RuntimeDelta;
 use crate::ports::project_store::ProjectStore;
 use crate::extension::ExtensionRegistry;
+use crate::importer_registry::ImporterRegistry;
 use editor_model::CausalityEdge;
 use editor_model::EditorSessionPort;
 use editor_model::PendingChangeSet;
@@ -27,6 +28,7 @@ use editor_model::RebuildCause;
 use editor_model::StableId;
 use editor_model::logic_activation::{LogicActivationEvent, LogicActivationRing, ring_push};
 use editor_model::ports::ExtensionRegistryPort;
+use editor_model::ports::ImporterRegistryPort;
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -477,6 +479,8 @@ pub struct EditorSession {
     logic_activation_ring: LogicActivationRing,
     /// Extension registry (ADR-0040 — v0.92 SDK).
     extension_registry: Arc<Mutex<dyn ExtensionRegistryPort>>,
+    /// Importer registry (ADR-0040 step 3 + ADR-0041 — v0.93 external source importers).
+    importer_registry: Arc<Mutex<dyn ImporterRegistryPort>>,
 }
 
 impl std::fmt::Debug for EditorSession {
@@ -484,6 +488,14 @@ impl std::fmt::Debug for EditorSession {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let ext_count = self.extension_registry.lock()
             .map(|r| r.list().len())
+            .unwrap_or(0);
+        let imp_count = self.importer_registry.lock()
+            .map(|r| {
+                use editor_model::external_source::ExternalSourceKind;
+                r.list_by_kind(&ExternalSourceKind::Aseprite).len()
+                    + r.list_by_kind(&ExternalSourceKind::Ldtk).len()
+                    + r.list_by_kind(&ExternalSourceKind::Tiled).len()
+            })
             .unwrap_or(0);
         f.debug_struct("EditorSession")
             .field("active_document", &self.active_document)
@@ -500,6 +512,7 @@ impl std::fmt::Debug for EditorSession {
                 &self.logic_activation_ring.len(),
             )
             .field("extension_registry_len", &ext_count)
+            .field("importer_registry_len", &imp_count)
             .finish()
     }
 }
@@ -508,7 +521,8 @@ impl EditorSession {
     /// Construct a new session with the given store and clock.
     ///
     /// The session starts with no active document and no history scopes.
-    /// Extension registry is empty (for tests that don't want built-in pre-seeding).
+    /// Extension registry and importer registry are empty (for tests that don't
+    /// want built-in pre-seeding).
     pub fn new(store: Arc<dyn ProjectStore>, clock: Arc<dyn Clock>) -> Self {
         Self {
             store,
@@ -527,6 +541,7 @@ impl EditorSession {
                 editor_model::logic_activation::LOGIC_ACTIVATION_RING_CAP,
             ),
             extension_registry: Arc::new(Mutex::new(ExtensionRegistry::empty())),
+            importer_registry: Arc::new(Mutex::new(ImporterRegistry::empty())),
         }
     }
 
@@ -534,7 +549,8 @@ impl EditorSession {
     ///
     /// This is the canonical production constructor. Built-in extensions
     /// (`builtin.logic-bricks.controllers`, `builtin.logic-recipes`,
-    /// `builtin.scene-validator`) are registered via the SDK at composition time.
+    /// `builtin.scene-validator`) and built-in importers (Aseprite, LDtk,
+    /// Tiled) are pre-registered at composition time.
     pub fn with_builtins(store: Arc<dyn ProjectStore>, clock: Arc<dyn Clock>) -> Self {
         Self {
             store,
@@ -552,6 +568,7 @@ impl EditorSession {
                 editor_model::logic_activation::LOGIC_ACTIVATION_RING_CAP,
             ),
             extension_registry: Arc::new(Mutex::new(ExtensionRegistry::with_builtins())),
+            importer_registry: Arc::new(Mutex::new(ImporterRegistry::with_builtins())),
         }
     }
 
@@ -570,6 +587,23 @@ impl EditorSession {
         &mut self,
     ) -> &mut Arc<Mutex<dyn ExtensionRegistryPort>> {
         &mut self.extension_registry
+    }
+
+    /// Returns the importer registry accessor (shared).
+    ///
+    /// Returns `Arc<Mutex<dyn ImporterRegistryPort>>` so callers can hold the
+    /// lock across multiple calls without borrowing `&mut self`.
+    pub fn importer_registry(&self) -> Arc<Mutex<dyn ImporterRegistryPort>> {
+        Arc::clone(&self.importer_registry)
+    }
+
+    /// Returns a mutable reference to the importer registry.
+    ///
+    /// Used by WASM exports that need to register/unregister importers.
+    pub(crate) fn importer_registry_mut(
+        &mut self,
+    ) -> &mut Arc<Mutex<dyn ImporterRegistryPort>> {
+        &mut self.importer_registry
     }
 
     // ─── Sub-state accessors (PR2a) ──────────────────────────────────────────

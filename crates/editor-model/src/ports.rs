@@ -9,6 +9,7 @@
 //! the circular dependency: both `editor_application` and `editor_core` can access
 //! them via `editor_model::ports` without depending on each other.
 
+use crate::importer::{ImporterDescriptor, ImporterError, ImporterHandle, ImporterInput, ParseOutput};
 use crate::session_port::EditorSessionPort;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
@@ -215,6 +216,87 @@ pub fn register_extension_registry(registry: Arc<Mutex<dyn ExtensionRegistryPort
 /// Get a clone of the registered extension registry, or `None` if not yet registered.
 pub fn with_extension_registry() -> Option<Arc<Mutex<dyn ExtensionRegistryPort>>> {
     EXTENSION_REGISTRY
+        .try_with(|cell| cell.borrow().clone())
+        .ok()
+        .flatten()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Importer registry (v0.93 — ADR-0040 step 3 + ADR-0041)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Same pattern as `EXTENSION_REGISTRY`. The concrete `ImporterRegistry` lives in
+// `editor_application::importer_registry`; this port trait and thread_local allow
+// `editor_core` (Bevy systems doing import) and `editor-application` WASM exports
+// to interact with the registry without a circular dependency.
+
+use crate::external_source::ExternalSourceKind;
+
+/// Port trait for the importer registry.
+///
+/// Object-safe (`dyn ImporterRegistryPort` is valid) so it can be held behind
+/// an `Arc<Mutex<dyn ImporterRegistryPort>>` on `EditorSession`.
+pub trait ImporterRegistryPort: Send + Sync {
+    /// Register an importer with its descriptor and concrete implementation.
+    ///
+    /// Returns `Ok(handle)` on success. Returns `Err(ImporterError::DuplicateId)`
+    /// if the ID is already registered.
+    fn register(
+        &mut self,
+        descriptor: ImporterDescriptor,
+        importer: std::sync::Arc<dyn crate::importer::Importer>,
+    ) -> Result<ImporterHandle, ImporterError>;
+
+    /// Unregister an importer by ID.
+    ///
+    /// Returns `Ok(())` on success. Returns `Err(ImporterError::NotFound)` if
+    /// the ID is not registered.
+    fn unregister(&mut self, id: &str) -> Result<(), ImporterError>;
+
+    /// List all registered importers whose kind matches `kind`.
+    fn list_by_kind(&self, kind: &ExternalSourceKind) -> Vec<ImporterDescriptor>;
+
+    /// Dispatch parsing to the first registered importer matching `kind`.
+    ///
+    /// Returns `Err(ImporterError::NoImporterForKind)` if no importer is registered
+    /// for the given kind.
+    fn dispatch(
+        &self,
+        kind: &ExternalSourceKind,
+        source: ImporterInput<'_>,
+    ) -> Result<ParseOutput, ImporterError>;
+
+    /// Get a registered importer by its ID.
+    fn get(&self, id: &str) -> Option<std::sync::Arc<dyn crate::importer::Importer>>;
+
+    /// Check whether a given importer ID is registered (any version).
+    ///
+    /// Used by the transaction kernel's permission gate — it only needs to
+    /// verify the importer is known, not that it has an active implementation.
+    fn is_registered(&self, id: &str) -> bool;
+}
+
+thread_local! {
+    /// The global importer registry — set at WASM startup via
+    /// [`register_importer_registry`]. Same ownership semantics as `PROJECT_STORE`.
+    static IMPORTER_REGISTRY: std::cell::RefCell<Option<Arc<Mutex<dyn ImporterRegistryPort>>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Register the importer registry (call once at WASM startup).
+///
+/// Takes ownership of the `Arc<Mutex<dyn ImporterRegistryPort>>`. The registry
+/// stays alive as long as either the caller keeps its `Arc` clone alive OR this
+/// registration is held.
+pub fn register_importer_registry(registry: Arc<Mutex<dyn ImporterRegistryPort>>) {
+    IMPORTER_REGISTRY.with(|cell| {
+        *cell.borrow_mut() = Some(registry);
+    });
+}
+
+/// Get a clone of the registered importer registry, or `None` if not yet registered.
+pub fn with_importer_registry() -> Option<Arc<Mutex<dyn ImporterRegistryPort>>> {
+    IMPORTER_REGISTRY
         .try_with(|cell| cell.borrow().clone())
         .ok()
         .flatten()

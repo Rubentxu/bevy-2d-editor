@@ -175,8 +175,76 @@ where
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tests
+// Importer permission checking (ADR-0040 step 3 + ADR-0041 — v0.93)
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// Check whether an Importer-origin ChangeSet comes from a registered importer.
+///
+/// Per decision #1 (ADR-0041): "ANY `Capability::Importers` can import — no separate
+/// Extension registration required." The importer declares `Capability::Importers` at
+/// registration time and is checked here against the `ImporterRegistryPort`.
+///
+/// Returns `Ok(())` if the importer is registered. Returns
+/// `Err(KernelError::PermissionDenied)` if:
+/// - The importer ID cannot be parsed from the actor string (`importer:<id>`)
+/// - The importer is not found in the registry
+///
+/// This is a no-op for non-Importer origins (Human, Agent, Recipe, Plugin,
+/// Migration, RuntimeApplyBack).
+///
+/// # Arguments
+///
+/// * `cs` — The ChangeSet to check
+pub fn transaction_kernel_check_importer_permission<O>(
+    cs: &ChangeSet<O>,
+) -> Result<(), KernelError<std::convert::Infallible>>
+where
+    O: std::fmt::Debug + Clone,
+{
+    // Fast path: only check Importer origins
+    if !matches!(cs.origin, ChangeOrigin::Importer) {
+        return Ok(());
+    }
+
+    // Extract importer ID from actor string ("importer:<id>" convention).
+    let importer_id = cs.actor.strip_prefix("importer:").ok_or_else(|| {
+        KernelError::PermissionDenied {
+            extension: cs.actor.clone(),
+            area: "unknown".to_string(),
+            scope_needed: "importer: prefix required".to_string(),
+            scope_granted: "none".to_string(),
+        }
+    })?;
+
+    // Look up the importer from the global registry.
+    let registry = editor_model::ports::with_importer_registry()
+        .ok_or_else(|| KernelError::PermissionDenied {
+            extension: importer_id.to_string(),
+            area: "importer registry".to_string(),
+            scope_needed: "registry available".to_string(),
+            scope_granted: "not initialized".to_string(),
+        })?;
+
+    let registry_guard = registry.lock().map_err(|_| KernelError::PermissionDenied {
+        extension: importer_id.to_string(),
+        area: "importer registry".to_string(),
+        scope_needed: "lock acquisition".to_string(),
+        scope_granted: "lock poisoned".to_string(),
+    })?;
+
+    // Check: importer must be registered (is_registered returns true for known IDs)
+    let _importer = registry_guard
+        .is_registered(importer_id)
+        .then_some(())
+        .ok_or_else(|| KernelError::PermissionDenied {
+            extension: importer_id.to_string(),
+            area: "importer registry".to_string(),
+            scope_needed: "registered".to_string(),
+            scope_granted: "not found".to_string(),
+        })?;
+
+    Ok(())
+}
 
 #[cfg(test)]
 mod tests {
@@ -247,5 +315,65 @@ mod tests {
         let _ = register_extension_registry(Arc::clone(&registry));
 
         assert!(transaction_kernel_check_plugin_permission(&cs).is_ok());
+    }
+
+    // ─── Importer permission tests (v0.93) ───────────────────────────────────────
+
+    #[test]
+    fn importer_permission_check_no_op_for_human_origin() {
+        let mut cs: ChangeSet<String> = ChangeSet::new(
+            "cs5".into(),
+            ChangeOrigin::Human,
+            "user".into(),
+            "test".into(),
+        );
+        cs.add_resource("scene", "test.json");
+        assert!(transaction_kernel_check_importer_permission(&cs).is_ok());
+    }
+
+    #[test]
+    fn importer_permission_check_no_op_for_plugin_origin() {
+        let mut cs: ChangeSet<String> = ChangeSet::new(
+            "cs6".into(),
+            ChangeOrigin::Plugin,
+            "extension:builtin.test".into(),
+            "test".into(),
+        );
+        cs.add_resource("scene", "test.json");
+        assert!(transaction_kernel_check_importer_permission(&cs).is_ok());
+    }
+
+    #[test]
+    fn importer_permission_denied_for_unknown_importer() {
+        use editor_model::ports::{register_importer_registry, ImporterRegistryPort};
+
+        let mut cs: ChangeSet<String> = ChangeSet::new(
+            "cs7".into(),
+            ChangeOrigin::Importer,
+            "importer:builtin.unknown".into(),
+            "test".into(),
+        );
+        cs.add_resource("scene", "test.json");
+
+        // Register empty importer registry
+        let registry: Arc<Mutex<dyn ImporterRegistryPort>> =
+            Arc::new(Mutex::new(crate::importer_registry::ImporterRegistry::empty()));
+        let _ = register_importer_registry(Arc::clone(&registry));
+
+        let err = transaction_kernel_check_importer_permission(&cs).unwrap_err();
+        assert!(matches!(err, KernelError::PermissionDenied { .. }));
+    }
+
+    #[test]
+    fn importer_permission_denied_for_missing_importer_prefix() {
+        let mut cs: ChangeSet<String> = ChangeSet::new(
+            "cs8".into(),
+            ChangeOrigin::Importer,
+            "builtin.aseprite".into(), // missing "importer:" prefix
+            "test".into(),
+        );
+        cs.add_resource("scene", "test.json");
+        let err = transaction_kernel_check_importer_permission(&cs).unwrap_err();
+        assert!(matches!(err, KernelError::PermissionDenied { .. }));
     }
 }

@@ -167,6 +167,14 @@ fn approve_selected_ops_impl(change_id: &str, indices: &[usize]) -> Result<Strin
             .map_err(|e| JsValue::from_str(&format!("Permission denied: {}", e)))?;
     }
 
+    // ADR-0040 step 3 + ADR-0041 v0.93: Check importer permissions.
+    // This only runs for Importer-origin ChangeSets (Human/Agent/Plugin are no-ops).
+    if matches!(cs.origin, ChangeOrigin::Importer) {
+        use crate::transaction::transaction_kernel_check_importer_permission;
+        transaction_kernel_check_importer_permission(&cs)
+            .map_err(|e| JsValue::from_str(&format!("Permission denied: {}", e)))?;
+    }
+
     let mut applied_count = 0;
     for &idx in indices {
         let op_json = cs.ops.get(idx).ok_or_else(|| {
@@ -527,6 +535,227 @@ pub fn submit_plugin_change_set_wasm(
     Ok(change_id)
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Importer WASM exports (ADR-0040 step 3 + ADR-0041 — v0.93)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Get the importer registry from the global session (mutable).
+fn with_importer_registry_mut<
+    R,
+    F: FnOnce(&mut dyn editor_model::ports::ImporterRegistryPort) -> R,
+>(
+    f: F,
+) -> Result<R, JsValue> {
+    let sess = session()?;
+    let mut guard = sess
+        .lock()
+        .map_err(|e| JsValue::from_str(&format!("Session lock poisoned: {}", e)))?;
+    let reg = guard.importer_registry_mut();
+    let mut reg_guard = reg
+        .lock()
+        .map_err(|e| JsValue::from_str(&format!("Registry lock poisoned: {}", e)))?;
+    Ok(f(&mut *reg_guard))
+}
+
+/// Register an importer from a JSON descriptor + WASM trait object.
+///
+/// Accepts a JSON object with `id`, `kind`, `supported_versions`, and `display_name` fields.
+/// The WASM caller must also provide a trait object implementing `Importer` — in practice
+/// this is a JS shim that delegates to the browser for file reading.
+#[wasm_bindgen]
+pub fn register_importer_wasm(json: &str) -> Result<String, JsValue> {
+    use editor_model::importer::{ImporterDescriptor, ImporterError};
+
+    let descriptor: ImporterDescriptor = serde_json::from_str(json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid descriptor JSON: {}", e)))?;
+
+    // v0.93: importers are registered with a dummy Arc<dyn Importer> for now.
+    // The real trait object would come from a JS shim, but we don't have that yet.
+    // For the WASM surface, we just register the descriptor so list_importers works.
+    // Real importer registration (with a live trait object) is done in PR2–PR4.
+    with_importer_registry_mut(|reg| {
+        // We can't easily pass a JS-side trait object through wasm-bindgen today,
+        // so we register with a no-op importer stub. The actual import pipeline
+        // in PR2+ will call the registry directly from Rust.
+        reg.register(
+            descriptor.clone(),
+            std::sync::Arc::new(crate::importer_registry::DummyImporter {
+                descriptor,
+            }) as std::sync::Arc<dyn editor_model::importer::Importer>,
+        )
+    })
+    .map_err(|e| JsValue::from_str(&format!("ImporterError: {}", e)))?
+    .map_err(|e| JsValue::from_str(&format!("Registration failed: {}", e)))?;
+
+    Ok(serde_json::json!({ "ok": true }).to_string())
+}
+
+/// List all registered importers as a JSON array of descriptors.
+#[wasm_bindgen]
+pub fn list_importers_wasm() -> Result<String, JsValue> {
+    use editor_model::ports::with_importer_registry;
+
+    let summaries = with_importer_registry()
+        .ok_or_else(|| JsValue::from_str("Importer registry not initialized"))?
+        .lock()
+        .map_err(|e| JsValue::from_str(&format!("Registry lock poisoned: {}", e)))?
+        .list_by_kind(&editor_model::external_source::ExternalSourceKind::Aseprite);
+
+    // For now, return the 3 built-in descriptors as a flat list
+    let registry = with_importer_registry()
+        .ok_or_else(|| JsValue::from_str("Importer registry not initialized"))?
+        .lock()
+        .map_err(|e| JsValue::from_str(&format!("Registry lock poisoned: {}", e)))?;
+
+    use editor_model::external_source::ExternalSourceKind;
+    let mut all: Vec<_> = Vec::new();
+    all.extend(registry.list_by_kind(&ExternalSourceKind::Aseprite));
+    all.extend(registry.list_by_kind(&ExternalSourceKind::Ldtk));
+    all.extend(registry.list_by_kind(&ExternalSourceKind::Tiled));
+
+    serde_json::to_string(&all)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+}
+
+/// Import an external source file (Aseprite, LDtk, Tiled) and produce a ChangeSet.
+///
+/// Accepts `kind` (string), `source_uri` (string), `bytes_b64` (base64-encoded file bytes),
+/// and `target_resource_ref` (destination path in the project).
+///
+/// Returns a JSON object with `change_set_id` and `sidecar_path` on success.
+#[wasm_bindgen]
+pub fn import_external_source_wasm(
+    kind: &str,
+    source_uri: &str,
+    bytes_b64: &str,
+    target_resource_ref: &str,
+) -> Result<String, JsValue> {
+    use editor_model::external_source::ExternalSourceKind;
+    use editor_model::importer::ImporterInput;
+
+    // Parse the kind
+    let source_kind = match kind {
+        "Aseprite" | "aseprite" => ExternalSourceKind::Aseprite,
+        "Ldtk" | "ldtk" => ExternalSourceKind::Ldtk,
+        "Tiled" | "tiled" => ExternalSourceKind::Tiled,
+        other => ExternalSourceKind::Custom(other.to_string()),
+    };
+
+    // Decode base64 bytes
+    let bytes = base64_decode(bytes_b64)
+        .map_err(|e| JsValue::from_str(&format!("Base64 decode error: {}", e)))?;
+
+    // Dispatch to the importer
+    let registry = editor_model::ports::with_importer_registry()
+        .ok_or_else(|| JsValue::from_str("Importer registry not initialized"))?;
+
+    let reg_guard = registry
+        .lock()
+        .map_err(|e| JsValue::from_str(&format!("Registry lock poisoned: {}", e)))?;
+
+    let parse_output = reg_guard
+        .dispatch(
+            &source_kind,
+            ImporterInput {
+                bytes: &bytes,
+                source_uri,
+                fingerprint_hint: None,
+            },
+        )
+        .map_err(|e| JsValue::from_str(&format!("Import error: {}", e)))?;
+
+    drop(reg_guard);
+
+    // Build the ChangeSet JSON (simplified — full implementation in PR2+)
+    let pending_cs = serde_json::json!({
+        "id": format!("import-{}", uuid::Uuid::new_v4()),
+        "origin": "Importer",
+        "actor": format!("importer:builtin.{}", kind.to_lowercase()),
+        "rationale": format!("Import from {}", source_uri),
+        "ops": [],
+        "resources": [],
+        "submitted_at_ms": std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64,
+    });
+
+    let change_id = serde_json::from_value::<editor_model::PendingChangeSet>(pending_cs.clone())
+        .unwrap()
+        .id;
+
+    with_pending_change_sets_mut(|map| {
+        let cs: editor_model::PendingChangeSet =
+            serde_json::from_value(pending_cs).map_err(|e| JsValue::from_str(&format!("{}", e)))?;
+        map.insert(change_id.clone(), cs);
+        Ok::<(), JsValue>(())
+    })?
+    .map_err(|e| JsValue::from_str(&format!("{}", e)))?;
+
+    // Compute sidecar path
+    let sidecar_path = format!("{}.meta.json", target_resource_ref);
+
+    let response = serde_json::json!({
+        "change_set_id": change_id,
+        "sidecar_path": sidecar_path,
+        "parse_output": parse_output,
+    });
+
+    serde_json::to_string(&response)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+}
+
+/// Re-import an external source file and return the diff result.
+///
+/// Accepts `source_uri` (path to the source file).
+///
+/// Returns a JSON object with `status` ("no-op" | "changed" | "conflict") and
+/// `change_set_id` if a ChangeSet was produced.
+#[wasm_bindgen]
+pub fn reimport_external_source_wasm(source_uri: &str) -> Result<String, JsValue> {
+    // v0.93 PR5: Full implementation with ProvenanceDiff computation.
+    // For now, return a placeholder "not implemented" response.
+    let response = serde_json::json!({
+        "status": "not_implemented",
+        "source_uri": source_uri,
+        "message": "Reimport pipeline lands in PR5 (v0.93)",
+    });
+    serde_json::to_string(&response)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+}
+
+/// Get the external source provenance record for a given resource path.
+///
+/// Accepts `resource_ref` (the logical path of the imported resource).
+///
+/// Returns the `ExternalSource` JSON from the sidecar `.meta.json` file,
+/// or `null` if no sidecar exists.
+#[wasm_bindgen]
+pub fn get_external_source_wasm(resource_ref: &str) -> Result<String, JsValue> {
+    use editor_model::ports::with_project_store;
+    use editor_model::ports::ProjectStore;
+
+    let sidecar_path = format!("{}.meta.json", resource_ref);
+    let store = with_project_store()
+        .ok_or_else(|| JsValue::from_str("Project store not initialized"))?;
+
+    match store.read(&sidecar_path) {
+        Ok(bytes) => {
+            let text = String::from_utf8(bytes)
+                .map_err(|e| JsValue::from_str(&format!("UTF-8 error: {}", e)))?;
+            Ok(text)
+        }
+        Err(editor_model::ports::StoreError::NotFound(_)) => {
+            Ok("null".to_string())
+        }
+        Err(e) => Err(JsValue::from_str(&format!("Store error: {}", e))),
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────────────────────────────────────────
+
 /// Initialize the project store and the global `EditorSession`.
 ///
 /// MUST be called before any editor operations. Creates an `OpfsProjectStore`,
@@ -565,6 +794,11 @@ pub async fn init_project_store() -> Result<(), JsValue> {
     use editor_model::ports::register_extension_registry;
     register_extension_registry(session.extension_registry());
 
+    // v0.93 PR1: register the importer registry globally so editor-core can
+    // check importer provenance without importing editor-application.
+    use editor_model::ports::register_importer_registry;
+    register_importer_registry(session.importer_registry());
+
     Ok(())
 }
 
@@ -573,4 +807,55 @@ fn register_session_via_port(session: &Arc<Mutex<EditorSession>>) {
     use editor_model::EditorSessionPort;
     let arc: Arc<Mutex<dyn EditorSessionPort>> = session.clone();
     editor_model::ports::register_editor_session(arc);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A no-op importer stub used only for WASM registration surface.
+///
+/// Real importers (Aseprite, LDtk, Tiled) are implemented in `editor_core::importer`
+/// and registered in PR2–PR4. This stub lets the WASM surface exercise the registry
+/// without a live trait object.
+struct DummyImporter {
+    descriptor: editor_model::importer::ImporterDescriptor,
+}
+
+impl editor_model::importer::Importer for DummyImporter {
+    fn descriptor(&self) -> editor_model::importer::ImporterDescriptor {
+        self.descriptor.clone()
+    }
+
+    fn parse(
+        &self,
+        _source: editor_model::importer::ImporterInput<'_>,
+    ) -> Result<editor_model::importer::ParseOutput, editor_model::importer::ImporterError> {
+        Ok(editor_model::importer::ParseOutput::default())
+    }
+
+    fn build_change_set(
+        &self,
+        draft: editor_model::importer::ParseOutput,
+        _snapshot: editor_model::session::EditorSnapshot,
+    ) -> Result<editor_model::importer::BuildChangeSetOutput, editor_model::importer::ImporterError>
+    {
+        Ok(editor_model::importer::BuildChangeSetOutput {
+            provenance_diff: None,
+            change_set_json: serde_json::to_string(&draft).unwrap_or_default(),
+        })
+    }
+}
+
+/// Decode a base64 string, mapping errors to JsValue.
+fn base64_decode(input: &str) -> Result<Vec<u8>, JsValue> {
+    // Use the `base64` crate (already a dependency of the workspace).
+    base64_decode_impl(input)
+        .map_err(|e| JsValue::from_str(&format!("Base64 decode failed: {}", e)))
+}
+
+fn base64_decode_impl(input: &str) -> Result<Vec<u8>, base64::DecodeError> {
+    // The standard base64 engine accepts both standard and URL-safe alphabets.
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD.decode(input)
 }

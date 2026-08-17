@@ -184,3 +184,33 @@ pub struct SourceFilesCache {
     /// File path → file content.
     pub files: std::collections::BTreeMap<String, String>,
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Importer snapshot (v0.93 — ADR-0040 step 3)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A read-only snapshot of the editor state at import time.
+///
+/// Passed to `Importer::build_change_set` so the importer can compute
+/// the delta between the current editor state and the imported resources
+/// and emit `AssetCommand`s accordingly.
+///
+/// In v0.93 this is a minimal placeholder — the full snapshot model
+/// (including all open scene documents, scene assets, schemas) is built
+/// out in a follow-up cycle.
+#[derive(Debug, Clone, Default)]
+pub struct EditorSnapshot {
+    /// Logical path → scene asset catalog entry ids.
+    ///
+    /// Used by importers to detect whether a target resource already exists.
+    pub known_scene_assets: std::collections::BTreeMap<String, String>,
+    /// Scene asset document id → logical path map.
+    pub scene_asset_ids: std::collections::BTreeMap<String, String>,
+}
+
+impl EditorSnapshot {
+    /// Construct an empty snapshot.
+    pub fn new() -> Self {
+        Self::default()
+    }
+}

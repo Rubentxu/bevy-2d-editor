@@ -10,7 +10,9 @@ pub mod causality;
 pub mod component;
 pub mod document;
 pub mod extension;
+pub mod external_source;
 pub mod ids;
+pub mod importer;
 pub mod int_grid;
 pub mod logic_activation;
 pub mod logic_graph;
@@ -88,3 +90,12 @@ pub use rebuild_cause::RebuildCause;
 // v0.90 PR1: EditorSessionPort trait + RuntimeDelta
 pub use runtime_delta::RuntimeDelta;
 pub use session_port::EditorSessionPort;
+
+// v0.93 PR1: External source provenance (ADR-0041) + Importer protocol (ADR-0040 step 3)
+pub use external_source::{
+    ExternalSource, ExternalSourceKind, OwnershipRule, ProvenanceDiff, SourceMapping,
+};
+pub use importer::{
+    BuildChangeSetOutput, Importer, ImporterDescriptor, ImporterError, ImporterHandle,
+    ImporterInput, ImporterVersion, ImporterVersionRange, ParseOutput, ResourceDraft,
+};

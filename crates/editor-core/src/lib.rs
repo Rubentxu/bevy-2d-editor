@@ -170,6 +170,8 @@ pub enum ValidationCategory {
     Schema,
     Dirty,
     Logic,
+    /// Issues produced during external source import (ADR-0041).
+    Import,
 }
 
 pub use asset_command::{AssetCommand, AssetCommandError, AssetOperationLog};

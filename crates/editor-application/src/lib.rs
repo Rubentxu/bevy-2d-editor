@@ -6,6 +6,7 @@
 
 pub mod adapters;
 pub mod extension;
+pub mod importer_registry;
 pub mod ports;
 pub mod runtime_delta;
 pub mod session;
@@ -31,3 +32,6 @@ pub use editor_model::transaction::{PartialApplyReceipt, PartialApplyWarning};
 // editor-application's transaction module provides TransactionKernel and KernelError
 // (stateful, impl-specific) but re-exports the trait/types from editor_model.
 pub use transaction::{ChangeSetSummary, KernelError, TransactionKernel};
+
+// v0.93 PR1: Importer registry
+pub use importer_registry::ImporterRegistry;
