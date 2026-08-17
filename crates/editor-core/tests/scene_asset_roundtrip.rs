@@ -242,6 +242,7 @@ fn s7_scene_asset_document_with_layers_roundtrip() {
         }
         LevelLayer::Tile(_) => panic!("Expected SceneInstance layer, got Tile"),
         LevelLayer::Auto(_) => panic!("Expected SceneInstance layer, got Auto"),
+        LevelLayer::IntGrid(_) => panic!("Expected SceneInstance layer, got IntGrid"),
     }
 }
 
