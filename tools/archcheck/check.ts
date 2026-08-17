@@ -4,8 +4,8 @@
  * docs/architecture/05-architecture-fitness-functions.md
  *
  * Assertions enforce the dependency-gate rules:
- *   A1  crates/editor-core/src/lib.rs exists.
- *   A2  crates/editor-core/Cargo.toml declares bevy = "0.19".
+ *   A1  crates/editor-bevy/src/lib.rs exists.  (PR5: renamed from editor-core)
+ *   A2  crates/editor-bevy/Cargo.toml declares bevy = "0.19". (PR5: renamed from editor-core)
  *   B1  editor-model purity: no bevy:: in crates/editor-model/src/;
  *       crates/editor-model/Cargo.toml has no bevy dependency line.
  *   B2  editor-application root purity: no wasm_bindgen / web_sys / js_sys
@@ -167,17 +167,17 @@ const ASSERTIONS: Assertion[] = [
   // ── A group: existing PR1 skeleton assertions ────────────────────────────
   {
     id: "A1",
-    description: "crates/editor-core/src/lib.rs exists",
+    description: "crates/editor-bevy/src/lib.rs exists",
     run() {
-      const libPath = join(root, "crates/editor-core/src/lib.rs");
+      const libPath = join(root, "crates/editor-bevy/src/lib.rs");
       assertExists(libPath, this.description);
     },
   },
   {
     id: "A2",
-    description: 'crates/editor-core/Cargo.toml declares bevy = "0.19"',
+    description: 'crates/editor-bevy/Cargo.toml declares bevy = "0.19"',
     run() {
-      const cargoTomlPath = join(root, "crates/editor-core/Cargo.toml");
+      const cargoTomlPath = join(root, "crates/editor-bevy/Cargo.toml");
       assertRegexInFile(
         cargoTomlPath,
         /^bevy\s*=\s*\{?\s*version\s*=\s*"0\.19"/m,

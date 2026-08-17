@@ -1,9 +1,9 @@
 //! Built-in LDtk importer registration.
 //!
 //! Registers `builtin.ldtk` with `Capability::Importers` in the importer registry.
-//! The concrete `LdtkImporter` implementation lives in `editor_core::importer::ldtk`.
+//! The concrete `LdtkImporter` implementation lives in `editor_bevy::importer::ldtk`.
 
-use editor_core::importer::LdtkImporter;
+use editor_bevy::importer::LdtkImporter;
 use editor_model::extension::{Capability, CapabilityDescriptor, ExtensionId, ExtensionManifest, Permission, PermissionArea, PermissionScope, SemVer};
 use std::sync::Arc;
 

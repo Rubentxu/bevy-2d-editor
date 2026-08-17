@@ -1,9 +1,9 @@
 //! Built-in Aseprite importer registration.
 //!
 //! Registers `builtin.aseprite` with `Capability::Importers` in the importer registry.
-//! The concrete `AsepriteImporter` implementation lives in `editor_core::importer::aseprite`.
+//! The concrete `AsepriteImporter` implementation lives in `editor_bevy::importer::aseprite`.
 
-use editor_core::importer::AsepriteImporter;
+use editor_bevy::importer::AsepriteImporter;
 use editor_model::extension::{Capability, CapabilityDescriptor, ExtensionId, ExtensionManifest, Permission, PermissionArea, PermissionScope, SemVer};
 use std::sync::Arc;
 

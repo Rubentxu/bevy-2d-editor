@@ -1,9 +1,9 @@
 //! Built-in Tiled importer registration.
 //!
 //! Registers `builtin.tiled` with `Capability::Importers` in the importer registry.
-//! The concrete `TiledImporter` implementation lives in `editor_core::importer::tiled`.
+//! The concrete `TiledImporter` implementation lives in `editor_bevy::importer::tiled`.
 
-use editor_core::importer::TiledImporter;
+use editor_bevy::importer::TiledImporter;
 use editor_model::extension::{Capability, CapabilityDescriptor, ExtensionId, ExtensionManifest, Permission, PermissionArea, PermissionScope, SemVer};
 use std::sync::Arc;
 

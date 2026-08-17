@@ -1,5 +1,5 @@
 [package]
-name = "editor-core"
+name = "editor-bevy"
 version = "0.1.0"
 edition = "2024"
 description = "Bevy 2D editor core (WASM-compiled) — scene authoring, asset pipelines, logic graphs"

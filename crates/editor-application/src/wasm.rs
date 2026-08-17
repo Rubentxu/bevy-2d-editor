@@ -8,16 +8,16 @@ use std::sync::{Arc, Mutex, OnceLock};
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;
 
-use editor_core::hot_reload_state::{PLAY_MODE_REQUEST, PlayModeRequest};
+use editor_bevy::hot_reload_state::{PLAY_MODE_REQUEST, PlayModeRequest};
 use editor_model::PendingChangeSet;
 use editor_model::PendingChangeSetSummary;
 use editor_model::ports::register_project_store;
 use editor_model::time::Clock;
 
-use editor_core::Command;
-use editor_core::CommandEnvelope;
-use editor_core::CommandMetadata;
-use editor_core::dispatch_command_via_kernel;
+use editor_bevy::Command;
+use editor_bevy::CommandEnvelope;
+use editor_bevy::CommandMetadata;
+use editor_bevy::dispatch_command_via_kernel;
 
 use crate::EditorSession;
 use crate::adapters::opfs::OpfsProjectStore;

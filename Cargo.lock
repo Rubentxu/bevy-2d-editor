@@ -2413,7 +2413,7 @@ name = "editor-application"
 version = "0.1.0"
 dependencies = [
  "base64",
- "editor-core",
+ "editor-bevy",
  "editor-model",
  "hex",
  "js-sys",
@@ -2428,7 +2428,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "editor-core"
+name = "editor-bevy"
 version = "0.1.0"
 dependencies = [
  "base64",
