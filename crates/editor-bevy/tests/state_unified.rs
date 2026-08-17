@@ -20,6 +20,7 @@ struct FakeSession {
     scene_states: BTreeMap<String, support::SceneSessionState>,
     asset_states: BTreeMap<String, support::AssetSessionState>,
     logic_states: BTreeMap<String, support::LogicSessionState>,
+    world_states: BTreeMap<String, support::WorldSessionState>,
     recent_change_sets: BTreeMap<String, Vec<support::ChangeSetSummary>>,
 }
 
@@ -38,6 +39,11 @@ impl EditorSessionPort for FakeSession {
         self.logic_states
             .entry(path.to_string())
             .or_insert_with(support::LogicSessionState::default)
+    }
+    fn world_state_mut(&mut self, path: &str) -> &mut support::WorldSessionState {
+        self.world_states
+            .entry(path.to_string())
+            .or_insert_with(support::WorldSessionState::default)
     }
     fn recent_change_sets_for(&self, _scene_path: &str) -> Vec<support::ChangeSetSummary> {
         Vec::new()
@@ -91,6 +97,7 @@ fn fresh_session() {
         scene_states: BTreeMap::new(),
         asset_states: BTreeMap::new(),
         logic_states: BTreeMap::new(),
+        world_states: BTreeMap::new(),
         recent_change_sets: BTreeMap::new(),
     };
     let arc: Arc<Mutex<dyn EditorSessionPort>> = Arc::new(Mutex::new(session));
@@ -120,9 +127,12 @@ fn asset_state_mut_idempotent() {
     let _ = editor_model::ports::with_session_mut(|s| {
         // First call creates the state; second call returns the same entry.
         s.asset_state_mut(&p).catalog_warnings.push(
-            editor_model::scene_asset_catalog::CatalogWarning::MissingComponentSchema {
-                entity_id: "E1".to_string(),
-                component_type_id: "Transform2D".to_string(),
+            editor_model::scene_asset_catalog::CatalogWarning {
+                code: "missing_component_schema".to_string(),
+                message: "Scene asset references Transform2D which is not in the schema registry"
+                    .to_string(),
+                asset_id: None,
+                logical_path: Some(p.clone()),
             },
         );
     });

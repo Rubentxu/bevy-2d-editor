@@ -77,8 +77,7 @@ pub trait WorldApi {
     ) -> Result<String, DispatchError>;
 
     /// Move a level ref to a new world-space position.
-    fn place_level(&mut self, level_id: String, position: [f32; 2])
-        -> Result<(), DispatchError>;
+    fn place_level(&mut self, level_id: String, position: [f32; 2]) -> Result<(), DispatchError>;
 
     /// Replace the active `LayoutPolicy`.
     fn set_layout_policy(&mut self, policy: LayoutPolicy) -> Result<(), DispatchError>;
@@ -173,10 +172,10 @@ pub trait ChangeApi {
 // ─────────────────────────────────────────────────────────────────────────────
 
 use crate::dispatch_error::DispatchError;
+pub use editor_model::StableId;
 use editor_model::world::{
     LayoutPolicy, LinkDirection, StreamingPolicy, WorldId, WorldLevelRef, WorldLink, WorldLinkKind,
 };
-pub use editor_model::StableId;
 
 /// Reference to a port on a logic node.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]

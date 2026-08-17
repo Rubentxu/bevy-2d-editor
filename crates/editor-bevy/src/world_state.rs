@@ -43,14 +43,13 @@ pub fn with_world_doc<F, R>(f: F) -> R
 where
     F: FnOnce(&WorldDocument) -> R,
 {
-    WORLD_DOC
-        .with(|cell| {
-            let borrowed = cell.borrow();
-            let doc = borrowed
-                .as_ref()
-                .expect("WORLD_DOC is not set; call set_world_doc() first");
-            f(doc)
-        })
+    WORLD_DOC.with(|cell| {
+        let borrowed = cell.borrow();
+        let doc = borrowed
+            .as_ref()
+            .expect("WORLD_DOC is not set; call set_world_doc() first");
+        f(doc)
+    })
 }
 
 /// Get a mutable reference to the currently active `WorldDocument`.
@@ -62,14 +61,13 @@ pub fn with_world_doc_mut<F, R>(f: F) -> R
 where
     F: FnOnce(&mut WorldDocument) -> R,
 {
-    WORLD_DOC
-        .with(|cell| {
-            let mut borrowed = cell.borrow_mut();
-            let doc = borrowed
-                .as_mut()
-                .expect("WORLD_DOC is not set; call set_world_doc() first");
-            f(doc)
-        })
+    WORLD_DOC.with(|cell| {
+        let mut borrowed = cell.borrow_mut();
+        let doc = borrowed
+            .as_mut()
+            .expect("WORLD_DOC is not set; call set_world_doc() first");
+        f(doc)
+    })
 }
 
 /// Get a reference to the active `SceneAssetCatalog`.
@@ -77,14 +75,13 @@ pub fn with_world_catalog<F, R>(f: F) -> R
 where
     F: FnOnce(&SceneAssetCatalog) -> R,
 {
-    WORLD_CATALOG
-        .with(|cell| {
-            let borrowed = cell.borrow();
-            let catalog = borrowed
-                .as_ref()
-                .expect("WORLD_CATALOG is not set; call set_world_catalog() first");
-            f(catalog)
-        })
+    WORLD_CATALOG.with(|cell| {
+        let borrowed = cell.borrow();
+        let catalog = borrowed
+            .as_ref()
+            .expect("WORLD_CATALOG is not set; call set_world_catalog() first");
+        f(catalog)
+    })
 }
 
 /// Get a mutable reference to the active `SceneAssetCatalog`.
@@ -92,14 +89,13 @@ pub fn with_world_catalog_mut<F, R>(f: F) -> R
 where
     F: FnOnce(&mut SceneAssetCatalog) -> R,
 {
-    WORLD_CATALOG
-        .with(|cell| {
-            let mut borrowed = cell.borrow_mut();
-            let catalog = borrowed
-                .as_mut()
-                .expect("WORLD_CATALOG is not set; call set_world_catalog() first");
-            f(catalog)
-        })
+    WORLD_CATALOG.with(|cell| {
+        let mut borrowed = cell.borrow_mut();
+        let catalog = borrowed
+            .as_mut()
+            .expect("WORLD_CATALOG is not set; call set_world_catalog() first");
+        f(catalog)
+    })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

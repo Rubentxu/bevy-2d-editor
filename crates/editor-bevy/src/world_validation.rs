@@ -16,7 +16,7 @@
 //! - Missing `asset_ref` → Error
 
 use editor_model::scene_asset_catalog::SceneAssetCatalog;
-use editor_model::world::{WorldDocument, WorldLink, WorldLevelRef};
+use editor_model::world::{WorldDocument, WorldLevelRef, WorldLink};
 use editor_protocol::capabilities::{TopologyIssue, TopologyIssueCode, TopologySeverity};
 use std::collections::{HashMap, HashSet};
 
@@ -39,10 +39,7 @@ use std::collections::{HashMap, HashSet};
 /// # Returns
 ///
 /// A `Vec<TopologyIssue>` containing all detected issues (may be empty).
-pub fn validate_topology(
-    world: &WorldDocument,
-    catalog: &SceneAssetCatalog,
-) -> Vec<TopologyIssue> {
+pub fn validate_topology(world: &WorldDocument, catalog: &SceneAssetCatalog) -> Vec<TopologyIssue> {
     let mut issues = Vec::new();
 
     // 1. Check each WorldLevelRef.asset_ref resolves in the catalog
@@ -61,10 +58,7 @@ pub fn validate_topology(
 }
 
 /// Check that each WorldLevelRef.asset_ref resolves in the catalog.
-fn validate_asset_refs(
-    world: &WorldDocument,
-    catalog: &SceneAssetCatalog,
-) -> Vec<TopologyIssue> {
+fn validate_asset_refs(world: &WorldDocument, catalog: &SceneAssetCatalog) -> Vec<TopologyIssue> {
     let mut issues = Vec::new();
 
     for level in &world.levels {
@@ -303,10 +297,7 @@ mod tests {
 
         let issues = validate_topology(&world, &catalog);
         assert_eq!(issues.len(), 1);
-        assert!(matches!(
-            issues[0].code,
-            TopologyIssueCode::MissingLevelRef
-        ));
+        assert!(matches!(issues[0].code, TopologyIssueCode::MissingLevelRef));
         assert!(matches!(issues[0].severity, TopologySeverity::Error));
         assert_eq!(issues[0].level_id.as_deref(), Some("lvl-1"));
     }
@@ -481,9 +472,7 @@ mod tests {
         // Should have no topology issues (self-loop is valid)
         let topo_issues: Vec<_> = issues
             .into_iter()
-            .filter(|i| {
-                !matches!(i.code, TopologyIssueCode::MissingLevelRef)
-            })
+            .filter(|i| !matches!(i.code, TopologyIssueCode::MissingLevelRef))
             .collect();
         assert!(topo_issues.is_empty(), "self-loop should not cause issues");
     }

@@ -150,15 +150,11 @@ pub enum WorldCommand {
 
     /// Save (version bump) a world document.
     /// No structural change; inverse is another WorldSave.
-    WorldSave {
-        world_path: String,
-    },
+    WorldSave { world_path: String },
 
     /// Delete a world document entirely.
     /// Inverse is not possible (document is gone); this command is terminal.
-    WorldDelete {
-        world_path: String,
-    },
+    WorldDelete { world_path: String },
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -173,7 +169,10 @@ pub fn apply(
     cmd: &WorldCommand,
 ) -> Result<WorldCommand, WorldCommandError> {
     match cmd {
-        WorldCommand::WorldCreate { name, layout_policy } => {
+        WorldCommand::WorldCreate {
+            name,
+            layout_policy,
+        } => {
             // Cannot create a world with an empty doc - use this for initial creation
             doc.name = name.clone();
             doc.layout_policy = layout_policy.clone();
@@ -236,7 +235,8 @@ pub fn apply(
             let removed = doc.levels.remove(pos);
 
             // Remove incident links
-            doc.links.retain(|l| l.from != *level_id && l.to != *level_id);
+            doc.links
+                .retain(|l| l.from != *level_id && l.to != *level_id);
 
             Ok(WorldCommand::WorldPlaceLevel {
                 world_path: doc.id.as_str().to_string(),
@@ -473,7 +473,10 @@ mod tests {
         };
 
         let inverse = apply(&mut doc, &cmd).unwrap();
-        assert!(matches!(doc.layout_policy, LayoutPolicy::Grid { cell_size: 64 }));
+        assert!(matches!(
+            doc.layout_policy,
+            LayoutPolicy::Grid { cell_size: 64 }
+        ));
 
         // Inverse should restore Free
         match inverse {
@@ -510,7 +513,10 @@ mod tests {
         };
 
         let result = apply(&mut doc, &cmd);
-        assert!(matches!(result, Err(WorldCommandError::WorkspaceTooLarge(100))));
+        assert!(matches!(
+            result,
+            Err(WorldCommandError::WorkspaceTooLarge(100))
+        ));
     }
 
     #[test]
@@ -536,7 +542,10 @@ mod tests {
         };
 
         let result = apply(&mut doc, &cmd);
-        assert!(matches!(result, Err(WorldCommandError::DuplicateLevelId(_))));
+        assert!(matches!(
+            result,
+            Err(WorldCommandError::DuplicateLevelId(_))
+        ));
     }
 
     #[test]
