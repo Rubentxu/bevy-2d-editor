@@ -635,7 +635,7 @@ All Hito 1 items completed in v0.12-v0.20. Deferred items:
 | ADR-0027 | Rig-Based Agent Runtime for the AI-Native Bevy 2D Editor — manager/worker composition, transport-neutrality, proposal-first workflows                                                  | Accepted (planning baseline) |
 | ADR-0028 | Workflow-First UI Convergence Before Agentic AI — editor-shell-integrity → workflow-surface-convergence → ui-workflow-overhaul sequencing                                              | ✅ (v0.86.0 prerequisite)    |
 | ADR-0029 | Frontend Performance Budget Contract — three-budget gate (initialJs 380 KB, totalJs 800 KB, wasm 20 MB) enforced by `frontend/scripts/check-bundle-size.mjs`                           | ✅ (v0.86.1)                 |
-| ADR-0030 | Compile-Time Hexagonal Crate Boundaries — `editor-model` / `editor-application` / `editor-bevy` / adapters | Accepted (2026-08-14) |
+| ADR-0030 | Compile-Time Hexagonal Crate Boundaries — `editor-model` / `editor-application` / `editor-bevy` / `editor-protocol` / `editor-wasm` / `editor-storage-web` | ✅ (v0.94.0) |
 | ADR-0031 | Explicit EditorSession Replaces Domain-Level Global State | Accepted (2026-08-14) |
 | ADR-0032 | Shared Transaction Kernel and ChangeSet, with Domain-Specific Commands | Accepted (2026-08-14) |
 | ADR-0033 | ProjectStore Port with OPFS and Filesystem Adapters | Accepted (2026-08-14) |
