@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/editor-bevy", "crates/ai-proxy", "crates/editor-model", "crates/editor-application"]
+members = ["crates/editor-bevy", "crates/ai-proxy", "crates/editor-model", "crates/editor-application", "crates/editor-protocol"]
 resolver = "2"
 
 # Profile configuration is inherited from ~/.cargo/config.toml

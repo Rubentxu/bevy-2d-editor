@@ -524,6 +524,7 @@ pub fn dispatch_command(json: &str) -> Result<String, JsValue> {
     // established the kernel as the single dispatch path. The `dispatch_*_legacy`
     // functions are also removed below.
     dispatch_command_via_kernel(envelope)
+        .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Kernel path: route a command envelope through SceneTransactionKernel.
@@ -531,10 +532,11 @@ pub fn dispatch_command(json: &str) -> Result<String, JsValue> {
 /// This is the internal dispatch function used by both the legacy WASM entry point
 /// and by `editor_application::wasm` for ChangeWorkbench approval.
 #[cfg(target_arch = "wasm32")]
-pub fn dispatch_command_via_kernel(envelope: CommandEnvelope) -> Result<String, JsValue> {
+pub fn dispatch_command_via_kernel(envelope: CommandEnvelope) -> Result<String, editor_protocol::DispatchError> {
     use crate::transaction_bridge::scene_transaction_kernel;
     use editor_model::session::HistoryScope;
     use editor_model::transaction::{Applier, ChangeOrigin, ChangeSet};
+    use editor_protocol::DispatchError;
 
     // Determine ChangeOrigin from authorship metadata.
     // ADR-0040: "extension:<id>" prefix indicates Plugin origin.
@@ -571,7 +573,7 @@ pub fn dispatch_command_via_kernel(envelope: CommandEnvelope) -> Result<String, 
         if let Some(registry) = editor_model::ports::with_extension_registry() {
             if let Ok(guard) = registry.lock() {
                 if guard.get(ext_id).is_none() {
-                    return Err(JsValue::from_str(&format!(
+                    return Err(DispatchError::PermissionDenied(format!(
                         "extension '{}' is not registered",
                         ext_id
                     )));
@@ -586,7 +588,7 @@ pub fn dispatch_command_via_kernel(envelope: CommandEnvelope) -> Result<String, 
         let mut doc_ref = cell.borrow_mut();
         let doc = doc_ref
             .as_mut()
-            .ok_or_else(|| JsValue::from_str("No active scene"))?;
+            .ok_or_else(|| DispatchError::ExecutionFailed("No active scene".to_string()))?;
 
         // Create a temporary HistoryScope for the kernel call.
         // Note: The kernel updates HistoryScope but we also record in OperationLog
@@ -596,7 +598,7 @@ pub fn dispatch_command_via_kernel(envelope: CommandEnvelope) -> Result<String, 
         let kernel = scene_transaction_kernel();
         let receipt = kernel
             .apply_atomic(&cs, doc, &mut history)
-            .map_err(|e| JsValue::from_str(&format!("kernel apply failed: {}", e)))?;
+            .map_err(|e| DispatchError::KernelError(e.to_string()))?;
 
         // Extract the inverse (kernel returns inverses in reverse order).
         let inverse =
@@ -623,13 +625,13 @@ pub fn dispatch_command_via_kernel(envelope: CommandEnvelope) -> Result<String, 
         });
 
         // Return the inverse and post-apply snapshot.
-        Ok::<(Command, SceneDocument), JsValue>((inverse, doc.clone()))
+        Ok::<(Command, SceneDocument), DispatchError>((inverse, doc.clone()))
     })?;
 
     scene_state::mark_dirty();
 
     let result_json = serde_json::to_string(&CommandResult { inverse, snapshot })
-        .map_err(|e| JsValue::from_str(&format!("Failed to serialize result: {}", e)))?;
+        .map_err(|e| DispatchError::ExecutionFailed(format!("Failed to serialize result: {}", e)))?;
 
     Ok(result_json)
 }

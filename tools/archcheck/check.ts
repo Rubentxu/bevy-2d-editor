@@ -17,6 +17,8 @@
  *       appears exactly once (the editor-model canonical definition) and
  *       `pub type LocalId` appears at most once (deprecated alias). The
  *       editor-core duplicate struct was collapsed to a re-export in v0.88.
+ *   B7  editor-protocol purity: no bevy:: / wasm_bindgen / web_sys / js_sys
+ *       in crates/editor-protocol/src/; Cargo.toml lists no bevy/wasm-bindgen.
  *
  * Exits with code 0 only when all assertions pass.
  */
@@ -357,6 +359,26 @@ const ASSERTIONS: Assertion[] = [
           );
         }
       }
+    },
+  },
+  // ── B7 (PR6): editor-protocol has no bevy/wasm-bindgen imports ──────────────────
+  {
+    id: "B7",
+    description:
+      "editor-protocol crate purity: no bevy:: / wasm_bindgen / web_sys / js_sys " +
+      "in crates/editor-protocol/src/; Cargo.toml lists no bevy or wasm-bindgen",
+    run() {
+      const protocolSrc = join(root, "crates/editor-protocol/src");
+      if (existsSync(protocolSrc)) {
+        assertNoRegexInDir(
+          protocolSrc,
+          /(?:bevy::|wasm_bindgen|web_sys|js_sys)/,
+          this.description,
+          true,
+        );
+      }
+      const protocolCargo = join(root, "crates/editor-protocol/Cargo.toml");
+      assertDependencyFree(protocolCargo, ["bevy", "wasm-bindgen"], this.description);
     },
   },
 ];
