@@ -1,0 +1,63 @@
+{
+  "ldtkVersion": "1.0.0",
+  "worlds": [
+    {
+      "identifier": "TestWorld",
+      "levels": [
+        {
+          "uid": 0,
+          "identifier": "Level_1",
+          "worldX": 0,
+          "worldY": 0,
+          "pxWid": 640,
+          "pxHei": 480,
+          "__neighbours": [],
+          "layerInstances": [
+            {
+              "__type": "IntGrid",
+              "identifier": "Collision",
+              "layerDefUid": 1,
+              "cx": 20,
+              "cy": 15,
+              "gridSize": 32,
+              "intGrid": [
+                { "coord": [0, 0], "v": 1 },
+                { "coord": [1, 0], "v": 1 },
+                { "coord": [2, 0], "v": 0 },
+                { "coord": [5, 3], "v": 1 }
+              ],
+              "intGridDef": {
+                "identifier": "Collision",
+                "values": [
+                  { "value": 0 },
+                  { "value": 1, "identifier": "solid" }
+                ]
+              }
+            },
+            {
+              "__type": "Entities",
+              "identifier": "Actors",
+              "layerDefUid": 2,
+              "cx": 20,
+              "cy": 15,
+              "gridSize": 32,
+              "entityInstances": [
+                {
+                  "entityId": 5,
+                  "gridX": 3,
+                  "gridY": 2,
+                  "px": [96, 64],
+                  "px2": [128, 96],
+                  "fieldInstances": [
+                    { "__identifier": "hp", "__value": 12, "__type": "F_Int" },
+                    { "__identifier": "name", "__value": "Goblin", "__type": "F_String" }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
