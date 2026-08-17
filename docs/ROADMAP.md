@@ -427,13 +427,14 @@ into a **Cursor-like, agent-native editor for Bevy 2D games**.
 
 | Order | Change | Status | Why |
 |-------|--------|--------|-----|
-| 1 | `v0.87-architecture-foundation` | ⏭️ Next | CI gates, `editor-model` extraction, `EditorSession`, `Clock`/`IdGenerator`, `ProjectStore`, Transaction Kernel v1, ChangeSet v1, typed backend foundation, fitness tests |
-| 2 | `v0.88-production-authoring` | 🔲 Planned | 2D direct manipulation toolkit, World Workspace v1, scope-of-change, filesystem project mode, recipes, hierarchy performance |
-| 3 | `v0.89-change-runtime-workbench` | 🔲 Planned | Change Workbench, semantic diffs, checkpoints, Runtime Causality Inspector, Runtime Apply-Back |
-| 4 | `v0.90-agent-runtime` | 🔲 Planned | `editor-protocol` tool contracts, `agent-runtime` crate (Rig behind capability ports), ChangeSet proposal generation, approval enforcement |
-| 5 | `v0.91-semantic-retrieval-agents` | 🔲 Planned | Semantic/typed retrieval, specialists, post-apply verification, bounded background maintenance |
-| 6 | `v0.92-ecosystem-sdk-importers` | 🔲 Planned | Editor Extension SDK, Aseprite/LDtk/Tiled import+reimport, capability permissions |
-| 7 | `v1.0-stabilization` | 🔲 Planned | Full small-game authoring pass, crash/recovery, performance corpus, a11y, compatibility policy |
+| 1 | `v0.87-architecture-foundation` | ✅ DONE | CI gates, `editor-model` extraction, `EditorSession`, `Clock`/`IdGenerator`, `ProjectStore`, Transaction Kernel v1, ChangeSet v1, typed backend foundation, fitness tests |
+| 2 | `v0.88-production-authoring` | ✅ DONE | 2D direct manipulation toolkit, World Workspace v1, scope-of-change, filesystem project mode, recipes, hierarchy performance |
+| 3 | `v0.89-change-runtime-workbench` | ✅ DONE | Change Workbench, semantic diffs, checkpoints, Runtime Causality Inspector, Runtime Apply-Back |
+| 4 | `v0.90-agent-runtime` | ✅ DONE | `editor-protocol` tool contracts, `agent-runtime` crate (Rig behind capability ports), ChangeSet proposal generation, approval enforcement |
+| 5 | `v0.91-semantic-retrieval-agents` | ✅ DONE | Semantic/typed retrieval, specialists, post-apply verification, bounded background maintenance |
+| 6 | `v0.92-ecosystem-sdk-importers` | ✅ DONE (v0.92.0) | Editor Extension SDK (ADR-0040 steps 1-2), 3 built-in extensions via SDK, thread_local migrations, EditorSession split, FakeSession extraction |
+| 7 | `v0.93-tbd` | 🔲 Planned | OperationLog migration to editor-model; extension SDK built-in assertions; Aseprite/LDtk/Tiled importers (SDK-061); v1.0 hardening gates |
+| 8 | `v1.0-stabilization` | 🔲 Planned | Full small-game authoring pass, crash/recovery, performance corpus, a11y, compatibility policy |
 
 ### Normative references
 

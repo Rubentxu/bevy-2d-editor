@@ -58,7 +58,10 @@ ADR numbering is monotonic and never reused. Superseded decisions keep their ori
 | [ADR-0046](./0046-semantic-editor-model-authority.md)                            | Semantic Editor Model Is the Authoritative Source of Truth                     | Accepted (2026-08-14)                                                |
 | [ADR-0047](./0047-logic-graph-model-split-bevy-adapter.md)                       | Logic Graph Model Split — Pure Types in editor-model, Bevy Adapter in editor-core | Accepted (2026-08-15) — v0.87 (`v0.87-architecture-foundation`)    |
 | [ADR-0048](./0048-projectstore-v1-is-synchronous.md)                              | ProjectStore v1 Is a Synchronous Port                                          | Accepted (2026-08-15) — v0.87 (`v0.87-architecture-foundation`)    |
-| [ADR-0051](./0051-change-workbench-bottom-dock-tab.md)                              | ChangeWorkbenchPanel Lives in Bottom-Dock as an Internal Tab (ADR-0039/0024)   | Draft (2026-08-16) — v0.89 PR2b (`feat/v0.89-pr2b-workbench`)              |
+| [ADR-0049](./0049-dual-dispatch-gate.md)                                        | Dual Dispatch Gate for TransactionKernel Adoption                               | Accepted (2026-08-16) — v0.89 (`v0.89-change-runtime-workbench`)    |
+| [ADR-0050](./0050-apply-back-policy-not-mirrored.md)                              | ApplyBackPolicy Lives in editor-application (Mirror-Pair with editor-core)      | Accepted (2026-08-16) — v0.89 (`v0.89-change-runtime-workbench`)    |
+| [ADR-0051](./0051-change-workbench-bottom-dock-tab.md)                           | ChangeWorkbenchPanel Lives in Bottom-Dock as an Internal Tab (ADR-0039/0024)   | Accepted (2026-08-16) — v0.89 (`v0.89-change-runtime-workbench`)    |
+| [ADR-0052](./0052-runtime-causality-rebuild-cause.md)                            | Runtime Causality — RebuildCause + LogicActivationRing + CausalityEdge          | Accepted (2026-08-16) — v0.89 (`v0.89-change-runtime-workbench`)    |
 
 ## Related Documents
 

@@ -2,11 +2,11 @@
 
 All notable changes to Bevy 2D Editor are documented here. The project follows semantic version tags; detailed milestone history is available in [docs/ROADMAP.md](docs/ROADMAP.md).
 
-## v0.92.0 — Editor Extension SDK (2026-08-17)
+## v0.92.0 — Ecosystem & Architecture Hardening (2026-08-17)
 
-Implements ADR-0040 steps 1 and 2: internal Rust extension registry and
-capability permission model. Three built-in extensions (Logic Bricks
-controllers, recipe pack, scene validator) ship via the SDK surface.
+Delivers the Editor Extension SDK (ADR-0040 steps 1 and 2), completes the
+v0.91 deferred thread-local migrations, and ships two significant
+refactorings (EditorSession split, FakeSession extraction).
 
 ### New features
 
@@ -31,6 +31,30 @@ controllers, recipe pack, scene validator) ship via the SDK surface.
 - **Architecture fitness gate** (ADR-0044): extensions must not import
   `EditorSession` directly (enforced by archcheck)
 
+### Also delivered (from v0.91 cycle amendment)
+
+- **SCENE_DOC thread_local migration** (HIGH-1): scene_session re-entrancy
+  fixed via `with_asset_doc_take()` / `restore_doc()` pattern —
+  `apply_command` no longer holds `&mut SceneDocument` across re-entrant
+  session locks
+- **LOGIC_GRAPH_DOC thread_local migration** (HIGH-2): logic_state
+  re-entrancy fixed via `take` / `restore` pattern mirroring scene_session
+- **ASSET_OPERATION_LOG migration** (HIGH-3): `undo_asset` / `redo_asset`
+  now use `with_asset_doc_take()` / `with_asset_log_take()` instead of nested
+  `RefCell` borrows; re-entrancy safe
+- **EditorSession god-class split** (MEDIUM-5): `session.rs` restructured
+  into 3 sub-structs — `PreviewSessionState`, `ChangeSetsSessionState`,
+  `RuntimeSessionState` — with domain methods; `EditorSession` reduced from
+  16 to 11 fields; 14 delegate methods updated
+- **FakeSession shared test harness** (MEDIUM-6): `FakeSession` struct with
+  full `EditorSessionPort` impl extracted to
+  `crates/editor-core/tests/support/mod.rs`; eliminates ~500 lines of
+  duplicate struct+impl across 5 integration test files
+- **StableId type consolidation** (ADR-0049): unified `editor_model::StableId`
+  across `editor_core`; `document::StableId` conversion via `as_str()`
+- **Poll loop wiring + dedup**: `get_change_set_summaries_wasm` fully wired
+  to `EditorSession.recent_change_sets` via `EditorSessionPort`
+
 ### New features (from Unreleased)
 
 - Frontend ESLint and Prettier production gates.
@@ -43,6 +67,15 @@ controllers, recipe pack, scene validator) ship via the SDK surface.
 - Pre-existing test `validation_center_tests::wasm_validation_cycle_in_active_graph`
   (unrelated to this cycle; to be fixed separately)
 - Cosmetic unused-variable warning in `extension.rs:179` (trivial fix)
+- **`OperationLog` type not yet in `editor-model`** (deferred from v0.90):
+  `AssetSessionState::operation_log_bytes` and
+  `LogicSessionState::operation_log_bytes` remain `Vec<u8>` placeholders;
+  the real `OperationLog` type lives in `editor-core`; migration is a v0.93
+  mechanical follow-up
+- **FakeSession built-in manifest assertion** (`assert_eq!(list.len(), 3)`)
+  not yet added as a CI gate — infra in place, test missing
+- **Multi-thread concurrent register test** and **stale permission removal test**
+  not yet written — infrastructure ready, tests are the remaining work
 
 ## v0.91.0 — Thread-Local Migration Completion (2026-08-16)
 
@@ -85,38 +118,13 @@ remaining v0.91 work is split out as a v0.92 follow-up.
 
 ### Known limitations (deferred to v0.92)
 
-- **3 thread_locals remain in editor-core** (the v0.91 cycle amendment's
-  remaining scope): `SCENE_DOC` (scene_session.rs), `LOGIC_GRAPH_DOC`
-  (logic_state.rs), `ASSET_OPERATION_LOG` (asset_state.rs). The trait
-  seam is in place; the migration is mechanical but requires a
-  re-entrancy analysis because the closures in `apply_command`, `undo`,
-  `redo` hold `&mut SceneDocument` across `processor::apply` calls, which
-  themselves want the session lock for logging. The current v0.91 trait
-  uses `Arc<Mutex<EditorSession>>` which cannot be re-entered from the
-  same thread. The next cycle should either (a) restructure
-  `apply_command` to take the document by value and write back
-  atomically, or (b) use a per-document `Arc<Mutex<SceneDocument>>` as
-  separate shared state (independent of EditorSession).
-- **EditorSession god-class split**: `editor-application/src/session.rs`
-  is 828 lines with 16 fields and 30+ accessors. Splitting into
-  `editor_session/{core, scene_state, asset_state, logic_state,
-  preview, change_sets, causality, runtime_delta, logic_activation}.rs`
-  is a deepening candidate; not a functional change.
-- **FakeSession test harness shared** (`crates/editor-core/tests/common/`):
-  5 test files duplicate the `FakeSession` impl. Extraction was attempted
-  in v0.91 PR4 but the migration broke re-entrancy patterns; the
-  `crates/editor-core/tests/common/mod.rs` module exists but the
-  per-file `mod common;` declarations are not in place. A follow-up PR
-  can complete this trivially once the per-file signature drift is
-  reconciled.
 - **Pre-existing TypeScript errors** in `editor_application.d.ts`
   (17 errors, lines 807-1015). Pre-existing since v0.89 PR4; `vite build`
   exits 0 (transpileOnly). Out of scope for v0.91.
-- **`OperationLog` type itself not yet in `editor-model`**: the
-  `AssetSessionState::operation_log_bytes` and
-  `LogicSessionState::operation_log_bytes` fields are `Vec<u8>` placeholders
-  (v0.90 PR4). The real `OperationLog` type still lives in
-  `editor-core`; moving it is a v0.92 task.
+
+> All three thread_local migrations (SCENE_DOC, LOGIC_GRAPH_DOC, ASSET_OPERATION_LOG),
+> the EditorSession split, and the FakeSession extraction were completed
+> in v0.92.0 — see v0.92.0 "Also delivered" section.
 
 ## v0.90.0 — Thread-Local Liquidation & Apply-Back Wiring (2026-08-16)
 
