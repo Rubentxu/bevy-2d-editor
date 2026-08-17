@@ -136,6 +136,46 @@ where
     ASSET_OPERATION_LOG.with(|cell| f(&mut *cell.borrow_mut()))
 }
 
+/// Extract both the asset doc and log from their RefCells, call `f` with
+/// both mutable references, then write them back.
+///
+/// Uses `mem::replace` (not `.take()`) so no Option wrapper needed on the
+/// thread-local. A fresh `AssetOperationLog::new_const()` is used as the
+/// placeholder while the real log is held by `f`.
+///
+/// This prevents deadlock when `f` triggers code that re-enters the session
+/// (e.g., processor::apply → preview rebuild → nested asset operations).
+/// Same pattern as `scene_session::undo` / `scene_session::redo`.
+pub fn with_asset_doc_and_log_mut<F, R>(f: F) -> Result<R, &'static str>
+where
+    F: FnOnce(&mut SceneAssetDocument, &mut AssetOperationLog) -> R,
+{
+    // Phase 1: extract both from RefCells — borrows are released before f() runs
+    let mut doc_opt = SCENE_ASSET_DOC.with(|cell| cell.borrow_mut().take());
+    let log_placeholder = AssetOperationLog::new_const();
+    let mut log = ASSET_OPERATION_LOG
+        .with(|cell| std::mem::replace(&mut *cell.borrow_mut(), log_placeholder));
+
+    let doc = match &mut doc_opt {
+        Some(d) => d,
+        None => {
+            // Restore both on error
+            SCENE_ASSET_DOC.with(|cell| *cell.borrow_mut() = doc_opt);
+            ASSET_OPERATION_LOG.with(|cell| *cell.borrow_mut() = log);
+            return Err("No asset open");
+        }
+    };
+
+    // Phase 2: call f with both mutable refs — RefCell borrows are NOT held
+    let result = f(doc, &mut log);
+
+    // Phase 3: write both back
+    SCENE_ASSET_DOC.with(|cell| *cell.borrow_mut() = doc_opt);
+    ASSET_OPERATION_LOG.with(|cell| *cell.borrow_mut() = log);
+
+    Ok(result)
+}
+
 /// Get an immutable borrowed reference to the ASSET_BODY_CACHE.
 pub fn with_asset_body_cache<F, R>(f: F) -> R
 where

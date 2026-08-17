@@ -305,7 +305,7 @@ use crate::state::{
     LOGIC_OPERATION_LOG, PLAY_MODE_REQUEST, PlayModeRequest, RESYNC_REPORTS, SCENE_ASSET_DOC,
     SCENE_REGISTRY, VALIDATION_ISSUES, clear_asset_catalog_warnings, get_asset_catalog_warnings,
     mark_dirty, with_asset_body_cache, with_asset_body_cache_mut, with_asset_catalog,
-    with_asset_catalog_mut, with_asset_doc, with_asset_doc_mut, with_asset_log, with_asset_log_mut,
+    with_asset_catalog_mut, with_asset_doc, with_asset_doc_and_log_mut, with_asset_doc_mut, with_asset_log, with_asset_log_mut,
     with_logic_graph, with_logic_graph_catalog, with_logic_graph_catalog_mut, with_logic_graph_mut,
     with_logic_log, with_logic_log_mut, with_registry, with_registry_mut,
 };
@@ -2297,35 +2297,27 @@ fn dispatch_asset_command_via_kernel(cmd: AssetCommand) -> Result<String, JsValu
 /// Undo the last asset command. Returns the inverse command JSON.
 #[wasm_bindgen]
 pub fn undo_asset() -> Result<String, JsValue> {
-    let inverse_json = with_asset_doc_mut(|doc_opt| {
-        with_asset_log_mut(|log| {
-            let doc = doc_opt
-                .as_mut()
-                .ok_or_else(|| JsValue::from_str("No asset open"))?;
-            log.undo(doc)
-                .map_err(|e| JsValue::from_str(&e.to_string()))?;
-            serde_json::to_string(&())
-                .map_err(|e| JsValue::from_str(&format!("Failed to serialize: {}", e)))
-        })
-    })?;
-    Ok(inverse_json)
+    with_asset_doc_and_log_mut(|doc, log| {
+        log.undo(doc)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        serde_json::to_string(&())
+            .map_err(|e| JsValue::from_str(&format!("Failed to serialize: {}", e)))
+    })
+    .map_err(|e| JsValue::from_str(e))?;
+    Ok(String::new())
 }
 
 /// Redo the next asset command.
 #[wasm_bindgen]
 pub fn redo_asset() -> Result<String, JsValue> {
-    let result_json = with_asset_doc_mut(|doc_opt| {
-        with_asset_log_mut(|log| {
-            let doc = doc_opt
-                .as_mut()
-                .ok_or_else(|| JsValue::from_str("No asset open"))?;
-            log.redo(doc)
-                .map_err(|e| JsValue::from_str(&e.to_string()))?;
-            serde_json::to_string(&())
-                .map_err(|e| JsValue::from_str(&format!("Failed to serialize: {}", e)))
-        })
-    })?;
-    Ok(result_json)
+    with_asset_doc_and_log_mut(|doc, log| {
+        log.redo(doc)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        serde_json::to_string(&())
+            .map_err(|e| JsValue::from_str(&format!("Failed to serialize: {}", e)))
+    })
+    .map_err(|e| JsValue::from_str(e))?;
+    Ok(String::new())
 }
 
 /// Returns asset operation log metadata as JSON.

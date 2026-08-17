@@ -7,65 +7,69 @@
 //! ASSET_OPERATION_LOG, LOGIC_GRAPH_DOC, LOGIC_OPERATION_LOG) is deferred to
 //! v0.90 PR5 — this PR provides the seam.
 
-use editor_model::{AssetSessionState, EditorSessionPort, LogicSessionState, SceneSessionState};
+#[path = "support/mod.rs"]
+mod support;
+
+use editor_model::EditorSessionPort;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
+// Define only the fields needed for this test's custom logic.
+// All 11 fields exist in support::FakeSession but we declare only the 4 we use.
 struct FakeSession {
-    scene_states: BTreeMap<String, SceneSessionState>,
-    asset_states: BTreeMap<String, AssetSessionState>,
-    logic_states: BTreeMap<String, LogicSessionState>,
-    recent_change_sets: BTreeMap<String, Vec<editor_model::ChangeSetSummary>>,
+    scene_states: BTreeMap<String, support::SceneSessionState>,
+    asset_states: BTreeMap<String, support::AssetSessionState>,
+    logic_states: BTreeMap<String, support::LogicSessionState>,
+    recent_change_sets: BTreeMap<String, Vec<support::ChangeSetSummary>>,
 }
 
 impl EditorSessionPort for FakeSession {
-    fn scene_state_mut(&mut self, path: &str) -> &mut SceneSessionState {
+    fn scene_state_mut(&mut self, path: &str) -> &mut support::SceneSessionState {
         self.scene_states
             .entry(path.to_string())
-            .or_insert_with(SceneSessionState::default)
+            .or_insert_with(support::SceneSessionState::default)
     }
-    fn recent_change_sets_for(&self, _scene_path: &str) -> Vec<editor_model::ChangeSetSummary> {
-        Vec::new()
-    }
-    fn asset_state_mut(&mut self, path: &str) -> &mut AssetSessionState {
+    fn asset_state_mut(&mut self, path: &str) -> &mut support::AssetSessionState {
         self.asset_states
             .entry(path.to_string())
-            .or_insert_with(AssetSessionState::default)
+            .or_insert_with(support::AssetSessionState::default)
     }
-    fn logic_state_mut(&mut self, path: &str) -> &mut LogicSessionState {
+    fn logic_state_mut(&mut self, path: &str) -> &mut support::LogicSessionState {
         self.logic_states
             .entry(path.to_string())
-            .or_insert_with(LogicSessionState::default)
+            .or_insert_with(support::LogicSessionState::default)
+    }
+    fn recent_change_sets_for(&self, _scene_path: &str) -> Vec<support::ChangeSetSummary> {
+        Vec::new()
     }
     fn tunable_baselines_mut(&mut self) -> &mut BTreeMap<String, serde_json::Value> {
         unimplemented!()
     }
-    fn last_rebuild_cause_mut(&mut self) -> &mut Option<editor_model::RebuildCause> {
+    fn last_rebuild_cause_mut(&mut self) -> &mut Option<support::RebuildCause> {
         unimplemented!()
     }
     fn pending_causality_edges_mut(
         &mut self,
-    ) -> &mut BTreeMap<editor_model::StableId, Vec<editor_model::CausalityEdge>> {
+    ) -> &mut BTreeMap<support::StableId, Vec<support::CausalityEdge>> {
         unimplemented!()
     }
     fn runtime_delta_buffer_mut(
         &mut self,
-    ) -> &mut std::collections::VecDeque<editor_model::RuntimeDelta> {
+    ) -> &mut std::collections::VecDeque<support::RuntimeDelta> {
         unimplemented!()
     }
-    fn preview_inspector_mut(&mut self) -> &mut editor_model::PreviewInspectorState {
+    fn preview_inspector_mut(&mut self) -> &mut support::PreviewInspectorState {
         unimplemented!()
     }
-    fn source_files_mut(&mut self) -> &mut editor_model::SourceFilesCache {
+    fn source_files_mut(&mut self) -> &mut support::SourceFilesCache {
         unimplemented!()
     }
     fn logic_activation_ring_mut(
         &mut self,
-    ) -> &mut std::collections::VecDeque<editor_model::logic_activation::LogicActivationEvent> {
+    ) -> &mut std::collections::VecDeque<support::LogicActivationEvent> {
         unimplemented!()
     }
-
-    fn all_recent_change_sets(&self) -> Vec<editor_model::ChangeSetSummary> {
+    fn all_recent_change_sets(&self) -> Vec<support::ChangeSetSummary> {
         self.recent_change_sets
             .values()
             .flat_map(|v| v.iter().cloned())
@@ -77,7 +81,7 @@ impl EditorSessionPort for FakeSession {
     fn push_recent_change_set(
         &mut self,
         scene_path: &str,
-        summary: editor_model::ChangeSetSummary,
+        summary: support::ChangeSetSummary,
     ) {
         self.recent_change_sets
             .entry(scene_path.to_string())

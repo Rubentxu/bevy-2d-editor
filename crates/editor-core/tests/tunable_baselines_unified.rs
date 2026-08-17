@@ -7,110 +7,15 @@
 //!    `EditorSession.tunable_baselines` (the canonical owner).
 //! 3. The session read path is the only one used by apply-back and export.
 
+#[path = "support/mod.rs"]
+mod support;
+
 use editor_model::EditorSessionPort;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-struct FakeSession {
-    tunable_baselines: BTreeMap<String, serde_json::Value>,
-    runtime_delta_buffer: std::collections::VecDeque<editor_model::RuntimeDelta>,
-    pending_causality_edges: BTreeMap<editor_model::StableId, Vec<editor_model::CausalityEdge>>,
-    last_rebuild_cause: Option<editor_model::RebuildCause>,
-    scene_states: BTreeMap<String, editor_model::SceneSessionState>,
-    asset_states: BTreeMap<String, editor_model::AssetSessionState>,
-    logic_states: BTreeMap<String, editor_model::LogicSessionState>,
-    preview_inspector: editor_model::PreviewInspectorState,
-    source_files: editor_model::SourceFilesCache,
-    logic_activation_ring:
-        std::collections::VecDeque<editor_model::logic_activation::LogicActivationEvent>,
-    recent_change_sets: BTreeMap<String, Vec<editor_model::ChangeSetSummary>>,
-}
-
-impl EditorSessionPort for FakeSession {
-    fn tunable_baselines_mut(&mut self) -> &mut BTreeMap<String, serde_json::Value> {
-        &mut self.tunable_baselines
-    }
-    fn last_rebuild_cause_mut(&mut self) -> &mut Option<editor_model::RebuildCause> {
-        &mut self.last_rebuild_cause
-    }
-    fn pending_causality_edges_mut(
-        &mut self,
-    ) -> &mut BTreeMap<editor_model::StableId, Vec<editor_model::CausalityEdge>> {
-        &mut self.pending_causality_edges
-    }
-    fn runtime_delta_buffer_mut(
-        &mut self,
-    ) -> &mut std::collections::VecDeque<editor_model::RuntimeDelta> {
-        &mut self.runtime_delta_buffer
-    }
-    fn scene_state_mut(&mut self, path: &str) -> &mut editor_model::SceneSessionState {
-        self.scene_states
-            .entry(path.to_string())
-            .or_insert_with(editor_model::SceneSessionState::default)
-    }
-    fn asset_state_mut(&mut self, path: &str) -> &mut editor_model::AssetSessionState {
-        self.asset_states
-            .entry(path.to_string())
-            .or_insert_with(editor_model::AssetSessionState::default)
-    }
-    fn logic_state_mut(&mut self, path: &str) -> &mut editor_model::LogicSessionState {
-        self.logic_states
-            .entry(path.to_string())
-            .or_insert_with(editor_model::LogicSessionState::default)
-    }
-    fn preview_inspector_mut(&mut self) -> &mut editor_model::PreviewInspectorState {
-        &mut self.preview_inspector
-    }
-    fn source_files_mut(&mut self) -> &mut editor_model::SourceFilesCache {
-        &mut self.source_files
-    }
-    fn recent_change_sets_for(&self, scene_path: &str) -> Vec<editor_model::ChangeSetSummary> {
-        self.recent_change_sets
-            .get(scene_path)
-            .cloned()
-            .unwrap_or_default()
-    }
-    fn logic_activation_ring_mut(
-        &mut self,
-    ) -> &mut std::collections::VecDeque<editor_model::logic_activation::LogicActivationEvent> {
-        &mut self.logic_activation_ring
-    }
-
-    fn all_recent_change_sets(&self) -> Vec<editor_model::ChangeSetSummary> {
-        self.recent_change_sets
-            .values()
-            .flat_map(|v| v.iter().cloned())
-            .collect()
-    }
-    fn active_document_path(&self) -> Option<&str> {
-        None
-    }
-    fn push_recent_change_set(
-        &mut self,
-        scene_path: &str,
-        summary: editor_model::ChangeSetSummary,
-    ) {
-        self.recent_change_sets
-            .entry(scene_path.to_string())
-            .or_insert_with(Vec::new)
-            .push(summary);
-    }
-}
-
 fn fresh_session() {
-    let session = FakeSession {
-        tunable_baselines: BTreeMap::new(),
-        runtime_delta_buffer: std::collections::VecDeque::with_capacity(64),
-        pending_causality_edges: BTreeMap::new(),
-        last_rebuild_cause: None,
-        scene_states: BTreeMap::new(),
-        asset_states: BTreeMap::new(),
-        logic_states: BTreeMap::new(),
-        preview_inspector: editor_model::PreviewInspectorState::default(),
-        source_files: editor_model::SourceFilesCache::default(),
-        logic_activation_ring: std::collections::VecDeque::with_capacity(64),
-        recent_change_sets: BTreeMap::new(),
-    };
+    let session = support::FakeSessionWithDefaults(support::FakeSession::new());
     let arc: Arc<Mutex<dyn EditorSessionPort>> = Arc::new(Mutex::new(session));
     editor_model::ports::register_editor_session(arc);
 }

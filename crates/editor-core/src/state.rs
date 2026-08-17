@@ -13,7 +13,7 @@
 pub use crate::asset_state::{
     clear_asset_catalog_warnings, get_asset_catalog_warnings, with_asset_body_cache,
     with_asset_body_cache_mut, with_asset_catalog, with_asset_catalog_mut, with_asset_doc,
-    with_asset_doc_mut, with_asset_log, with_asset_log_mut,
+    with_asset_doc_and_log_mut, with_asset_doc_mut, with_asset_log, with_asset_log_mut,
 };
 pub use crate::hot_reload_state::{
     HOT_RELOAD_BUS, HotReloadRequest, PLAY_MODE_REQUEST, PlayModeRequest,

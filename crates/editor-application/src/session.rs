@@ -142,26 +142,6 @@ pub type LocalAssetSessionState = editor_model::AssetSessionState;
 /// `operation_log_bytes`.
 pub type LocalLogicSessionState = editor_model::LogicSessionState;
 
-/// Session state for the runtime preview inspector (PR2a).
-#[derive(Debug, Clone, Default)]
-pub struct PreviewInspectorState {
-    /// Live runtime metrics (FPS, frame time, rebuild count).
-    pub metrics: Value,
-    /// Per-instance runtime-to-editor ID mapping.
-    pub mapping: Vec<Value>,
-    /// Per-StableId provenance records from play mode.
-    pub provenance: BTreeMap<String, Value>,
-    /// Last rebuild cause (§6).
-    pub last_rebuild_cause: Option<RebuildCause>,
-}
-
-/// In-memory cache for source file contents.
-#[derive(Debug, Clone, Default)]
-pub struct SourceFilesCache {
-    /// File path → file content.
-    pub files: BTreeMap<String, String>,
-}
-
 /// Recent change-set summary buffer (capped at 50 entries per scene path).
 ///
 /// Populated by polling `OperationLog::recent_change_sets_for` per scene path.
@@ -232,6 +212,214 @@ impl Default for RecentChangeSetsBuffer {
 }
 
 // ---------------------------------------------------------------------------
+// Sub-state structs (ADR-0031 — MEDIUM-5 god-class split)
+// ---------------------------------------------------------------------------
+//
+// Split from EditorSession to reduce its 16-field / 43-method surface area.
+// Each sub-struct groups fields that share a domain theme; EditorSession
+// holds them as public fields so call sites access session.preview.xxx directly.
+//
+// | Sub-struct              | Fields grouped                        |
+// |-------------------------|---------------------------------------|
+// | PreviewSessionState     | preview_inspector + source_files      |
+// | ChangeSetsSessionState  | recent_change_sets + pending_*       |
+// | RuntimeSessionState     | runtime_delta_buffer + tunable_baselines |
+
+/// Session state for the runtime preview inspector and source-file cache.
+///
+/// Groups the preview inspector (live runtime data) with the source-file
+/// contents cache, both of which are read frequently during play-mode.
+#[derive(Debug, Clone, Default)]
+pub struct PreviewSessionState {
+    /// Live runtime metrics, ID mapping, and provenance.
+    pub preview_inspector: editor_model::PreviewInspectorState,
+    /// In-memory contents of source files (keyed by project-relative path).
+    pub source_files: editor_model::SourceFilesCache,
+}
+
+impl PreviewSessionState {
+    /// Construct a default preview state.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns a reference to the preview inspector state.
+    pub fn preview_inspector(&self) -> &editor_model::PreviewInspectorState {
+        &self.preview_inspector
+    }
+
+    /// Returns a mutable reference to the preview inspector state.
+    pub fn preview_inspector_mut(&mut self) -> &mut editor_model::PreviewInspectorState {
+        &mut self.preview_inspector
+    }
+
+    /// Returns a reference to the source files cache.
+    pub fn source_files(&self) -> &editor_model::SourceFilesCache {
+        &self.source_files
+    }
+
+    /// Returns a mutable reference to the source files cache.
+    pub fn source_files_mut(&mut self) -> &mut editor_model::SourceFilesCache {
+        &mut self.source_files
+    }
+
+    /// Returns the last rebuild cause recorded by §6.
+    pub fn last_rebuild_cause(&self) -> Option<&RebuildCause> {
+        self.preview_inspector.last_rebuild_cause.as_ref()
+    }
+
+    /// Records a rebuild cause (§6).
+    pub fn set_last_rebuild_cause(&mut self, cause: RebuildCause) {
+        self.preview_inspector.last_rebuild_cause = Some(cause);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ChangeSetsSessionState — recent change sets + pending causality + pending changes
+// ---------------------------------------------------------------------------
+
+/// Session state for ChangeWorkbench and causality tracking.
+///
+/// Groups three related concerns: per-scene recent-change-set buffers,
+/// pending causality edges from play-mode, and pending ChangeSets awaiting
+/// user approval in the ChangeWorkbench (ADR-0039).
+#[derive(Debug, Clone, Default)]
+pub struct ChangeSetsSessionState {
+    /// Recent change-set summaries per scene path (capped at 50 per scene).
+    pub recent_change_sets: BTreeMap<String, RecentChangeSetsBuffer>,
+    /// Pending causality edges collected during a preview rebuild.
+    /// Keyed by target StableId; drained and applied to `PreviewProvenance`
+    /// at the end of each rebuild.
+    pub pending_causality_edges: BTreeMap<StableId, Vec<CausalityEdge>>,
+    /// Pending ChangeSets awaiting user approval in the ChangeWorkbench (ADR-0039).
+    /// Key = change-set ID (e.g. "agent:12345" or "cmd:1234567890").
+    pub pending_change_sets: BTreeMap<String, PendingChangeSet>,
+}
+
+impl ChangeSetsSessionState {
+    /// Construct a default instance with empty maps.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    // ─── Recent change sets ─────────────────────────────────────────────────
+
+    /// Returns the recent change-set summaries for the given scene path.
+    /// Returns an empty buffer if no entries have been recorded for this path.
+    pub fn recent_change_sets_for(&self, scene_path: &str) -> Vec<ChangeSetSummary> {
+        self.recent_change_sets
+            .get(scene_path)
+            .map(|b| b.entries())
+            .unwrap_or_default()
+    }
+
+    /// Push a `ChangeSetSummary` to the per-scene buffer.
+    /// The buffer is capped at 50 entries per scene path; the oldest entry
+    /// is evicted on overflow.
+    pub fn push_recent_change_set(&mut self, scene_path: &str, summary: ChangeSetSummary) {
+        self.recent_change_sets
+            .entry(scene_path.to_string())
+            .or_insert_with(|| RecentChangeSetsBuffer::new(50))
+            .push(summary);
+    }
+
+    /// Returns all `ChangeSetSummary` entries across all scene paths
+    /// (most recent first).
+    pub fn all_recent_change_sets(&self) -> Vec<editor_model::ChangeSetSummary> {
+        let mut all = Vec::new();
+        for buf in self.recent_change_sets.values() {
+            all.extend(buf.entries());
+        }
+        all
+    }
+
+    // ─── Pending causality edges ─────────────────────────────────────────────
+
+    /// Returns a mutable reference to the pending causality edges map.
+    pub fn pending_causality_edges_mut(
+        &mut self,
+    ) -> &mut BTreeMap<StableId, Vec<CausalityEdge>> {
+        &mut self.pending_causality_edges
+    }
+
+    // ─── Pending ChangeSets ─────────────────────────────────────────────────
+
+    /// Returns a mutable reference to the pending ChangeSets map.
+    pub fn pending_change_sets_mut(&mut self) -> &mut BTreeMap<String, PendingChangeSet> {
+        &mut self.pending_change_sets
+    }
+
+    /// Returns an immutable reference to the pending ChangeSets map.
+    pub fn pending_change_sets(&self) -> &BTreeMap<String, PendingChangeSet> {
+        &self.pending_change_sets
+    }
+}
+
+// ---------------------------------------------------------------------------
+// RuntimeSessionState — runtime deltas + tunable baselines
+// ---------------------------------------------------------------------------
+
+/// Session state for play-mode runtime data.
+///
+/// Groups the runtime delta buffer (play-mode apply-back) with the tunable
+/// baselines captured on PlayModeEnter.
+#[derive(Debug, Clone, Default)]
+pub struct RuntimeSessionState {
+    /// Runtime delta buffer for play-mode apply-back (capped at RUNTIME_DELTA_BUFFER_CAP).
+    pub runtime_delta_buffer: VecDeque<RuntimeDelta>,
+    /// Baseline values for Tunable fields, captured on PlayModeEnter.
+    /// Key = composite `"instance_id|component_type_id|field_path"`.
+    pub tunable_baselines: BTreeMap<String, serde_json::Value>,
+}
+
+impl RuntimeSessionState {
+    /// Construct with capacity pre-allocated for the delta buffer.
+    pub fn new() -> Self {
+        Self {
+            runtime_delta_buffer: VecDeque::with_capacity(crate::runtime_delta::RUNTIME_DELTA_BUFFER_CAP),
+            tunable_baselines: BTreeMap::new(),
+        }
+    }
+
+    // ─── Runtime delta buffer ────────────────────────────────────────────────
+
+    /// Returns a reference to the delta buffer.
+    pub fn runtime_delta_buffer(&self) -> &VecDeque<RuntimeDelta> {
+        &self.runtime_delta_buffer
+    }
+
+    /// Returns a mutable reference to the delta buffer, with cap enforcement.
+    pub fn runtime_delta_buffer_mut(&mut self) -> &mut VecDeque<RuntimeDelta> {
+        while self.runtime_delta_buffer.len() > crate::runtime_delta::RUNTIME_DELTA_BUFFER_CAP {
+            self.runtime_delta_buffer.pop_front();
+        }
+        &mut self.runtime_delta_buffer
+    }
+
+    // ─── Tunable baselines ───────────────────────────────────────────────────
+
+    /// Capture the authoring baseline for every field marked Tunable.
+    pub fn snapshot_tunable_baselines(&mut self, baselines: BTreeMap<String, serde_json::Value>) {
+        self.tunable_baselines = baselines;
+    }
+
+    /// Returns a reference to the tunable baselines map.
+    pub fn tunable_baselines(&self) -> &BTreeMap<String, serde_json::Value> {
+        &self.tunable_baselines
+    }
+
+    /// Returns a mutable reference to the tunable baselines map.
+    pub fn tunable_baselines_mut(&mut self) -> &mut BTreeMap<String, serde_json::Value> {
+        &mut self.tunable_baselines
+    }
+
+    /// Clear all tunable baselines.
+    pub fn clear_tunable_baselines(&mut self) {
+        self.tunable_baselines.clear();
+    }
+}
+
+// ---------------------------------------------------------------------------
 // EditorSession
 // ---------------------------------------------------------------------------
 
@@ -282,26 +470,12 @@ pub struct EditorSession {
     asset_states: BTreeMap<String, LocalAssetSessionState>,
     /// Per-logic-graph-path session state (LOGIC_GRAPH_DOC etc.).
     logic_states: BTreeMap<String, LocalLogicSessionState>,
-    /// Runtime preview inspector state (PREVIEW_METRICS etc.).
-    preview_inspector: editor_model::PreviewInspectorState,
-    /// Source file contents cache (SOURCE_FILE_REGISTRY).
-    source_files: editor_model::SourceFilesCache,
-    /// Recent change-set summaries per scene path (capped at 50 per scene).
-    recent_change_sets: BTreeMap<String, RecentChangeSetsBuffer>,
-    /// Pending causality edges collected during a preview rebuild.
-    /// Keyed by target StableId; drained and applied to `PreviewProvenance`
-    /// at the end of each rebuild (v0.90 PR2 consolidates this from
-    /// `editor-core::preview_inspector::PENDING_CAUSALITY_EDGES`).
-    pending_causality_edges: BTreeMap<StableId, Vec<CausalityEdge>>,
-    /// Runtime delta buffer for play-mode apply-back (capped at 64).
-    runtime_delta_buffer: VecDeque<RuntimeDelta>,
-    /// Baseline values for Tunable fields, captured on PlayModeEnter.
-    ///
-    /// Key = composite `"instance_id|component_type_id|field_path"`, value = JSON baseline.
-    tunable_baselines: BTreeMap<String, serde_json::Value>,
-    /// Pending ChangeSets awaiting user approval in the ChangeWorkbench (ADR-0039).
-    /// Key = change-set ID (e.g. "agent:12345" or "cmd:1234567890").
-    pending_change_sets: BTreeMap<String, PendingChangeSet>,
+    /// Runtime preview inspector + source files (PREVIEW_METRICS etc.).
+    preview_state: PreviewSessionState,
+    /// Change-workbench and causality tracking state.
+    change_sets: ChangeSetsSessionState,
+    /// Runtime delta buffer and tunable baselines.
+    runtime: RuntimeSessionState,
     /// Logic activation event ring — capped at 64 entries (§6).
     logic_activation_ring: LogicActivationRing,
 }
@@ -316,12 +490,9 @@ impl std::fmt::Debug for EditorSession {
             .field("scene_states", &self.scene_states)
             .field("asset_states", &self.asset_states)
             .field("logic_states", &self.logic_states)
-            .field("preview_inspector", &self.preview_inspector)
-            .field("source_files", &self.source_files)
-            .field("recent_change_sets", &self.recent_change_sets)
-            .field("runtime_delta_buffer_len", &self.runtime_delta_buffer.len())
-            .field("tunable_baselines_len", &self.tunable_baselines.len())
-            .field("pending_change_sets_len", &self.pending_change_sets.len())
+            .field("preview_state", &self.preview_state)
+            .field("change_sets", &self.change_sets)
+            .field("runtime", &self.runtime)
             .field(
                 "logic_activation_ring_len",
                 &self.logic_activation_ring.len(),
@@ -345,15 +516,9 @@ impl EditorSession {
             scene_states: BTreeMap::new(),
             asset_states: BTreeMap::new(),
             logic_states: BTreeMap::new(),
-            preview_inspector: editor_model::PreviewInspectorState::default(),
-            source_files: editor_model::SourceFilesCache::default(),
-            recent_change_sets: BTreeMap::new(),
-            pending_causality_edges: BTreeMap::new(),
-            runtime_delta_buffer: VecDeque::with_capacity(
-                crate::runtime_delta::RUNTIME_DELTA_BUFFER_CAP,
-            ),
-            tunable_baselines: BTreeMap::new(),
-            pending_change_sets: BTreeMap::new(),
+            preview_state: PreviewSessionState::new(),
+            change_sets: ChangeSetsSessionState::new(),
+            runtime: RuntimeSessionState::new(),
             logic_activation_ring: VecDeque::with_capacity(
                 editor_model::logic_activation::LOGIC_ACTIVATION_RING_CAP,
             ),
@@ -393,24 +558,17 @@ impl EditorSession {
     ///
     /// Returns an empty buffer if no entries have been recorded for this path.
     pub fn recent_change_sets_for(&self, scene_path: &str) -> Vec<ChangeSetSummary> {
-        self.recent_change_sets
-            .get(scene_path)
-            .map(|b| b.entries())
-            .unwrap_or_default()
+        self.change_sets.recent_change_sets_for(scene_path)
     }
 
     /// Returns a reference to the runtime delta buffer.
     pub fn runtime_delta_buffer(&self) -> &VecDeque<RuntimeDelta> {
-        &self.runtime_delta_buffer
+        RuntimeSessionState::runtime_delta_buffer(&self.runtime)
     }
 
     /// Returns a mutable reference to the runtime delta buffer.
     pub fn runtime_delta_buffer_mut(&mut self) -> &mut VecDeque<RuntimeDelta> {
-        // Enforce the cap on every access (v0.90 PR6: RUNTIME_DELTA_BUFFER_CAP).
-        while self.runtime_delta_buffer.len() > crate::runtime_delta::RUNTIME_DELTA_BUFFER_CAP {
-            self.runtime_delta_buffer.pop_front();
-        }
-        &mut self.runtime_delta_buffer
+        self.runtime.runtime_delta_buffer_mut()
     }
 
     /// Capture the authoring baseline for every field marked Tunable.
@@ -418,37 +576,37 @@ impl EditorSession {
     /// Called by `process_play_mode_request(PlayModeEnter)`. The captured
     /// baseline is later used to compute `RuntimeDelta` on `PlayModeExit`.
     pub fn snapshot_tunable_baselines(&mut self, baselines: BTreeMap<String, serde_json::Value>) {
-        self.tunable_baselines = baselines;
+        self.runtime.snapshot_tunable_baselines(baselines);
     }
 
     /// Returns a reference to the tunable baselines map.
     pub fn tunable_baselines(&self) -> &BTreeMap<String, serde_json::Value> {
-        &self.tunable_baselines
+        RuntimeSessionState::tunable_baselines(&self.runtime)
     }
 
     /// Clear all tunable baselines (called after PlayModeExit delta computation).
     pub fn clear_tunable_baselines(&mut self) {
-        self.tunable_baselines.clear();
+        self.runtime.clear_tunable_baselines();
     }
 
     /// Returns a reference to the source files cache.
     pub fn source_files(&self) -> &editor_model::SourceFilesCache {
-        &self.source_files
+        self.preview_state.source_files()
     }
 
     /// Returns a mutable reference to the source files cache.
     pub fn source_files_mut(&mut self) -> &mut editor_model::SourceFilesCache {
-        &mut self.source_files
+        self.preview_state.source_files_mut()
     }
 
     /// Returns a reference to the preview inspector state.
     pub fn preview_inspector(&self) -> &editor_model::PreviewInspectorState {
-        &self.preview_inspector
+        self.preview_state.preview_inspector()
     }
 
     /// Returns a mutable reference to the preview inspector state.
     pub fn preview_inspector_mut(&mut self) -> &mut editor_model::PreviewInspectorState {
-        &mut self.preview_inspector
+        self.preview_state.preview_inspector_mut()
     }
 
     // ─── §6 Runtime Causality accessors ────────────────────────────────────────
@@ -470,30 +628,23 @@ impl EditorSession {
     /// from tests). The buffer is capped at 50 entries per scene path; the
     /// oldest entry is evicted on overflow.
     pub fn push_recent_change_set(&mut self, scene_path: &str, summary: ChangeSetSummary) {
-        self.recent_change_sets
-            .entry(scene_path.to_string())
-            .or_insert_with(|| RecentChangeSetsBuffer::new(50))
-            .push(summary);
+        self.change_sets.push_recent_change_set(scene_path, summary);
     }
 
     /// Returns all `ChangeSetSummary` entries for the given scene path
     /// (most recent first). Empty Vec if no entries (or session not initialized).
     pub fn all_recent_change_sets(&self) -> Vec<editor_model::ChangeSetSummary> {
-        let mut all = Vec::new();
-        for buf in self.recent_change_sets.values() {
-            all.extend(buf.entries());
-        }
-        all
+        self.change_sets.all_recent_change_sets()
     }
 
     /// Returns the last rebuild cause recorded by §6.
     pub fn last_rebuild_cause(&self) -> Option<&RebuildCause> {
-        self.preview_inspector.last_rebuild_cause.as_ref()
+        self.preview_state.last_rebuild_cause()
     }
 
     /// Records a rebuild cause (§6).
     pub fn set_last_rebuild_cause(&mut self, cause: RebuildCause) {
-        self.preview_inspector.last_rebuild_cause = Some(cause);
+        self.preview_state.set_last_rebuild_cause(cause);
     }
 
     /// Returns a reference to the project store.
@@ -591,12 +742,12 @@ impl EditorSession {
     /// ADR-0031 rule: workbench UI state lives in the sanctioned composition root
     /// (`EditorSession`), not in domain modules.
     pub fn pending_change_sets_mut(&mut self) -> &mut BTreeMap<String, PendingChangeSet> {
-        &mut self.pending_change_sets
+        self.change_sets.pending_change_sets_mut()
     }
 
     /// Returns a reference to the pending ChangeSets map.
     pub fn pending_change_sets(&self) -> &BTreeMap<String, PendingChangeSet> {
-        &self.pending_change_sets
+        self.change_sets.pending_change_sets()
     }
 }
 
@@ -799,23 +950,19 @@ mod tests {
 
 impl EditorSessionPort for EditorSession {
     fn tunable_baselines_mut(&mut self) -> &mut BTreeMap<String, serde_json::Value> {
-        &mut self.tunable_baselines
+        self.runtime.tunable_baselines_mut()
     }
 
     fn last_rebuild_cause_mut(&mut self) -> &mut Option<RebuildCause> {
-        &mut self.preview_inspector.last_rebuild_cause
+        &mut self.preview_state.preview_inspector.last_rebuild_cause
     }
 
     fn pending_causality_edges_mut(&mut self) -> &mut BTreeMap<StableId, Vec<CausalityEdge>> {
-        &mut self.pending_causality_edges
+        self.change_sets.pending_causality_edges_mut()
     }
 
     fn runtime_delta_buffer_mut(&mut self) -> &mut VecDeque<RuntimeDelta> {
-        // Enforce the cap on every access (v0.90 PR6: RUNTIME_DELTA_BUFFER_CAP).
-        while self.runtime_delta_buffer.len() > crate::runtime_delta::RUNTIME_DELTA_BUFFER_CAP {
-            self.runtime_delta_buffer.pop_front();
-        }
-        &mut self.runtime_delta_buffer
+        self.runtime.runtime_delta_buffer_mut()
     }
 
     fn scene_state_mut(&mut self, path: &str) -> &mut editor_model::SceneSessionState {
@@ -837,30 +984,19 @@ impl EditorSessionPort for EditorSession {
     }
 
     fn preview_inspector_mut(&mut self) -> &mut editor_model::PreviewInspectorState {
-        &mut self.preview_inspector
+        self.preview_state.preview_inspector_mut()
     }
 
     fn source_files_mut(&mut self) -> &mut editor_model::SourceFilesCache {
-        &mut self.source_files
+        self.preview_state.source_files_mut()
     }
 
     fn recent_change_sets_for(&self, scene_path: &str) -> Vec<editor_model::ChangeSetSummary> {
-        // PR5: read from the in-session map. The OperationLog poll
-        // (which was the v0.89 read path) is deferred to v0.91 — the
-        // RecentChangeSetsBuffer is populated externally via
-        // `EditorSession::push_recent_change_set` (added in v0.91 PR1).
-        self.recent_change_sets
-            .get(scene_path)
-            .map(|b| b.entries().to_vec())
-            .unwrap_or_default()
+        self.change_sets.recent_change_sets_for(scene_path)
     }
 
     fn all_recent_change_sets(&self) -> Vec<editor_model::ChangeSetSummary> {
-        let mut all = Vec::new();
-        for buf in self.recent_change_sets.values() {
-            all.extend(buf.entries());
-        }
-        all
+        self.change_sets.all_recent_change_sets()
     }
 
     fn active_document_path(&self) -> Option<&str> {
@@ -872,10 +1008,7 @@ impl EditorSessionPort for EditorSession {
         scene_path: &str,
         summary: editor_model::ChangeSetSummary,
     ) {
-        self.recent_change_sets
-            .entry(scene_path.to_string())
-            .or_insert_with(|| RecentChangeSetsBuffer::new(50))
-            .push(summary);
+        self.change_sets.push_recent_change_set(scene_path, summary);
     }
 
     fn logic_activation_ring_mut(

@@ -2,103 +2,76 @@
 //! thread_locals in editor-core are gone; both now read from / write to
 //! `EditorSession` via the `EditorSessionPort` trait.
 
+#[path = "support/mod.rs"]
+mod support;
+
 use editor_model::EditorSessionPort;
 use editor_model::scene_asset_catalog::{CatalogWarning, SceneAssetCatalog};
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 
+// Uses support::FakeSessionWithDefaults as base (provides all 11 fields + impl).
+// Only overrides recent_change_sets_for/all_recent_change_sets/push_recent_change_set
+// to return empty/nop as required by this test's isolation checks.
+
 struct FakeSession {
-    tunable_baselines: std::collections::BTreeMap<String, serde_json::Value>,
-    runtime_delta_buffer: std::collections::VecDeque<editor_model::RuntimeDelta>,
-    pending_causality_edges:
-        std::collections::BTreeMap<editor_model::StableId, Vec<editor_model::CausalityEdge>>,
-    last_rebuild_cause: Option<editor_model::RebuildCause>,
-    scene_states: std::collections::BTreeMap<String, editor_model::SceneSessionState>,
-    asset_states: std::collections::BTreeMap<String, editor_model::AssetSessionState>,
-    logic_states: std::collections::BTreeMap<String, editor_model::LogicSessionState>,
-    preview_inspector: editor_model::PreviewInspectorState,
-    source_files: editor_model::SourceFilesCache,
-    recent_change_sets: std::collections::BTreeMap<String, Vec<editor_model::ChangeSetSummary>>,
-    logic_activation_ring:
-        std::collections::VecDeque<editor_model::logic_activation::LogicActivationEvent>,
+    inner: support::FakeSession,
 }
 
 impl EditorSessionPort for FakeSession {
-    fn tunable_baselines_mut(
-        &mut self,
-    ) -> &mut std::collections::BTreeMap<String, serde_json::Value> {
-        &mut self.tunable_baselines
+    fn scene_state_mut(&mut self, path: &str) -> &mut support::SceneSessionState {
+        self.inner.scene_state_mut(path)
     }
-    fn last_rebuild_cause_mut(&mut self) -> &mut Option<editor_model::RebuildCause> {
-        &mut self.last_rebuild_cause
+    fn asset_state_mut(&mut self, path: &str) -> &mut support::AssetSessionState {
+        self.inner.asset_state_mut(path)
+    }
+    fn logic_state_mut(&mut self, path: &str) -> &mut support::LogicSessionState {
+        self.inner.logic_state_mut(path)
+    }
+    fn tunable_baselines_mut(&mut self) -> &mut std::collections::BTreeMap<String, serde_json::Value> {
+        self.inner.tunable_baselines_mut()
+    }
+    fn last_rebuild_cause_mut(&mut self) -> &mut Option<support::RebuildCause> {
+        self.inner.last_rebuild_cause_mut()
     }
     fn pending_causality_edges_mut(
         &mut self,
-    ) -> &mut std::collections::BTreeMap<editor_model::StableId, Vec<editor_model::CausalityEdge>>
+    ) -> &mut std::collections::BTreeMap<support::StableId, Vec<support::CausalityEdge>>
     {
-        &mut self.pending_causality_edges
+        self.inner.pending_causality_edges_mut()
     }
     fn runtime_delta_buffer_mut(
         &mut self,
-    ) -> &mut std::collections::VecDeque<editor_model::RuntimeDelta> {
-        &mut self.runtime_delta_buffer
+    ) -> &mut std::collections::VecDeque<support::RuntimeDelta> {
+        self.inner.runtime_delta_buffer_mut()
     }
-    fn scene_state_mut(&mut self, path: &str) -> &mut editor_model::SceneSessionState {
-        self.scene_states
-            .entry(path.to_string())
-            .or_insert_with(editor_model::SceneSessionState::default)
+    fn preview_inspector_mut(&mut self) -> &mut support::PreviewInspectorState {
+        self.inner.preview_inspector_mut()
     }
-    fn asset_state_mut(&mut self, path: &str) -> &mut editor_model::AssetSessionState {
-        self.asset_states
-            .entry(path.to_string())
-            .or_insert_with(editor_model::AssetSessionState::default)
-    }
-    fn logic_state_mut(&mut self, path: &str) -> &mut editor_model::LogicSessionState {
-        self.logic_states
-            .entry(path.to_string())
-            .or_insert_with(editor_model::LogicSessionState::default)
-    }
-    fn preview_inspector_mut(&mut self) -> &mut editor_model::PreviewInspectorState {
-        &mut self.preview_inspector
-    }
-    fn source_files_mut(&mut self) -> &mut editor_model::SourceFilesCache {
-        &mut self.source_files
-    }
-    fn recent_change_sets_for(&self, _scene_path: &str) -> Vec<editor_model::ChangeSetSummary> {
-        Vec::new()
-    }
-    fn push_recent_change_set(
-        &mut self,
-        _scene_path: &str,
-        _summary: editor_model::ChangeSetSummary,
-    ) {
+    fn source_files_mut(&mut self) -> &mut support::SourceFilesCache {
+        self.inner.source_files_mut()
     }
     fn logic_activation_ring_mut(
         &mut self,
-    ) -> &mut std::collections::VecDeque<editor_model::logic_activation::LogicActivationEvent> {
-        &mut self.logic_activation_ring
+    ) -> &mut std::collections::VecDeque<support::LogicActivationEvent> {
+        self.inner.logic_activation_ring_mut()
     }
-    fn all_recent_change_sets(&self) -> Vec<editor_model::ChangeSetSummary> {
+    // Override to return empty as required by this test's isolation semantics
+    fn recent_change_sets_for(&self, _scene_path: &str) -> Vec<support::ChangeSetSummary> {
+        Vec::new()
+    }
+    fn all_recent_change_sets(&self) -> Vec<support::ChangeSetSummary> {
         Vec::new()
     }
     fn active_document_path(&self) -> Option<&str> {
         None
     }
+    fn push_recent_change_set(&mut self, _scene_path: &str, _summary: support::ChangeSetSummary) {}
 }
 
 fn fresh_session() {
     let session = FakeSession {
-        tunable_baselines: std::collections::BTreeMap::new(),
-        runtime_delta_buffer: std::collections::VecDeque::with_capacity(64),
-        pending_causality_edges: std::collections::BTreeMap::new(),
-        last_rebuild_cause: None,
-        scene_states: std::collections::BTreeMap::new(),
-        asset_states: std::collections::BTreeMap::new(),
-        logic_states: std::collections::BTreeMap::new(),
-        preview_inspector: editor_model::PreviewInspectorState::default(),
-        source_files: editor_model::SourceFilesCache::default(),
-        recent_change_sets: std::collections::BTreeMap::new(),
-        logic_activation_ring: std::collections::VecDeque::with_capacity(64),
+        inner: support::FakeSession::new(),
     };
     let arc: Arc<Mutex<dyn EditorSessionPort>> = Arc::new(Mutex::new(session));
     editor_model::ports::register_editor_session(arc);
