@@ -2,25 +2,47 @@
 
 All notable changes to Bevy 2D Editor are documented here. The project follows semantic version tags; detailed milestone history is available in [docs/ROADMAP.md](docs/ROADMAP.md).
 
-## Unreleased
+## v0.92.0 — Editor Extension SDK (2026-08-17)
 
-### Added
+Implements ADR-0040 steps 1 and 2: internal Rust extension registry and
+capability permission model. Three built-in extensions (Logic Bricks
+controllers, recipe pack, scene validator) ship via the SDK surface.
+
+### New features
+
+- **Editor Extension SDK — internal registry** (`ExtensionManifest`,
+  `Capability`, `Permission`/`PermissionArea`/`PermissionScope` type system;
+  `ExtensionRegistryPort` trait + `ExtensionRegistry` impl; held as 8th
+  `EditorSession` sub-state via `Arc<Mutex<dyn ExtensionRegistryPort>>`)
+- **Apply-time permission re-check**: `transaction_kernel_check_plugin_permission`
+  fires for `ChangeOrigin::Plugin` ChangeSets before the preflight loop;
+  `extension:<id>` actor prefix is the single source of truth for
+  extension-originated ChangeSets
+- **WASM exports**: `register_extension_wasm`, `list_extensions_wasm`,
+  `unregister_extension_wasm`, `submit_plugin_change_set_wasm` (routes through
+  pending ChangeSet flow for ChangeWorkbench visibility)
+- **Three built-in extensions via SDK**: `builtin.logic-bricks.controllers`
+  (`Capability::Commands`), `builtin.logic-recipes` (`Capability::Recipes`),
+  `builtin.scene-validator` (`Capability::Validators`) — all registered at
+  `EditorSession::with_builtins()` composition time
+- **`ValidationIssue` unified as canonical WASM-boundary type**:
+  `LogicValidationIssue` retained as `#[deprecated]` specialization with
+  adapter at boundary
+- **Architecture fitness gate** (ADR-0044): extensions must not import
+  `EditorSession` directly (enforced by archcheck)
+
+### New features (from Unreleased)
 
 - Frontend ESLint and Prettier production gates.
 - GitHub Actions CI, tagged release packaging, Dependabot, and JavaScript bundle budget enforcement.
 - User, contributor, security, and release documentation.
-
-### Changed
-
 - Production checks now enforce a 350 KB gzip budget across built JavaScript assets.
 
-### Fixed
+### Known limitations
 
-- None.
-
-### Removed
-
-- None.
+- Pre-existing test `validation_center_tests::wasm_validation_cycle_in_active_graph`
+  (unrelated to this cycle; to be fixed separately)
+- Cosmetic unused-variable warning in `extension.rs:179` (trivial fix)
 
 ## v0.91.0 — Thread-Local Migration Completion (2026-08-16)
 
