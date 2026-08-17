@@ -113,6 +113,9 @@ The workbench participates in the wider 2D toolchain and has a credible extensio
 - validator extension example;
 - capability permissions/versioning.
 
+### Delivered (v0.92.0)
+SDK + capability permissions + 3 built-in extensions shipped. Importers deferred to v0.93 per SDK-061 dependency.
+
 ## v1.0 — Stabilization
 
 ### Product gates

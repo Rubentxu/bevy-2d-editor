@@ -432,8 +432,8 @@ into a **Cursor-like, agent-native editor for Bevy 2D games**.
 | 3 | `v0.89-change-runtime-workbench` | ✅ DONE | Change Workbench, semantic diffs, checkpoints, Runtime Causality Inspector, Runtime Apply-Back |
 | 4 | `v0.90-agent-runtime` | ✅ DONE | `editor-protocol` tool contracts, `agent-runtime` crate (Rig behind capability ports), ChangeSet proposal generation, approval enforcement |
 | 5 | `v0.91-semantic-retrieval-agents` | ✅ DONE | Semantic/typed retrieval, specialists, post-apply verification, bounded background maintenance |
-| 6 | `v0.92-ecosystem-sdk-importers` | ✅ DONE (v0.92.0) | Editor Extension SDK (ADR-0040 steps 1-2), 3 built-in extensions via SDK, thread_local migrations, EditorSession split, FakeSession extraction |
-| 7 | `v0.93-tbd` | 🔲 Planned | OperationLog migration to editor-model; extension SDK built-in assertions; Aseprite/LDtk/Tiled importers (SDK-061); v1.0 hardening gates |
+| 6 | `v0.92-ecosystem-sdk-importers` | ✅ DONE (v0.92.0) | Editor Extension SDK (ADR-0040 steps 1-2), 3 built-in extensions via SDK, thread_local migrations, EditorSession split, FakeSession extraction; importers deferred to v0.93 |
+| 7 | `v0.93-importers-sdk-061` | 🔲 Planned | Aseprite/LDtk/Tiled importers (SDK-061); extension SDK built-in assertions; extension protocol stabilisation (ADR-0040 step 3) |
 | 8 | `v1.0-stabilization` | 🔲 Planned | Full small-game authoring pass, crash/recovery, performance corpus, a11y, compatibility policy |
 
 ### Normative references
