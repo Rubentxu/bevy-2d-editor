@@ -6,3 +6,8 @@
 pub mod logic_bricks;
 pub mod logic_recipes;
 pub mod scene_validator;
+
+// Re-export manifests at the builtins level for ergonomic access.
+pub use logic_bricks::manifest as logic_bricks_manifest;
+pub use logic_recipes::manifest as logic_recipes_manifest;
+pub use scene_validator::manifest as scene_validator_manifest;
