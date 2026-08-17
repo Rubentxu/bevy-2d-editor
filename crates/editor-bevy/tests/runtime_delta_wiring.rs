@@ -36,6 +36,9 @@ impl EditorSessionPort for FakeSessionWithCap {
     fn logic_state_mut(&mut self, path: &str) -> &mut editor_model::LogicSessionState {
         self.0.logic_state_mut(path)
     }
+    fn world_state_mut(&mut self, path: &str) -> &mut editor_model::WorldSessionState {
+        self.0.world_state_mut(path)
+    }
     fn tunable_baselines_mut(
         &mut self,
     ) -> &mut std::collections::BTreeMap<String, serde_json::Value> {

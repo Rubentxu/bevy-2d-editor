@@ -56,6 +56,9 @@ pub mod tile_layer;
 pub mod tileset;
 pub mod time;
 pub mod transaction_bridge;
+pub mod world_command;
+pub mod world_state;
+pub mod world_validation;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
 mod wasm_auto_layer;

@@ -28,6 +28,9 @@ impl EditorSessionPort for FakeSession {
     fn logic_state_mut(&mut self, path: &str) -> &mut support::LogicSessionState {
         self.inner.logic_state_mut(path)
     }
+    fn world_state_mut(&mut self, path: &str) -> &mut support::WorldSessionState {
+        self.inner.world_state_mut(path)
+    }
     fn tunable_baselines_mut(
         &mut self,
     ) -> &mut std::collections::BTreeMap<String, serde_json::Value> {

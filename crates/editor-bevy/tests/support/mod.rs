@@ -106,6 +106,7 @@ extern crate serde_json;
 pub use editor_model;
 pub use editor_model::AssetSessionState;
 pub use editor_model::RebuildCause;
+pub use editor_model::WorldSessionState;
 
 // ─── FakeSession ─────────────────────────────────────────────────────────────
 
@@ -119,25 +120,27 @@ pub use editor_model::RebuildCause;
 /// # Example (minimal construction)
 ///
 /// ```ignore
-/// FakeSession {
-///     scene_states: BTreeMap::new(),
-///     asset_states: BTreeMap::new(),
-///     logic_states: BTreeMap::new(),
-///     tunable_baselines: BTreeMap::new(),
-///     runtime_delta_buffer: VecDeque::new(),
-///     pending_causality_edges: BTreeMap::new(),
-///     last_rebuild_cause: None,
-///     preview_inspector: PreviewInspectorState::default(),
-///     source_files: SourceFilesCache::default(),
-///     logic_activation_ring: VecDeque::new(),
-///     recent_change_sets: BTreeMap::new(),
-/// }
+///     FakeSession {
+///         scene_states: BTreeMap::new(),
+///         asset_states: BTreeMap::new(),
+///         logic_states: BTreeMap::new(),
+///         world_states: BTreeMap::new(),
+///         tunable_baselines: BTreeMap::new(),
+///         runtime_delta_buffer: VecDeque::new(),
+///         pending_causality_edges: BTreeMap::new(),
+///         last_rebuild_cause: None,
+///         preview_inspector: PreviewInspectorState::default(),
+///         source_files: SourceFilesCache::default(),
+///         logic_activation_ring: VecDeque::new(),
+///         recent_change_sets: BTreeMap::new(),
+///     }
 /// ```
 #[derive(Debug, Default)]
 pub struct FakeSession {
     pub scene_states: BTreeMap<String, SceneSessionState>,
     pub asset_states: BTreeMap<String, AssetSessionState>,
     pub logic_states: BTreeMap<String, LogicSessionState>,
+    pub world_states: BTreeMap<String, WorldSessionState>,
     pub tunable_baselines: BTreeMap<String, serde_json::Value>,
     pub runtime_delta_buffer: VecDeque<RuntimeDelta>,
     pub pending_causality_edges: BTreeMap<StableId, Vec<CausalityEdge>>,
@@ -175,6 +178,11 @@ impl EditorSessionPort for FakeSession {
         self.logic_states
             .entry(path.to_string())
             .or_insert_with(LogicSessionState::default)
+    }
+    fn world_state_mut(&mut self, path: &str) -> &mut WorldSessionState {
+        self.world_states
+            .entry(path.to_string())
+            .or_insert_with(WorldSessionState::default)
     }
     fn tunable_baselines_mut(&mut self) -> &mut BTreeMap<String, serde_json::Value> {
         &mut self.tunable_baselines
@@ -260,6 +268,9 @@ impl EditorSessionPort for FakeSessionWithDefaults {
     }
     fn logic_state_mut(&mut self, path: &str) -> &mut LogicSessionState {
         self.0.logic_state_mut(path)
+    }
+    fn world_state_mut(&mut self, path: &str) -> &mut WorldSessionState {
+        self.0.world_state_mut(path)
     }
     fn tunable_baselines_mut(&mut self) -> &mut BTreeMap<String, serde_json::Value> {
         self.0.tunable_baselines_mut()

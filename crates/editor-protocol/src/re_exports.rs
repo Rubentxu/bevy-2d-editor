@@ -22,3 +22,9 @@ pub use editor_model::ports::{
 };
 
 pub use editor_model::session_port::EditorSessionPort;
+
+// World Workspace types (ADR-0037)
+pub use editor_model::world::{
+    EntranceRef, LayoutPolicy, LinkDirection, StreamingPolicy, WorldCatalogEntry, WorldDocument,
+    WorldId, WorldLevelRef, WorldLink, WorldLinkKind,
+};
