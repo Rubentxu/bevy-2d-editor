@@ -2416,6 +2416,7 @@ dependencies = [
  "editor-bevy",
  "editor-model",
  "editor-protocol",
+ "editor-storage-web",
  "hex",
  "js-sys",
  "serde",
@@ -2468,6 +2469,23 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "uuid",
+]
+
+[[package]]
+name = "editor-storage-web"
+version = "0.1.0"
+dependencies = [
+ "editor-model",
+ "hex",
+ "js-sys",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.18",
+ "uuid",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]
