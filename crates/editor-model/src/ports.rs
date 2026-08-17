@@ -156,3 +156,66 @@ pub fn with_session<R, F: FnOnce(&dyn EditorSessionPort) -> R>(f: F) -> Option<R
         .ok()
         .flatten()
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Extension registry (v0.92 — ADR-0040)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Mirrors the `PROJECT_STORE` / `EDITOR_SESSION` pattern exactly. The concrete
+// `ExtensionRegistry` lives in `editor_application::extension`; this port trait
+// and thread_local allow `editor_core` (Bevy systems) to check extension
+// permissions without importing `editor_application`.
+
+use crate::extension::{
+    ExtensionError, ExtensionHandle, ExtensionManifest, ExtensionSummary,
+};
+
+/// Port trait for the extension registry.
+///
+/// Object-safe (`dyn ExtensionRegistryPort` is valid) so it can be held behind
+/// an `Arc<Mutex<dyn ExtensionRegistryPort>>` on `EditorSession`.
+pub trait ExtensionRegistryPort: Send + Sync {
+    /// Register an extension manifest.
+    ///
+    /// Returns `Ok(handle)` on success. Returns `Err(ExtensionError::DuplicateId)`
+    /// if the ID is already registered.
+    fn register(&mut self, manifest: ExtensionManifest) -> Result<ExtensionHandle, ExtensionError>;
+
+    /// Unregister an extension by ID.
+    ///
+    /// Returns `Ok(())` on success. Returns `Err(ExtensionError::NotFound)` if
+    /// the ID is not registered.
+    fn unregister(&mut self, id: &str) -> Result<(), ExtensionError>;
+
+    /// List all registered extensions as lightweight summaries.
+    fn list(&self) -> Vec<ExtensionSummary>;
+
+    /// Get a registered extension's full manifest by ID.
+    fn get(&self, id: &str) -> Option<ExtensionManifest>;
+}
+
+thread_local! {
+    /// The global extension registry — set at WASM startup via
+    /// [`register_extension_registry`]. Same ownership semantics as `PROJECT_STORE`.
+    static EXTENSION_REGISTRY: std::cell::RefCell<Option<Arc<Mutex<dyn ExtensionRegistryPort>>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Register the extension registry (call once at WASM startup).
+///
+/// Takes ownership of the `Arc<Mutex<dyn ExtensionRegistryPort>>`. The registry
+/// stays alive as long as either the caller keeps its `Arc` clone alive OR this
+/// registration is held.
+pub fn register_extension_registry(registry: Arc<Mutex<dyn ExtensionRegistryPort>>) {
+    EXTENSION_REGISTRY.with(|cell| {
+        *cell.borrow_mut() = Some(registry);
+    });
+}
+
+/// Get a clone of the registered extension registry, or `None` if not yet registered.
+pub fn with_extension_registry() -> Option<Arc<Mutex<dyn ExtensionRegistryPort>>> {
+    EXTENSION_REGISTRY
+        .try_with(|cell| cell.borrow().clone())
+        .ok()
+        .flatten()
+}

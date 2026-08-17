@@ -397,6 +397,17 @@ pub enum KernelError<E> {
     ApprovalRequired,
     /// History scope is not available.
     HistoryMissing,
+    /// Extension permission denied — the Plugin origin lacks the required permission.
+    PermissionDenied {
+        /// The extension ID that was denied.
+        extension: String,
+        /// The permission area that was denied.
+        area: String,
+        /// The scope that was required.
+        scope_needed: String,
+        /// The scope that was granted (or "none" if no permission in that area).
+        scope_granted: String,
+    },
 }
 
 impl<E: Debug> Debug for KernelError<E> {
@@ -411,6 +422,14 @@ impl<E: Debug> Debug for KernelError<E> {
             Self::RollbackFailed { cause } => f.debug_tuple("RollbackFailed").field(cause).finish(),
             Self::ApprovalRequired => write!(f, "ApprovalRequired"),
             Self::HistoryMissing => write!(f, "HistoryMissing"),
+            Self::PermissionDenied { extension, area, scope_needed, scope_granted } => {
+                f.debug_struct("PermissionDenied")
+                    .field("extension", extension)
+                    .field("area", area)
+                    .field("scope_needed", scope_needed)
+                    .field("scope_granted", scope_granted)
+                    .finish()
+            }
         }
     }
 }
@@ -425,6 +444,12 @@ impl<E: Debug + std::fmt::Display> std::fmt::Display for KernelError<E> {
             Self::RollbackFailed { cause } => write!(f, "rollback failed: {cause}"),
             Self::ApprovalRequired => write!(f, "human approval required"),
             Self::HistoryMissing => write!(f, "history scope not available"),
+            Self::PermissionDenied { extension, area, scope_needed, scope_granted } => {
+                write!(
+                    f,
+                    "extension '{extension}' permission denied: {area} requires {scope_needed}, but only {scope_granted} granted"
+                )
+            }
         }
     }
 }

@@ -9,6 +9,7 @@ pub mod auto_layer;
 pub mod causality;
 pub mod component;
 pub mod document;
+pub mod extension;
 pub mod ids;
 pub mod logic_activation;
 pub mod logic_graph;
@@ -30,6 +31,10 @@ pub mod transaction;
 // Re-export all public types at the root for ergonomic use.
 pub use auto_layer::{
     AutoLayer, AutoLayerId, Pattern3x3, PatternCell, is_auto_layer_stale, regenerate,
+};
+pub use extension::{
+    Capability, CapabilityDescriptor, ExtensionError, ExtensionHandle, ExtensionId,
+    ExtensionManifest, ExtensionSummary, Permission, PermissionArea, PermissionScope, SemVer,
 };
 pub use component::ComponentInstance;
 pub use document::{Anchor, Color, Entity, SceneDocument, Vec2};
