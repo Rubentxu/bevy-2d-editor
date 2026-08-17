@@ -381,23 +381,49 @@ const ASSERTIONS: Assertion[] = [
       assertDependencyFree(protocolCargo, ["bevy", "wasm-bindgen"], this.description);
     },
   },
-  // ── B8 (PR7): editor-wasm is the sole wasm_bindgen holder ─────────────────────
+  // ── B8 (PR7/ADR-0030): editor-model / editor-protocol have no wasm imports ──────
   {
     id: "B8",
     description:
-      "wasm_bindgen / web_sys / js_sys appear only in editor-wasm/src/ " +
-      "(the sole WASM cdylib); other crates have zero occurrences",
+      "editor-model and editor-protocol have zero wasm_bindgen/web_sys/js_sys imports; " +
+      "editor-application has zero wasm imports at root (wasm.rs excluded); " +
+      "editor-bevy and editor-wasm are WASM-compiled and may have wasm_bindgen",
     run() {
-      const wasmSrc = join(root, "crates/editor-wasm/src");
       const wasmPattern = /(?:wasm_bindgen|web_sys|js_sys)/;
-      for (const crateName of ["editor-model", "editor-application", "editor-bevy", "editor-protocol"]) {
+      // Strict: editor-model must be pure
+      for (const crateName of ["editor-model"]) {
         const crateSrc = join(root, `crates/${crateName}/src`);
         if (!existsSync(crateSrc)) continue;
         const hits = countPatternInDir(crateSrc, wasmPattern, true);
         if (hits > 0) {
           failures.push(
-            `Assertion failed: ${this.description} — ${hits} occurrence(s) of wasm_bindgen/web_sys/js_sys in ${crateName}/src/`,
+            `Assertion failed: ${this.description} — ${hits} occurrence(s) of wasm_bindgen/web_sys/js_sys in ${crateName}/src/ (must be pure)`,
           );
+        }
+      }
+      // Strict: editor-protocol must be pure protocol
+      for (const crateName of ["editor-protocol"]) {
+        const crateSrc = join(root, `crates/${crateName}/src`);
+        if (!existsSync(crateSrc)) continue;
+        const hits = countPatternInDir(crateSrc, wasmPattern, true);
+        if (hits > 0) {
+          failures.push(
+            `Assertion failed: ${this.description} — ${hits} occurrence(s) of wasm_bindgen/web_sys/js_sys in ${crateName}/src/ (must be pure)`,
+          );
+        }
+      }
+      // Strict: editor-application root (non-wasm modules) has no wasm imports
+      const appSrc = join(root, "crates/editor-application/src");
+      if (existsSync(appSrc)) {
+        for (const entry of readdirSync(appSrc, { withFileTypes: true })) {
+          if (!entry.isFile() || !entry.name.endsWith(".rs")) continue;
+          if (entry.name === "wasm.rs") continue; // wasm.rs is the re-export shim
+          const content = readFileSync(join(appSrc, entry.name), "utf8");
+          if (wasmPattern.test(content)) {
+            failures.push(
+              `Assertion failed: ${this.description} — wasm_bindgen/web_sys/js_sys found in ${entry.name} (editor-application root must be pure)`,
+            );
+          }
         }
       }
     },

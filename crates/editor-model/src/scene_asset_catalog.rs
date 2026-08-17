@@ -377,14 +377,6 @@ fn current_unix_millis() -> u64 {
     crate::time::now_millis()
 }
 
-#[cfg(target_arch = "wasm32")]
-pub fn random_hex_8() -> String {
-    use js_sys::{Date, Math};
-    let seed = (Date::now() * 1_000_000.0) as u64 ^ (Math::random() * 1e15) as u64;
-    format!("{:016x}", seed & 0xFFFFFFFF)
-}
-
-#[cfg(not(target_arch = "wasm32"))]
 pub fn random_hex_8() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let nanos = SystemTime::now()
@@ -395,7 +387,6 @@ pub fn random_hex_8() -> String {
     format!("{:016x}", nanos.wrapping_add(counter) & 0xFFFFFFFF)
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 fn static_counter() -> u64 {
     use std::sync::atomic::{AtomicU64, Ordering};
     static C: AtomicU64 = AtomicU64::new(0);
