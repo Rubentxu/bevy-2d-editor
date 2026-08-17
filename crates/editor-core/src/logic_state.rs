@@ -19,7 +19,9 @@ thread_local! {
     /// Logic Graph document: the active logic graph being edited.
     pub static LOGIC_GRAPH_DOC: RefCell<Option<LogicGraphAsset>> = const { RefCell::new(None) };
     /// Logic operation log: per-graph undo/redo history.
-    pub static LOGIC_OPERATION_LOG: RefCell<LogicOperationLog> = const { RefCell::new(LogicOperationLog::new_const()) };
+    /// Wrapped in `Option` to enable take/write-back in undo_graph/redo_graph
+    /// without requiring `LogicOperationLog: Default`.
+    pub static LOGIC_OPERATION_LOG: RefCell<Option<LogicOperationLog>> = const { RefCell::new(Some(LogicOperationLog::new_const())) };
     /// Logic Graph catalog: metadata for all persisted logic graph assets.
     pub static LOGIC_GRAPH_CATALOG: RefCell<Option<LogicGraphCatalog>> = const { RefCell::new(None) };
 }
@@ -114,7 +116,7 @@ pub fn with_logic_log<F, R>(f: F) -> R
 where
     F: FnOnce(&LogicOperationLog) -> R,
 {
-    LOGIC_OPERATION_LOG.with(|cell| f(&*cell.borrow()))
+    LOGIC_OPERATION_LOG.with(|cell| f(cell.borrow().as_ref().unwrap()))
 }
 
 /// Get a mutable borrowed reference to the LogicOperationLog.
@@ -122,7 +124,64 @@ pub fn with_logic_log_mut<F, R>(f: F) -> R
 where
     F: FnOnce(&mut LogicOperationLog) -> R,
 {
-    LOGIC_OPERATION_LOG.with(|cell| f(&mut *cell.borrow_mut()))
+    LOGIC_OPERATION_LOG.with(|cell| f(cell.borrow_mut().as_mut().unwrap()))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v0.92: Re-entrancy safe helpers (take/write-back)
+//
+// apply_command equivalent for logic uses kernel.apply_atomic which internally
+// calls processor::apply. The nested RefCell borrow pattern in undo_logic/
+// redo_logic (with_logic_graph_mut closure → with_logic_log_mut) is fixed
+// with these helpers.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Result of applying a logic command.
+#[derive(Debug)]
+pub struct LogicApplyResult {
+    pub inverse: LogicOperationLog,
+    pub snapshot: LogicGraphAsset,
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v0.92: Re-entrancy safe helpers (take/write-back)
+//
+// undo_graph and redo_graph use the take/write-back pattern: the graph
+// is extracted from the LOGIC_GRAPH_DOC RefCell before OperationLog::undo/redo
+// is called, releasing the RefCell borrow for the duration of the call.
+// This prevents nested RefCell borrow issues in the callers.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Undo the last logic command (re-entrancy safe, v0.92).
+///
+/// Panics if no graph is loaded (precondition: caller must ensure graph is active).
+pub fn undo_graph() -> Result<LogicGraphAsset, crate::logic_command::LogicCommandError> {
+    let mut graph = LOGIC_GRAPH_DOC
+        .with(|cell| cell.borrow_mut().take())
+        .expect("undo_graph: no active logic graph");
+    let mut log = LOGIC_OPERATION_LOG
+        .with(|l| l.borrow_mut().take())
+        .unwrap_or_else(LogicOperationLog::new_const);
+    log.undo(&mut graph)?;
+    LOGIC_GRAPH_DOC.with(|cell| *cell.borrow_mut() = Some(graph.clone()));
+    LOGIC_OPERATION_LOG.with(|cell| *cell.borrow_mut() = Some(log));
+    Ok(graph)
+}
+
+/// Redo the next logic command (re-entrancy safe, v0.92).
+///
+/// Panics if no graph is loaded (precondition: caller must ensure graph is active).
+pub fn redo_graph() -> Result<LogicGraphAsset, crate::logic_command::LogicCommandError> {
+    let mut graph = LOGIC_GRAPH_DOC
+        .with(|cell| cell.borrow_mut().take())
+        .expect("redo_graph: no active logic graph");
+    let mut log = LOGIC_OPERATION_LOG
+        .with(|l| l.borrow_mut().take())
+        .unwrap_or_else(LogicOperationLog::new_const);
+    log.redo(&mut graph)?;
+    LOGIC_GRAPH_DOC.with(|cell| *cell.borrow_mut() = Some(graph.clone()));
+    LOGIC_OPERATION_LOG.with(|cell| *cell.borrow_mut() = Some(log));
+    Ok(graph)
 }
 
 /// Get an immutable borrowed reference to the LogicGraphCatalog, initializing if needed.

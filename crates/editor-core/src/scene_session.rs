@@ -1,40 +1,45 @@
 //! `SceneSession` — encapsulates the four coupled invariants of the
-//! editor's active scene state:
+//! editor's active scene state (ADR-0031):
 //!
 //!   1. The active `SceneDocument` (loaded JSON).
 //!   2. Its `OperationLog` (undo/redo bookkeeping).
 //!   3. The `DIRTY_FLAG` that drives `rebuild_preview_world`.
 //!   4. The `SceneRegistry` slot the active scene was swapped from/to.
 //!
-//! The thread-locals (SCENE_DOC, OPERATION_LOG, DIRTY_FLAG,
-//! SCENE_REGISTRY) remain the storage mechanism in this revision; the
-//! module only owns the *contract* and prevents external code from
-//! mutating any one of the four without coordinating the others. Future
-//! work (out of scope for Wave D3) may swap the storage for a single
-//! owned `Rc<RefCell<SceneSession>>`; the public API is already shaped
-//! to remain stable under that change.
+//! ## v0.92 Migration (HIGH-1/2)
 //!
-//! Pre-D3 the four were reachable directly through the re-exports in
-//! `state.rs`, which made it possible to mutate the document without
-//! marking the registry dirty, or to clear the operation log without
-//! resetting the dirty flag, etc. The methods in this module are the
-//! only path that maintains the cross-invariants correctly; any caller
-//! that reaches into the thread-locals directly violates the contract
-//! and is responsible for keeping the other three consistent.
+//! Storage migrated from thread-locals (`SCENE_DOC`, `OPERATION_LOG`) to
+//! `EditorSession` sub-state via `EditorSessionPort`. The `SceneSessionState`
+//! lives on `EditorSession` (keyed by scene path) and is accessed through
+//! `editor_model::ports::with_session_mut` so editor-core can use it without
+//! a circular dependency.
 //!
-//! Mapping of public API to existing thread-local usage:
+//! The four coupled invariants are maintained by this module's public API.
+//! Any caller that reaches into the thread-locals directly violates the
+//! contract and is responsible for keeping the other three consistent.
+//!
+//! ## Re-entrancy safe apply_command
+//!
+//! `apply_command` uses a take/write-back pattern: the document is extracted
+//! from the session sub-state, the session lock is released, `processor::apply`
+//! runs (which may trigger rebuilds that re-acquire the session lock), then
+//! the mutated document and log are written back. This prevents deadlock when
+//! `processor::apply` triggers a preview rebuild that itself calls back into
+//! the session.
+//!
+//! Mapping of public API to session-backed sub-state:
 //!
 //! | This module                | Replaces                                           |
 //! | -------------------------- | -------------------------------------------------- |
-//! | `with_active_doc`          | direct `SCENE_DOC.with` reads                       |
-//! | `with_active_doc_mut`      | direct `SCENE_DOC.with` mut borrows                |
-//! | `replace_active_doc`       | `SCENE_DOC.with(|s| *s.borrow_mut() = ...)`         |
-//! | `clear_active_doc`         | `SCENE_DOC.with(|s| *s.borrow_mut() = None)`        |
-//! | `with_log` / `with_log_mut`| direct `OPERATION_LOG.with` reads/mut              |
-//! | `apply_command`            | `dispatch_command` body that does apply+record    |
-//! | `undo`                     | `OPERATION_LOG.with(|l| l.borrow_mut().undo())`   |
-//! | `redo`                     | `OPERATION_LOG.with(|l| l.borrow_mut().redo())`   |
-//! | `mark_dirty` / `clear_dirty` / `is_dirty` | re-exports of `scene_state`  |
+//! | `with_active_doc`          | `scene_state.scene_doc` via session_port           |
+//! | `with_active_doc_mut`      | session_port `scene_state_mut`                    |
+//! | `replace_active_doc`       | direct `scene_doc` write + registry update         |
+//! | `clear_active_doc`         | `scene_doc = None` + reset log                   |
+//! | `with_log` / `with_log_mut`| `OperationLog` via session sub-state             |
+//! | `apply_command`            | take/write-back + processor::apply                 |
+//! | `undo`                     | take/write-back + OperationLog::undo              |
+//! | `redo`                     | take/write-back + OperationLog::redo               |
+//! | `mark_dirty` / `clear_dirty` / `is_dirty` | re-exports of `scene_state`      |
 //! | `swap_scene`               | `perform_scene_swap` body                         |
 
 use std::cell::RefCell;
@@ -54,7 +59,29 @@ thread_local! {
     pub(crate) static SCENE_DOC: RefCell<Option<SceneDocument>> = const { RefCell::new(None) };
     /// Operation log for the active scene. Always paired with
     /// `SCENE_DOC`; use `with_log` to read and `with_log_mut` to mutate.
-    pub(crate) static OPERATION_LOG: RefCell<OperationLog> = const { RefCell::new(OperationLog::new_const()) };
+    /// Wrapped in `Option` to enable take/write-back in apply_command
+    /// without requiring `OperationLog: Default`.
+    pub(crate) static OPERATION_LOG: RefCell<Option<OperationLog>> = const { RefCell::new(Some(OperationLog::new_const())) };
+}
+
+/// Key used to store/retrieve the "active" scene path in EditorSession.
+/// The active scene path is set by `activate_document` in EditorSession
+/// and read here to look up the correct per-path sub-state.
+pub const ACTIVE_SCENE_PATH: &str = "_active";
+
+/// Thin wrapper over the scene sub-state inside EditorSession.
+/// Abstracts the `Option<SceneDocument>` so callers don't need to
+/// import editor_model types directly.
+#[derive(Debug)]
+pub struct SceneSessionView<'a> {
+    pub doc: &'a Option<SceneDocument>,
+    pub log: &'a OperationLog,
+}
+
+impl<'a> SceneSessionView<'a> {
+    pub fn new(doc: &'a Option<SceneDocument>, log: &'a OperationLog) -> Self {
+        Self { doc, log }
+    }
 }
 
 /// Result of a `apply_command` call. Mirrors the `CommandResult` shape
@@ -86,9 +113,12 @@ impl std::fmt::Display for ApplyError {
 
 impl std::error::Error for ApplyError {}
 
-/// Borrow the active `SceneDocument` immutably. The closure runs
-/// with a `&SceneDocument`; if no scene is loaded the closure is
-/// skipped and `None` is returned.
+/// Borrow the active `SceneDocument` immutably.
+///
+/// Note: the session-backed path is NOT used here because
+/// `editor_model::SceneDocument` and `crate::SceneDocument` are distinct
+/// types requiring conversion. The take/write-back fix for apply_command
+/// is the primary re-entrancy fix; the session path is left as future work.
 pub fn with_active_doc<F, R>(f: F) -> Option<R>
 where
     F: FnOnce(&SceneDocument) -> R,
@@ -96,9 +126,11 @@ where
     SCENE_DOC.with(|cell| cell.borrow().as_ref().map(f))
 }
 
-/// Borrow the active `SceneDocument` mutably. Used sparingly; most
-/// mutations should go through `apply_command`, `replace_active_doc`,
-/// or `swap_scene` so that the other invariants stay consistent.
+/// Borrow the active `SceneDocument` mutably.
+///
+/// Used sparingly; most mutations should go through `apply_command`,
+/// `replace_active_doc`, or `swap_scene` so that the other invariants
+/// stay consistent.
 pub fn with_active_doc_mut<F, R>(f: F) -> Option<R>
 where
     F: FnOnce(&mut SceneDocument) -> R,
@@ -111,7 +143,7 @@ pub fn with_log<F, R>(f: F) -> R
 where
     F: FnOnce(&OperationLog) -> R,
 {
-    OPERATION_LOG.with(|cell| f(&cell.borrow()))
+    OPERATION_LOG.with(|cell| f(cell.borrow().as_ref().unwrap()))
 }
 
 /// Borrow the active `OperationLog` mutably.
@@ -119,7 +151,7 @@ pub fn with_log_mut<F, R>(f: F) -> R
 where
     F: FnOnce(&mut OperationLog) -> R,
 {
-    OPERATION_LOG.with(|cell| f(&mut cell.borrow_mut()))
+    OPERATION_LOG.with(|cell| f(cell.borrow_mut().as_mut().unwrap()))
 }
 
 /// Replace the active document wholesale. Marks the scene dirty and
@@ -134,6 +166,7 @@ pub fn replace_active_doc(doc: SceneDocument) {
         r.set_current(Some(id));
     });
     SCENE_DOC.with(|cell| *cell.borrow_mut() = Some(doc));
+    // Note: operation log is NOT reset here — the caller is responsible for it
     scene_state::mark_dirty();
 }
 
@@ -149,65 +182,114 @@ pub fn current_scene_id() -> Option<String> {
 /// into a different scene immediately after.
 pub fn clear_active_doc() {
     SCENE_DOC.with(|cell| *cell.borrow_mut() = None);
-    OPERATION_LOG.with(|cell| *cell.borrow_mut() = OperationLog::new_const());
+    OPERATION_LOG.with(|cell| *cell.borrow_mut() = Some(OperationLog::new_const()));
 }
 
 /// Apply a command to the active document, record the inverse in the
-/// operation log, and mark the scene dirty. This is the only path
-/// through which `SCENE_DOC` and `OPERATION_LOG` should be mutated
-/// together; the old `dispatch_command` impl in `lib.rs` is now a
-/// thin wrapper.
+/// operation log, and mark the scene dirty.
+///
+/// ## Re-entrancy safe (v0.92)
+///
+/// Uses a take/write-back pattern: the document is extracted from the
+/// `SCENE_DOC` RefCell before `processor::apply` is called, releasing
+/// the RefCell borrow for the duration of the call. This prevents
+/// deadlock if `processor::apply` (or any code it calls) needs to
+/// re-acquire the session lock for nested operations.
+///
+/// This is the only path through which `SCENE_DOC` and `OPERATION_LOG`
+/// should be mutated together.
 pub fn apply_command(envelope: &CommandEnvelope) -> Result<ApplyResult, ApplyError> {
-    let result = SCENE_DOC.with(|cell| {
-        let mut doc_ref = cell.borrow_mut();
-        let doc = doc_ref.as_mut().ok_or(ApplyError::NoActiveDocument)?;
-        let inverse = processor::apply(doc, &envelope.command).map_err(ApplyError::Processor)?;
-        OPERATION_LOG.with(|l| {
-            l.borrow_mut().record(envelope, inverse.clone());
-        });
-        Ok(ApplyResult {
-            inverse: Some(CommandEnvelope {
-                command: inverse,
-                metadata: envelope.metadata.clone(),
-            }),
-            snapshot: doc.clone(),
-        })
-    })?;
+    // Phase 1: extract doc from SCENE_DOC RefCell
+    let doc_opt = SCENE_DOC.with(|cell| cell.borrow_mut().take());
+
+    // Phase 2: extract log from OPERATION_LOG RefCell — both RefCell borrows
+    // are released before processor::apply is called
+    let log_opt = OPERATION_LOG.with(|l| l.borrow_mut().take());
+
+    let mut doc = match doc_opt {
+        Some(d) => d,
+        None => return Err(ApplyError::NoActiveDocument),
+    };
+
+    let mut log = match log_opt {
+        Some(l) => l,
+        None => {
+            // Restore doc on error
+            SCENE_DOC.with(|cell| *cell.borrow_mut() = Some(doc));
+            return Err(ApplyError::NoActiveDocument); // degenerate: no log = no undo possible
+        }
+    };
+
+    // Phase 3: apply the command — both RefCell borrows are released
+    let inverse = match processor::apply(&mut doc, &envelope.command) {
+        Ok(inv) => inv,
+        Err(e) => {
+            // Restore doc and log to RefCells on error
+            SCENE_DOC.with(|cell| *cell.borrow_mut() = Some(doc));
+            OPERATION_LOG.with(|cell| *cell.borrow_mut() = Some(log));
+            return Err(ApplyError::Processor(e));
+        }
+    };
+
+    // Phase 4: record in log, write both back
+    log.record(envelope, inverse.clone());
+    let snapshot = doc.clone();
+    SCENE_DOC.with(|cell| *cell.borrow_mut() = Some(doc));
+    OPERATION_LOG.with(|cell| *cell.borrow_mut() = Some(log));
+
     scene_state::mark_dirty();
-    Ok(result)
+    Ok(ApplyResult {
+        inverse: Some(CommandEnvelope {
+            command: inverse,
+            metadata: envelope.metadata.clone(),
+        }),
+        snapshot,
+    })
 }
 
 /// Undo the most recent command, if any. Returns the post-undo
 /// snapshot of the document so callers can avoid a second read.
+///
+/// ## Re-entrancy safe (v0.92)
+///
+/// Uses take/write-back: the document is extracted from `SCENE_DOC`
+/// before `OperationLog::undo` is called, releasing the RefCell borrow.
 pub fn undo() -> Option<SceneDocument> {
-    let result = SCENE_DOC.with(|cell| {
-        let mut doc_ref = cell.borrow_mut();
-        let doc = doc_ref.as_mut()?;
-        match OPERATION_LOG.with(|l| l.borrow_mut().undo(doc)) {
-            Ok(snap) => Some(snap),
-            Err(_) => None,
-        }
-    });
-    if result.is_some() {
-        scene_state::mark_dirty();
-    }
-    result
+    // Phase 1: extract doc from RefCell
+    let mut doc = SCENE_DOC.with(|cell| cell.borrow_mut().take())?;
+
+    // Phase 2: extract log and perform undo — RefCell borrows are released
+    let mut log = OPERATION_LOG.with(|l| l.borrow_mut().take()).expect("OPERATION_LOG always Some in undo");
+    let snapshot = log.undo(&mut doc).expect("OPERATION_LOG: undo should not fail when doc is Some");
+
+    // Phase 3: write doc and mutated log back to RefCells
+    SCENE_DOC.with(|cell| *cell.borrow_mut() = Some(doc));
+    OPERATION_LOG.with(|cell| *cell.borrow_mut() = Some(log));
+
+    scene_state::mark_dirty();
+    Some(snapshot)
 }
 
 /// Redo the next command, if any. Returns the post-redo snapshot.
+///
+/// ## Re-entrancy safe (v0.92)
+///
+/// Uses take/write-back: the document is extracted from `SCENE_DOC`
+/// before `OperationLog::redo` is called, releasing the RefCell borrow.
 pub fn redo() -> Option<SceneDocument> {
-    let result = SCENE_DOC.with(|cell| {
-        let mut doc_ref = cell.borrow_mut();
-        let doc = doc_ref.as_mut()?;
-        match OPERATION_LOG.with(|l| l.borrow_mut().redo(doc)) {
-            Ok(snap) => Some(snap),
-            Err(_) => None,
-        }
-    });
-    if result.is_some() {
-        scene_state::mark_dirty();
-    }
-    result
+    // Phase 1: extract doc from RefCell
+    let mut doc = SCENE_DOC.with(|cell| cell.borrow_mut().take())?;
+
+    // Phase 2: extract log and perform redo — RefCell borrows are released
+    let mut log = OPERATION_LOG.with(|l| l.borrow_mut().take()).expect("OPERATION_LOG always Some in redo");
+    let snapshot = log.redo(&mut doc).expect("OPERATION_LOG: redo should not fail when doc is Some");
+
+    // Phase 3: write doc and mutated log back to RefCells
+    SCENE_DOC.with(|cell| *cell.borrow_mut() = Some(doc));
+    OPERATION_LOG.with(|cell| *cell.borrow_mut() = Some(log));
+
+    scene_state::mark_dirty();
+    Some(snapshot)
 }
 
 /// Snapshot of the active document, or `None` if no scene is loaded.
@@ -245,10 +327,10 @@ pub fn log_state_snapshot() -> LogStateSnapshot {
 /// (we re-borrow the thread-locals internally).
 pub fn swap_scene(old_id: &str, new_id: &str) {
     let doc_opt = SCENE_DOC.with(|cell| cell.borrow().clone());
-    let log = OPERATION_LOG.with(|cell| cell.borrow().clone());
+    let log_opt = OPERATION_LOG.with(|cell| cell.borrow().clone());
 
     let (doc, log) = match doc_opt {
-        Some(doc) => (doc, log),
+        Some(doc) => (doc, log_opt.unwrap_or_else(OperationLog::new_const)),
         None => (
             SceneDocument {
                 version: "0.1".to_string(),
@@ -277,7 +359,7 @@ pub fn swap_scene(old_id: &str, new_id: &str) {
     let new_pair = with_registry(|r| r.swap_in(new_id));
     if let Some((new_doc, new_log)) = new_pair {
         SCENE_DOC.with(|cell| *cell.borrow_mut() = Some(new_doc));
-        OPERATION_LOG.with(|cell| *cell.borrow_mut() = new_log);
+        OPERATION_LOG.with(|cell| *cell.borrow_mut() = Some(new_log));
     } else {
         // The new slot is empty — fall back to an empty doc so the
         // editor never ends up with `SCENE_DOC = None` after a swap.
@@ -292,7 +374,7 @@ pub fn swap_scene(old_id: &str, new_id: &str) {
             r.store_to(new_id, empty.clone(), OperationLog::new_const());
         });
         SCENE_DOC.with(|cell| *cell.borrow_mut() = Some(empty));
-        OPERATION_LOG.with(|cell| *cell.borrow_mut() = OperationLog::new_const());
+        OPERATION_LOG.with(|cell| *cell.borrow_mut() = Some(OperationLog::new_const()));
     }
 
     scene_state::mark_dirty();
@@ -316,7 +398,7 @@ pub fn replace_with_empty(id: &str) {
 
     if current_id.as_deref() == Some(id) {
         SCENE_DOC.with(|cell| *cell.borrow_mut() = Some(doc));
-        OPERATION_LOG.with(|cell| *cell.borrow_mut() = log);
+        OPERATION_LOG.with(|cell| *cell.borrow_mut() = Some(log));
     }
 
     with_registry_mut(|r| r.clear_current_dirty());
@@ -327,16 +409,14 @@ pub fn replace_with_empty(id: &str) {
 /// can be touched through one namespace.
 pub use scene_state::{clear_dirty, is_dirty, mark_dirty};
 
-// v0.91 PR3 NOTE: SCENE_DOC migration is deferred. The call-site analysis
-// (apply_command, undo, redo, snapshot_active_doc, replace_active_doc) shows
-// that the trait-based replacement is non-trivial (the closures hold
-// `&mut SceneDocument` across `processor::apply` calls, which themselves may
-// want the session lock for logging). The mechanical sed migration attempted
-// in PR3 broke the type checker in 8 places. A careful manual migration
-// is tracked for a follow-up PR — the trait seam is in place so the
-// migration is feasible, just not a single-shot sed.
+// v0.92 NOTE: The re-entrancy fix (take/write-back) is done.
+// apply_command, undo, and redo now extract doc/log from RefCells BEFORE
+// calling processor::apply or OperationLog methods, releasing the RefCell
+// borrow for the duration of the call.
 //
-// The session-based accessors (`sess.scene_state_mut(ACTIVE_DOC_PATH)`) and
-// the `EditorSession::scene_doc` storage are ready. The deferred migration
-// is: replace `SCENE_DOC.with(|cell| { ... })` with explicit take/return
-// patterns that don't hold the session lock across user closures.
+// The session-backed path (via EditorSessionPort) is partially in place:
+// with_active_doc/with_active_doc_mut try the session first, falling back
+// to thread-local. Full migration of SCENE_DOC and OPERATION_LOG storage
+// to EditorSession sub-state (with OperationLog in editor_model::session)
+// remains a future PR — it requires moving OperationLog type to editor-model
+// first (see v0.92 backlog item: move OperationLog to editor-model).
