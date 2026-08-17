@@ -30,6 +30,11 @@
 
 import { useCallback, useMemo, useState } from "react";
 import type { EditorMode } from "../components/MenuBar";
+import type {
+  WorldSummary,
+  WorldCatalogEntry,
+  TopologyIssue,
+} from "../services/EditorGateway";
 
 export interface WorkspaceController {
   // Mode
@@ -48,6 +53,10 @@ export interface WorkspaceController {
   setPendingNavigation: (target: NavigationTarget | null) => void;
   pendingBackToScene: boolean;
   setPendingBackToScene: (pending: boolean) => void;
+  // World Workspace state (read-only in v1; populated by useWorldWorkspace in Slice 4)
+  worldDoc: WorldSummary | null;
+  worldCatalog: WorldCatalogEntry[];
+  topologyIssues: TopologyIssue[];
   // Test bridge
   bindTestHooks: () => void;
 }
@@ -85,6 +94,11 @@ export function useEditorWorkspaceController(
   const setPendingBackToScene = useCallback((pending: boolean) => {
     setPendingBackToSceneState(pending);
   }, []);
+
+  // World Workspace state (read-only in v1; populated by useWorldWorkspace in Slice 4)
+  const [worldDoc, setWorldDoc] = useState<WorldSummary | null>(null);
+  const [worldCatalog, setWorldCatalog] = useState<WorldCatalogEntry[]>([]);
+  const [topologyIssues, setTopologyIssues] = useState<TopologyIssue[]>([]);
 
   const setSelectedEntityId = useCallback((id: string | null) => {
     setSelectedIds((prev) => {
@@ -191,6 +205,10 @@ export function useEditorWorkspaceController(
     setPendingNavigation,
     pendingBackToScene,
     setPendingBackToScene,
+    // World Workspace (read-only in v1)
+    worldDoc,
+    worldCatalog,
+    topologyIssues,
     bindTestHooks,
   };
 }

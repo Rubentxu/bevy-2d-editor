@@ -31,7 +31,7 @@ import DockDivider from "./DockDivider";
 import { stampDockPanelDrag } from "./drag-payload";
 import type { DockableRegion } from "../../hooks/useDockPrefs";
 
-type EditorMode = "scene" | "asset-authoring" | "logic" | "code" | "play";
+type EditorMode = "scene" | "asset-authoring" | "logic" | "code" | "play" | "world";
 
 interface Props {
   visible: boolean;
@@ -77,10 +77,11 @@ function getOutlineTitle(editorMode: EditorMode = "scene"): string {
       return "Project Assets";
     case "scene":
       return "Outline";
-    // logic/code/play: outline body is empty — use generic "Outline"
+    // logic/code/play/world: outline body is empty — use generic "Outline"
     case "logic":
     case "code":
     case "play":
+    case "world":
       return "Outline";
   }
 }
@@ -97,10 +98,11 @@ function getPropertiesTitle(editorMode: EditorMode = "scene"): string {
       return "Authoring";
     case "scene":
       return "Properties";
-    // logic/code/play: properties body is empty — use generic "Properties"
+    // logic/code/play/world: properties body is empty — use generic "Properties"
     case "logic":
     case "code":
     case "play":
+    case "world":
       return "Properties";
   }
 }

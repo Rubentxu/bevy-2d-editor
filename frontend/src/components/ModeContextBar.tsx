@@ -56,6 +56,7 @@ const MODE_LABELS: Record<EditorMode, string> = {
   logic: "Logic",
   code: "Code",
   play: "Play",
+  world: "World",
 };
 
 const MODE_DOMAINS: Record<EditorMode, string> = {
@@ -64,6 +65,7 @@ const MODE_DOMAINS: Record<EditorMode, string> = {
   logic: "logic",
   code: "code",
   play: "runtime",
+  world: "world",
 };
 
 export default function ModeContextBar({
