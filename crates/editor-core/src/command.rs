@@ -5,9 +5,10 @@
 //! semantic (not raw diffs), fully reversible, and carry authorship metadata
 //! for future agent auditing.
 
-use crate::document::{ComponentInstance, StableId};
+use crate::document::ComponentInstance;
 use crate::scene_asset::{AssetReference, LocalId};
 use crate::scene_instance::SceneInstance;
+use editor_model::ids::StableId;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use thiserror::Error;

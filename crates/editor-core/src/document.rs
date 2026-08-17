@@ -9,47 +9,17 @@ use std::fmt;
 
 use crate::scene_instance::SceneInstance;
 
+// StableId is a type alias to editor_model::ids::StableId (see above).
 // ComponentInstance is still defined locally in this module.
 // scene_instance module re-exports ComponentInstance from editor_model::component
 // (see scene_instance.rs) to break the document ↔ scene_instance circular import.
 
 /// Opaque stable identifier for entities.
-/// Uses #[serde(transparent)] so it serializes as a plain string.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct StableId(String);
-
-impl StableId {
-    pub fn new(id: impl Into<String>) -> Self {
-        Self(id.into())
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for StableId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-// ─── Conversion between editor_model::StableId (canonical) ───────────────────
-
-/// Convert from the canonical `editor_model::StableId` to the local mirror.
-impl From<editor_model::StableId> for StableId {
-    fn from(id: editor_model::StableId) -> Self {
-        StableId(id.into_inner())
-    }
-}
-
-/// Convert from the local mirror to the canonical `editor_model::StableId`.
-impl From<StableId> for editor_model::StableId {
-    fn from(id: StableId) -> Self {
-        editor_model::StableId::new(id.0)
-    }
-}
+///
+/// Type alias to the canonical `editor_model::ids::StableId` (ADR-0049).
+/// The inner `String` serializes as a plain string via serde `#[serde(transparent)]`
+/// on the editor_model type.
+pub type StableId = editor_model::ids::StableId;
 
 // T-02-14 LocalId collapse (completed in v0.88): canonical definition lives in
 // editor_model::ids::LocalId. This re-export keeps `editor_core::document::LocalId`
