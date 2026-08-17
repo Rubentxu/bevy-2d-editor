@@ -54,6 +54,11 @@ refactorings (EditorSession split, FakeSession extraction).
   across `editor_core`; `document::StableId` conversion via `as_str()`
 - **Poll loop wiring + dedup**: `get_change_set_summaries_wasm` fully wired
   to `EditorSession.recent_change_sets` via `EditorSessionPort`
+- **`OperationLog` placeholder cleanup** (post-v0.92): `AssetSessionState::operation_log_bytes`
+  and `LogicSessionState::operation_log_bytes` removed; the poll loop in
+  `preview_runtime.rs` reads `OperationLog` thread_local directly and pushes
+  `ChangeSetSummary` via `push_recent_change_set`, making the serialized-bytes
+  path obsolete
 
 ### New features (from Unreleased)
 
@@ -67,11 +72,6 @@ refactorings (EditorSession split, FakeSession extraction).
 - Pre-existing test `validation_center_tests::wasm_validation_cycle_in_active_graph`
   (unrelated to this cycle; to be fixed separately)
 - Cosmetic unused-variable warning in `extension.rs:179` (trivial fix)
-- **`OperationLog` type not yet in `editor-model`** (deferred from v0.90):
-  `AssetSessionState::operation_log_bytes` and
-  `LogicSessionState::operation_log_bytes` remain `Vec<u8>` placeholders;
-  the real `OperationLog` type lives in `editor-core`; migration is a v0.93
-  mechanical follow-up
 - **FakeSession built-in manifest assertion** (`assert_eq!(list.len(), 3)`)
   not yet added as a CI gate — infra in place, test missing
 - **Multi-thread concurrent register test** and **stale permission removal test**
