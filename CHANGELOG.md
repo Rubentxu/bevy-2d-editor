@@ -2,6 +2,43 @@
 
 All notable changes to Bevy 2D Editor are documented here. The project follows semantic version tags; detailed milestone history is available in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## v0.94.0 — Hexagonal Crate Boundaries (ADR-0030) (2026-08-17)
+
+Implements the full 6-crate architecture from ADR-0030 with compile-time hexagonal
+boundaries. editor-model is now fully pure (no Bevy, no WASM bindings).
+
+### Architecture changes
+
+- **`editor-bevy`** (renamed from `editor-core`): Bevy adapter — scene authoring,
+  logic graphs, WASM preview systems. No WASM glue at the root level.
+- **`editor-protocol`** (NEW): Wire types and capability API trait definitions.
+  Houses `Command`, `AssetCommand`, `LogicCommand`, `DispatchError`, and
+  `SceneApi`, `SceneAssetApi`, `WorldApi`, `LogicApi`, `RuntimeApi`,
+  `CodeApi`, `ValidationApi`, `ChangeApi` traits per ADR-0034.
+  Pure — no Bevy, no wasm-bindgen.
+- **`editor-wasm`** (NEW, cdylib): WASM cdylib extracted from editor-application.
+  `[lib] name = "editor_application"` preserves frontend imports.
+  The only crate with wasm_bindgen/web_sys/js_sys at the root level.
+- **`editor-storage-web`** (NEW): OPFS adapter extracted from editor-application.
+  `OpfsCore`, `RawStoreBridge`, WASM bridge in cfg-gated module.
+- **`editor-application`**: Now pure application services. WASM glue removed.
+  Depends on: editor-model, editor-protocol, editor-storage-web.
+- **`editor-model`**: Unchanged. Pure semantic types.
+
+### CI / quality gates
+
+- **`archcheck`** (NEW CI workflow): Runs all B1–B9 assertions on every PR.
+  B7: editor-protocol purity. B8: editor-model/application/protocol wasm-free.
+  B9: editor-storage-web wasm imports cfg-gated.
+- **D1 regression test**: `dispatch_kernel_regression` test suite (4 tests)
+  proves `dispatch_command_via_kernel` routes through the ChangeWorkbench
+  approval path.
+
+### ADR status changes
+
+- ADR-0030: **Implemented** (was: Accepted, partial)
+- ADR-0044: **CI gate wired** (archcheck in CI)
+
 ## v0.93.0 — External Source Importers (SDK-061) (2026-08-17)
 
 Delivers the Aseprite, LDtk, and Tiled import pipelines with provenance tracking,
