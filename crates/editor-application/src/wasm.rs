@@ -158,6 +158,15 @@ fn approve_selected_ops_impl(change_id: &str, indices: &[usize]) -> Result<Strin
     let cs = with_pending_change_sets_mut(|map| map.remove(change_id))?
         .ok_or_else(|| JsValue::from_str(&format!("ChangeSet not found: {}", change_id)))?;
 
+    // ADR-0040 v0.92: Check extension permissions before dispatching any op.
+    // This only runs for Plugin-origin ChangeSets (Human/Agent are no-ops).
+    use editor_model::transaction::ChangeOrigin;
+    if matches!(cs.origin, ChangeOrigin::Plugin) {
+        use crate::transaction::transaction_kernel_check_plugin_permission;
+        transaction_kernel_check_plugin_permission(&cs)
+            .map_err(|e| JsValue::from_str(&format!("Permission denied: {}", e)))?;
+    }
+
     let mut applied_count = 0;
     for &idx in indices {
         let op_json = cs.ops.get(idx).ok_or_else(|| {

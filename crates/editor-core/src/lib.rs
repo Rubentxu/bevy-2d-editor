@@ -534,10 +534,12 @@ pub fn dispatch_command_via_kernel(envelope: CommandEnvelope) -> Result<String, 
     use editor_model::transaction::{Applier, ChangeOrigin, ChangeSet};
 
     // Determine ChangeOrigin from authorship metadata.
+    // ADR-0040: "extension:<id>" prefix indicates Plugin origin.
     let origin = match envelope.metadata.authorship.as_str() {
         "user" => ChangeOrigin::Human,
         s if s.starts_with("agent:") => ChangeOrigin::Agent,
         "system" => ChangeOrigin::Migration,
+        s if s.starts_with("extension:") => ChangeOrigin::Plugin,
         _ => ChangeOrigin::Human,
     };
 
@@ -550,6 +552,31 @@ pub fn dispatch_command_via_kernel(envelope: CommandEnvelope) -> Result<String, 
     );
     cs.add_resource("scene", "scenes/current.json");
     cs.push_op(envelope.command.clone());
+
+    // ADR-0040 v0.92: For Plugin-origin commands, verify the extension is registered.
+    // This is a lightweight check: just confirm the extension ID is in the registry.
+    // The full permission check (covering resource-specific scopes) happens in
+    // editor_application::transaction::transaction_kernel_check_plugin_permission at
+    // ChangeSet approval time. This here check ensures unknown extensions can't
+    // even dispatch commands through the kernel path.
+    if matches!(origin, ChangeOrigin::Plugin) {
+        let ext_id = envelope
+            .metadata
+            .authorship
+            .strip_prefix("extension:")
+            .unwrap_or(&envelope.metadata.authorship);
+        if let Some(registry) = editor_model::ports::with_extension_registry() {
+            if let Ok(guard) = registry.lock() {
+                if guard.get(ext_id).is_none() {
+                    return Err(JsValue::from_str(&format!(
+                        "extension '{}' is not registered",
+                        ext_id
+                    )));
+                }
+            }
+        }
+        // If registry not initialized, allow dispatch (fail-open for dev scenarios).
+    }
 
     // Get mutable access to the scene doc and operation log.
     let (inverse, snapshot) = SCENE_DOC.with(|cell| {
