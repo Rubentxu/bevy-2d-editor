@@ -35,6 +35,22 @@ impl fmt::Display for StableId {
     }
 }
 
+// ─── Conversion between editor_model::StableId (canonical) ───────────────────
+
+/// Convert from the canonical `editor_model::StableId` to the local mirror.
+impl From<editor_model::StableId> for StableId {
+    fn from(id: editor_model::StableId) -> Self {
+        StableId(id.into_inner())
+    }
+}
+
+/// Convert from the local mirror to the canonical `editor_model::StableId`.
+impl From<StableId> for editor_model::StableId {
+    fn from(id: StableId) -> Self {
+        editor_model::StableId::new(id.0)
+    }
+}
+
 // T-02-14 LocalId collapse (completed in v0.88): canonical definition lives in
 // editor_model::ids::LocalId. This re-export keeps `editor_core::document::LocalId`
 // paths compiling; the API is identical (new/as_str/is_empty/Display, serde transparent).
@@ -154,6 +170,34 @@ impl From<ComponentInstance> for editor_model::ComponentInstance {
         Self {
             type_id: doc.type_id,
             values: doc.values,
+        }
+    }
+}
+
+/// Convert from the canonical `editor_model::Entity` to the local mirror.
+/// Requires `editor_model::StableId` and `editor_model::ComponentInstance`
+/// to be convertible to local types (satisfied by the From impls above).
+impl From<editor_model::Entity> for Entity {
+    fn from(em: editor_model::Entity) -> Self {
+        Self {
+            id: em.id.into(),
+            local_id: em.local_id.into(),
+            name: em.name,
+            parent: em.parent.map(|p| p.into()),
+            components: em.components.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+/// Convert from the local `editor_core::Entity` to the canonical `editor_model::Entity`.
+impl From<Entity> for editor_model::Entity {
+    fn from(doc: Entity) -> Self {
+        Self {
+            id: doc.id.into(),
+            local_id: doc.local_id.into(),
+            name: doc.name,
+            parent: doc.parent.map(|p| p.into()),
+            components: doc.components.into_iter().map(Into::into).collect(),
         }
     }
 }

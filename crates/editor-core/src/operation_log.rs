@@ -252,7 +252,7 @@ impl OperationLog {
         self.entries.iter().rev().cloned().collect()
     }
 
-    pub fn recent_change_sets_for(&self, stable_id: &StableId) -> Vec<RecentChangeSummary> {
+    pub fn recent_change_sets_for(&self, stable_id: &str) -> Vec<RecentChangeSummary> {
         let mut results = Vec::new();
         for entry in self.entries.iter().rev() {
             let ops_touched = count_ops_touching_stable_id(&entry.forward, stable_id);
@@ -304,25 +304,25 @@ pub struct RecentChangeSummary {
 ///
 /// Handles Batch commands recursively. Returns 0 if the command does not
 /// reference the entity.
-fn count_ops_touching_stable_id(cmd: &Command, stable_id: &StableId) -> usize {
+fn count_ops_touching_stable_id(cmd: &Command, stable_id: &str) -> usize {
     match cmd {
-        Command::CreateEntity { id, .. } if id == stable_id => 1,
-        Command::DeleteEntity { id, .. } if id == stable_id => 1,
-        Command::AddComponent { entity_id, .. } if entity_id == stable_id => 1,
-        Command::RemoveComponent { entity_id, .. } if entity_id == stable_id => 1,
-        Command::SetComponentField { entity_id, .. } if entity_id == stable_id => 1,
+        Command::CreateEntity { id, .. } if id.as_str() == stable_id => 1,
+        Command::DeleteEntity { id, .. } if id.as_str() == stable_id => 1,
+        Command::AddComponent { entity_id, .. } if entity_id.as_str() == stable_id => 1,
+        Command::RemoveComponent { entity_id, .. } if entity_id.as_str() == stable_id => 1,
+        Command::SetComponentField { entity_id, .. } if entity_id.as_str() == stable_id => 1,
         Command::SetComponentFieldOnMultiple { entity_ids, .. }
-            if entity_ids.iter().any(|id| id == stable_id) =>
+            if entity_ids.iter().any(|id| id.as_str() == stable_id) =>
         {
             1
         }
-        Command::ReparentEntity { entity_id, .. } if entity_id == stable_id => 1,
-        Command::RenameEntity { entity_id, .. } if entity_id == stable_id => 1,
-        Command::PlaceInstance { instance_id, .. } if instance_id == stable_id => 1,
-        Command::RemoveInstance { instance_id, .. } if instance_id == stable_id => 1,
-        Command::ReplaceInstanceAsset { instance_id, .. } if instance_id == stable_id => 1,
-        Command::UpsertOverride { instance_id, .. } if instance_id == stable_id => 1,
-        Command::RevertOverride { instance_id, .. } if instance_id == stable_id => 1,
+        Command::ReparentEntity { entity_id, .. } if entity_id.as_str() == stable_id => 1,
+        Command::RenameEntity { entity_id, .. } if entity_id.as_str() == stable_id => 1,
+        Command::PlaceInstance { instance_id, .. } if instance_id.as_str() == stable_id => 1,
+        Command::RemoveInstance { instance_id, .. } if instance_id.as_str() == stable_id => 1,
+        Command::ReplaceInstanceAsset { instance_id, .. } if instance_id.as_str() == stable_id => 1,
+        Command::UpsertOverride { instance_id, .. } if instance_id.as_str() == stable_id => 1,
+        Command::RevertOverride { instance_id, .. } if instance_id.as_str() == stable_id => 1,
         Command::Batch { commands, .. } => commands
             .iter()
             .map(|c| count_ops_touching_stable_id(c, stable_id))

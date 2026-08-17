@@ -71,6 +71,9 @@ impl EditorSessionPort for FakeSession {
             .flat_map(|v| v.iter().cloned())
             .collect()
     }
+    fn active_document_path(&self) -> Option<&str> {
+        None
+    }
     fn push_recent_change_set(
         &mut self,
         scene_path: &str,

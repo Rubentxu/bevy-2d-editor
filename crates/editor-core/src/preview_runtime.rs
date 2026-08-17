@@ -209,6 +209,14 @@ pub fn start_engine(canvas_id: &str) {
                 .run_if(in_edit_mode)
                 .after(rebuild_preview_world),
         )
+        // v0.92 HIGH-4: poll recent change sets after process_commands so
+        // each apply shows up in the ApplyBackPanel's "Recent History" view.
+        .add_systems(
+            Update,
+            poll_recent_change_sets_system
+                .run_if(in_edit_mode)
+                .after(process_commands),
+        )
         // Play-mode sensor systems — run before logic evaluation
         .add_systems(
             Update,
@@ -1146,14 +1154,20 @@ pub fn poll_recent_change_sets_inner() {
     if entries.is_empty() {
         return;
     }
-    // Use a synthetic scene path when no active document is selected.
-    // The session-level `DocumentSelection::path` is not exposed via the
-    // trait; v0.91+ follow-up will thread it through.
-    let scene_path = "_default".to_string();
 
     let _ = editor_model::ports::with_session_mut(|sess| {
-        for entry in &entries {
+        // v0.92 HIGH-4: route to the active document's buffer, not "_default".
+        let scene_path = sess
+            .active_document_path()
+            .map(str::to_string)
+            .unwrap_or_else(|| "_default".to_string());
+
+        for (idx, entry) in entries.iter().enumerate() {
             let summary = ChangeSetSummary {
+                // Use index-in-snapshot as a stable dedup cursor.
+                // The buffer's last_seen_change_id advances monotonically,
+                // so entries with change_id <= last_seen are silently skipped.
+                change_id: idx as u64,
                 origin: entry
                     .origin
                     .clone()
@@ -1165,7 +1179,6 @@ pub fn poll_recent_change_sets_inner() {
                 applied_at_ms: entry.metadata.timestamp,
                 ops_touched: 1, // coarse — OperationLog entries don't carry the
                                 // full command list, so we use a placeholder.
-                                // v0.91+ follow-up will compute the real count.
             };
             sess.push_recent_change_set(&scene_path, summary);
         }

@@ -81,6 +81,9 @@ impl EditorSessionPort for FakeSession {
     fn all_recent_change_sets(&self) -> Vec<editor_model::ChangeSetSummary> {
         Vec::new()
     }
+    fn active_document_path(&self) -> Option<&str> {
+        None
+    }
 }
 
 fn fresh_session() {

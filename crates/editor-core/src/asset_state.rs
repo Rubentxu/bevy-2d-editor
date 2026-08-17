@@ -31,6 +31,7 @@ thread_local! {
     /// `editor_model::AssetSessionState`).
     pub static SCENE_ASSET_DOC: RefCell<Option<SceneAssetDocument>> = const { RefCell::new(None) };
     /// Asset operation log: per-asset undo/redo history (ADR-0007).
+    /// v0.92 HIGH-3: wrapped in `Option` for re-entrancy-safe take/write-back.
     /// Migrated to `EditorSession` in v0.91 PR5 (requires the `OperationLog`
     /// type to move from `editor-core` to `editor-model`).
     pub static ASSET_OPERATION_LOG: RefCell<AssetOperationLog> = const { RefCell::new(AssetOperationLog::new_const()) };

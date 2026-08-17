@@ -160,6 +160,8 @@ use serde::{Deserialize, Serialize};
 /// Returned by [`OperationLog::recent_change_sets_for`](crate::operation_log::OperationLog::recent_change_sets_for).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChangeSetSummary {
+    /// Monotonically increasing ID used for dedup (last_seen_change_id).
+    pub change_id: u64,
     /// Where the change originated.
     pub origin: String,
     /// Who authored this change.

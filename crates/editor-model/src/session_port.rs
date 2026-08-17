@@ -59,6 +59,12 @@ pub trait EditorSessionPort {
     /// WASM export to power the ApplyBackPanel's "Recent History" view.
     fn all_recent_change_sets(&self) -> Vec<crate::session::ChangeSetSummary>;
 
+    /// Returns the path of the active document, if any.
+    ///
+    /// Used by `poll_recent_change_sets_system` to route summaries to the
+    /// correct per-scene buffer instead of the hardcoded "_default" path.
+    fn active_document_path(&self) -> Option<&str>;
+
     /// Push a `ChangeSetSummary` to the per-scene buffer (v0.91 PR1).
     ///
     /// Called by the `poll_recent_change_sets` Bevy system in editor-core after

@@ -153,9 +153,9 @@ pub fn last_rebuild_cause() -> Option<crate::RebuildCause> {
 /// applied to `PREVIEW_PROVENANCE` by `apply_pending_causality_edges` at
 /// the end of a preview rebuild.
 pub fn stamp_provenance(stable_id: StableId, edge: crate::CausalityEdge) {
-    // Convert document::StableId (editor-core mirror) to editor_model::StableId
-    // for the trait method signature.
-    let model_sid = editor_model::StableId::new(stable_id.as_str());
+    // Convert editor_core::StableId to editor_model::StableId via From impl
+    // (ADR-0049 Phase 1: canonical type lives in editor_model).
+    let model_sid: editor_model::StableId = stable_id.into();
     let _ = editor_model::ports::with_session_mut(|sess| {
         sess.pending_causality_edges_mut()
             .entry(model_sid)
@@ -188,7 +188,7 @@ pub fn apply_pending_causality_edges() {
         PREVIEW_PROVENANCE.with(|prov| {
             let mut prov_map = prov.borrow_mut();
             for (model_sid, edges) in pending_map {
-                let sid = StableId::new(model_sid.as_str());
+                let sid: StableId = model_sid.into();
                 if let Some(entry) = prov_map.get_mut(&sid) {
                     entry.causality_edges.extend(edges);
                 }

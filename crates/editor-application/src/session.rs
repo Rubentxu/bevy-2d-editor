@@ -170,6 +170,9 @@ pub struct SourceFilesCache {
 pub struct RecentChangeSetsBuffer {
     entries: VecDeque<ChangeSetSummary>,
     capacity: usize,
+    /// Cursor: the highest `change_id` already pushed to the buffer.
+    /// New entries with `change_id <= last_seen_change_id` are skipped (dedup).
+    last_seen_change_id: Option<u64>,
 }
 
 impl RecentChangeSetsBuffer {
@@ -178,15 +181,24 @@ impl RecentChangeSetsBuffer {
         Self {
             entries: VecDeque::new(),
             capacity,
+            last_seen_change_id: None,
         }
     }
 
     /// Push a new entry, evicting the oldest if over capacity.
+    /// Skips entries whose `change_id` is at or below `last_seen_change_id`.
     pub fn push(&mut self, summary: ChangeSetSummary) {
+        let change_id = summary.change_id;
+        if let Some(cutoff) = self.last_seen_change_id {
+            if change_id <= cutoff {
+                return; // dedup — already seen this entry
+            }
+        }
         if self.entries.len() >= self.capacity {
             self.entries.pop_front();
         }
         self.entries.push_back(summary);
+        self.last_seen_change_id = Some(change_id);
     }
 
     /// Drain entries and replace with a new set of summaries (used for rebuild).
@@ -849,6 +861,10 @@ impl EditorSessionPort for EditorSession {
             all.extend(buf.entries());
         }
         all
+    }
+
+    fn active_document_path(&self) -> Option<&str> {
+        self.active_document.as_ref().map(|sel| sel.path())
     }
 
     fn push_recent_change_set(
