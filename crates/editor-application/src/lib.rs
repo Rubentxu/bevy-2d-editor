@@ -5,6 +5,7 @@
 //! See ADR-0031 (EditorSession), ADR-0033 (ProjectStore), ADR-0048 (sync v1).
 
 pub mod adapters;
+pub mod extension;
 pub mod ports;
 pub mod runtime_delta;
 pub mod session;

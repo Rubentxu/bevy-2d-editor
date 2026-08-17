@@ -15,16 +15,18 @@
 
 use editor_model::time::{Clock, Timestamp};
 use std::collections::{BTreeMap, VecDeque};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::RuntimeDelta;
 use crate::ports::project_store::ProjectStore;
+use crate::extension::ExtensionRegistry;
 use editor_model::CausalityEdge;
 use editor_model::EditorSessionPort;
 use editor_model::PendingChangeSet;
 use editor_model::RebuildCause;
 use editor_model::StableId;
 use editor_model::logic_activation::{LogicActivationEvent, LogicActivationRing, ring_push};
+use editor_model::ports::ExtensionRegistryPort;
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -115,10 +117,6 @@ impl CacheEntry {
 // RecentChangeSetsBuffer uses ChangeSetSummary from editor_application::transaction.
 
 use crate::transaction::ChangeSetSummary;
-use editor_model::document::SceneDocument;
-use editor_model::logic_graph::LogicGraphAsset;
-use editor_model::scene_asset::SceneAssetDocument;
-use serde_json::Value;
 
 /// Session state for one active scene document (PR2a real types).
 ///
@@ -478,11 +476,16 @@ pub struct EditorSession {
     runtime: RuntimeSessionState,
     /// Logic activation event ring — capped at 64 entries (§6).
     logic_activation_ring: LogicActivationRing,
+    /// Extension registry (ADR-0040 — v0.92 SDK).
+    extension_registry: Arc<Mutex<dyn ExtensionRegistryPort>>,
 }
 
 impl std::fmt::Debug for EditorSession {
     /// Prints structural info only — dyn trait contents are not printable.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let ext_count = self.extension_registry.lock()
+            .map(|r| r.list().len())
+            .unwrap_or(0);
         f.debug_struct("EditorSession")
             .field("active_document", &self.active_document)
             .field("history_scopes", &self.history_scopes)
@@ -497,6 +500,7 @@ impl std::fmt::Debug for EditorSession {
                 "logic_activation_ring_len",
                 &self.logic_activation_ring.len(),
             )
+            .field("extension_registry_len", &ext_count)
             .finish()
     }
 }
@@ -505,6 +509,7 @@ impl EditorSession {
     /// Construct a new session with the given store and clock.
     ///
     /// The session starts with no active document and no history scopes.
+    /// Extension registry is empty (for tests that don't want built-in pre-seeding).
     pub fn new(store: Arc<dyn ProjectStore>, clock: Arc<dyn Clock>) -> Self {
         Self {
             store,
@@ -522,7 +527,50 @@ impl EditorSession {
             logic_activation_ring: VecDeque::with_capacity(
                 editor_model::logic_activation::LOGIC_ACTIVATION_RING_CAP,
             ),
+            extension_registry: Arc::new(Mutex::new(ExtensionRegistry::empty())),
         }
+    }
+
+    /// Construct a new session with built-in extensions pre-registered.
+    ///
+    /// This is the canonical production constructor. Built-in extensions
+    /// (`builtin.logic-bricks.controllers`, `builtin.logic-recipes`,
+    /// `builtin.scene-validator`) are registered via the SDK at composition time.
+    pub fn with_builtins(store: Arc<dyn ProjectStore>, clock: Arc<dyn Clock>) -> Self {
+        Self {
+            store,
+            clock,
+            active_document: None,
+            history_scopes: BTreeMap::new(),
+            caches: BTreeMap::new(),
+            scene_states: BTreeMap::new(),
+            asset_states: BTreeMap::new(),
+            logic_states: BTreeMap::new(),
+            preview_state: PreviewSessionState::new(),
+            change_sets: ChangeSetsSessionState::new(),
+            runtime: RuntimeSessionState::new(),
+            logic_activation_ring: VecDeque::with_capacity(
+                editor_model::logic_activation::LOGIC_ACTIVATION_RING_CAP,
+            ),
+            extension_registry: Arc::new(Mutex::new(ExtensionRegistry::with_builtins())),
+        }
+    }
+
+    /// Returns the extension registry accessor (shared, read-only).
+    ///
+    /// Returns `Arc<Mutex<dyn ExtensionRegistryPort>>` so callers can hold the
+    /// lock across multiple calls without borrowing `&mut self`.
+    pub fn extension_registry(&self) -> Arc<Mutex<dyn ExtensionRegistryPort>> {
+        Arc::clone(&self.extension_registry)
+    }
+
+    /// Returns a mutable reference to the extension registry.
+    ///
+    /// Used by WASM exports that need to register/unregister extensions.
+    pub(crate) fn extension_registry_mut(
+        &mut self,
+    ) -> &mut Arc<Mutex<dyn ExtensionRegistryPort>> {
+        &mut self.extension_registry
     }
 
     // ─── Sub-state accessors (PR2a) ──────────────────────────────────────────

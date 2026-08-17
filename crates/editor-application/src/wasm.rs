@@ -422,6 +422,102 @@ pub fn create_apply_back_change_set_wasm(rationale: &str) -> Result<String, JsVa
     Ok(change_id)
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Extension registry WASM exports (ADR-0040 — v0.92)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Get the extension registry from the global session.
+fn with_ext_registry_mut<
+    R,
+    F: FnOnce(&mut dyn editor_model::ports::ExtensionRegistryPort) -> R,
+>(
+    f: F,
+) -> Result<R, JsValue> {
+    let sess = session()?;
+    let mut guard = sess
+        .lock()
+        .map_err(|e| JsValue::from_str(&format!("Session lock poisoned: {}", e)))?;
+    let reg = guard
+        .extension_registry_mut();
+    let mut reg_guard = reg
+        .lock()
+        .map_err(|e| JsValue::from_str(&format!("Registry lock poisoned: {}", e)))?;
+    Ok(f(&mut *reg_guard))
+}
+
+/// Register an extension from a JSON manifest.
+///
+/// Accepts an `ExtensionManifest` JSON object. Returns a JSON object with
+/// `handle` (u64) and `summary` fields on success.
+#[wasm_bindgen]
+pub fn register_extension_wasm(json: &str) -> Result<String, JsValue> {
+    use editor_model::extension::ExtensionSummary;
+    use editor_model::ports::ExtensionRegistryPort;
+
+    let manifest: editor_model::extension::ExtensionManifest = serde_json::from_str(json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid manifest JSON: {}", e)))?;
+
+    let handle = with_ext_registry_mut(|reg| reg.register(manifest.clone()))?
+        .map_err(|e| JsValue::from_str(&format!("ExtensionError: {}", e)))?;
+
+    let summary = ExtensionSummary::from(&manifest);
+    let response = serde_json::json!({
+        "handle": handle.to_u64(),
+        "summary": summary,
+    });
+    serde_json::to_string(&response)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+}
+
+/// List all registered extensions as a JSON array of summaries.
+#[wasm_bindgen]
+pub fn list_extensions_wasm() -> Result<String, JsValue> {
+    use editor_model::ports::with_extension_registry;
+
+    let summaries = with_extension_registry()
+        .ok_or_else(|| JsValue::from_str("Extension registry not initialized"))?
+        .lock()
+        .map_err(|e| JsValue::from_str(&format!("Registry lock poisoned: {}", e)))?
+        .list();
+
+    serde_json::to_string(&summaries)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+}
+
+/// Unregister an extension by ID.
+#[wasm_bindgen]
+pub fn unregister_extension_wasm(id: &str) -> Result<(), JsValue> {
+    with_ext_registry_mut(|reg| reg.unregister(id))?
+        .map_err(|e| JsValue::from_str(&format!("ExtensionError: {}", e)))
+}
+
+/// Submit a plugin ChangeSet for approval.
+///
+/// Builds a `PendingChangeSet` with `origin: "Plugin"` and
+/// `actor: "extension:<extension_id>"` and routes it through the existing
+/// `submit_pending_change_set` flow (visible in ChangeWorkbench per ADR-0040).
+#[wasm_bindgen]
+pub fn submit_plugin_change_set_wasm(
+    extension_id: &str,
+    change_set_json: &str,
+) -> Result<String, JsValue> {
+    use editor_model::PendingChangeSet;
+
+    let mut cs: PendingChangeSet = serde_json::from_str(change_set_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid ChangeSet JSON: {}", e)))?;
+
+    // Override origin and actor to reflect plugin provenance.
+    cs.origin = "Plugin".to_string();
+    cs.actor = format!("extension:{}", extension_id);
+
+    let change_id = cs.id.clone();
+    with_pending_change_sets_mut(|map| {
+        map.insert(change_id.clone(), cs);
+    })?;
+
+    Ok(change_id)
+}
+
 /// Initialize the project store and the global `EditorSession`.
 ///
 /// MUST be called before any editor operations. Creates an `OpfsProjectStore`,
@@ -440,7 +536,7 @@ pub async fn init_project_store() -> Result<(), JsValue> {
     // Create the session and register it globally for workbench WASM exports.
     // Re-init is safe: the existing session (if any) is reused to avoid losing
     // pending ChangeSets across HMR/dev-server reloads.
-    let session = Arc::new(Mutex::new(EditorSession::new(
+    let session = Arc::new(Mutex::new(EditorSession::with_builtins(
         store_arc,
         Arc::new(SysClock::new()) as Arc<dyn Clock>,
     )));
@@ -454,6 +550,11 @@ pub async fn init_project_store() -> Result<(), JsValue> {
     // the session via a temporary closure that downcasts through the
     // concrete `EditorSession` (which already implements the trait).
     register_session_via_port(&session);
+
+    // v0.92: register the extension registry globally so editor-core can
+    // check extension permissions without importing editor-application.
+    use editor_model::ports::register_extension_registry;
+    register_extension_registry(session.extension_registry());
 
     Ok(())
 }
