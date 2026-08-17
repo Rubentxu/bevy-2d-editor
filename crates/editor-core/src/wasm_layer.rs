@@ -36,8 +36,8 @@ pub fn list_scene_instance_layers_wasm(asset_json: &str) -> Result<String, JsVal
                     "instances_count": scene_layer.instances.len(),
                 }));
             }
-            LevelLayer::Tile(_) | LevelLayer::Auto(_) => {
-                // Tile and Auto layers are handled separately in their respective APIs
+            LevelLayer::Tile(_) | LevelLayer::Auto(_) | LevelLayer::IntGrid(_) => {
+                // Tile, Auto, and IntGrid layers are handled separately in their respective APIs
             }
         }
     }
@@ -81,7 +81,7 @@ pub fn create_scene_instance_layer_wasm(
         .iter()
         .filter_map(|l| match l {
             LevelLayer::SceneInstance(s) => Some(s.order),
-            LevelLayer::Tile(_) | LevelLayer::Auto(_) => None,
+            LevelLayer::Tile(_) | LevelLayer::Auto(_) | LevelLayer::IntGrid(_) => None,
         })
         .max()
         .map(|o| o + 1)

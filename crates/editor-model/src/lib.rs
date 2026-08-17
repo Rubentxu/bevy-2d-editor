@@ -11,6 +11,7 @@ pub mod component;
 pub mod document;
 pub mod extension;
 pub mod ids;
+pub mod int_grid;
 pub mod logic_activation;
 pub mod logic_graph;
 pub mod pending_change_set;
@@ -71,6 +72,7 @@ pub use tileset::{
     AsepriteFrame, AsepriteMetadata, AsepriteSlice, AsepriteTag, TileCoord, TileGrid, TileRef,
     TilesetAsset, TilesetId, TilesetManager, TilesetMetadata,
 };
+pub use int_grid::{IntGridCell, IntGridCoord, IntGridLayer, IntGridLayerId, IntGridMap, IntGridSchemaKind};
 pub use time::{Clock, Timestamp};
 pub use transaction::{
     Applier, ApprovalPolicy, ChangeOrigin, ChangeSet, DiffSummary, EffectsSummary, ResourceRef,

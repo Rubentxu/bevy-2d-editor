@@ -249,6 +249,8 @@ pub enum LevelLayer {
     Tile(crate::tile_layer::TileLayer),
     /// A layer holding an AutoLayer.
     Auto(crate::auto_layer::AutoLayer),
+    /// A layer holding an IntGridLayer.
+    IntGrid(crate::int_grid::IntGridLayer),
 }
 
 #[cfg(test)]
@@ -281,5 +283,76 @@ mod tests {
         let parsed: SceneAssetDocument = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.role, SceneAssetRole::Logic);
         assert_eq!(parsed.asset_id, "lga_jump");
+    }
+
+    #[test]
+    fn int_grid_layer_round_trips() {
+        use crate::int_grid::{IntGridCell, IntGridLayer, IntGridLayerId, IntGridSchemaKind};
+
+        let mut layer = IntGridLayer::new(
+            IntGridLayerId::new("ig_collision".to_string()),
+            "Collision".to_string(),
+        )
+        .with_identifier("Collision")
+        .with_order(1)
+        .with_dimensions(100, 80)
+        .with_schema_kind(IntGridSchemaKind::Values);
+
+        layer.paint_cell(0, 0, 1, Some("solid".to_string()));
+        layer.paint_cell(1, 0, 0, None);
+        layer.paint_cell(5, 10, 3, Some("water".to_string()));
+
+        let level_layer = LevelLayer::IntGrid(layer.clone());
+        let json = serde_json::to_string(&level_layer).unwrap();
+
+        // Verify the JSON contains the expected kind tag
+        assert!(json.contains("\"kind\":\"int_grid\""));
+
+        let parsed: LevelLayer = serde_json::from_str(&json).unwrap();
+        match parsed {
+            LevelLayer::IntGrid(parsed_layer) => {
+                assert_eq!(parsed_layer.id.as_str(), "ig_collision");
+                assert_eq!(parsed_layer.name, "Collision");
+                assert_eq!(parsed_layer.identifier.as_deref(), Some("Collision"));
+                assert_eq!(parsed_layer.order, 1);
+                assert_eq!(parsed_layer.grid_width, 100);
+                assert_eq!(parsed_layer.grid_height, 80);
+                assert_eq!(parsed_layer.schema_kind, IntGridSchemaKind::Values);
+                assert_eq!(parsed_layer.cell_count(), 3);
+
+                let cell = parsed_layer.get_cell(5, 10).unwrap();
+                assert_eq!(cell.value, 3);
+                assert_eq!(cell.identifier.as_deref(), Some("water"));
+            }
+            other => panic!("Expected LevelLayer::IntGrid, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn int_grid_layer_tile_ref_round_trips() {
+        use crate::int_grid::{IntGridLayer, IntGridLayerId, IntGridSchemaKind};
+
+        let mut layer = IntGridLayer::with_tile_ref(
+            IntGridLayerId::new("ig_tiles".to_string()),
+            "Tile References".to_string(),
+        )
+        .with_order(0);
+
+        layer.paint_cell(0, 0, 5, None); // tile index 5
+        layer.paint_cell(10, 20, 12, None); // tile index 12
+
+        let level_layer = LevelLayer::IntGrid(layer);
+        let json = serde_json::to_string(&level_layer).unwrap();
+        let parsed: LevelLayer = serde_json::from_str(&json).unwrap();
+
+        match parsed {
+            LevelLayer::IntGrid(parsed_layer) => {
+                assert_eq!(parsed_layer.schema_kind, IntGridSchemaKind::TileRef);
+                assert_eq!(parsed_layer.cell_count(), 2);
+                assert_eq!(parsed_layer.get_cell(0, 0).unwrap().value, 5);
+                assert_eq!(parsed_layer.get_cell(10, 20).unwrap().value, 12);
+            }
+            other => panic!("Expected LevelLayer::IntGrid, got {:?}", other),
+        }
     }
 }
