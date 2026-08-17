@@ -2,6 +2,63 @@
 
 All notable changes to Bevy 2D Editor are documented here. The project follows semantic version tags; detailed milestone history is available in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## v0.93.0 — External Source Importers (SDK-061) (2026-08-17)
+
+Delivers the Aseprite, LDtk, and Tiled import pipelines with provenance tracking,
+reimport conflict handling, and the SDK-061 importer protocol. Completes the
+v0.92 ecosystem roadmap item.
+
+### New features
+
+- **`ExternalSource` provenance types** (`editor-model`): `ExternalSource`,
+  `ExternalSourceKind`, `SourceMapping`, `OwnershipRule`, `ProvenanceDiff`,
+  `ConflictPolicy` — sidecar `.meta.json` stores path, SHA-256 fingerprint,
+  and last-import time
+- **`ImporterRegistryPort`** trait + `Arc<Mutex<dyn ImporterRegistry>>` as
+  9th `EditorSession` sub-state; mirrors the `ExtensionRegistryPort` pattern
+- **Aseprite import pipeline** (`builtin.aseprite`): parses Aseprite JSON v1/v2
+  → `LevelLayer::Tile` per frame; PNG spritesheet → `AssetFile` at `resources/`;
+  validated via `ImporterVersionRange`
+- **LDtk import pipeline** (`builtin.ldtk`): parses LDtk JSON 1.0.0–1.5.0;
+  one `SceneAssetDocument` per level at `levels/<world>/<level>`;
+  `LevelLayer::IntGrid` + `LevelLayer::Auto` for semantic/auto layers;
+  entity instances → `SceneInstance` with `Transform2D` + field components
+- **Tiled import pipeline** (`builtin.tiled`): parses Tiled JSON v1.0–v1.10;
+  TMX/XML rejected with `ImporterError::UnsupportedKind("xml")`;
+  tile layers → `LevelLayer::Tile`; object layers → `SceneInstance`;
+  embedded tilesets → `TilesetAsset`; templates → `Fragment` documents
+- **Reimport pipeline** (`editor-application/reimport.rs`): SHA-256 fingerprint
+  of source bytes; `ProvenanceDiff` computes added/removed/changed mappings;
+  editor-owned changes routed to Change Workbench with `ApprovalPolicy::RequiresHuman`
+- **`ConflictPolicy`** enum (`AutoApply`, `HumanReview`, `SkipOnConflict`) wired
+  into reimport per `OwnershipRule`
+- **`ImportDialog.tsx`** frontend component: kind selector, file picker,
+  destination path, conflict summary
+- **5 WASM exports**: `list_importers_wasm`, `importer_descriptor_wasm`,
+  `import_external_source_wasm`, `reimport_external_source_wasm`,
+  `list_imported_sources_wasm`
+- **SDK versioning**: `ImporterVersion` + `ImporterVersionRange` mandatory on
+  all descriptors; range-gating validator rejects out-of-range sources
+- **6 built-in assertions**: FakeSession test gate verifies exactly 6 built-in
+  extensions (3 logic + 3 importers)
+
+### Architecture
+
+- `crates/editor-model/src/int_grid.rs`: `IntGridCoord`, `IntGridCell`,
+  `IntGridLayer`, `IntGridSchemaKind` — `LevelLayer::IntGrid` variant for
+  LDtk semantic cells
+- Architecture fitness gate: importer crates cannot import `EditorSession`
+  directly; must use typed port traits only
+- ADR-0041 updated to "Accepted + Implemented (v0.93)"
+
+### Known limitations
+
+- **`editor-model` WASM build** has a pre-existing `js_sys` unresolved import
+  in `scene_asset_catalog.rs` (was present on `main` before this cycle;
+  not introduced by v0.93)
+- `wasm_validation_cycle_in_active_graph` test fails on `main` (pre-existing,
+  unrelated to importers)
+
 ## v0.92.0 — Ecosystem & Architecture Hardening (2026-08-17)
 
 Delivers the Editor Extension SDK (ADR-0040 steps 1 and 2), completes the

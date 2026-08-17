@@ -2,12 +2,5 @@
 members = ["crates/editor-core", "crates/ai-proxy", "crates/editor-model", "crates/editor-application"]
 resolver = "2"
 
-[profile.dev]
-opt-level = 1
-debug = 1
-
-[profile.release]
-opt-level = "s"
-lto = true
-codegen-units = 1
-strip = true
+# Profile configuration is inherited from ~/.cargo/config.toml
+# to share settings across all Rust projects and avoid redundant definitions.
