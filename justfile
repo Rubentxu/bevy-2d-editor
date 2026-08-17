@@ -1,6 +1,6 @@
 # Bevy 2D Editor — Development Commands
 
-editor_crate := "crates/editor-application"
+editor_crate := "crates/editor-wasm"
 frontend     := "frontend"
 wasm_out     := "frontend/src/wasm"
 

@@ -13,9 +13,6 @@ pub mod runtime_delta;
 pub mod session;
 pub mod transaction;
 
-#[cfg(target_arch = "wasm32")]
-pub mod wasm;
-
 pub use adapters::in_memory::InMemoryProjectStore;
 pub use adapters::opfs::OpfsProjectStore;
 pub use ports::project_store::{ProjectStore, StoreEntry, StoreError};

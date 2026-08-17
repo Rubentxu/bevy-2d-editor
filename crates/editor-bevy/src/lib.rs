@@ -1999,7 +1999,7 @@ async fn warm_asset_body_cache() {
     use crate::scene_asset::SceneAssetDocument;
 
     // Access the catalog that was just loaded
-    let entries: Vec<crate::editor_model::scene_asset_catalog::SceneAssetCatalogEntry> =
+    let entries: Vec<editor_model::scene_asset_catalog::SceneAssetCatalogEntry> =
         crate::asset_state::with_asset_catalog(|cat| cat.list_all().into_iter().cloned().collect());
 
     for entry in entries {

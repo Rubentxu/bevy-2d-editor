@@ -10,7 +10,7 @@
  *       crates/editor-model/Cargo.toml has no bevy dependency line.
  *   B2  editor-application root purity: no wasm_bindgen / web_sys / js_sys
  *       imports in files directly under crates/editor-application/src/
- *       (adapters/opfs.rs is excluded as cfg-gated wasm32 stub).
+ *       (wasm.rs is excluded — thin re-export of editor-wasm after PR7).
  *   B3  Dependency direction: editor-model does not import editor_core or
  *       editor_application; crates/editor-model/Cargo.toml lists neither.
  *   B4  LocalId uniqueness: across all crates/*\/src/, `pub struct LocalId`
@@ -379,6 +379,27 @@ const ASSERTIONS: Assertion[] = [
       }
       const protocolCargo = join(root, "crates/editor-protocol/Cargo.toml");
       assertDependencyFree(protocolCargo, ["bevy", "wasm-bindgen"], this.description);
+    },
+  },
+  // ── B8 (PR7): editor-wasm is the sole wasm_bindgen holder ─────────────────────
+  {
+    id: "B8",
+    description:
+      "wasm_bindgen / web_sys / js_sys appear only in editor-wasm/src/ " +
+      "(the sole WASM cdylib); other crates have zero occurrences",
+    run() {
+      const wasmSrc = join(root, "crates/editor-wasm/src");
+      const wasmPattern = /(?:wasm_bindgen|web_sys|js_sys)/;
+      for (const crateName of ["editor-model", "editor-application", "editor-bevy", "editor-protocol"]) {
+        const crateSrc = join(root, `crates/${crateName}/src`);
+        if (!existsSync(crateSrc)) continue;
+        const hits = countPatternInDir(crateSrc, wasmPattern, true);
+        if (hits > 0) {
+          failures.push(
+            `Assertion failed: ${this.description} — ${hits} occurrence(s) of wasm_bindgen/web_sys/js_sys in ${crateName}/src/`,
+          );
+        }
+      }
     },
   },
 ];

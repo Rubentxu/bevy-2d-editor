@@ -54,15 +54,15 @@ impl ImporterRegistry {
     pub fn with_builtins() -> Self {
         let mut registry = Self::empty();
 
-        // Built-in Aseprite importer — real implementation from editor-core (v0.93 PR2)
-        let aseprite_importer = editor_core::importer::AsepriteImporter::new();
+        // Built-in Aseprite importer — real implementation from editor-bevy (v0.93 PR2)
+        let aseprite_importer = editor_bevy::importer::AsepriteImporter::new();
         let aseprite_desc = aseprite_importer.descriptor();
         registry
             .register(aseprite_desc, std::sync::Arc::new(aseprite_importer))
             .expect("builtin.aseprite must not duplicate");
 
-        // Built-in LDtk importer — real implementation from editor-core (v0.93 PR3)
-        let ldtk_importer = editor_core::importer::LdtkImporter::new();
+        // Built-in LDtk importer — real implementation from editor-bevy (v0.93 PR3)
+        let ldtk_importer = editor_bevy::importer::LdtkImporter::new();
         let ldtk_desc = ldtk_importer.descriptor();
         registry
             .register(ldtk_desc, std::sync::Arc::new(ldtk_importer))
@@ -315,8 +315,8 @@ mod tests {
     use editor_model::importer::{ImporterVersion, ImporterVersionRange, ParseOutput};
     use editor_model::ports::ImporterRegistryPort;
 
-    /// A trivial importer used only in tests.
-    struct DummyImporter {
+    /// A trivial importer used only in tests and WASM stub registration.
+    pub(crate) struct DummyImporter {
         descriptor: ImporterDescriptor,
     }
 

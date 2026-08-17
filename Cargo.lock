@@ -2415,6 +2415,7 @@ dependencies = [
  "base64",
  "editor-bevy",
  "editor-model",
+ "editor-protocol",
  "hex",
  "js-sys",
  "serde",
@@ -2435,6 +2436,7 @@ dependencies = [
  "bevy",
  "console_error_panic_hook",
  "editor-model",
+ "editor-protocol",
  "js-sys",
  "rand 0.9.4",
  "serde",
@@ -2450,10 +2452,40 @@ dependencies = [
 name = "editor-model"
 version = "0.1.0"
 dependencies = [
+ "js-sys",
  "rand 0.9.4",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "editor-protocol"
+version = "0.1.0"
+dependencies = [
+ "editor-model",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "uuid",
+]
+
+[[package]]
+name = "editor-wasm"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "editor-application",
+ "editor-bevy",
+ "editor-model",
+ "editor-protocol",
+ "js-sys",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "uuid",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]
