@@ -4,9 +4,9 @@
 //! These tests run entirely in-memory without WASM/OPFS, using the
 //! pure Rust persistence and catalog functions directly.
 
-use editor_core::scene_asset::SceneAssetRole;
-use editor_core::test_helpers::FakeClock;
-use editor_core::{ASSETS_DIR, ProjectMetadata, asset_path};
+use editor_bevy::scene_asset::SceneAssetRole;
+use editor_bevy::test_helpers::FakeClock;
+use editor_bevy::{ASSETS_DIR, ProjectMetadata, asset_path};
 use editor_model::scene_asset_catalog::{
     SceneAssetCatalog, SceneAssetCatalogEntry, mint_asset_id, random_hex_8,
 };

@@ -2,12 +2,12 @@
 
 use std::collections::BTreeMap;
 
-use editor_core::StableId;
-use editor_core::scene_asset::{
+use editor_bevy::StableId;
+use editor_bevy::scene_asset::{
     AssetReference, LocalId, SceneAssetDocument, SceneAssetEntity, SceneAssetRole,
 };
-use editor_core::scene_instance::{ComponentOverride, ComponentOverrideStatus, SceneInstance};
-use editor_core::scene_instance_overrides::{
+use editor_bevy::scene_instance::{ComponentOverride, ComponentOverrideStatus, SceneInstance};
+use editor_bevy::scene_instance_overrides::{
     classify_overrides, effective_values, mint_id_map, reconcile_id_map, resync, try_rebind,
     validate_overrides,
 };
@@ -70,7 +70,7 @@ fn classify_overrides_namespaced_active() {
 
     let patch = ComponentOverride {
         target_local_id: LocalId::new("root"),
-        component_type_id: editor_core::schema::ComponentTypeId::new("editor.Sprite2D"),
+        component_type_id: editor_bevy::schema::ComponentTypeId::new("editor.Sprite2D"),
         field_path: vec!["asset".to_string()],
         value: serde_json::Value::String("cannon.png".to_string()),
         status: ComponentOverrideStatus::Active,
@@ -103,7 +103,7 @@ fn classify_overrides_short_form_orphans() {
     // Short form: "Sprite2D" instead of "editor.Sprite2D"
     let patch = ComponentOverride {
         target_local_id: LocalId::new("root"),
-        component_type_id: editor_core::schema::ComponentTypeId::new("Sprite2D"),
+        component_type_id: editor_bevy::schema::ComponentTypeId::new("Sprite2D"),
         field_path: vec!["asset".to_string()],
         value: serde_json::Value::String("cannon.png".to_string()),
         status: ComponentOverrideStatus::Active,
@@ -141,7 +141,7 @@ fn resync_preserves_override_on_rename() {
     let instance = make_instance(
         vec![ComponentOverride {
             target_local_id: LocalId::new("abc"),
-            component_type_id: editor_core::schema::ComponentTypeId::new("editor.Sprite2D"),
+            component_type_id: editor_bevy::schema::ComponentTypeId::new("editor.Sprite2D"),
             field_path: vec!["asset".to_string()],
             value: serde_json::Value::String("cannon.png".to_string()),
             status: ComponentOverrideStatus::Active,
@@ -178,7 +178,7 @@ fn resync_moves_to_orphaned_on_entity_removed() {
     let instance = make_instance(
         vec![ComponentOverride {
             target_local_id: LocalId::new("abc"),
-            component_type_id: editor_core::schema::ComponentTypeId::new("editor.Sprite2D"),
+            component_type_id: editor_bevy::schema::ComponentTypeId::new("editor.Sprite2D"),
             field_path: vec!["asset".to_string()],
             value: serde_json::Value::String("cannon.png".to_string()),
             status: ComponentOverrideStatus::Active,
@@ -228,7 +228,7 @@ fn resync_marks_stale_on_field_rename() {
     let instance = make_instance(
         vec![ComponentOverride {
             target_local_id: LocalId::new("root"),
-            component_type_id: editor_core::schema::ComponentTypeId::new("editor.Sprite2D"),
+            component_type_id: editor_bevy::schema::ComponentTypeId::new("editor.Sprite2D"),
             field_path: vec!["asset".to_string()],
             value: serde_json::Value::String("cannon.png".to_string()),
             status: ComponentOverrideStatus::Active,
@@ -287,7 +287,7 @@ fn resync_marks_conflict_on_type_change() {
     let instance = make_instance(
         vec![ComponentOverride {
             target_local_id: LocalId::new("player"),
-            component_type_id: editor_core::schema::ComponentTypeId::new("editor.Health"),
+            component_type_id: editor_bevy::schema::ComponentTypeId::new("editor.Health"),
             field_path: vec!["current".to_string()],
             value: serde_json::json!(42),
             status: ComponentOverrideStatus::Active,
@@ -324,7 +324,7 @@ fn resync_rebinds_via_local_path() {
     let instance = make_instance(
         vec![ComponentOverride {
             target_local_id: LocalId::new("abc"),
-            component_type_id: editor_core::schema::ComponentTypeId::new("editor.Sprite2D"),
+            component_type_id: editor_bevy::schema::ComponentTypeId::new("editor.Sprite2D"),
             field_path: vec!["asset".to_string()],
             value: serde_json::Value::String("cannon.png".to_string()),
             status: ComponentOverrideStatus::Active,
@@ -514,7 +514,7 @@ fn validate_overrides_returns_issues_for_each_failure() {
             // Issue 2: missing_component (short form)
             ComponentOverride {
                 target_local_id: LocalId::new("root"),
-                component_type_id: editor_core::schema::ComponentTypeId::new("WrongComponent"),
+                component_type_id: editor_bevy::schema::ComponentTypeId::new("WrongComponent"),
                 field_path: vec!["field".to_string()],
                 value: serde_json::Value::Null,
                 status: ComponentOverrideStatus::Active,
@@ -522,7 +522,7 @@ fn validate_overrides_returns_issues_for_each_failure() {
             // Issue 3: type_conflict
             ComponentOverride {
                 target_local_id: LocalId::new("root"),
-                component_type_id: editor_core::schema::ComponentTypeId::new("editor.Sprite2D"),
+                component_type_id: editor_bevy::schema::ComponentTypeId::new("editor.Sprite2D"),
                 field_path: vec!["asset".to_string()],
                 value: serde_json::json!(123),
                 status: ComponentOverrideStatus::Active,
@@ -532,7 +532,7 @@ fn validate_overrides_returns_issues_for_each_failure() {
             // Issue 1: missing_entity
             ComponentOverride {
                 target_local_id: LocalId::new("nonexistent"),
-                component_type_id: editor_core::schema::ComponentTypeId::new("editor.Sprite2D"),
+                component_type_id: editor_bevy::schema::ComponentTypeId::new("editor.Sprite2D"),
                 field_path: vec!["asset".to_string()],
                 value: serde_json::Value::String("cannon.png".to_string()),
                 status: ComponentOverrideStatus::Orphaned,

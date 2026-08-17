@@ -5,10 +5,10 @@
 
 use std::collections::BTreeMap;
 
-use editor_core::StableId;
-use editor_core::command::{Command, CommandEnvelope, CommandMetadata};
-use editor_core::document::SceneDocument;
-use editor_core::scene_session::{
+use editor_bevy::StableId;
+use editor_bevy::command::{Command, CommandEnvelope, CommandMetadata};
+use editor_bevy::document::SceneDocument;
+use editor_bevy::scene_session::{
     apply_command, clear_active_doc, clear_dirty, is_dirty, log_state_snapshot, mark_dirty, redo,
     replace_active_doc, replace_with_empty, snapshot_active_doc, swap_scene, undo, with_active_doc,
     with_log,
@@ -134,20 +134,20 @@ fn swap_scene_moves_active_doc_between_scenes() {
     // Pre-populate the registry with scene-2 so the swap has a target.
     // swap_scene moves scene-1 into the registry, then loads scene-2.
     let mut doc2 = empty_doc("scene-2", "Other");
-    doc2.entities.push(editor_core::document::Entity {
-        id: editor_core::StableId::new("ent-other"),
-        local_id: editor_core::document::LocalId::new("ent-other"),
+    doc2.entities.push(editor_bevy::document::Entity {
+        id: editor_bevy::StableId::new("ent-other"),
+        local_id: editor_bevy::document::LocalId::new("ent-other"),
         name: "Other".to_string(),
         parent: None,
         components: vec![],
     });
     {
-        use editor_core::scene_state::with_registry_mut;
+        use editor_bevy::scene_state::with_registry_mut;
         with_registry_mut(|r| {
             r.store_to(
                 "scene-2",
                 doc2.clone(),
-                editor_core::operation_log::OperationLog::new_const(),
+                editor_bevy::operation_log::OperationLog::new_const(),
             );
         });
     }

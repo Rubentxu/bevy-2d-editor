@@ -3,7 +3,7 @@
 //! Exercises the full parse → build_change_set pipeline and verifies the
 //! Level SceneAsset shape that results from the import.
 
-use editor_core::importer::TiledImporter;
+use editor_bevy::importer::TiledImporter;
 use editor_model::importer::{Importer, ImporterInput};
 use editor_model::session::EditorSnapshot;
 
@@ -269,13 +269,13 @@ fn build_change_set_produces_level_document() {
         .expect("build_change_set should succeed");
 
     // Verify change_set_json is valid JSON containing AssetCommands
-    let commands: Vec<editor_core::asset_command::AssetCommand> =
+    let commands: Vec<editor_bevy::asset_command::AssetCommand> =
         serde_json::from_str(&build_output.change_set_json)
             .expect("change_set_json should be valid AssetCommand JSON");
 
     assert!(!commands.is_empty());
     assert!(commands.iter().any(|c| {
-        matches!(c, editor_core::asset_command::AssetCommand::AddComponent { .. })
+        matches!(c, editor_bevy::asset_command::AssetCommand::AddComponent { .. })
     }));
 }
 

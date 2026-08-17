@@ -8,7 +8,7 @@
 //! S11: Place while the asset is missing stores `asset_version_seen: 0` (broken marker)
 //! S12: Placement of an empty asset is rejected with `CommandError::EmptyAsset`
 
-use editor_core::{
+use editor_bevy::{
     StableId,
     command::{Command, CommandError},
     document::SceneDocument,

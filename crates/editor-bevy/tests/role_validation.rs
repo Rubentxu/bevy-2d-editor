@@ -1,7 +1,7 @@
 //! Role validation & hierarchy-via-relationships tests.
 //! Covers scenarios S7, S9.
 
-use editor_core::scene_asset::{
+use editor_bevy::scene_asset::{
     LocalId, RelationshipKind, SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata,
     SceneAssetRelationship, SceneAssetRole, validate_role,
 };

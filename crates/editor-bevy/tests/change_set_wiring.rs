@@ -12,11 +12,11 @@
 //! - THEN `OperationLog` entries MUST be byte-identical to v0.88 legacy path
 //! - AND `E1.translation` MUST equal `(10,10)`
 
-use editor_core::command::{Command, CommandEnvelope, CommandMetadata};
-use editor_core::document::{ComponentInstance, Entity, LocalId, SceneDocument, StableId};
-use editor_core::operation_log::OperationLog;
-use editor_core::processor;
-use editor_core::transaction_bridge::scene_transaction_kernel;
+use editor_bevy::command::{Command, CommandEnvelope, CommandMetadata};
+use editor_bevy::document::{ComponentInstance, Entity, LocalId, SceneDocument, StableId};
+use editor_bevy::operation_log::OperationLog;
+use editor_bevy::processor;
+use editor_bevy::transaction_bridge::scene_transaction_kernel;
 use editor_model::session::HistoryScope;
 use editor_model::transaction::{ChangeOrigin, ChangeSet};
 

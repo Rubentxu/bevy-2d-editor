@@ -3,7 +3,7 @@
 //! Exercises the full parse → build_change_set pipeline and verifies the
 //! Level SceneAsset shape that results from the import.
 
-use editor_core::importer::AsepriteImporter;
+use editor_bevy::importer::AsepriteImporter;
 use editor_model::importer::{Importer, ImporterInput};
 use editor_model::session::EditorSnapshot;
 
@@ -91,14 +91,14 @@ fn build_change_set_emits_level_document_with_tile_layer() {
         .expect("build_change_set should succeed");
 
     // Parse the emitted change_set_json as AssetCommands
-    let commands: Vec<editor_core::asset_command::AssetCommand> =
+    let commands: Vec<editor_bevy::asset_command::AssetCommand> =
         serde_json::from_str(&build_output.change_set_json)
             .expect("change_set_json should be valid AssetCommand JSON");
 
     // Should have a Batch command containing AddComponent commands
     assert!(!commands.is_empty(), "should emit at least one command");
     let batch = commands.iter().find_map(|c| {
-        if matches!(c, editor_core::asset_command::AssetCommand::Batch { .. }) {
+        if matches!(c, editor_bevy::asset_command::AssetCommand::Batch { .. }) {
             Some(c)
         } else {
             None
@@ -122,14 +122,14 @@ fn level_document_contains_four_tiles() {
         .expect("build_change_set should succeed");
 
     // Extract the LevelDocument component from the Batch command
-    let commands: Vec<editor_core::asset_command::AssetCommand> =
+    let commands: Vec<editor_bevy::asset_command::AssetCommand> =
         serde_json::from_str(&build_output.change_set_json).unwrap();
 
     // Find the LevelDocument component value
     let level_doc_json = commands.iter().find_map(|c| {
-        if let editor_core::asset_command::AssetCommand::Batch { commands: batch_cmds, .. } = c {
+        if let editor_bevy::asset_command::AssetCommand::Batch { commands: batch_cmds, .. } = c {
             batch_cmds.iter().find_map(|cmd| {
-                if let editor_core::asset_command::AssetCommand::AddComponent { type_id, values, .. } = cmd {
+                if let editor_bevy::asset_command::AssetCommand::AddComponent { type_id, values, .. } = cmd {
                     if type_id == "editor.LevelDocument" {
                         Some(values)
                     } else {
@@ -227,13 +227,13 @@ fn texture_ref_points_to_png() {
         .build_change_set(parse_output.clone(), EditorSnapshot::new())
         .expect("build_change_set should succeed");
 
-    let commands: Vec<editor_core::asset_command::AssetCommand> =
+    let commands: Vec<editor_bevy::asset_command::AssetCommand> =
         serde_json::from_str(&build_output.change_set_json).unwrap();
 
     let texture_ref = commands.iter().find_map(|c| {
-        if let editor_core::asset_command::AssetCommand::Batch { commands: batch_cmds, .. } = c {
+        if let editor_bevy::asset_command::AssetCommand::Batch { commands: batch_cmds, .. } = c {
             batch_cmds.iter().find_map(|cmd| {
-                if let editor_core::asset_command::AssetCommand::AddComponent { type_id, values, .. } = cmd {
+                if let editor_bevy::asset_command::AssetCommand::AddComponent { type_id, values, .. } = cmd {
                     if type_id == "editor.TextureRef" {
                         Some(values)
                     } else {

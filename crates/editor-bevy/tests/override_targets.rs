@@ -1,7 +1,7 @@
 //! Override target & rename tests.
 //! Covers scenarios S3, S4.
 
-use editor_core::{
+use editor_bevy::{
     scene_asset::LocalId,
     scene_instance::{
         ComponentOverride, ComponentOverrideStatus, component_override_status_after_field_rename,
@@ -12,7 +12,7 @@ use editor_core::{
 fn s3_override_targets_local_id() {
     let patch = ComponentOverride {
         target_local_id: LocalId::new("weapon".to_string()),
-        component_type_id: editor_core::schema::ComponentTypeId::new("Sprite2D"),
+        component_type_id: editor_bevy::schema::ComponentTypeId::new("Sprite2D"),
         field_path: vec!["asset".to_string()],
         value: serde_json::json!("cannon.png"),
         status: ComponentOverrideStatus::Active,
@@ -34,7 +34,7 @@ fn s3_override_targets_local_id() {
 fn s4_rename_marks_stale() {
     let patch = ComponentOverride {
         target_local_id: LocalId::new("weapon".to_string()),
-        component_type_id: editor_core::schema::ComponentTypeId::new("Sprite2D"),
+        component_type_id: editor_bevy::schema::ComponentTypeId::new("Sprite2D"),
         field_path: vec!["asset".to_string()],
         value: serde_json::json!("cannon.png"),
         status: ComponentOverrideStatus::Active,
@@ -57,7 +57,7 @@ fn s4_rename_marks_stale() {
 
     let orphan_patch = ComponentOverride {
         target_local_id: LocalId::new("weapon".to_string()),
-        component_type_id: editor_core::schema::ComponentTypeId::new("Sprite2D"),
+        component_type_id: editor_bevy::schema::ComponentTypeId::new("Sprite2D"),
         field_path: vec!["asset".to_string()],
         value: serde_json::json!("cannon.png"),
         status: ComponentOverrideStatus::Orphaned,

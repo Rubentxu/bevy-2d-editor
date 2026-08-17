@@ -5,7 +5,7 @@
 //! S8: Asset version bump on load triggers resync
 //! S9: Resync never auto-deletes overrides - orphaned patches go to orphaned_overrides
 
-use editor_core::{
+use editor_bevy::{
     StableId,
     scene_asset::{AssetReference, LocalId, SceneAssetDocument, SceneAssetEntity, SceneAssetRole},
     scene_instance::{ComponentOverride, ComponentOverrideStatus, SceneInstance},
@@ -63,7 +63,7 @@ fn s8_version_bump_triggers_resync() {
         1, // old version
         vec![ComponentOverride {
             target_local_id: LocalId::new("root".to_string()),
-            component_type_id: editor_core::schema::ComponentTypeId::new("editor.Transform2D"),
+            component_type_id: editor_bevy::schema::ComponentTypeId::new("editor.Transform2D"),
             field_path: vec!["translation".to_string()],
             value: serde_json::json!({"x": 100.0, "y": 200.0}),
             status: ComponentOverrideStatus::Active,
@@ -113,7 +113,7 @@ fn s9_resync_never_silently_deletes_overrides() {
             // Override targeting a deleted entity
             ComponentOverride {
                 target_local_id: LocalId::new("deleted_entity".to_string()),
-                component_type_id: editor_core::schema::ComponentTypeId::new("editor.Transform2D"),
+                component_type_id: editor_bevy::schema::ComponentTypeId::new("editor.Transform2D"),
                 field_path: vec!["translation".to_string()],
                 value: serde_json::json!({"x": 50.0, "y": 75.0}),
                 status: ComponentOverrideStatus::Active,
@@ -121,7 +121,7 @@ fn s9_resync_never_silently_deletes_overrides() {
             // Override targeting existing entity
             ComponentOverride {
                 target_local_id: LocalId::new("root".to_string()),
-                component_type_id: editor_core::schema::ComponentTypeId::new("editor.Transform2D"),
+                component_type_id: editor_bevy::schema::ComponentTypeId::new("editor.Transform2D"),
                 field_path: vec!["scale".to_string()],
                 value: serde_json::json!({"x": 2.0, "y": 2.0}),
                 status: ComponentOverrideStatus::Active,
@@ -223,21 +223,21 @@ fn s9_multiple_orphaned_overrides() {
         component_overrides: vec![
             ComponentOverride {
                 target_local_id: LocalId::new("deleted1".to_string()),
-                component_type_id: editor_core::schema::ComponentTypeId::new("editor.Transform2D"),
+                component_type_id: editor_bevy::schema::ComponentTypeId::new("editor.Transform2D"),
                 field_path: vec!["translation".to_string()],
                 value: serde_json::json!({"x": 1.0, "y": 1.0}),
                 status: ComponentOverrideStatus::Active,
             },
             ComponentOverride {
                 target_local_id: LocalId::new("deleted2".to_string()),
-                component_type_id: editor_core::schema::ComponentTypeId::new("editor.Transform2D"),
+                component_type_id: editor_bevy::schema::ComponentTypeId::new("editor.Transform2D"),
                 field_path: vec!["rotation".to_string()],
                 value: serde_json::json!(45.0),
                 status: ComponentOverrideStatus::Active,
             },
             ComponentOverride {
                 target_local_id: LocalId::new("root".to_string()), // This one survives
-                component_type_id: editor_core::schema::ComponentTypeId::new("editor.Transform2D"),
+                component_type_id: editor_bevy::schema::ComponentTypeId::new("editor.Transform2D"),
                 field_path: vec!["scale".to_string()],
                 value: serde_json::json!({"x": 1.5, "y": 1.5}),
                 status: ComponentOverrideStatus::Active,

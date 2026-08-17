@@ -1,8 +1,8 @@
 //! Serde round-trip tests for scene asset and instance types.
 //! Covers scenarios S1, S2, S6, S7, S8.
 
-use editor_core::bsn_ir::{BsnIr, BsnIrNode, BsnIrRelationship, BsnPatch, BsnPatchOp};
-use editor_core::scene_asset::{
+use editor_bevy::bsn_ir::{BsnIr, BsnIrNode, BsnIrRelationship, BsnPatch, BsnPatchOp};
+use editor_bevy::scene_asset::{
     AssetReference, ExposedProperty, LayerId, LevelLayer, LocalId, RelationshipKind,
     SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata, SceneAssetRelationship,
     SceneAssetRole, SceneInstanceLayer, SceneInstanceLayerKind,
@@ -218,7 +218,7 @@ fn s7_scene_asset_document_with_layers_roundtrip() {
         })],
         asset_id: "asset-002".to_string(),
         logical_path: "assets/level_01.bsn".to_string(),
-        role: editor_core::scene_asset::SceneAssetRole::Level,
+        role: editor_bevy::scene_asset::SceneAssetRole::Level,
         version: 1,
         entities: vec![],
         relationships: vec![],

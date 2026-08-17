@@ -3,10 +3,10 @@
 //! Covers: S3 (RemoveInstance), S15 (PlaceInstance), S16 (RemoveInstance inverse),
 //! S17 (ReplaceInstanceAsset).
 
-use editor_core::document::LocalId as DocumentLocalId;
-use editor_core::scene_asset::{AssetReference, LocalId};
-use editor_core::scene_instance::SceneInstance;
-use editor_core::{Command, SceneDocument, StableId};
+use editor_bevy::document::LocalId as DocumentLocalId;
+use editor_bevy::scene_asset::{AssetReference, LocalId};
+use editor_bevy::scene_instance::SceneInstance;
+use editor_bevy::{Command, SceneDocument, StableId};
 use std::collections::BTreeMap;
 
 fn empty_doc() -> SceneDocument {
@@ -200,7 +200,7 @@ fn test_replace_instance_asset_deserializes() {
 // S15, S16, S17: Apply and Inverse Tests
 // =============================================================================
 
-use editor_core::processor;
+use editor_bevy::processor;
 
 /// S15: PlaceInstance applies and produces RemoveInstance as inverse.
 #[test]
@@ -374,7 +374,7 @@ fn s17_replace_instance_asset_apply_and_inverse() {
 /// S3: RemoveInstance drops only that instance, not authored entities.
 #[test]
 fn s3_remove_instance_only_affects_instance() {
-    use editor_core::Entity;
+    use editor_bevy::Entity;
 
     let mut doc = empty_doc();
 

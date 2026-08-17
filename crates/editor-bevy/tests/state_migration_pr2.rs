@@ -82,11 +82,11 @@ fn scene_asset_catalog_writes_via_session() {
     fresh_session();
     // with_asset_catalog_mut writes to the session.
     let _ = editor_model::ports::with_session_mut(|sess| {
-        sess.asset_state_mut(editor_core::asset_state::ACTIVE_ASSET_PATH)
+        sess.asset_state_mut(editor_bevy::asset_state::ACTIVE_ASSET_PATH)
             .catalog = Some(SceneAssetCatalog::new());
     });
     let catalog_present: Option<bool> = editor_model::ports::with_session_mut(|sess| {
-        sess.asset_state_mut(editor_core::asset_state::ACTIVE_ASSET_PATH)
+        sess.asset_state_mut(editor_bevy::asset_state::ACTIVE_ASSET_PATH)
             .catalog
             .is_some()
     });
@@ -104,13 +104,13 @@ fn scene_asset_catalog_warnings_via_session() {
         logical_path: None,
     };
     let _ = editor_model::ports::with_session_mut(|sess| {
-        sess.asset_state_mut(editor_core::asset_state::ACTIVE_ASSET_PATH)
+        sess.asset_state_mut(editor_bevy::asset_state::ACTIVE_ASSET_PATH)
             .catalog_warnings
             .push(warning.clone());
     });
 
     // Read it back via the editor-core API.
-    let warnings = editor_core::asset_state::get_asset_catalog_warnings();
+    let warnings = editor_bevy::asset_state::get_asset_catalog_warnings();
     assert_eq!(warnings.len(), 1, "session should have one warning");
     assert_eq!(warnings[0].code, "test_warning");
 }
@@ -120,7 +120,7 @@ fn clear_asset_catalog_warnings_clears_session() {
     fresh_session();
     // Push a warning, then clear.
     let _ = editor_model::ports::with_session_mut(|sess| {
-        sess.asset_state_mut(editor_core::asset_state::ACTIVE_ASSET_PATH)
+        sess.asset_state_mut(editor_bevy::asset_state::ACTIVE_ASSET_PATH)
             .catalog_warnings
             .push(CatalogWarning {
                 code: "to_be_cleared".to_string(),
@@ -130,14 +130,14 @@ fn clear_asset_catalog_warnings_clears_session() {
             });
     });
     assert_eq!(
-        editor_core::asset_state::get_asset_catalog_warnings().len(),
+        editor_bevy::asset_state::get_asset_catalog_warnings().len(),
         1,
         "warning present"
     );
 
-    editor_core::asset_state::clear_asset_catalog_warnings();
+    editor_bevy::asset_state::clear_asset_catalog_warnings();
     assert_eq!(
-        editor_core::asset_state::get_asset_catalog_warnings().len(),
+        editor_bevy::asset_state::get_asset_catalog_warnings().len(),
         0,
         "warning cleared"
     );

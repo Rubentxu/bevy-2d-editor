@@ -10,7 +10,7 @@
 //!     values were divergent before the multi-edit.
 //!   - Round-trip JSON serde of the new variant.
 
-use editor_core::{
+use editor_bevy::{
     StableId,
     command::{Command, CommandError},
     document::{ComponentInstance, Entity, LocalId, SceneDocument},

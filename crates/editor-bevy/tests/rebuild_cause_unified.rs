@@ -26,7 +26,7 @@ fn record_rebuild_cause_writes_via_session() {
     fresh_session();
     // The thread_local LAST_REBUILD_CAUSE no longer exists; we write through
     // the trait.
-    editor_core::preview_inspector::record_rebuild_cause(RebuildCause::UserEdit {
+    editor_bevy::preview_inspector::record_rebuild_cause(RebuildCause::UserEdit {
         command_id: "legacy_sprite_move".to_string(),
     });
 
@@ -50,19 +50,19 @@ fn last_rebuild_cause_reads_via_session() {
     let _ = editor_model::ports::with_session_mut(|sess| {
         *sess.last_rebuild_cause_mut() = Some(RebuildCause::PlayModeEnter);
     });
-    let cause = editor_core::preview_inspector::last_rebuild_cause();
+    let cause = editor_bevy::preview_inspector::last_rebuild_cause();
     assert!(matches!(cause, Some(RebuildCause::PlayModeEnter)));
 }
 
 #[test]
 fn stamp_provenance_writes_via_session() {
     fresh_session();
-    let sid = editor_core::document::StableId::new("E1");
+    let sid = editor_bevy::document::StableId::new("E1");
     let edge = CausalityEdge {
         edge_kind: CausalityEdgeKind::Definition,
         target_stable_id: "def1".to_string(),
     };
-    editor_core::preview_inspector::stamp_provenance(sid.clone(), edge.clone());
+    editor_bevy::preview_inspector::stamp_provenance(sid.clone(), edge.clone());
 
     let edges: Option<Vec<CausalityEdge>> = editor_model::ports::with_session_mut(|sess| {
         sess.pending_causality_edges_mut()
@@ -96,13 +96,13 @@ fn apply_pending_causality_edges_drains_session() {
     });
 
     // Set up the PREVIEW_PROVENANCE thread_local with matching entries.
-    use editor_core::preview_inspector::PreviewProvenance;
-    use editor_core::scene_asset::{AssetReference, LocalId};
-    let mut prov: BTreeMap<editor_core::document::StableId, PreviewProvenance> = BTreeMap::new();
+    use editor_bevy::preview_inspector::PreviewProvenance;
+    use editor_bevy::scene_asset::{AssetReference, LocalId};
+    let mut prov: BTreeMap<editor_bevy::document::StableId, PreviewProvenance> = BTreeMap::new();
     prov.insert(
-        editor_core::document::StableId::new("E1"),
+        editor_bevy::document::StableId::new("E1"),
         PreviewProvenance {
-            stable_id: editor_core::document::StableId::new("E1"),
+            stable_id: editor_bevy::document::StableId::new("E1"),
             local_id: LocalId::new("local1"),
             asset_ref: AssetReference::new("asset1"),
             components: vec![],
@@ -111,9 +111,9 @@ fn apply_pending_causality_edges_drains_session() {
         },
     );
     prov.insert(
-        editor_core::document::StableId::new("E2"),
+        editor_bevy::document::StableId::new("E2"),
         PreviewProvenance {
-            stable_id: editor_core::document::StableId::new("E2"),
+            stable_id: editor_bevy::document::StableId::new("E2"),
             local_id: LocalId::new("local2"),
             asset_ref: AssetReference::new("asset2"),
             components: vec![],
@@ -121,9 +121,9 @@ fn apply_pending_causality_edges_drains_session() {
             causality_edges: vec![],
         },
     );
-    editor_core::preview_inspector::set_provenance(prov);
+    editor_bevy::preview_inspector::set_provenance(prov);
 
-    editor_core::preview_inspector::apply_pending_causality_edges();
+    editor_bevy::preview_inspector::apply_pending_causality_edges();
 
     // Session pending edges are drained.
     let pending_count: Option<usize> =
@@ -135,8 +135,8 @@ fn apply_pending_causality_edges_drains_session() {
     );
 
     // PROVENANCE has the edges.
-    let e1_prov = editor_core::preview_inspector::get_provenance("E1").unwrap();
+    let e1_prov = editor_bevy::preview_inspector::get_provenance("E1").unwrap();
     assert_eq!(e1_prov.causality_edges.len(), 1);
-    let e2_prov = editor_core::preview_inspector::get_provenance("E2").unwrap();
+    let e2_prov = editor_bevy::preview_inspector::get_provenance("E2").unwrap();
     assert_eq!(e2_prov.causality_edges.len(), 1);
 }

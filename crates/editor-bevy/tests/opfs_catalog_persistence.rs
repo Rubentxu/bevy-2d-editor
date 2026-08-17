@@ -7,8 +7,8 @@
 //! The wasm-side fault-injection test for `update_project_metadata_for_asset`
 //! lives in the Playwright suite (ADR-0019).
 
-use editor_core::ProjectMetadata;
-use editor_core::scene_asset::SceneAssetRole;
+use editor_bevy::ProjectMetadata;
+use editor_bevy::scene_asset::SceneAssetRole;
 use editor_model::scene_asset_catalog::{SceneAssetCatalog, SceneAssetCatalogEntry};
 
 fn entry(

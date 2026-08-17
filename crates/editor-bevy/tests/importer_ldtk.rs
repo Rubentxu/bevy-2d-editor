@@ -3,7 +3,7 @@
 //! Exercises the full parse → build_change_set pipeline and verifies the
 //! Level SceneAsset shape that results from the import.
 
-use editor_core::importer::LdtkImporter;
+use editor_bevy::importer::LdtkImporter;
 use editor_model::importer::{Importer, ImporterInput};
 use editor_model::session::EditorSnapshot;
 

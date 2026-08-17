@@ -5,7 +5,7 @@
 //! S16: orphan catalog entries (body file missing) emit typed CatalogWarning.
 //! S19: catalog survives across calls without project.json write.
 
-use editor_core::scene_asset::SceneAssetRole;
+use editor_bevy::scene_asset::SceneAssetRole;
 use editor_model::scene_asset_catalog::{
     CatalogWarning, SceneAssetCatalog, SceneAssetCatalogEntry,
 };

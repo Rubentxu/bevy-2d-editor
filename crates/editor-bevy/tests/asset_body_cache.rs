@@ -2,7 +2,7 @@
 //!
 //! Covers Task 1.7: cache operations for instance placement projection.
 
-use editor_core::scene_asset::{
+use editor_bevy::scene_asset::{
     AssetReference, LocalId, SceneAssetDocument, SceneAssetEntity, SceneAssetMetadata,
     SceneAssetRole,
 };

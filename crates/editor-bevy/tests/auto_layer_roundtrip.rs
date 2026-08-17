@@ -12,16 +12,16 @@
 //!
 //! Strict TDD: tests define the expected API contracts.
 
-use editor_core::AssetCommand;
-use editor_core::asset_command::apply as asset_apply;
-use editor_core::auto_layer::{
+use editor_bevy::AssetCommand;
+use editor_bevy::asset_command::apply as asset_apply;
+use editor_bevy::auto_layer::{
     AutoLayer, AutoLayerId, AutoRule, Pattern3x3, PatternCell, is_auto_layer_stale, regenerate,
 };
-use editor_core::scene_asset::{LayerId, LevelLayer};
-use editor_core::tile_layer::TileLayer;
-use editor_core::tile_layer::TileLayerId;
-use editor_core::tileset::{TileCoord, TileGrid, TileRef, TilesetId};
-use editor_core::{SceneAssetDocument, SceneAssetRole};
+use editor_bevy::scene_asset::{LayerId, LevelLayer};
+use editor_bevy::tile_layer::TileLayer;
+use editor_bevy::tile_layer::TileLayerId;
+use editor_bevy::tileset::{TileCoord, TileGrid, TileRef, TilesetId};
+use editor_bevy::{SceneAssetDocument, SceneAssetRole};
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 

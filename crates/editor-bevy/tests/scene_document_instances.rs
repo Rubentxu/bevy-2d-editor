@@ -4,7 +4,7 @@
 //! S13: `entities` array shape is unchanged when instances are present.
 //! S14: Authored entities do NOT have an `instance_id` field.
 
-use editor_core::{
+use editor_bevy::{
     SceneDocument, StableId,
     document::LocalId as DocumentLocalId,
     scene_asset::{AssetReference, LocalId, SceneAssetDocument, SceneAssetEntity, SceneAssetRole},
@@ -92,7 +92,7 @@ fn s13_entities_array_shape_unchanged_when_instances_present() {
         version: "0.1".to_string(),
         scene_id: "test_scene".to_string(),
         name: "Test Scene".to_string(),
-        entities: vec![editor_core::Entity {
+        entities: vec![editor_bevy::Entity {
             id: StableId::new("ent_001"),
             local_id: DocumentLocalId::new("ent_001"),
             name: "Player".to_string(),
@@ -138,7 +138,7 @@ fn s14_authored_entities_do_not_have_instance_id() {
         version: "0.1".to_string(),
         scene_id: "test_scene".to_string(),
         name: "Test Scene".to_string(),
-        entities: vec![editor_core::Entity {
+        entities: vec![editor_bevy::Entity {
             id: StableId::new("ent_001"),
             local_id: DocumentLocalId::new("ent_001"),
             name: "Player".to_string(),

@@ -1,7 +1,7 @@
 //! v0.90 PR6 (MUST, D3 spec §8) — ApplyBackPolicy mirror-pair serde equivalence.
 //!
 //! The `ApplyBackPolicy` enum lives in TWO crates per ADR-0050:
-//! - `editor_core::ApplyBackPolicy` — field type on `ComponentSchema.apply_back`.
+//! - `editor_bevy::ApplyBackPolicy` — field type on `ComponentSchema.apply_back`.
 //! - `editor_application::ApplyBackPolicy` — derivation source for `RuntimeDelta`.
 //!
 //! The two enums are documented as a mirror-pair: identical variant set,
@@ -15,13 +15,13 @@
 
 #[test]
 fn apply_back_policy_mirror_pair_serde_equivalence() {
-    use editor_core::ApplyBackPolicy as CorePolicy;
+    use editor_bevy::ApplyBackPolicy as CorePolicy;
     use serde::{Deserialize, Serialize};
     // editor_application::ApplyBackPolicy lives in editor-application and is
-    // serde-compatible with editor_core::ApplyBackPolicy per ADR-0050. Since
+    // serde-compatible with editor_bevy::ApplyBackPolicy per ADR-0050. Since
     // editor-core cannot import editor-application in non-wasm32 builds, we
     // declare an equivalent local enum and verify serde output is byte-equal.
-    // This catches drift if editor_core::ApplyBackPolicy gains a variant
+    // This catches drift if editor_bevy::ApplyBackPolicy gains a variant
     // without editor_application's enum being updated in the same commit.
 
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

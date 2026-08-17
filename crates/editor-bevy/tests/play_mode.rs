@@ -3,8 +3,8 @@
 //! Tests KEYBOARD_STATE population from ButtonInput.
 
 use bevy::prelude::*;
-use editor_core::PlayMode;
-use editor_core::logic_evaluator::{KEYBOARD_STATE, update_keyboard_state};
+use editor_bevy::PlayMode;
+use editor_bevy::logic_evaluator::{KEYBOARD_STATE, update_keyboard_state};
 
 /// System that populates KEYBOARD_STATE and immediately asserts — runs in same
 /// test app so thread-local state is guaranteed shared.
@@ -143,7 +143,7 @@ fn test_keyboard_state_not_updated_in_edit_mode() {
     let mut app = App::new();
     app.add_systems(
         Update,
-        update_keyboard_state.run_if(editor_core::in_play_mode),
+        update_keyboard_state.run_if(editor_bevy::in_play_mode),
     );
 
     // Set Edit mode and press A — system should NOT run

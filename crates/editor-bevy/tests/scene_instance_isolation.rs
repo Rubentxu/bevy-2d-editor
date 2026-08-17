@@ -5,7 +5,7 @@
 //! E8: Two instances of the same asset must have isolated id_maps.
 //! The namespaced `inst_<iid>_<lid>` minting ensures no collision between instances.
 
-use editor_core::{
+use editor_bevy::{
     StableId,
     command::Command,
     document::SceneDocument,

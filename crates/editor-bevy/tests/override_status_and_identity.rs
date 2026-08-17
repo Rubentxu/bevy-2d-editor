@@ -1,9 +1,9 @@
 //! Override status and identity tests.
 //! Covers scenarios S5, S8, S10.
 
-use editor_core::StableId;
-use editor_core::scene_asset::{LocalId, SceneAssetEntity};
-use editor_core::scene_instance::{ComponentOverride, ComponentOverrideStatus};
+use editor_bevy::StableId;
+use editor_bevy::scene_asset::{LocalId, SceneAssetEntity};
+use editor_bevy::scene_instance::{ComponentOverride, ComponentOverrideStatus};
 use std::any::TypeId;
 
 #[test]
@@ -12,7 +12,7 @@ fn s5_override_status_is_closed_enum() {
     // deserialize back, assert status equals Active (lowercase snake_case string).
     let patch = ComponentOverride {
         target_local_id: LocalId::new("weapon".to_string()),
-        component_type_id: editor_core::schema::ComponentTypeId::new("Sprite2D"),
+        component_type_id: editor_bevy::schema::ComponentTypeId::new("Sprite2D"),
         field_path: vec!["asset".into()],
         value: serde_json::json!("cannon.png"),
         status: ComponentOverrideStatus::Active,

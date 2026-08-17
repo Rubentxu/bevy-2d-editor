@@ -140,8 +140,8 @@ fn compute_runtime_deltas_diff_finds_changed_field() {
     });
 
     // Call the diff function with a fake runtime getter.
-    use editor_core::document::ComponentInstance;
-    let appended = editor_core::preview_runtime::compute_runtime_deltas_internal(
+    use editor_bevy::document::ComponentInstance;
+    let appended = editor_bevy::preview_runtime::compute_runtime_deltas_internal(
         |instance_id| {
             if instance_id == "inst1" {
                 let mut values = serde_json::Map::new();
@@ -204,8 +204,8 @@ fn compute_runtime_deltas_unchanged_returns_zero() {
         *s.tunable_baselines_mut() = baselines;
     });
 
-    use editor_core::document::ComponentInstance;
-    let appended = editor_core::preview_runtime::compute_runtime_deltas_internal(
+    use editor_bevy::document::ComponentInstance;
+    let appended = editor_bevy::preview_runtime::compute_runtime_deltas_internal(
         |instance_id| {
             if instance_id == "inst1" {
                 let mut values = serde_json::Map::new();

@@ -2,8 +2,8 @@
 //!
 //! Verifies legacy v0.88 fixtures lacking `apply_back` deserialize to `Never`.
 
-use editor_core::ApplyBackPolicy;
-use editor_core::schema::ComponentSchema;
+use editor_bevy::ApplyBackPolicy;
+use editor_bevy::schema::ComponentSchema;
 use serde_json::json;
 
 #[test]
