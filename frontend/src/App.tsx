@@ -86,8 +86,9 @@ import {
   placeSceneInstance,
 } from "./services/scene-assets";
 import { findSourceLocation } from "./services/code-files";
+import WorldWorkspace from "./components/WorldWorkspace";
 
-type EditorMode = "scene" | "asset-authoring" | "logic" | "code" | "play";
+type EditorMode = "scene" | "asset-authoring" | "logic" | "code" | "play" | "world";
 
 export default function App() {
   return (
@@ -1754,35 +1755,45 @@ function AppInner() {
             onDeleteScene={handleDeleteScene}
             onRenameScene={handleRenameScene}
             canvas={
-              <div
-                className={`canvas-container${isDragOverCanvas ? " canvas-drop-active" : ""}`}
-                data-testid="canvas-drop-target"
-                onDragOver={handleCanvasDragOver}
-                onDragLeave={handleCanvasDragLeave}
-                onDrop={handleCanvasDrop}
-              >
-                {!ready && (
-                  <div style={{ padding: 16, color: "#888" }}>
-                    {initError ? `Error: ${initError}` : "Loading WASM..."}
-                  </div>
-                )}
-                <div
-                  className="canvas-transform"
-                  style={{
-                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              editorMode === "world" ? (
+                <WorldWorkspace
+                  onOpenLevel={(levelId, _assetRef) => {
+                    // Open level from world workspace switches to scene mode
+                    setEditorMode("scene");
                   }}
+                  onBackToScene={() => setEditorMode("scene")}
+                />
+              ) : (
+                <div
+                  className={`canvas-container${isDragOverCanvas ? " canvas-drop-active" : ""}`}
+                  data-testid="canvas-drop-target"
+                  onDragOver={handleCanvasDragOver}
+                  onDragLeave={handleCanvasDragLeave}
+                  onDrop={handleCanvasDrop}
                 >
-                  <canvas id="bevy-canvas" />
-                </div>
-                {isDragOverCanvas && (
+                  {!ready && (
+                    <div style={{ padding: 16, color: "#888" }}>
+                      {initError ? `Error: ${initError}` : "Loading WASM..."}
+                    </div>
+                  )}
                   <div
-                    className="canvas-drop-outline"
-                    data-testid="canvas-drop-outline"
-                    aria-hidden="true"
-                  />
-                )}
-                <ViewportControls />
-              </div>
+                    className="canvas-transform"
+                    style={{
+                      transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                    }}
+                  >
+                    <canvas id="bevy-canvas" />
+                  </div>
+                  {isDragOverCanvas && (
+                    <div
+                      className="canvas-drop-outline"
+                      data-testid="canvas-drop-outline"
+                      aria-hidden="true"
+                    />
+                  )}
+                  <ViewportControls />
+                </div>
+              )
             }
           />
         }
