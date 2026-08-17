@@ -8,6 +8,7 @@ pub mod adapters;
 pub mod extension;
 pub mod importer_registry;
 pub mod ports;
+pub mod reimport;
 pub mod runtime_delta;
 pub mod session;
 pub mod transaction;

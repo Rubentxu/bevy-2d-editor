@@ -591,29 +591,38 @@ pub fn register_importer_wasm(json: &str) -> Result<String, JsValue> {
 }
 
 /// List all registered importers as a JSON array of descriptors.
+///
+/// Accepts an optional `kind` filter string ("Aseprite", "Ldtk", "Tiled", or
+/// "Custom" for unknown kinds). If `kind` is `None` or not provided, returns
+/// all registered importers.
 #[wasm_bindgen]
-pub fn list_importers_wasm() -> Result<String, JsValue> {
+pub fn list_importers_wasm(kind: Option<String>) -> Result<String, JsValue> {
     use editor_model::ports::with_importer_registry;
+    use editor_model::external_source::ExternalSourceKind;
 
-    let summaries = with_importer_registry()
-        .ok_or_else(|| JsValue::from_str("Importer registry not initialized"))?
-        .lock()
-        .map_err(|e| JsValue::from_str(&format!("Registry lock poisoned: {}", e)))?
-        .list_by_kind(&editor_model::external_source::ExternalSourceKind::Aseprite);
-
-    // For now, return the 3 built-in descriptors as a flat list
     let registry = with_importer_registry()
         .ok_or_else(|| JsValue::from_str("Importer registry not initialized"))?
         .lock()
         .map_err(|e| JsValue::from_str(&format!("Registry lock poisoned: {}", e)))?;
 
-    use editor_model::external_source::ExternalSourceKind;
-    let mut all: Vec<_> = Vec::new();
-    all.extend(registry.list_by_kind(&ExternalSourceKind::Aseprite));
-    all.extend(registry.list_by_kind(&ExternalSourceKind::Ldtk));
-    all.extend(registry.list_by_kind(&ExternalSourceKind::Tiled));
+    let result: Vec<_> = if let Some(kind_str) = kind {
+        let filter_kind = match kind_str.to_lowercase().as_str() {
+            "aseprite" => ExternalSourceKind::Aseprite,
+            "ldtk" => ExternalSourceKind::Ldtk,
+            "tiled" => ExternalSourceKind::Tiled,
+            other => ExternalSourceKind::Custom(other.to_string()),
+        };
+        registry.list_by_kind(&filter_kind)
+    } else {
+        // No filter — return all
+        let mut all: Vec<_> = Vec::new();
+        all.extend(registry.list_by_kind(&ExternalSourceKind::Aseprite));
+        all.extend(registry.list_by_kind(&ExternalSourceKind::Ldtk));
+        all.extend(registry.list_by_kind(&ExternalSourceKind::Tiled));
+        all
+    };
 
-    serde_json::to_string(&all)
+    serde_json::to_string(&result)
         .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
 }
 
@@ -709,17 +718,69 @@ pub fn import_external_source_wasm(
 ///
 /// Accepts `source_uri` (path to the source file).
 ///
-/// Returns a JSON object with `status` ("no-op" | "changed" | "conflict") and
+/// Returns a JSON object with `status` ("no-op" | "queued" | "auto-applied") and
 /// `change_set_id` if a ChangeSet was produced.
 #[wasm_bindgen]
 pub fn reimport_external_source_wasm(source_uri: &str) -> Result<String, JsValue> {
-    // v0.93 PR5: Full implementation with ProvenanceDiff computation.
-    // For now, return a placeholder "not implemented" response.
-    let response = serde_json::json!({
-        "status": "not_implemented",
-        "source_uri": source_uri,
-        "message": "Reimport pipeline lands in PR5 (v0.93)",
-    });
+    use crate::reimport::{reimport as do_reimport, ReimportResult};
+    use editor_model::ports::with_project_store;
+    use editor_model::ports::ProjectStore;
+
+    let store = with_project_store()
+        .ok_or_else(|| JsValue::from_str("Project store not initialized"))?;
+
+    let importer_registry = editor_model::ports::with_importer_registry()
+        .ok_or_else(|| JsValue::from_str("Importer registry not initialized"))?;
+
+    let result = with_pending_change_sets_mut(|pending_change_sets| {
+        do_reimport(
+            source_uri,
+            store.as_ref(),
+            &importer_registry,
+            pending_change_sets,
+            || {
+                editor_model::time::Timestamp(
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis() as u64,
+                )
+            },
+        )
+    })
+    .map_err(|e| JsValue::from_str(&format!("Reimport error: {}", e)))?;
+
+    let response = match result {
+        ReimportResult::NoOp => serde_json::json!({
+            "status": "no-op",
+            "source_uri": source_uri,
+        }),
+        ReimportResult::QueuedForReview { change_set_id, diff } => serde_json::json!({
+            "status": "queued",
+            "source_uri": source_uri,
+            "change_set_id": change_set_id,
+            "diff": {
+                "added": diff.added.len(),
+                "removed": diff.removed.len(),
+                "modified_source": diff.modified_source.len(),
+                "modified_editor": diff.modified_editor.len(),
+                "ownership_conflicts": diff.ownership_conflicts.len(),
+            }
+        }),
+        ReimportResult::AutoApplied { change_set_id, diff } => serde_json::json!({
+            "status": "auto-applied",
+            "source_uri": source_uri,
+            "change_set_id": change_set_id,
+            "diff": {
+                "added": diff.added.len(),
+                "removed": diff.removed.len(),
+                "modified_source": diff.modified_source.len(),
+                "modified_editor": diff.modified_editor.len(),
+                "ownership_conflicts": diff.ownership_conflicts.len(),
+            }
+        }),
+    };
+
     serde_json::to_string(&response)
         .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
 }
