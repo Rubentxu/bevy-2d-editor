@@ -469,10 +469,7 @@ pub fn create_apply_back_change_set_wasm(rationale: &str) -> Result<String, JsVa
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Get mutable access to the extension registry via the global port.
-fn with_ext_registry_mut<
-    R,
-    F: FnOnce(&mut dyn editor_model::ports::ExtensionRegistryPort) -> R,
->(
+fn with_ext_registry_mut<R, F: FnOnce(&mut dyn editor_model::ports::ExtensionRegistryPort) -> R>(
     f: F,
 ) -> Result<R, JsValue> {
     let registry = editor_model::ports::with_extension_registry()
@@ -597,9 +594,8 @@ pub fn register_importer_wasm(json: &str) -> Result<String, JsValue> {
         // in PR2+ will call the registry directly from Rust.
         reg.register(
             descriptor.clone(),
-            std::sync::Arc::new(DummyImporter {
-                descriptor,
-            }) as std::sync::Arc<dyn editor_model::importer::Importer>,
+            std::sync::Arc::new(DummyImporter { descriptor })
+                as std::sync::Arc<dyn editor_model::importer::Importer>,
         )
     });
     // Flatten: result is Result<Result<(), ImporterError>, JsValue>
@@ -624,8 +620,8 @@ pub fn register_importer_wasm(json: &str) -> Result<String, JsValue> {
 /// all registered importers.
 #[wasm_bindgen]
 pub fn list_importers_wasm(kind: Option<String>) -> Result<String, JsValue> {
-    use editor_model::ports::with_importer_registry;
     use editor_model::external_source::ExternalSourceKind;
+    use editor_model::ports::with_importer_registry;
 
     let registry = with_importer_registry()
         .ok_or_else(|| JsValue::from_str("Importer registry not initialized"))?;
@@ -720,8 +716,8 @@ pub fn import_external_source_wasm(
         .unwrap()
         .id;
 
-    let cs: editor_model::PendingChangeSet =
-        serde_json::from_value(pending_cs).map_err(|e| JsValue::from_str(&format!("JSON parse error: {}", e)))?;
+    let cs: editor_model::PendingChangeSet = serde_json::from_value(pending_cs)
+        .map_err(|e| JsValue::from_str(&format!("JSON parse error: {}", e)))?;
 
     with_pending_change_sets_mut(|map| {
         map.insert(change_id.clone(), cs);
@@ -748,12 +744,12 @@ pub fn import_external_source_wasm(
 /// `change_set_id` if a ChangeSet was produced.
 #[wasm_bindgen]
 pub fn reimport_external_source_wasm(source_uri: &str) -> Result<String, JsValue> {
-    use editor_application::reimport::{reimport as do_reimport, ReimportResult};
-    use editor_model::ports::with_project_store;
+    use editor_application::reimport::{ReimportResult, reimport as do_reimport};
     use editor_model::ports::ProjectStore;
+    use editor_model::ports::with_project_store;
 
-    let store = with_project_store()
-        .ok_or_else(|| JsValue::from_str("Project store not initialized"))?;
+    let store =
+        with_project_store().ok_or_else(|| JsValue::from_str("Project store not initialized"))?;
 
     let importer_registry = editor_model::ports::with_importer_registry()
         .ok_or_else(|| JsValue::from_str("Importer registry not initialized"))?;
@@ -781,7 +777,10 @@ pub fn reimport_external_source_wasm(source_uri: &str) -> Result<String, JsValue
             "status": "no-op",
             "source_uri": source_uri,
         }),
-        Ok(ReimportResult::QueuedForReview { change_set_id, diff }) => serde_json::json!({
+        Ok(ReimportResult::QueuedForReview {
+            change_set_id,
+            diff,
+        }) => serde_json::json!({
             "status": "queued",
             "source_uri": source_uri,
             "change_set_id": change_set_id,
@@ -793,7 +792,10 @@ pub fn reimport_external_source_wasm(source_uri: &str) -> Result<String, JsValue
                 "ownership_conflicts": diff.ownership_conflicts.len(),
             }
         }),
-        Ok(ReimportResult::AutoApplied { change_set_id, diff }) => serde_json::json!({
+        Ok(ReimportResult::AutoApplied {
+            change_set_id,
+            diff,
+        }) => serde_json::json!({
             "status": "auto-applied",
             "source_uri": source_uri,
             "change_set_id": change_set_id,
@@ -822,12 +824,12 @@ pub fn reimport_external_source_wasm(source_uri: &str) -> Result<String, JsValue
 /// or `null` if no sidecar exists.
 #[wasm_bindgen]
 pub fn get_external_source_wasm(resource_ref: &str) -> Result<String, JsValue> {
-    use editor_model::ports::with_project_store;
     use editor_model::ports::ProjectStore;
+    use editor_model::ports::with_project_store;
 
     let sidecar_path = format!("{}.meta.json", resource_ref);
-    let store = with_project_store()
-        .ok_or_else(|| JsValue::from_str("Project store not initialized"))?;
+    let store =
+        with_project_store().ok_or_else(|| JsValue::from_str("Project store not initialized"))?;
 
     match store.read(&sidecar_path) {
         Ok(bytes) => {
@@ -835,9 +837,7 @@ pub fn get_external_source_wasm(resource_ref: &str) -> Result<String, JsValue> {
                 .map_err(|e| JsValue::from_str(&format!("UTF-8 error: {}", e)))?;
             Ok(text)
         }
-        Err(editor_model::ports::StoreError::NotFound(_)) => {
-            Ok("null".to_string())
-        }
+        Err(editor_model::ports::StoreError::NotFound(_)) => Ok("null".to_string()),
         Err(e) => Err(JsValue::from_str(&format!("Store error: {}", e))),
     }
 }

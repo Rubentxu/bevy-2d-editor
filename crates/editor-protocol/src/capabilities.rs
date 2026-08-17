@@ -22,8 +22,12 @@ pub trait SceneApi {
         field: String,
         value: serde_json::Value,
     ) -> Result<(), DispatchError>;
-    fn get_field(&self, entity: StableId, component: String, field: String)
-        -> Result<serde_json::Value, DispatchError>;
+    fn get_field(
+        &self,
+        entity: StableId,
+        component: String,
+        field: String,
+    ) -> Result<serde_json::Value, DispatchError>;
 }
 
 /// Scene asset authoring capability — place, replace, validate overrides.
@@ -39,10 +43,7 @@ pub trait SceneAssetApi {
         instance_id: StableId,
         new_asset_ref: String,
     ) -> Result<(), DispatchError>;
-    fn validate_overrides(
-        &self,
-        instance_id: StableId,
-    ) -> Result<ValidationReport, DispatchError>;
+    fn validate_overrides(&self, instance_id: StableId) -> Result<ValidationReport, DispatchError>;
     fn get_override_status(&self, instance_id: StableId) -> Result<OverrideStatus, DispatchError>;
 }
 
@@ -89,20 +90,16 @@ pub trait RuntimeApi {
 /// Code authoring capability — source file CRUD per ADR-0043.
 /// Corresponds to CodeApi in typed-editor-backend spec.
 pub trait CodeApi {
-    fn create_source_file(&mut self, path: String, content: String)
-        -> Result<(), DispatchError>;
-    fn write_source_file(&mut self, path: String, content: String)
-        -> Result<(), DispatchError>;
+    fn create_source_file(&mut self, path: String, content: String) -> Result<(), DispatchError>;
+    fn write_source_file(&mut self, path: String, content: String) -> Result<(), DispatchError>;
     // D2: delete and rename are FORBIDDEN in v1
 }
 
 /// Validation and diagnostics capability.
 pub trait ValidationApi {
     fn get_validation_issues(&self) -> Result<ValidationReport, DispatchError>;
-    fn get_resync_reports(
-        &self,
-        instance_id: StableId,
-    ) -> Result<Vec<ResyncReport>, DispatchError>;
+    fn get_resync_reports(&self, instance_id: StableId)
+    -> Result<Vec<ResyncReport>, DispatchError>;
 }
 
 /// Change submission and approval capability.
@@ -111,8 +108,10 @@ pub trait ChangeApi {
     fn submit_pending_change_set(&mut self) -> Result<ChangeSetSummary, DispatchError>;
     fn approve_change_set(&mut self, id: StableId) -> Result<ApplyReceipt, DispatchError>;
     fn reject_change_set(&mut self, id: StableId, reason: String) -> Result<(), DispatchError>;
-    fn get_change_history(&self, scope: HistoryScope)
-        -> Result<Vec<ChangeSetSummary>, DispatchError>;
+    fn get_change_history(
+        &self,
+        scope: HistoryScope,
+    ) -> Result<Vec<ChangeSetSummary>, DispatchError>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

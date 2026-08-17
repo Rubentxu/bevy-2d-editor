@@ -78,11 +78,7 @@ impl EditorSessionPort for FakeSession {
     fn active_document_path(&self) -> Option<&str> {
         None
     }
-    fn push_recent_change_set(
-        &mut self,
-        scene_path: &str,
-        summary: support::ChangeSetSummary,
-    ) {
+    fn push_recent_change_set(&mut self, scene_path: &str, summary: support::ChangeSetSummary) {
         self.recent_change_sets
             .entry(scene_path.to_string())
             .or_insert_with(Vec::new)
@@ -130,9 +126,9 @@ fn asset_state_mut_idempotent() {
             },
         );
     });
-    let warnings_len = editor_model::ports::with_session_mut(|s| {
-        s.asset_state_mut(&p).catalog_warnings.len()
-    }).unwrap();
+    let warnings_len =
+        editor_model::ports::with_session_mut(|s| s.asset_state_mut(&p).catalog_warnings.len())
+            .unwrap();
     assert_eq!(
         warnings_len, 1,
         "second call returns the same state entry, not a fresh default"

@@ -259,8 +259,12 @@ pub fn undo() -> Option<SceneDocument> {
     let mut doc = SCENE_DOC.with(|cell| cell.borrow_mut().take())?;
 
     // Phase 2: extract log and perform undo — RefCell borrows are released
-    let mut log = OPERATION_LOG.with(|l| l.borrow_mut().take()).expect("OPERATION_LOG always Some in undo");
-    let snapshot = log.undo(&mut doc).expect("OPERATION_LOG: undo should not fail when doc is Some");
+    let mut log = OPERATION_LOG
+        .with(|l| l.borrow_mut().take())
+        .expect("OPERATION_LOG always Some in undo");
+    let snapshot = log
+        .undo(&mut doc)
+        .expect("OPERATION_LOG: undo should not fail when doc is Some");
 
     // Phase 3: write doc and mutated log back to RefCells
     SCENE_DOC.with(|cell| *cell.borrow_mut() = Some(doc));
@@ -281,8 +285,12 @@ pub fn redo() -> Option<SceneDocument> {
     let mut doc = SCENE_DOC.with(|cell| cell.borrow_mut().take())?;
 
     // Phase 2: extract log and perform redo — RefCell borrows are released
-    let mut log = OPERATION_LOG.with(|l| l.borrow_mut().take()).expect("OPERATION_LOG always Some in redo");
-    let snapshot = log.redo(&mut doc).expect("OPERATION_LOG: redo should not fail when doc is Some");
+    let mut log = OPERATION_LOG
+        .with(|l| l.borrow_mut().take())
+        .expect("OPERATION_LOG always Some in redo");
+    let snapshot = log
+        .redo(&mut doc)
+        .expect("OPERATION_LOG: redo should not fail when doc is Some");
 
     // Phase 3: write doc and mutated log back to RefCells
     SCENE_DOC.with(|cell| *cell.borrow_mut() = Some(doc));

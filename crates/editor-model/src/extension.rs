@@ -64,7 +64,11 @@ pub struct SemVer {
 impl SemVer {
     /// Construct a version from major.minor.patch.
     pub fn new(major: u32, minor: u32, patch: u32) -> Self {
-        Self { major, minor, patch }
+        Self {
+            major,
+            minor,
+            patch,
+        }
     }
 
     /// Construct from a string like "0.92.0".
@@ -76,7 +80,11 @@ impl SemVer {
         let major = parts[0].parse().ok()?;
         let minor = parts[1].parse().ok()?;
         let patch = parts[2].parse().ok()?;
-        Some(Self { major, minor, patch })
+        Some(Self {
+            major,
+            minor,
+            patch,
+        })
     }
 }
 
@@ -207,7 +215,11 @@ impl Permission {
     }
 
     /// Construct a permission for a specific resource glob.
-    pub fn for_resource(area: PermissionArea, scope: PermissionScope, resource: impl Into<String>) -> Self {
+    pub fn for_resource(
+        area: PermissionArea,
+        scope: PermissionScope,
+        resource: impl Into<String>,
+    ) -> Self {
         Self {
             area,
             scope,
@@ -279,7 +291,9 @@ pub enum ExtensionError {
     #[error("invalid manifest: {0}")]
     InvalidManifest(String),
     /// Permission denied — extension lacks required permission for an operation.
-    #[error("permission denied for extension '{extension}': {area} requires {scope_needed} but manifest grants {scope_granted}")]
+    #[error(
+        "permission denied for extension '{extension}': {area} requires {scope_needed} but manifest grants {scope_granted}"
+    )]
     PermissionDenied {
         /// The extension ID.
         extension: String,
@@ -371,7 +385,10 @@ mod tests {
                 kind: Capability::Commands,
                 description: Some("Rust controller evaluators".to_string()),
             }],
-            vec![Permission::new(PermissionArea::Commands, PermissionScope::Propose)],
+            vec![Permission::new(
+                PermissionArea::Commands,
+                PermissionScope::Propose,
+            )],
         );
 
         let json = serde_json::to_string(&manifest).unwrap();
@@ -416,7 +433,10 @@ mod tests {
                     description: None,
                 },
             ],
-            vec![Permission::new(PermissionArea::Validators, PermissionScope::Read)],
+            vec![Permission::new(
+                PermissionArea::Validators,
+                PermissionScope::Read,
+            )],
         );
 
         let summary = ExtensionSummary::from(&manifest);

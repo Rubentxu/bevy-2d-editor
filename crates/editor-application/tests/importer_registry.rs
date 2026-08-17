@@ -20,10 +20,7 @@ impl Importer for DummyImporter {
         self.descriptor.clone()
     }
 
-    fn parse(
-        &self,
-        _source: ImporterInput<'_>,
-    ) -> Result<ParseOutput, ImporterError> {
+    fn parse(&self, _source: ImporterInput<'_>) -> Result<ParseOutput, ImporterError> {
         Ok(ParseOutput::default())
     }
 
@@ -43,10 +40,7 @@ fn make_aseprite_descriptor() -> ImporterDescriptor {
     ImporterDescriptor::new(
         "builtin.aseprite",
         ExternalSourceKind::Aseprite,
-        ImporterVersionRange::new(
-            ImporterVersion::new(1, 0, 0),
-            ImporterVersion::new(2, 0, 0),
-        ),
+        ImporterVersionRange::new(ImporterVersion::new(1, 0, 0), ImporterVersion::new(2, 0, 0)),
         "Aseprite",
     )
 }
@@ -57,34 +51,47 @@ fn make_aseprite_descriptor() -> ImporterDescriptor {
 fn register_list_unregister_round_trip() {
     let mut registry = ImporterRegistry::empty();
     let desc = make_aseprite_descriptor();
-    let importer: Arc<dyn Importer> = Arc::new(DummyImporter { descriptor: desc.clone() });
+    let importer: Arc<dyn Importer> = Arc::new(DummyImporter {
+        descriptor: desc.clone(),
+    });
 
     let handle = registry.register(desc.clone(), importer).unwrap();
-    assert_eq!(registry.list_by_kind(&ExternalSourceKind::Aseprite).len(), 1);
+    assert_eq!(
+        registry.list_by_kind(&ExternalSourceKind::Aseprite).len(),
+        1
+    );
     assert!(registry.get("builtin.aseprite").is_some());
 
     registry.unregister("builtin.aseprite").unwrap();
-    assert!(registry.list_by_kind(&ExternalSourceKind::Aseprite).is_empty());
+    assert!(
+        registry
+            .list_by_kind(&ExternalSourceKind::Aseprite)
+            .is_empty()
+    );
 }
 
 #[test]
 fn duplicate_id_rejected() {
     let mut registry = ImporterRegistry::empty();
     let desc = make_aseprite_descriptor();
-    let importer: Arc<dyn Importer> = Arc::new(DummyImporter { descriptor: desc.clone() });
+    let importer: Arc<dyn Importer> = Arc::new(DummyImporter {
+        descriptor: desc.clone(),
+    });
     registry.register(desc.clone(), importer).unwrap();
 
     let dup_desc = ImporterDescriptor::new(
         "builtin.aseprite", // same id
         ExternalSourceKind::Ldtk,
-        ImporterVersionRange::new(
-            ImporterVersion::new(1, 0, 0),
-            ImporterVersion::new(1, 5, 0),
-        ),
+        ImporterVersionRange::new(ImporterVersion::new(1, 0, 0), ImporterVersion::new(1, 5, 0)),
         "LDtk",
     );
     let err = registry
-        .register(dup_desc.clone(), Arc::new(DummyImporter { descriptor: dup_desc }))
+        .register(
+            dup_desc.clone(),
+            Arc::new(DummyImporter {
+                descriptor: dup_desc,
+            }),
+        )
         .unwrap_err();
     assert!(matches!(err, ImporterError::DuplicateId(_)));
 }
@@ -97,10 +104,7 @@ fn list_by_kind_filter() {
         descriptor: ImporterDescriptor::new(
             "builtin.aseprite",
             ExternalSourceKind::Aseprite,
-            ImporterVersionRange::new(
-                ImporterVersion::new(1, 0, 0),
-                ImporterVersion::new(2, 0, 0),
-            ),
+            ImporterVersionRange::new(ImporterVersion::new(1, 0, 0), ImporterVersion::new(2, 0, 0)),
             "Aseprite",
         ),
     });
@@ -108,10 +112,7 @@ fn list_by_kind_filter() {
         descriptor: ImporterDescriptor::new(
             "builtin.ldtk",
             ExternalSourceKind::Ldtk,
-            ImporterVersionRange::new(
-                ImporterVersion::new(1, 0, 0),
-                ImporterVersion::new(1, 5, 0),
-            ),
+            ImporterVersionRange::new(ImporterVersion::new(1, 0, 0), ImporterVersion::new(1, 5, 0)),
             "LDtk",
         ),
     });
@@ -119,9 +120,7 @@ fn list_by_kind_filter() {
     registry
         .register(aseprite.descriptor().clone(), aseprite)
         .unwrap();
-    registry
-        .register(ldtk.descriptor().clone(), ldtk)
-        .unwrap();
+    registry.register(ldtk.descriptor().clone(), ldtk).unwrap();
 
     // Tiled list should be empty
     assert!(registry.list_by_kind(&ExternalSourceKind::Tiled).is_empty());

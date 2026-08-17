@@ -52,23 +52,25 @@ where
     }
 
     // Extract extension ID from actor string ("extension:<id>" convention).
-    let extension_id = cs.actor.strip_prefix("extension:").ok_or_else(|| {
-        KernelError::PermissionDenied {
-            extension: cs.actor.clone(),
-            area: "unknown".to_string(),
-            scope_needed: "extension: prefix required".to_string(),
-            scope_granted: "none".to_string(),
-        }
-    })?;
+    let extension_id =
+        cs.actor
+            .strip_prefix("extension:")
+            .ok_or_else(|| KernelError::PermissionDenied {
+                extension: cs.actor.clone(),
+                area: "unknown".to_string(),
+                scope_needed: "extension: prefix required".to_string(),
+                scope_granted: "none".to_string(),
+            })?;
 
     // Look up the extension manifest from the global registry.
-    let registry = editor_model::ports::with_extension_registry()
-        .ok_or_else(|| KernelError::PermissionDenied {
+    let registry = editor_model::ports::with_extension_registry().ok_or_else(|| {
+        KernelError::PermissionDenied {
             extension: extension_id.to_string(),
             area: "extension registry".to_string(),
             scope_needed: "registry available".to_string(),
             scope_granted: "not initialized".to_string(),
-        })?;
+        }
+    })?;
 
     let registry_guard = registry.lock().map_err(|_| KernelError::PermissionDenied {
         extension: extension_id.to_string(),
@@ -77,14 +79,15 @@ where
         scope_granted: "lock poisoned".to_string(),
     })?;
 
-    let manifest = registry_guard
-        .get(extension_id)
-        .ok_or_else(|| KernelError::PermissionDenied {
-            extension: extension_id.to_string(),
-            area: "extension manifest".to_string(),
-            scope_needed: "registered".to_string(),
-            scope_granted: "not found".to_string(),
-        })?;
+    let manifest =
+        registry_guard
+            .get(extension_id)
+            .ok_or_else(|| KernelError::PermissionDenied {
+                extension: extension_id.to_string(),
+                area: "extension manifest".to_string(),
+                scope_needed: "registered".to_string(),
+                scope_granted: "not found".to_string(),
+            })?;
 
     // Check permissions for each resource affected by the ChangeSet.
     // For each resource, we check if the manifest grants Read/Write/Propose
@@ -145,12 +148,12 @@ where
         if !granted {
             // Also check if they have a broader scope (Write covers Read/Propose, etc.)
             let broader_scope = match scope_needed {
-                editor_model::extension::PermissionScope::Read => Some(
-                    editor_model::extension::PermissionScope::Write,
-                ),
-                editor_model::extension::PermissionScope::Propose => Some(
-                    editor_model::extension::PermissionScope::Write,
-                ),
+                editor_model::extension::PermissionScope::Read => {
+                    Some(editor_model::extension::PermissionScope::Write)
+                }
+                editor_model::extension::PermissionScope::Propose => {
+                    Some(editor_model::extension::PermissionScope::Write)
+                }
                 editor_model::extension::PermissionScope::Write => None,
                 editor_model::extension::PermissionScope::Subscribe => None,
                 _ => None, // #[non_exhaustive] catch-all
@@ -207,23 +210,25 @@ where
     }
 
     // Extract importer ID from actor string ("importer:<id>" convention).
-    let importer_id = cs.actor.strip_prefix("importer:").ok_or_else(|| {
-        KernelError::PermissionDenied {
-            extension: cs.actor.clone(),
-            area: "unknown".to_string(),
-            scope_needed: "importer: prefix required".to_string(),
-            scope_granted: "none".to_string(),
-        }
-    })?;
+    let importer_id =
+        cs.actor
+            .strip_prefix("importer:")
+            .ok_or_else(|| KernelError::PermissionDenied {
+                extension: cs.actor.clone(),
+                area: "unknown".to_string(),
+                scope_needed: "importer: prefix required".to_string(),
+                scope_granted: "none".to_string(),
+            })?;
 
     // Look up the importer from the global registry.
-    let registry = editor_model::ports::with_importer_registry()
-        .ok_or_else(|| KernelError::PermissionDenied {
+    let registry = editor_model::ports::with_importer_registry().ok_or_else(|| {
+        KernelError::PermissionDenied {
             extension: importer_id.to_string(),
             area: "importer registry".to_string(),
             scope_needed: "registry available".to_string(),
             scope_granted: "not initialized".to_string(),
-        })?;
+        }
+    })?;
 
     let registry_guard = registry.lock().map_err(|_| KernelError::PermissionDenied {
         extension: importer_id.to_string(),
@@ -249,7 +254,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use editor_model::ports::{register_extension_registry, ExtensionRegistryPort};
+    use editor_model::ports::{ExtensionRegistryPort, register_extension_registry};
     use std::sync::{Arc, Mutex};
 
     fn make_test_registry() -> Arc<Mutex<dyn ExtensionRegistryPort>> {
@@ -345,7 +350,7 @@ mod tests {
 
     #[test]
     fn importer_permission_denied_for_unknown_importer() {
-        use editor_model::ports::{register_importer_registry, ImporterRegistryPort};
+        use editor_model::ports::{ImporterRegistryPort, register_importer_registry};
 
         let mut cs: ChangeSet<String> = ChangeSet::new(
             "cs7".into(),
@@ -356,8 +361,9 @@ mod tests {
         cs.add_resource("scene", "test.json");
 
         // Register empty importer registry
-        let registry: Arc<Mutex<dyn ImporterRegistryPort>> =
-            Arc::new(Mutex::new(crate::importer_registry::ImporterRegistry::empty()));
+        let registry: Arc<Mutex<dyn ImporterRegistryPort>> = Arc::new(Mutex::new(
+            crate::importer_registry::ImporterRegistry::empty(),
+        ));
         let _ = register_importer_registry(Arc::clone(&registry));
 
         let err = transaction_kernel_check_importer_permission(&cs).unwrap_err();

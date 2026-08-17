@@ -308,9 +308,10 @@ use crate::state::{
     LOGIC_OPERATION_LOG, PLAY_MODE_REQUEST, PlayModeRequest, RESYNC_REPORTS, SCENE_ASSET_DOC,
     SCENE_REGISTRY, VALIDATION_ISSUES, clear_asset_catalog_warnings, get_asset_catalog_warnings,
     mark_dirty, with_asset_body_cache, with_asset_body_cache_mut, with_asset_catalog,
-    with_asset_catalog_mut, with_asset_doc, with_asset_doc_and_log_mut, with_asset_doc_mut, with_asset_log, with_asset_log_mut,
-    with_logic_graph, with_logic_graph_catalog, with_logic_graph_catalog_mut, with_logic_graph_mut,
-    with_logic_log, with_logic_log_mut, with_registry, with_registry_mut,
+    with_asset_catalog_mut, with_asset_doc, with_asset_doc_and_log_mut, with_asset_doc_mut,
+    with_asset_log, with_asset_log_mut, with_logic_graph, with_logic_graph_catalog,
+    with_logic_graph_catalog_mut, with_logic_graph_mut, with_logic_log, with_logic_log_mut,
+    with_registry, with_registry_mut,
 };
 
 /// Mutably access the asset body cache from integration tests.
@@ -523,8 +524,7 @@ pub fn dispatch_command(json: &str) -> Result<String, JsValue> {
     // path (via `is_dispatch_via_kernel() == false`) is removed; ADR-0032
     // established the kernel as the single dispatch path. The `dispatch_*_legacy`
     // functions are also removed below.
-    dispatch_command_via_kernel(envelope)
-        .map_err(|e| JsValue::from_str(&e.to_string()))
+    dispatch_command_via_kernel(envelope).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Kernel path: route a command envelope through SceneTransactionKernel.
@@ -532,7 +532,9 @@ pub fn dispatch_command(json: &str) -> Result<String, JsValue> {
 /// This is the internal dispatch function used by both the legacy WASM entry point
 /// and by `editor_application::wasm` for ChangeWorkbench approval.
 #[cfg(target_arch = "wasm32")]
-pub fn dispatch_command_via_kernel(envelope: CommandEnvelope) -> Result<String, editor_protocol::DispatchError> {
+pub fn dispatch_command_via_kernel(
+    envelope: CommandEnvelope,
+) -> Result<String, editor_protocol::DispatchError> {
     use crate::transaction_bridge::scene_transaction_kernel;
     use editor_model::session::HistoryScope;
     use editor_model::transaction::{Applier, ChangeOrigin, ChangeSet};
@@ -630,8 +632,9 @@ pub fn dispatch_command_via_kernel(envelope: CommandEnvelope) -> Result<String, 
 
     scene_state::mark_dirty();
 
-    let result_json = serde_json::to_string(&CommandResult { inverse, snapshot })
-        .map_err(|e| DispatchError::ExecutionFailed(format!("Failed to serialize result: {}", e)))?;
+    let result_json = serde_json::to_string(&CommandResult { inverse, snapshot }).map_err(|e| {
+        DispatchError::ExecutionFailed(format!("Failed to serialize result: {}", e))
+    })?;
 
     Ok(result_json)
 }

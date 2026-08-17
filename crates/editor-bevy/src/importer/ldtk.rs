@@ -52,27 +52,23 @@
 //! - `ValidationIssue { category: Import, code: "unknown_intgrid_identifier", severity: Warning }`
 //!   emitted per dropped IntGrid cell with unknown identifier.
 
+use editor_model::ComponentInstance;
+use editor_model::SceneInstance;
 use editor_model::auto_layer::{AutoLayer, AutoLayerId, AutoRule, Pattern3x3, PatternCell};
-use editor_model::external_source::{
-    ExternalSourceKind, OwnershipRule, SourceMapping,
-};
+use editor_model::external_source::{ExternalSourceKind, OwnershipRule, SourceMapping};
 use editor_model::ids::{LayerId, StableId};
 use editor_model::importer::{
     BuildChangeSetOutput, Importer, ImporterDescriptor, ImporterError, ImporterInput,
     ImporterVersion, ImporterVersionRange, ParseOutput, ResourceDraft,
 };
-use editor_model::int_grid::{
-    IntGridLayer, IntGridLayerId, IntGridSchemaKind,
-};
+use editor_model::int_grid::{IntGridLayer, IntGridLayerId, IntGridSchemaKind};
 use editor_model::scene_asset::{
     AssetReference, LevelLayer, SceneAssetDocument, SceneAssetMetadata, SceneAssetRole,
     SceneInstanceLayer, SceneInstanceLayerKind,
 };
-use editor_model::ComponentInstance;
-use editor_model::SceneInstance;
 use editor_model::session::EditorSnapshot;
 use editor_model::tile_layer::{TileLayer, TileLayerId};
-use editor_model::tileset::{TilesetId, TileRef};
+use editor_model::tileset::{TileRef, TilesetId};
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -351,13 +347,12 @@ impl LdtkImporter {
     /// Returns `Err(ImporterError::ParseError)` if the JSON is malformed.
     /// Returns `Err(ImporterError::UnsupportedVersion)` if the version is out of range.
     fn parse_json(&self, bytes: &[u8]) -> Result<Vec<LevelParseOutput>, ImporterError> {
-        let json: LdtkJson = serde_json::from_slice(bytes).map_err(|e| {
-            ImporterError::ParseError(format!("invalid LDtk JSON: {}", e))
-        })?;
+        let json: LdtkJson = serde_json::from_slice(bytes)
+            .map_err(|e| ImporterError::ParseError(format!("invalid LDtk JSON: {}", e)))?;
 
         // Version check
-        let detected = ImporterVersion::parse(&json.ldtk_version)
-            .unwrap_or(ImporterVersion::new(1, 0, 0));
+        let detected =
+            ImporterVersion::parse(&json.ldtk_version).unwrap_or(ImporterVersion::new(1, 0, 0));
 
         if !self.descriptor.supported_versions.contains(detected) {
             return Err(ImporterError::UnsupportedVersion {
@@ -424,17 +419,14 @@ impl LdtkImporter {
                     layers.push(LevelLayer::Tile(tile_layer));
                 }
                 "AutoLayer" => {
-                    let (auto_layer, issues) = self.parse_auto_layer(layer, level, ownership.clone());
+                    let (auto_layer, issues) =
+                        self.parse_auto_layer(layer, level, ownership.clone());
                     layers.push(LevelLayer::Auto(auto_layer));
                     validation_issues.extend(issues);
                 }
                 "Entities" => {
-                    let (sil, instances) = self.parse_entity_layer(
-                        level,
-                        layer,
-                        &level_path,
-                        ownership.clone(),
-                    );
+                    let (sil, instances) =
+                        self.parse_entity_layer(level, layer, &level_path, ownership.clone());
                     entity_instances.extend(instances);
                     layers.push(LevelLayer::SceneInstance(sil));
                 }
@@ -520,11 +512,7 @@ impl LdtkImporter {
         let tileset_id = layer
             .tileset_rel_path
             .as_ref()
-            .and_then(|p| {
-                std::path::Path::new(p)
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-            })
+            .and_then(|p| std::path::Path::new(p).file_stem().and_then(|s| s.to_str()))
             .map(|s| TilesetId::new(s.to_string()))
             .unwrap_or_else(|| TilesetId::new(format!("ts_{}_{}", level.uid, layer.identifier)));
 
@@ -555,11 +543,7 @@ impl LdtkImporter {
         let tileset_id = layer
             .tileset_rel_path
             .as_ref()
-            .and_then(|p| {
-                std::path::Path::new(p)
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-            })
+            .and_then(|p| std::path::Path::new(p).file_stem().and_then(|s| s.to_str()))
             .map(|s| TilesetId::new(s.to_string()))
             .unwrap_or_else(|| TilesetId::new(format!("ts_auto_{}", layer.identifier)));
 
@@ -590,11 +574,7 @@ impl LdtkImporter {
     }
 
     /// Convert an LDtk auto-rule definition to an internal AutoRule.
-    fn ldtk_rule_to_auto_rule(
-        &self,
-        def: &LdtkAutoRuleDef,
-        tileset_id: &TilesetId,
-    ) -> AutoRule {
+    fn ldtk_rule_to_auto_rule(&self, def: &LdtkAutoRuleDef, tileset_id: &TilesetId) -> AutoRule {
         // LDtk pattern: row-major list of ints, -1 = Any
         let mut pattern: Pattern3x3 = [[PatternCell::Any; 3]; 3];
         for (i, &val) in def.pattern.iter().take(9).enumerate() {
@@ -734,11 +714,16 @@ impl Importer for LdtkImporter {
             resource_drafts,
             mappings,
             ownership_rules: vec![OwnershipRule::SourceOwned],
-            detected_version: Some(level_outputs.first().map(|_| {
-                // Return the LDtk version string from the first level's parse
-                // (actual version is checked in parse_json)
-                "1.0.0".to_string()
-            }).unwrap_or_default()),
+            detected_version: Some(
+                level_outputs
+                    .first()
+                    .map(|_| {
+                        // Return the LDtk version string from the first level's parse
+                        // (actual version is checked in parse_json)
+                        "1.0.0".to_string()
+                    })
+                    .unwrap_or_default(),
+            ),
             detected_version_parsed: None,
         })
     }
@@ -754,7 +739,14 @@ impl Importer for LdtkImporter {
         // NOTE: In a full implementation we would cache the parse output,
         // but for now we re-parse. A production implementation would
         // pass the full LevelParseOutput through ResourceDraft or cache it.
-        let level_outputs = self.parse_json(draft.detected_version.as_ref().map(|s| s.as_bytes()).unwrap_or(&[]))
+        let level_outputs = self
+            .parse_json(
+                draft
+                    .detected_version
+                    .as_ref()
+                    .map(|s| s.as_bytes())
+                    .unwrap_or(&[]),
+            )
             .map_err(|e| ImporterError::ParseError(format!("re-parse failed: {}", e)))?;
 
         let mut all_commands: Vec<AssetCommand> = Vec::new();
@@ -786,8 +778,8 @@ impl Importer for LdtkImporter {
             });
         }
 
-        let change_set_json =
-            serde_json::to_string(&all_commands).map_err(|e| ImporterError::ParseError(e.to_string()))?;
+        let change_set_json = serde_json::to_string(&all_commands)
+            .map_err(|e| ImporterError::ParseError(e.to_string()))?;
 
         Ok(BuildChangeSetOutput {
             provenance_diff: None,
@@ -875,7 +867,8 @@ mod tests {
               ]
             }
           ]
-        }"#.as_bytes()
+        }"#
+        .as_bytes()
     }
 
     #[test]
@@ -914,7 +907,8 @@ mod tests {
         let old_json = r#"{
           "ldtkVersion": "99.0.0",
           "worlds": []
-        }"#.as_bytes();
+        }"#
+        .as_bytes();
         let input = ImporterInput {
             bytes: old_json,
             source_uri: "old.ldtk",
@@ -960,10 +954,8 @@ mod tests {
 
     #[test]
     fn version_range_contains() {
-        let range = ImporterVersionRange::new(
-            ImporterVersion::new(1, 0, 0),
-            ImporterVersion::new(1, 5, 0),
-        );
+        let range =
+            ImporterVersionRange::new(ImporterVersion::new(1, 0, 0), ImporterVersion::new(1, 5, 0));
         assert!(range.contains(ImporterVersion::new(1, 0, 0)));
         assert!(range.contains(ImporterVersion::new(1, 3, 0)));
         assert!(range.contains(ImporterVersion::new(1, 5, 0)));

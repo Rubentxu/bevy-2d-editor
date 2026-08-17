@@ -36,12 +36,15 @@ impl EditorSessionPort for FakeSessionWithCap {
     fn logic_state_mut(&mut self, path: &str) -> &mut editor_model::LogicSessionState {
         self.0.logic_state_mut(path)
     }
-    fn tunable_baselines_mut(&mut self) -> &mut std::collections::BTreeMap<String, serde_json::Value> {
+    fn tunable_baselines_mut(
+        &mut self,
+    ) -> &mut std::collections::BTreeMap<String, serde_json::Value> {
         self.0.tunable_baselines_mut()
     }
     fn pending_causality_edges_mut(
         &mut self,
-    ) -> &mut std::collections::BTreeMap<editor_model::StableId, Vec<editor_model::CausalityEdge>> {
+    ) -> &mut std::collections::BTreeMap<editor_model::StableId, Vec<editor_model::CausalityEdge>>
+    {
         self.0.pending_causality_edges_mut()
     }
     fn last_rebuild_cause_mut(&mut self) -> &mut Option<editor_model::RebuildCause> {
@@ -67,7 +70,11 @@ impl EditorSessionPort for FakeSessionWithCap {
     fn active_document_path(&self) -> Option<&str> {
         self.0.active_document_path()
     }
-    fn push_recent_change_set(&mut self, scene_path: &str, summary: editor_model::ChangeSetSummary) {
+    fn push_recent_change_set(
+        &mut self,
+        scene_path: &str,
+        summary: editor_model::ChangeSetSummary,
+    ) {
         self.0.push_recent_change_set(scene_path, summary)
     }
 }

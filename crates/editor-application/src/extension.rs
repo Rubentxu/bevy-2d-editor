@@ -51,7 +51,10 @@ impl ExtensionRegistry {
                 kind: Capability::Commands,
                 description: Some("Built-in RustController evaluators".to_string()),
             }],
-            vec![Permission::new(PermissionArea::Commands, PermissionScope::Propose)],
+            vec![Permission::new(
+                PermissionArea::Commands,
+                PermissionScope::Propose,
+            )],
         );
         Self::register_single(&mut registry, manifest1)
             .expect("builtin.logic-bricks.controllers must not duplicate");
@@ -63,10 +66,14 @@ impl ExtensionRegistry {
             vec![CapabilityDescriptor {
                 kind: Capability::Recipes,
                 description: Some(
-                    "Built-in recipes: platformer_jump, health_damage, proximity_trigger".to_string(),
+                    "Built-in recipes: platformer_jump, health_damage, proximity_trigger"
+                        .to_string(),
                 ),
             }],
-            vec![Permission::new(PermissionArea::Recipes, PermissionScope::Write)],
+            vec![Permission::new(
+                PermissionArea::Recipes,
+                PermissionScope::Write,
+            )],
         );
         Self::register_single(&mut registry, manifest2)
             .expect("builtin.logic-recipes must not duplicate");
@@ -79,7 +86,10 @@ impl ExtensionRegistry {
                 kind: Capability::Validators,
                 description: Some("Built-in scene document validator".to_string()),
             }],
-            vec![Permission::new(PermissionArea::Project, PermissionScope::Read)],
+            vec![Permission::new(
+                PermissionArea::Project,
+                PermissionScope::Read,
+            )],
         );
         Self::register_single(&mut registry, manifest3)
             .expect("builtin.scene-validator must not duplicate");
@@ -136,7 +146,10 @@ impl ExtensionRegistryPort for ExtensionRegistry {
     }
 
     fn list(&self) -> Vec<ExtensionSummary> {
-        self.manifests.values().map(ExtensionSummary::from).collect()
+        self.manifests
+            .values()
+            .map(ExtensionSummary::from)
+            .collect()
     }
 
     fn get(&self, id: &str) -> Option<ExtensionManifest> {
@@ -168,7 +181,10 @@ mod tests {
                 kind: Capability::Validators,
                 description: None,
             }],
-            vec![Permission::new(PermissionArea::Validators, PermissionScope::Read)],
+            vec![Permission::new(
+                PermissionArea::Validators,
+                PermissionScope::Read,
+            )],
         )
     }
 
@@ -194,7 +210,9 @@ mod tests {
         let mut registry = ExtensionRegistry::empty();
         let manifest = make_manifest("com.example.dup");
         registry.register(manifest).unwrap();
-        let err = registry.register(make_manifest("com.example.dup")).unwrap_err();
+        let err = registry
+            .register(make_manifest("com.example.dup"))
+            .unwrap_err();
         assert!(matches!(err, ExtensionError::DuplicateId(_)));
     }
 

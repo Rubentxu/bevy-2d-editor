@@ -18,9 +18,9 @@ use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
 use crate::RuntimeDelta;
-use crate::ports::project_store::ProjectStore;
 use crate::extension::ExtensionRegistry;
 use crate::importer_registry::ImporterRegistry;
+use crate::ports::project_store::ProjectStore;
 use editor_model::CausalityEdge;
 use editor_model::EditorSessionPort;
 use editor_model::PendingChangeSet;
@@ -335,9 +335,7 @@ impl ChangeSetsSessionState {
     // ─── Pending causality edges ─────────────────────────────────────────────
 
     /// Returns a mutable reference to the pending causality edges map.
-    pub fn pending_causality_edges_mut(
-        &mut self,
-    ) -> &mut BTreeMap<StableId, Vec<CausalityEdge>> {
+    pub fn pending_causality_edges_mut(&mut self) -> &mut BTreeMap<StableId, Vec<CausalityEdge>> {
         &mut self.pending_causality_edges
     }
 
@@ -375,7 +373,9 @@ impl RuntimeSessionState {
     /// Construct with capacity pre-allocated for the delta buffer.
     pub fn new() -> Self {
         Self {
-            runtime_delta_buffer: VecDeque::with_capacity(crate::runtime_delta::RUNTIME_DELTA_BUFFER_CAP),
+            runtime_delta_buffer: VecDeque::with_capacity(
+                crate::runtime_delta::RUNTIME_DELTA_BUFFER_CAP,
+            ),
             tunable_baselines: BTreeMap::new(),
         }
     }
@@ -469,6 +469,8 @@ pub struct EditorSession {
     asset_states: BTreeMap<String, LocalAssetSessionState>,
     /// Per-logic-graph-path session state (LOGIC_GRAPH_DOC etc.).
     logic_states: BTreeMap<String, LocalLogicSessionState>,
+    /// Per-world session state (WorldDocument bodies).
+    world_states: BTreeMap<String, editor_model::WorldSessionState>,
     /// Runtime preview inspector + source files (PREVIEW_METRICS etc.).
     preview_state: PreviewSessionState,
     /// Change-workbench and causality tracking state.
@@ -486,10 +488,14 @@ pub struct EditorSession {
 impl std::fmt::Debug for EditorSession {
     /// Prints structural info only — dyn trait contents are not printable.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let ext_count = self.extension_registry.lock()
+        let ext_count = self
+            .extension_registry
+            .lock()
             .map(|r| r.list().len())
             .unwrap_or(0);
-        let imp_count = self.importer_registry.lock()
+        let imp_count = self
+            .importer_registry
+            .lock()
             .map(|r| {
                 use editor_model::external_source::ExternalSourceKind;
                 r.list_by_kind(&ExternalSourceKind::Aseprite).len()
@@ -534,6 +540,7 @@ impl EditorSession {
             scene_states: BTreeMap::new(),
             asset_states: BTreeMap::new(),
             logic_states: BTreeMap::new(),
+            world_states: BTreeMap::new(),
             preview_state: PreviewSessionState::new(),
             change_sets: ChangeSetsSessionState::new(),
             runtime: RuntimeSessionState::new(),
@@ -561,6 +568,7 @@ impl EditorSession {
             scene_states: BTreeMap::new(),
             asset_states: BTreeMap::new(),
             logic_states: BTreeMap::new(),
+            world_states: BTreeMap::new(),
             preview_state: PreviewSessionState::new(),
             change_sets: ChangeSetsSessionState::new(),
             runtime: RuntimeSessionState::new(),
@@ -583,9 +591,7 @@ impl EditorSession {
     /// Returns a mutable reference to the extension registry.
     ///
     /// Used by WASM exports that need to register/unregister extensions.
-    pub(crate) fn extension_registry_mut(
-        &mut self,
-    ) -> &mut Arc<Mutex<dyn ExtensionRegistryPort>> {
+    pub(crate) fn extension_registry_mut(&mut self) -> &mut Arc<Mutex<dyn ExtensionRegistryPort>> {
         &mut self.extension_registry
     }
 
@@ -600,9 +606,7 @@ impl EditorSession {
     /// Returns a mutable reference to the importer registry.
     ///
     /// Used by WASM exports that need to register/unregister importers.
-    pub(crate) fn importer_registry_mut(
-        &mut self,
-    ) -> &mut Arc<Mutex<dyn ImporterRegistryPort>> {
+    pub(crate) fn importer_registry_mut(&mut self) -> &mut Arc<Mutex<dyn ImporterRegistryPort>> {
         &mut self.importer_registry
     }
 
@@ -633,6 +637,14 @@ impl EditorSession {
         self.logic_states
             .entry(path.to_string())
             .or_insert_with(LocalLogicSessionState::default)
+    }
+
+    /// Returns a mutable reference to the world session state for the given path,
+    /// creating it if absent (create-on-write, parallel to `scene_state_mut`).
+    pub fn world_state_mut(&mut self, path: &str) -> &mut editor_model::WorldSessionState {
+        self.world_states
+            .entry(path.to_string())
+            .or_insert_with(editor_model::WorldSessionState::default)
     }
 
     /// Returns the recent change-set summaries for the given scene path.
@@ -1062,6 +1074,12 @@ impl EditorSessionPort for EditorSession {
         self.logic_states
             .entry(path.to_string())
             .or_insert_with(editor_model::LogicSessionState::default)
+    }
+
+    fn world_state_mut(&mut self, path: &str) -> &mut editor_model::WorldSessionState {
+        self.world_states
+            .entry(path.to_string())
+            .or_insert_with(editor_model::WorldSessionState::default)
     }
 
     fn preview_inspector_mut(&mut self) -> &mut editor_model::PreviewInspectorState {

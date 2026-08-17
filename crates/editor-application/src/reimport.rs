@@ -20,10 +20,12 @@
 //! - `modified_editor` empty AND `ownership_conflicts` empty → auto-apply
 //! - `modified_source` only → auto-apply (source wins)
 
-use editor_model::external_source::{ConflictPolicy, ExternalSource, ExternalSourceKind, ProvenanceDiff};
+use editor_model::PendingChangeSet;
+use editor_model::external_source::{
+    ConflictPolicy, ExternalSource, ExternalSourceKind, ProvenanceDiff,
+};
 use editor_model::importer::{ImporterError, ImporterInput};
 use editor_model::ports::{ImporterRegistryPort, ProjectStore};
-use editor_model::PendingChangeSet;
 use editor_model::time::Timestamp;
 use std::sync::{Arc, Mutex};
 
@@ -71,12 +73,16 @@ pub fn load_sidecar(
         Ok(bytes) => {
             let text = String::from_utf8(bytes)
                 .map_err(|e| ReimportError::Store(format!("UTF-8 error reading sidecar: {}", e)))?;
-            let external_source: ExternalSource = serde_json::from_str(&text)
-                .map_err(|e| ReimportError::ParseSidecar(format!("Failed to parse sidecar JSON: {}", e)))?;
+            let external_source: ExternalSource = serde_json::from_str(&text).map_err(|e| {
+                ReimportError::ParseSidecar(format!("Failed to parse sidecar JSON: {}", e))
+            })?;
             Ok(Some(external_source))
         }
         Err(editor_model::ports::StoreError::NotFound(_)) => Ok(None),
-        Err(e) => Err(ReimportError::Store(format!("Failed to read sidecar: {}", e))),
+        Err(e) => Err(ReimportError::Store(format!(
+            "Failed to read sidecar: {}",
+            e
+        ))),
     }
 }
 
@@ -98,10 +104,7 @@ pub fn save_sidecar(
 /// Compute a `ProvenanceDiff` between the old and new `ExternalSource`.
 ///
 /// The diff compares `mappings` lists by `source_object_id`.
-pub fn compute_provenance_diff(
-    old: &ExternalSource,
-    new: &ExternalSource,
-) -> ProvenanceDiff {
+pub fn compute_provenance_diff(old: &ExternalSource, new: &ExternalSource) -> ProvenanceDiff {
     let old_by_source: std::collections::HashMap<_, _> = old
         .mappings
         .iter()
@@ -157,10 +160,7 @@ pub fn compute_provenance_diff(
                         ownership_conflicts.push((*new_mapping).clone());
                     }
                     // Editor-owned changed to something else
-                    (
-                        editor_model::external_source::OwnershipRule::EditorOwned,
-                        _,
-                    ) => {
+                    (editor_model::external_source::OwnershipRule::EditorOwned, _) => {
                         modified_editor.push((*new_mapping).clone());
                     }
                     // Something changed but not editor-owned
@@ -249,15 +249,14 @@ pub fn reimport(
         .lock()
         .map_err(|e| ReimportError::Store(format!("Importer registry lock poisoned: {}", e)))?;
 
-    let parse_output = reg_guard
-        .dispatch(
-            &old_sidecar.kind,
-            ImporterInput {
-                bytes: &source_bytes,
-                source_uri,
-                fingerprint_hint: Some(new_fingerprint.clone()),
-            },
-        )?;
+    let parse_output = reg_guard.dispatch(
+        &old_sidecar.kind,
+        ImporterInput {
+            bytes: &source_bytes,
+            source_uri,
+            fingerprint_hint: Some(new_fingerprint.clone()),
+        },
+    )?;
 
     drop(reg_guard);
 
@@ -292,12 +291,8 @@ pub fn reimport(
         return Ok(ReimportResult::NoOp);
     }
 
-    let change_set = build_change_set_from_diff(
-        &change_set_id,
-        &diff,
-        &old_sidecar.importer_id,
-        source_uri,
-    );
+    let change_set =
+        build_change_set_from_diff(&change_set_id, &diff, &old_sidecar.importer_id, source_uri);
 
     if requires_review {
         // Route to ChangeWorkbench with RequiresHuman
@@ -392,16 +387,26 @@ fn build_change_set_from_diff(
         rationale_parts.push(format!("~{} source-modified", diff.modified_source.len()));
     }
     if !diff.modified_editor.is_empty() {
-        rationale_parts.push(format!("!{} editor-modified (CONFLICT)", diff.modified_editor.len()));
+        rationale_parts.push(format!(
+            "!{} editor-modified (CONFLICT)",
+            diff.modified_editor.len()
+        ));
     }
     if !diff.ownership_conflicts.is_empty() {
-        rationale_parts.push(format!("⚠ {} ownership-conflicts", diff.ownership_conflicts.len()));
+        rationale_parts.push(format!(
+            "⚠ {} ownership-conflicts",
+            diff.ownership_conflicts.len()
+        ));
     }
 
     let rationale = if rationale_parts.is_empty() {
         format!("Reimport from {}", source_uri)
     } else {
-        format!("Reimport from {} [{}]", source_uri, rationale_parts.join(", "))
+        format!(
+            "Reimport from {} [{}]",
+            source_uri,
+            rationale_parts.join(", ")
+        )
     };
 
     let _has_conflicts = !diff.modified_editor.is_empty() || !diff.ownership_conflicts.is_empty();
@@ -454,7 +459,11 @@ mod tests {
             conflict_policy: None,
         };
         let new = ExternalSource {
-            mappings: vec![SourceMapping::new("entity:1", "scene.json", OwnershipRule::SourceOwned)],
+            mappings: vec![SourceMapping::new(
+                "entity:1",
+                "scene.json",
+                OwnershipRule::SourceOwned,
+            )],
             ..old.clone()
         };
         let diff = compute_provenance_diff(&old, &new);
@@ -472,7 +481,11 @@ mod tests {
             importer_id: "builtin.ldtk".to_string(),
             importer_version: editor_model::importer::ImporterVersion::new(1, 0, 0),
             last_import_time: Timestamp(0),
-            mappings: vec![SourceMapping::new("entity:1", "scene.json", OwnershipRule::SourceOwned)],
+            mappings: vec![SourceMapping::new(
+                "entity:1",
+                "scene.json",
+                OwnershipRule::SourceOwned,
+            )],
             ownership_rules: vec![],
             schema_version: 1,
             conflict_policy: None,

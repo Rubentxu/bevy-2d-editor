@@ -66,7 +66,11 @@ pub enum ConflictPolicy {
 
 impl ConflictPolicy {
     /// Returns `true` if the policy requires human review given the conflict state.
-    pub fn requires_review(&self, modified_editor_empty: bool, ownership_conflicts_empty: bool) -> bool {
+    pub fn requires_review(
+        &self,
+        modified_editor_empty: bool,
+        ownership_conflicts_empty: bool,
+    ) -> bool {
         match self {
             ConflictPolicy::AutoApply => !modified_editor_empty || !ownership_conflicts_empty,
             ConflictPolicy::HumanReview => true,
