@@ -1,0 +1,108 @@
+{
+  "type": "map",
+  "tiledversion": "1.10.0",
+  "width": 20,
+  "height": 15,
+  "tilewidth": 16,
+  "tileheight": 16,
+  "infinite": false,
+  "layers": [
+    {
+      "type": "tilelayer",
+      "name": "Ground",
+      "order": 0,
+      "width": 20,
+      "height": 15,
+      "data": [
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+      ]
+    },
+    {
+      "type": "objectgroup",
+      "name": "Props",
+      "order": 1,
+      "objects": [
+        {
+          "id": 1,
+          "x": 64.0,
+          "y": 32.0,
+          "width": 16.0,
+          "height": 16.0,
+          "type": "Coin",
+          "properties": [
+            { "name": "value", "type": "int", "value": 10 },
+            { "name": "sparkle", "type": "bool", "value": true }
+          ]
+        },
+        {
+          "id": 2,
+          "x": 160.0,
+          "y": 64.0,
+          "width": 32.0,
+          "height": 48.0,
+          "type": "Tree",
+          "properties": [
+            { "name": "species", "type": "string", "value": "oak" }
+          ]
+        },
+        {
+          "id": 3,
+          "x": 256.0,
+          "y": 96.0,
+          "width": 24.0,
+          "height": 24.0,
+          "template": "templates/teleport_pad.json",
+          "type": "Teleporter"
+        }
+      ]
+    },
+    {
+      "type": "imagelayer",
+      "name": "Background",
+      "order": 2,
+      "image": "art/background.png"
+    }
+  ],
+  "tilesets": [
+    {
+      "firstgid": 1,
+      "source": "tileset.json"
+    }
+  ],
+  "templates": [
+    {
+      "name": "teleport_pad",
+      "object": {
+        "id": 100,
+        "x": 0,
+        "y": 0,
+        "width": 24,
+        "height": 24,
+        "type": "Teleporter",
+        "properties": [
+          { "name": "target_level", "type": "string", "value": "level_2" },
+          { "name": "spawn_x", "type": "int", "value": 100 },
+          { "name": "spawn_y", "type": "int", "value": 200 }
+        ]
+      }
+    }
+  ],
+  "properties": [
+    { "name": "bg_color", "type": "color", "value": "#1a1a2e" },
+    { "name": "scroll_speed", "type": "float", "value": 1.5 }
+  ]
+}

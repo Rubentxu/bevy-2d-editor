@@ -5,6 +5,7 @@
 
 pub mod importer_aseprite;
 pub mod importer_ldtk;
+pub mod importer_tiled;
 pub mod logic_bricks;
 pub mod logic_recipes;
 pub mod scene_validator;
@@ -14,6 +15,8 @@ pub use importer_aseprite::importer as aseprite_importer;
 pub use importer_aseprite::manifest as aseprite_manifest;
 pub use importer_ldtk::importer as ldtk_importer;
 pub use importer_ldtk::manifest as ldtk_manifest;
+pub use importer_tiled::importer as tiled_importer;
+pub use importer_tiled::manifest as tiled_manifest;
 pub use logic_bricks::manifest as logic_bricks_manifest;
 pub use logic_recipes::manifest as logic_recipes_manifest;
 pub use scene_validator::manifest as scene_validator_manifest;

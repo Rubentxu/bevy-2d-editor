@@ -22,7 +22,9 @@
 
 pub mod aseprite;
 pub mod ldtk;
+pub mod tiled;
 
 // Re-export the public importer types for convenience.
 pub use aseprite::AsepriteImporter;
 pub use ldtk::LdtkImporter;
+pub use tiled::TiledImporter;
