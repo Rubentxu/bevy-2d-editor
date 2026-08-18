@@ -681,6 +681,7 @@ pub fn scene_asset_from_bsn_ir(ir: BsnIr) -> SceneAssetDocument {
             local_path: String::new(),
             name: String::new(), // no name in BsnIrNode
             components,
+            extension_data: BTreeMap::new(),
         });
 
         for child in node.children {
@@ -707,6 +708,7 @@ pub fn scene_asset_from_bsn_ir(ir: BsnIr) -> SceneAssetDocument {
         exposed_properties: Default::default(),
         metadata: SceneAssetMetadata::default(),
         layers: Default::default(),
+        extension_data: BTreeMap::new(),
     }
 }
 
@@ -751,11 +753,13 @@ mod tests {
                     type_id: "editor.Name".to_string(),
                     values: serde_json::json!({"name": "PlayerEntity"}),
                 }],
+                extension_data: BTreeMap::new(),
             }],
             relationships: vec![],
             exposed_properties: Default::default(),
             metadata: SceneAssetMetadata::default(),
             layers: Default::default(),
+            extension_data: BTreeMap::new(),
         };
         let imported = round_trip(&doc);
         assert_eq!(imported.entities.len(), 1);
@@ -813,18 +817,21 @@ mod tests {
                     local_path: String::new(),
                     name: "Root".to_string(),
                     components: vec![],
+                    extension_data: BTreeMap::new(),
                 },
                 SceneAssetEntity {
                     local_id: LocalId::new("child1".to_string()),
                     local_path: String::new(),
                     name: "Child1".to_string(),
                     components: vec![],
+                    extension_data: BTreeMap::new(),
                 },
                 SceneAssetEntity {
                     local_id: LocalId::new("child2".to_string()),
                     local_path: String::new(),
                     name: "Child2".to_string(),
                     components: vec![],
+                    extension_data: BTreeMap::new(),
                 },
             ],
             relationships: vec![
@@ -844,6 +851,7 @@ mod tests {
             exposed_properties: Default::default(),
             metadata: SceneAssetMetadata::default(),
             layers: Default::default(),
+            extension_data: BTreeMap::new(),
         };
         let imported = round_trip(&doc);
         // Root has 2 children

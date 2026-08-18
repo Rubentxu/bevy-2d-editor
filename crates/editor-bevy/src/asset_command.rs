@@ -24,6 +24,7 @@ use crate::scene_asset::{LayerId, LocalId, SceneAssetDocument, SceneAssetEntity}
 use crate::tileset::{TileCoord, TileGrid, TileRef};
 use editor_model::ComponentInstance;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use thiserror::Error;
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -268,6 +269,7 @@ pub fn apply(
                 local_path: local_path.clone(),
                 name: name.clone(),
                 components: components.clone(),
+                extension_data: BTreeMap::new(),
             });
             Ok(AssetCommand::RemoveEntity {
                 local_id: local_id.clone(),
@@ -774,6 +776,7 @@ mod tests {
             relationships: vec![],
             exposed_properties: vec![],
             metadata: Default::default(),
+            extension_data: BTreeMap::new(),
         }
     }
 
@@ -783,6 +786,7 @@ mod tests {
             local_path: format!("./{}", local_id),
             name: name.to_string(),
             components,
+            extension_data: BTreeMap::new(),
         }
     }
 

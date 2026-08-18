@@ -14,6 +14,7 @@
 use editor_model::world::{LinkDirection, WorldDocument, WorldLinkKind};
 
 use crate::world_command::WorldCommand;
+use std::collections::BTreeMap;
 
 /// Produce `WorldConnectLevels` commands for each consecutive pair of levels in a chain.
 ///
@@ -114,6 +115,7 @@ mod tests {
             ],
             links: Vec::new(),
             updated_at: 0,
+            extension_data: BTreeMap::new(),
         }
     }
 

@@ -27,6 +27,7 @@
 
 use crate::adapter::AdapterError;
 use crate::{LogicGraphAsset, ProjectMetadata, SceneAssetDocument, SceneDocument, WorldDocument};
+use std::collections::BTreeMap;
 use std::error::Error;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -134,6 +135,9 @@ pub mod migrate {
                 if doc.instances.is_empty() {
                     doc.instances = BTreeMap::new();
                 }
+                if doc.extension_data.is_empty() {
+                    doc.extension_data = BTreeMap::new();
+                }
                 Ok(())
             }
             other => Err(MigrationError::UnsupportedVersion {
@@ -213,6 +217,9 @@ pub mod migrate {
                 if doc.active_world.is_none() {
                     doc.active_world = None;
                 }
+                if doc.extension_data.is_empty() {
+                    doc.extension_data = BTreeMap::new();
+                }
                 Ok(())
             }
             other => Err(MigrationError::UnsupportedVersion {
@@ -265,6 +272,7 @@ mod tests {
             name: "N".into(),
             entities: vec![],
             instances: Default::default(),
+            extension_data: BTreeMap::new(),
         };
         let before = doc.clone();
         migrate::scene_document(SCENE_DOCUMENT_VERSION, &mut doc).unwrap();
@@ -280,6 +288,7 @@ mod tests {
             name: "N".into(),
             entities: vec![],
             instances: Default::default(),
+            extension_data: BTreeMap::new(),
         };
         let err = migrate::scene_document(999, &mut doc).unwrap_err();
         assert!(matches!(
@@ -300,6 +309,7 @@ mod tests {
             scene_assets: vec![],
             worlds: vec![],
             active_world: None,
+            extension_data: BTreeMap::new(),
         };
         migrate::project_metadata(0, &mut pm).unwrap();
         assert!(pm.worlds.is_empty());
@@ -316,6 +326,7 @@ mod tests {
             name: "N".into(),
             entities: vec![],
             instances: Default::default(),
+            extension_data: BTreeMap::new(),
         };
         migrate::scene_document(0, &mut doc).unwrap();
         assert!(doc.instances.is_empty());
@@ -353,6 +364,7 @@ mod tests {
             exposed_properties: vec![],
             metadata: SceneAssetMetadata::default(),
             layers: vec![],
+            extension_data: BTreeMap::new(),
         };
         migrate::scene_asset_document(1, &mut doc).unwrap();
         migrate::scene_asset_document(0, &mut doc).unwrap();

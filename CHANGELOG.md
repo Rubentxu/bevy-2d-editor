@@ -2,6 +2,33 @@
 
 All notable changes to Bevy 2D Editor are documented here. The project follows semantic version tags; detailed milestone history is available in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## v0.99.0 — Semantic Editor Model Extension Bags (ADR-0046 S4) (2026-08-18)
+
+Delivers SDD-0046 Slice 4: unknown JSON fields are now PRESERVED in a per-type extension bag instead of silently dropped (ADR-0046 rule 2 / SEM-3 satisfied).
+
+### New features
+
+- **`extension_data` extension bag** on 7 core types (`SceneDocument`, `SceneAssetDocument`, `WorldDocument`, `LogicGraphAsset`, `ProjectMetadata`, `Entity`, `SceneAssetEntity`): `#[serde(default, flatten)] BTreeMap<String, serde_json::Value>`.
+  - Deserialize: unknown top-level keys land in the bag (known fields parse normally)
+  - Serialize: bag entries inline; empty bag adds ZERO bytes
+  - Deterministic BTreeMap ordering (ADR-0045); unknown-field order not preserved (documented)
+  - Old documents parse with an empty bag — no version bump required
+- **S2 D4 completion**: `SceneAssetEntity` unknown fields upgrade from drop → preserve
+- **S3 migration interplay**: `migrate::scene_document` / `migrate::project_metadata` materialize the empty bag explicitly
+- **Adapter contract updated**: `JsonProjectAdapter::Lossless` semantics documented — known fields byte-exact; unknown fields preserved (deterministic)
+
+### Stats
+
+- 2 commits, ~360 LOC (135 type/wiring + 225 tests)
+- 12 new tests (11 extension_bags + 1 adapter round-trip)
+- All existing round-trip tests pass unchanged (empty bag = zero noise)
+
+### Architecture
+
+- SEM-3 satisfied: unknown data never silently disappears
+- ADR-0045 deterministic ordering via BTreeMap
+- ADR-0030 upheld: editor-model bevy-free, wasm-free
+
 ## v0.98.0 — Semantic Editor Model Migration Framework (ADR-0046 S3) (2026-08-18)
 
 Delivers SDD-0046 Slice 3: the SEM-5 migration framework. Every document type now declares a format version and upgrades through typed, pure migration functions — old documents migrate explicitly, future documents fail loudly instead of silently corrupting.

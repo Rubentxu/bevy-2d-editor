@@ -37,6 +37,7 @@ use editor_model::scene_asset::{LevelLayer, SceneAssetRole};
 use editor_model::session::EditorSnapshot;
 use editor_model::tile_layer::{TileLayer, TileLayerId};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -438,6 +439,7 @@ impl Importer for AsepriteImporter {
             exposed_properties: vec![],
             metadata: Default::default(),
             layers: vec![level_layer],
+            extension_data: BTreeMap::new(),
         };
 
         // Serialize the document

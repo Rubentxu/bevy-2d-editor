@@ -4,6 +4,7 @@
 //! for a visual node/edge graph. Distinct from a Bevy runtime scene.
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 use crate::component::ComponentInstance;
 
@@ -115,6 +116,9 @@ pub struct LogicGraphAsset {
     /// All directed edges in this graph.
     #[serde(default)]
     pub edges: Vec<LogicEdge>,
+    /// Unknown JSON fields preserved for forward compatibility (ADR-0046 rule 2).
+    #[serde(default, flatten)]
+    pub extension_data: BTreeMap<String, serde_json::Value>,
 }
 
 impl Default for LogicGraphAsset {
@@ -126,6 +130,7 @@ impl Default for LogicGraphAsset {
             builtin: false,
             nodes: Vec::new(),
             edges: Vec::new(),
+            extension_data: BTreeMap::new(),
         }
     }
 }

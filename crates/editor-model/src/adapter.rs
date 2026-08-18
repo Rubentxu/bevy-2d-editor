@@ -319,6 +319,7 @@ mod tests {
             name: "Original".into(),
             entities: vec![],
             instances: BTreeMap::new(),
+            extension_data: BTreeMap::new(),
         };
         let model = SemanticModel::Scene(doc);
 

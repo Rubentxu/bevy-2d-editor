@@ -74,6 +74,7 @@ use editor_model::session::EditorSnapshot;
 use editor_model::tile_layer::{TileLayer, TileLayerId};
 use editor_model::tileset::{TileCoord, TileRef, TilesetId};
 use serde::Deserialize;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -578,6 +579,7 @@ impl Importer for TiledImporter {
             exposed_properties: vec![],
             metadata: SceneAssetMetadata::default(),
             layers: map_output.layers,
+            extension_data: BTreeMap::new(),
         };
 
         let doc_json = serde_json::to_string(&doc)

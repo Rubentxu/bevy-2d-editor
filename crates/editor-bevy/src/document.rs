@@ -168,6 +168,7 @@ impl From<Entity> for editor_model::Entity {
             name: doc.name,
             parent: doc.parent.map(|p| p.into()),
             components: doc.components.into_iter().map(Into::into).collect(),
+            extension_data: BTreeMap::new(),
         }
     }
 }

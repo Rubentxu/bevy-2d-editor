@@ -1,12 +1,15 @@
 //! JSON adapter — wraps all 6 JSON writer sites in `editor-bevy`.
 //!
 //! Implements [`editor_model::adapter::EditorAdapter`] for [`JsonProjectAdapter`].
-//! Declares [`editor_model::adapter::AdapterFidelity::Lossless`] for all supported
-//! variants. The fidelity claim is fully honest since SDD-0046 S2 (D4): every
-//! editor-model document type tolerates and drops unknown JSON fields via
-//! `#[serde(default)]` / `#[serde(skip_serializing_if)]` — the lone
-//! `SceneAssetEntity::deny_unknown_fields` violator was removed. S4 (extension
-//! bag) will promote unknown-field tolerance to lossless preservation.
+//! Declares [`editor_model::adapter::AdapterFidelity::Lossless`] with these
+//! documented semantics (SDD-0046 S4):
+//!
+//! - **Known fields**: byte-exact round-trip (all editor-model fields survive).
+//! - **Unknown fields**: PRESERVED in the per-type `extension_data` extension
+//!   bag (ADR-0046 rule 2 / SEM-3) with deterministic BTreeMap ordering
+//!   (ADR-0045). Unknown-field ORDER is not preserved (sorted on write-back);
+//!   all data is preserved.
+//! - Full-document byte-equality holds when no unknown fields are present.
 //!
 //! The 6 wrapped JSON writer sites are:
 //! - `crates/editor-bevy/src/lib.rs` — `SceneDocument` save/load (2 sites)
@@ -184,6 +187,7 @@ mod tests {
             name: "Test Scene".into(),
             entities: vec![],
             instances: BTreeMap::new(),
+            extension_data: BTreeMap::new(),
         }
     }
 
@@ -262,6 +266,7 @@ mod tests {
             name: "Round Trip".into(),
             entities: vec![],
             instances: BTreeMap::new(),
+            extension_data: BTreeMap::new(),
         };
         let encoded = adapter.encode(&SemanticModel::Scene(doc)).unwrap();
         let decoded = adapter.decode(&encoded).unwrap();
@@ -286,6 +291,7 @@ mod tests {
             scene_assets: vec![],
             worlds: vec![],
             active_world: None,
+            extension_data: BTreeMap::new(),
         };
         let encoded = adapter.encode(&SemanticModel::ProjectMetadata(pm)).unwrap();
         let decoded = adapter.decode(&encoded).unwrap();

@@ -101,6 +101,7 @@ mod tests {
             name: "Test Scene".into(),
             entities: vec![],
             instances: BTreeMap::new(),
+            extension_data: BTreeMap::new(),
         };
         let result = adapter.encode(&SemanticModel::Scene(doc));
         assert!(result.is_ok(), "encode failed: {:?}", result.err());
@@ -127,6 +128,7 @@ mod tests {
             exposed_properties: vec![],
             metadata: editor_model::scene_asset::SceneAssetMetadata::default(),
             layers: vec![],
+            extension_data: BTreeMap::new(),
         };
         let result = adapter.encode(&SemanticModel::SceneAsset(asset));
         assert!(
@@ -147,6 +149,7 @@ mod tests {
             builtin: false,
             nodes: vec![],
             edges: vec![],
+            extension_data: BTreeMap::new(),
         };
         let result = adapter.encode(&SemanticModel::LogicGraph(graph));
         assert!(
@@ -167,6 +170,7 @@ mod tests {
             levels: vec![],
             links: vec![],
             updated_at: 0,
+            extension_data: BTreeMap::new(),
         };
         let result = adapter.encode(&SemanticModel::World(world));
         assert!(
@@ -188,6 +192,7 @@ mod tests {
             scene_assets: vec![],
             worlds: vec![],
             active_world: None,
+            extension_data: BTreeMap::new(),
         };
         let result = adapter.encode(&SemanticModel::ProjectMetadata(pm));
         assert!(

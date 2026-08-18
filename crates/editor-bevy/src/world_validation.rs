@@ -18,6 +18,7 @@
 use editor_model::scene_asset_catalog::SceneAssetCatalog;
 use editor_model::world::{WorldDocument, WorldLevelRef, WorldLink};
 use editor_protocol::capabilities::{TopologyIssue, TopologyIssueCode, TopologySeverity};
+use std::collections::BTreeMap;
 use std::collections::{HashMap, HashSet};
 
 /// Validate a world document's topology against a scene asset catalog.
@@ -246,6 +247,7 @@ mod tests {
             levels: Vec::new(),
             links: Vec::new(),
             updated_at: 0,
+            extension_data: BTreeMap::new(),
         }
     }
 
@@ -258,6 +260,7 @@ mod tests {
             levels,
             links: Vec::new(),
             updated_at: 0,
+            extension_data: BTreeMap::new(),
         }
     }
 
@@ -327,6 +330,7 @@ mod tests {
                 exit: None,
             }],
             updated_at: 0,
+            extension_data: BTreeMap::new(),
         };
         let catalog = empty_catalog();
 
@@ -379,6 +383,7 @@ mod tests {
                 exit: None,
             }],
             updated_at: 0,
+            extension_data: BTreeMap::new(),
         };
         let catalog = empty_catalog();
 
@@ -421,6 +426,7 @@ mod tests {
             ],
             links: Vec::new(), // No links at all
             updated_at: 0,
+            extension_data: BTreeMap::new(),
         };
         let catalog = empty_catalog();
 
@@ -464,6 +470,7 @@ mod tests {
                 exit: None,
             }],
             updated_at: 0,
+            extension_data: BTreeMap::new(),
         };
         let catalog = empty_catalog();
 
