@@ -14,8 +14,7 @@
 //! `crates/editor-bevy/src/bsn_export.rs:72`). Attempting to encode a Logic
 //! asset returns [`AdapterError::UnsupportedRole`].
 
-use crate::bsn_export::{BsnExportError, export_to_bsn_text};
-use editor_model::SceneAssetDocument;
+use crate::bsn_export::export_to_bsn_text;
 use editor_model::adapter::{AdapterError, AdapterFidelity, EditorAdapter, SemanticModel};
 use editor_model::scene_asset::SceneAssetRole;
 
@@ -78,6 +77,7 @@ impl EditorAdapter for BsnExportAdapter {
 mod tests {
     use super::*;
     use editor_model::ComponentInstance;
+    use editor_model::SceneAssetDocument;
     use editor_model::adapter::SemanticModel;
     use editor_model::scene_asset::{SceneAssetEntity, SceneAssetMetadata, SceneAssetRole};
     use std::collections::BTreeMap;

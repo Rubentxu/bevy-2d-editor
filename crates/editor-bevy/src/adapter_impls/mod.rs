@@ -16,9 +16,7 @@ pub mod bevy;
 pub mod bsn;
 pub mod json;
 
-use editor_model::adapter::{AdapterError, AdapterFidelity, EditorAdapter, SemanticModel};
-use std::error::Error;
-use std::fmt;
+use editor_model::adapter::EditorAdapter;
 
 // Re-export the three adapter types for convenience.
 pub use bevy::BevyRuntimeAdapter;
