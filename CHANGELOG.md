@@ -2,6 +2,30 @@
 
 All notable changes to Bevy 2D Editor are documented here. The project follows semantic version tags; detailed milestone history is available in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## v0.97.0 — Semantic Editor Model Impl Hardening (ADR-0046 S2) (2026-08-18)
+
+Delivers SDD-0046 Slice 2: closes all 4 ponytail debts left by S1. The adapter contract is now structurally sound — no memory leaks, cross-thread registry, real Bevy dispatch for Scene, and the `Lossless` fidelity claim is fully honest.
+
+### Improvements
+
+- **Owned `SemanticModel`** (`crates/editor-model/src/adapter.rs`): the enum no longer borrows (`'a` lifetime removed); `decode()` returns fully owned values — eliminates the `Box::leak` per-decode memory leak from S1.
+- **`OnceLock` registry**: `thread_local!` replaced with `std::sync::OnceLock`; `init_registry(Vec)` is single-shot (panics on double-call) and `all_adapters()` is cross-thread safe. The S1 `set_registry_fn` API was replaced.
+- **Real Bevy dispatch** (`BevyRuntimeAdapter`): `Scene(SceneDocument)` now calls the actual `export_dynamic_scene` projection (via new `From<editor_model::SceneDocument>` + `SceneInstance`/`ComponentOverride` conversions). `SceneAsset`/`LogicGraph`/`World`/`ProjectMetadata` return `UnsupportedModel` honestly — no editor-bevy projection accepts those types directly.
+- **`SceneAssetEntity` fidelity violator removed**: `#[serde(deny_unknown_fields)]` dropped; unknown JSON fields are tolerated (matching every other document type). The `JsonProjectAdapter::Lossless` claim is now provable without caveats.
+
+### Stats
+
+- 3 commits, ~460 LOC changed across 6 files
+- 16/16 spec scenarios passing (1 documented deviation: SceneAsset/LogicGraph → UnsupportedModel)
+- 476/477 workspace tests pass (1 pre-existing failure unchanged)
+- New tests: 4 unit (adapter.rs) + 3 unit (adapter_impls) + 1 integration (adapter_contract) + 2 D4 regression (scene_asset.rs)
+
+### Architecture
+
+- ADR-0030 upheld: `editor-model` remains bevy-free, wasm-free (wasm32 build clean)
+- ADR-0046 progresses: SEM-6 fidelity contracts fully honest
+- `From` impls added in `editor-bevy/src/{document,scene_instance}.rs` — field-by-field, no silent drops
+
 ## v0.96.0 — Semantic Editor Model Adapter Contract (ADR-0046 S1) (2026-08-18)
 
 Delivers SDD-0046 Slice 1: the `EditorAdapter` trait + `AdapterFidelity` enum + 3 retroactive impls that establish the adapter contract required by SEM-6. SEM-6 (Fidelity contracts) is satisfied for the first time.

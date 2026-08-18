@@ -172,6 +172,28 @@ impl From<Entity> for editor_model::Entity {
     }
 }
 
+/// Convert from the canonical `editor_model::SceneDocument` to the local mirror
+/// (SDD-0046 S2 D3 prerequisite).
+///
+/// The local `StableId` is a type alias of `editor_model::ids::StableId`, so
+/// the `instances` BTreeMap keys convert without mapping. Entities and scene
+/// instances use the From impls defined above / in `scene_instance.rs`.
+impl From<editor_model::SceneDocument> for SceneDocument {
+    fn from(em: editor_model::SceneDocument) -> Self {
+        Self {
+            version: em.version,
+            scene_id: em.scene_id,
+            name: em.name,
+            entities: em.entities.into_iter().map(Into::into).collect(),
+            instances: em
+                .instances
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
