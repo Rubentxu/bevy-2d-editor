@@ -6,6 +6,8 @@
 //! - Encode-only adapters reject unsupported roles correctly.
 //! - Fidelity annotations are consistent with adapter behaviour.
 
+use std::collections::BTreeMap;
+
 use editor_bevy::adapter_impls::{
     BevyRuntimeAdapter, BsnExportAdapter, JsonProjectAdapter, all_adapters_init,
 };
@@ -31,6 +33,7 @@ fn make_actor_asset() -> SceneAssetDocument {
             local_path: "root".into(),
             name: "Hero".into(),
             components: vec![],
+            extension_data: BTreeMap::new(),
         }],
         relationships: vec![],
         exposed_properties: vec![],
@@ -41,6 +44,7 @@ fn make_actor_asset() -> SceneAssetDocument {
             updated_at: None,
         },
         layers: vec![],
+        extension_data: BTreeMap::new(),
     }
 }
 
@@ -52,6 +56,7 @@ fn make_logic_asset() -> LogicGraphAsset {
         builtin: false,
         nodes: vec![],
         edges: vec![],
+        extension_data: BTreeMap::new(),
     }
 }
 
@@ -346,4 +351,29 @@ fn decode_unknown_field_dropped_and_migrated() {
         }
         other => panic!("expected Scene, got {other:?}"),
     }
+}
+
+// ---------------------------------------------------------------------------
+// SDD-0046 S4 — extension-bag scenario through JsonProjectAdapter (SEM-3)
+// ---------------------------------------------------------------------------
+
+/// Spec §sem4-adapter-contract scenario 16: unknown data survives a full
+/// adapter round-trip.
+#[test]
+fn adapter_round_trip_preserves_unknown_data() {
+    let adapter = JsonProjectAdapter::new();
+    let json = r#"{"version":"0.1","scene_id":"s1","name":"N","entities":[],"future_field":{"a":1},"another":42}"#;
+    let model = adapter
+        .decode(json.as_bytes())
+        .expect("decode with unknown fields");
+    let encoded = adapter.encode(&model).expect("re-encode");
+    let json_str = String::from_utf8(encoded).unwrap();
+    assert!(
+        json_str.contains(r#""future_field":{"a":1}"#),
+        "unknown data must survive adapter round-trip: {json_str}"
+    );
+    assert!(
+        json_str.contains(r#""another":42"#),
+        "unknown data must survive adapter round-trip: {json_str}"
+    );
 }
