@@ -7,9 +7,9 @@
 //! # Architecture
 //!
 //! The trait lives in `editor-model` (ADR-0030: bevy-free, wasm-free). Implementations
-//! live in `editor-bevy::adapter_impls`. The [`all_adapters`] registry is populated
-//! via [`set_registry_fn`] — a setter that takes a `fn()` pointer so `editor-model`
-//! need not depend on `editor-bevy`.
+//! live in the `adapter_impls` module of the consumer crate. The [`all_adapters`]
+//! registry is populated via [`set_registry_fn`] — a setter that takes a `fn()`
+//! pointer so `editor-model` need not depend on any consumer crate.
 //!
 //! # Fidelity levels
 //!
