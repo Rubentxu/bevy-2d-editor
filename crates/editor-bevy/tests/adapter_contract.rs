@@ -172,10 +172,15 @@ fn bevy_runtime_adapter_encodes_scene_asset() {
     let adapter = BevyRuntimeAdapter::new();
     let asset = make_actor_asset();
 
-    let result = adapter.encode(&SemanticModel::SceneAsset(asset.clone()));
+    // Honest dispatch (SDD-0046 S2 D3): no editor-bevy projection accepts
+    // SceneAssetDocument directly → UnsupportedModel.
+    let result = adapter.encode(&SemanticModel::SceneAsset(asset));
     assert!(
-        result.is_ok(),
-        "BevyRuntimeAdapter should encode SceneAsset, got {result:?}"
+        matches!(
+            result,
+            Err(editor_model::adapter::AdapterError::UnsupportedModel { .. })
+        ),
+        "BevyRuntimeAdapter should reject SceneAsset, got {result:?}"
     );
 }
 
@@ -184,10 +189,15 @@ fn bevy_runtime_adapter_encodes_logic_graph() {
     let adapter = BevyRuntimeAdapter::new();
     let logic = make_logic_asset();
 
-    let result = adapter.encode(&SemanticModel::LogicGraph(logic.clone()));
+    // Honest dispatch (SDD-0046 S2 D3): project_instances takes SceneDocument,
+    // not LogicGraphAsset → UnsupportedModel.
+    let result = adapter.encode(&SemanticModel::LogicGraph(logic));
     assert!(
-        result.is_ok(),
-        "BevyRuntimeAdapter should encode LogicGraph, got {result:?}"
+        matches!(
+            result,
+            Err(editor_model::adapter::AdapterError::UnsupportedModel { .. })
+        ),
+        "BevyRuntimeAdapter should reject LogicGraph, got {result:?}"
     );
 }
 

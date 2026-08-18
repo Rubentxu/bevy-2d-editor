@@ -72,8 +72,13 @@ pub struct SceneAssetDocument {
 }
 
 /// One entity inside a Scene Asset.
+///
+/// Fidelity note (SDD-0046 S2 D4): unknown JSON fields are tolerated and
+/// silently dropped, matching the `JsonProjectAdapter::Lossless` discipline
+/// used by every other editor-model document type. The previous
+/// `#[serde(deny_unknown_fields)]` violated that claim by rejecting documents
+/// that round-tripped through formats that added fields.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct SceneAssetEntity {
     /// Stable local identifier within this asset.
     pub local_id: SceneAssetLocalId,
@@ -354,5 +359,53 @@ mod tests {
             }
             other => panic!("Expected LevelLayer::IntGrid, got {:?}", other),
         }
+    }
+
+    // ── SDD-0046 S2 D4 tests ────────────────────────────────────────────────
+
+    /// Spec §sem2-scene-asset-entity scenario 12: extra fields parse and drop.
+    #[test]
+    fn scene_asset_entity_extra_field_parses() {
+        let json = r#"{
+            "local_id": "e1",
+            "local_path": "root",
+            "name": "Hero",
+            "components": [],
+            "unknown_field": 42
+        }"#;
+        let parsed: SceneAssetEntity =
+            serde_json::from_str(json).expect("SceneAssetEntity must tolerate unknown fields (D4)");
+        assert_eq!(parsed.local_path, "root");
+        assert_eq!(parsed.name, "Hero");
+    }
+
+    /// Spec §sem2-scene-asset-entity scenario 13: a full SceneAssetDocument
+    /// containing an entity with an extra field still parses.
+    #[test]
+    fn old_project_json_with_extra_fields_still_parses() {
+        let json = r#"{
+            "asset_id": "hero",
+            "logical_path": "actors/hero",
+            "role": "actor",
+            "version": 1,
+            "entities": [
+                {
+                    "local_id": "e1",
+                    "local_path": "root",
+                    "name": "Hero",
+                    "components": [],
+                    "future_field": {"a": 1}
+                }
+            ],
+            "relationships": [],
+            "metadata": {},
+            "layers": [],
+            "future_top_level": true
+        }"#;
+        let parsed: SceneAssetDocument = serde_json::from_str(json)
+            .expect("SceneAssetDocument must tolerate unknown fields (D4)");
+        assert_eq!(parsed.asset_id, "hero");
+        assert_eq!(parsed.entities.len(), 1);
+        assert_eq!(parsed.entities[0].name, "Hero");
     }
 }

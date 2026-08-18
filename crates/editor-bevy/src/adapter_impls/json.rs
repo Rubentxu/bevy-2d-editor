@@ -2,15 +2,11 @@
 //!
 //! Implements [`editor_model::adapter::EditorAdapter`] for [`JsonProjectAdapter`].
 //! Declares [`editor_model::adapter::AdapterFidelity::Lossless`] for all supported
-//! variants, with one documented caveat:
-//!
-//! > **Caveat** (`crates/editor-model/src/scene_asset.rs:76`):
-//! > `SceneAssetEntity` uses `#[serde(deny_unknown_fields)]`, so unknown JSON fields
-//! > in a `SceneAssetDocument` entity will cause decode to fail. All other document
-//! > types silently drop unknown fields (via `#[serde(default)]`). This asymmetry means
-//! > a `SceneAssetDocument` that round-tripped through a format that added fields would
-//! > not be byte-exact. SDD-0046 S2 (D4) removes this attribute; S4 (extension bag)
-//! > will address the general case by promoting all types to true lossless discipline.
+//! variants. The fidelity claim is fully honest since SDD-0046 S2 (D4): every
+//! editor-model document type tolerates and drops unknown JSON fields via
+//! `#[serde(default)]` / `#[serde(skip_serializing_if)]` — the lone
+//! `SceneAssetEntity::deny_unknown_fields` violator was removed. S4 (extension
+//! bag) will promote unknown-field tolerance to lossless preservation.
 //!
 //! The 6 wrapped JSON writer sites are:
 //! - `crates/editor-bevy/src/lib.rs` — `SceneDocument` save/load (2 sites)
