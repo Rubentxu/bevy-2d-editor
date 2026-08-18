@@ -9,7 +9,7 @@
 //! - Produces `WorldConnectLevels` commands for each consecutive pair of levels.
 //! - Permission: `Capability::Commands` (produces `WorldCommand`s)
 
-use editor_model::extension::{Capability, CapabilityDescriptor};
+use editor_model::extension::Capability;
 
 /// Metadata for a built-in world recipe.
 #[derive(Debug, Clone)]

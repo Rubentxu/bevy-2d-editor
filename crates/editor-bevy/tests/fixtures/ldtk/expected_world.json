@@ -96,10 +96,6 @@
   },
   {
     "world_path": "world-sampleworld",
-    "type": "WorldSave"
-  },
-  {
-    "world_path": "world-sampleworld",
     "link_id": "chain_lvl_sampleworld_0_lvl_sampleworld_1",
     "from": "lvl_sampleworld_0",
     "to": "lvl_sampleworld_1",
@@ -115,5 +111,9 @@
     "direction": "east",
     "kind": { "kind": "one_way" },
     "type": "WorldConnectLevels"
+  },
+  {
+    "world_path": "world-sampleworld",
+    "type": "WorldSave"
   }
 ]
