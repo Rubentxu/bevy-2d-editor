@@ -2,6 +2,31 @@
 
 All notable changes to Bevy 2D Editor are documented here. The project follows semantic version tags; detailed milestone history is available in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## v0.98.0 — Semantic Editor Model Migration Framework (ADR-0046 S3) (2026-08-18)
+
+Delivers SDD-0046 Slice 3: the SEM-5 migration framework. Every document type now declares a format version and upgrades through typed, pure migration functions — old documents migrate explicitly, future documents fail loudly instead of silently corrupting.
+
+### New features
+
+- **`MigrationError`** (`crates/editor-model/src/migration.rs`): `UnsupportedVersion` (future document in older editor) + `MigrationFailed` (step failure), thiserror-derived.
+- **`parse_version_string`**: `"0.1" → 0`, `"99.0" → 99` (major component), non-numeric → error.
+- **Typed `migrate::<type>` functions** for all 5 core document types (`SceneDocument`, `SceneAssetDocument`, `WorldDocument`, `LogicGraphAsset`, `ProjectMetadata`). Current version = no-op; V0→V1 materializes serde-defaulted fields explicitly; future versions → `UnsupportedVersion`.
+- **Adapter wiring**: `JsonProjectAdapter::decode` runs migrations after deserialization. Migration errors surface as `AdapterError::Decode`.
+- **Load-site wiring**: all 4 project.json load paths route through `migrate::project_metadata`. **Critical fix**: the `update_project_metadata`/`update_project_schemas` helpers previously read a future-version project.json, silently defaulted it, and wrote back an empty project — destroying the file. Migration errors now surface.
+
+### Stats
+
+- ~590 LOC across 6 files (2 commits)
+- 18/18 spec scenarios (16 unit/corpus + adapter scenarios)
+- 630 workspace tests pass / 1 pre-existing failure unchanged
+- 16 new tests (9 unit + 4 corpus + 3 adapter)
+
+### Architecture
+
+- ADR-0046 rule 4 honored: typed structures, never string replacement
+- ADR-0030 upheld: `editor-model` remains bevy-free, wasm-free (wasm32 build clean)
+- SEM-5 satisfied: every document type declares a format version with a tested upgrade path
+
 ## v0.97.0 — Semantic Editor Model Impl Hardening (ADR-0046 S2) (2026-08-18)
 
 Delivers SDD-0046 Slice 2: closes all 4 ponytail debts left by S1. The adapter contract is now structurally sound — no memory leaks, cross-thread registry, real Bevy dispatch for Scene, and the `Lossless` fidelity claim is fully honest.
