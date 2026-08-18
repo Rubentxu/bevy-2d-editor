@@ -105,12 +105,7 @@ export type LayoutPolicy =
   | { kind: "Custom"; value: string };
 
 /** Direction of a WorldLink. */
-export type LinkDirection =
-  | "north"
-  | "south"
-  | "east"
-  | "west"
-  | "undirected";
+export type LinkDirection = "north" | "south" | "east" | "west" | "undirected";
 
 /** One-way / bidirectional discriminator for WorldLink. */
 export type WorldLinkKind =
@@ -165,10 +160,7 @@ export type TopologySeverity = "Warning" | "Error";
 
 /** Issue code for topology validation errors. */
 export type TopologyIssueCode =
-  | "Unreachable"
-  | "InvalidReciprocal"
-  | "MissingNeighbour"
-  | "MissingLevelRef";
+  "Unreachable" | "InvalidReciprocal" | "MissingNeighbour" | "MissingLevelRef";
 
 /** A single topology validation issue. */
 export interface TopologyIssue {

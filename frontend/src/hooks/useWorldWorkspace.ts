@@ -20,7 +20,12 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { getEditorGateway, type LayoutPolicy, type TopologyIssue, type WorldSummary } from "../services/EditorGateway";
+import {
+  getEditorGateway,
+  type LayoutPolicy,
+  type TopologyIssue,
+  type WorldSummary,
+} from "../services/EditorGateway";
 import { useCanvasViewport } from "./useCanvasViewport";
 
 export interface WorldWorkspaceState {
@@ -31,7 +36,12 @@ export interface WorldWorkspaceState {
   viewport: ViewportState;
   selectLevel: (levelId: string | null) => void;
   placeLevel: (levelId: string, x: number, y: number) => Promise<void>;
-  connectLevels: (from: string, to: string, direction: string, kind: string) => Promise<void>;
+  connectLevels: (
+    from: string,
+    to: string,
+    direction: string,
+    kind: string,
+  ) => Promise<void>;
   setLayoutPolicy: (policy: LayoutPolicy) => Promise<void>;
   openLevel: (levelId: string) => Promise<string>;
   loadWorld: (name: string) => Promise<void>;
@@ -67,7 +77,9 @@ function useDebounce<T>(value: T, delay: number): T {
 
 export function useWorldWorkspace(): WorldWorkspaceState {
   const [worldDoc, setWorldDoc] = useState<WorldSummary | null>(null);
-  const [topologyIssues, setTopologyIssues] = useState<readonly TopologyIssue[]>([]);
+  const [topologyIssues, setTopologyIssues] = useState<
+    readonly TopologyIssue[]
+  >([]);
   const [selectedLevelId, setSelectedLevelId] = useState<string | null>(null);
   const [dragState, setDragState] = useState<DragState>({ active: false });
   const [activeWorldName, setActiveWorldName] = useState<string | null>(null);
@@ -85,7 +97,9 @@ export function useWorldWorkspace(): WorldWorkspaceState {
       setWorldDoc(result.value);
       setActiveWorldName(name);
       // Fetch topology issues
-      const topoResult = await gateway.world.validateTopology(result.value.world_id);
+      const topoResult = await gateway.world.validateTopology(
+        result.value.world_id,
+      );
       if (topoResult.ok) {
         setTopologyIssues(topoResult.value);
       } else {
@@ -112,7 +126,9 @@ export function useWorldWorkspace(): WorldWorkspaceState {
       if (result.ok) {
         setWorldDoc(result.value);
         // Refresh topology after placement
-        const topoResult = await gateway.world.validateTopology(result.value.world_id);
+        const topoResult = await gateway.world.validateTopology(
+          result.value.world_id,
+        );
         if (topoResult.ok) {
           setTopologyIssues(topoResult.value);
         }
@@ -125,10 +141,17 @@ export function useWorldWorkspace(): WorldWorkspaceState {
   const connectLevels = useCallback(
     async (from: string, to: string, direction: string, kind: string) => {
       const gateway = getEditorGateway();
-      const result = await gateway.world.connectLevels(from, to, direction, kind);
+      const result = await gateway.world.connectLevels(
+        from,
+        to,
+        direction,
+        kind,
+      );
       if (result.ok) {
         setWorldDoc(result.value);
-        const topoResult = await gateway.world.validateTopology(result.value.world_id);
+        const topoResult = await gateway.world.validateTopology(
+          result.value.world_id,
+        );
         if (topoResult.ok) {
           setTopologyIssues(topoResult.value);
         }
@@ -166,12 +189,18 @@ export function useWorldWorkspace(): WorldWorkspaceState {
       worldDoc
     ) {
       // Find the level and update if position changed significantly
-      const level = worldDoc.levels.find((l) => l.level_id === debouncedDrag.levelId);
+      const level = worldDoc.levels.find(
+        (l) => l.level_id === debouncedDrag.levelId,
+      );
       if (level) {
         const dx = Math.abs(debouncedDrag.currentX - level.position[0]);
         const dy = Math.abs(debouncedDrag.currentY - level.position[1]);
         if (dx > 2 || dy > 2) {
-          void placeLevel(debouncedDrag.levelId, debouncedDrag.currentX, debouncedDrag.currentY);
+          void placeLevel(
+            debouncedDrag.levelId,
+            debouncedDrag.currentX,
+            debouncedDrag.currentY,
+          );
         }
       }
     }

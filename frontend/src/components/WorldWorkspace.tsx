@@ -14,8 +14,16 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useWorldWorkspace, type WorldWorkspaceState } from "../hooks/useWorldWorkspace";
-import { type LayoutPolicy, type LinkDirection, type WorldLevelRef, type WorldLink } from "../services/EditorGateway";
+import {
+  useWorldWorkspace,
+  type WorldWorkspaceState,
+} from "../hooks/useWorldWorkspace";
+import {
+  type LayoutPolicy,
+  type LinkDirection,
+  type WorldLevelRef,
+  type WorldLink,
+} from "../services/EditorGateway";
 import "./WorldWorkspace.css";
 
 const LEVEL_SQUARE_SIZE = 80;
@@ -48,7 +56,10 @@ export default function WorldWorkspace({ onOpenLevel, onBackToScene }: Props) {
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number } | null>(null);
+  const [dragStartPos, setDragStartPos] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
 
   // Load the first available world on mount
   useEffect(() => {
@@ -113,7 +124,10 @@ export default function WorldWorkspace({ onOpenLevel, onBackToScene }: Props) {
   const minimapWorldScale = useMemo(() => {
     const w = worldBounds.maxX - worldBounds.minX;
     const h = worldBounds.maxY - worldBounds.minY;
-    return Math.min(MINIMAP_WIDTH / Math.max(w, 1), MINIMAP_HEIGHT / Math.max(h, 1));
+    return Math.min(
+      MINIMAP_WIDTH / Math.max(w, 1),
+      MINIMAP_HEIGHT / Math.max(h, 1),
+    );
   }, [worldBounds]);
 
   // Get topology issues for a specific level
@@ -277,7 +291,9 @@ export default function WorldWorkspace({ onOpenLevel, onBackToScene }: Props) {
           <button
             type="button"
             className={`world-workspace__layout-btn ${worldDoc.layout_policy.kind === "Grid" ? "active" : ""}`}
-            onClick={() => handleLayoutPolicyChange({ kind: "Grid", cell_size: 100 })}
+            onClick={() =>
+              handleLayoutPolicyChange({ kind: "Grid", cell_size: 100 })
+            }
             title="Grid layout"
           >
             Grid
@@ -336,16 +352,22 @@ export default function WorldWorkspace({ onOpenLevel, onBackToScene }: Props) {
             {renderArrowMarker("arrowhead-error", "#ef4444")}
             {renderArrowMarker("arrowhead-normal", "#60a5fa")}
             {worldDoc.links.map((link) => {
-              const fromLevel = worldDoc.levels.find((l) => l.level_id === link.from);
-              const toLevel = worldDoc.levels.find((l) => l.level_id === link.to);
+              const fromLevel = worldDoc.levels.find(
+                (l) => l.level_id === link.from,
+              );
+              const toLevel = worldDoc.levels.find(
+                (l) => l.level_id === link.to,
+              );
               if (!fromLevel || !toLevel) return null;
 
               const path = computeArrowPath(fromLevel, toLevel, link.direction);
               const hasIssue = topologyIssues.some(
-                (issue) => issue.link_id === link.id && issue.severity === "Warning",
+                (issue) =>
+                  issue.link_id === link.id && issue.severity === "Warning",
               );
               const hasError = topologyIssues.some(
-                (issue) => issue.link_id === link.id && issue.severity === "Error",
+                (issue) =>
+                  issue.link_id === link.id && issue.severity === "Error",
               );
               const markerId = hasError
                 ? "arrowhead-error"
@@ -357,7 +379,9 @@ export default function WorldWorkspace({ onOpenLevel, onBackToScene }: Props) {
                 <path
                   key={link.id}
                   d={path}
-                  stroke={hasError ? "#ef4444" : hasIssue ? "#f59e0b" : "#60a5fa"}
+                  stroke={
+                    hasError ? "#ef4444" : hasIssue ? "#f59e0b" : "#60a5fa"
+                  }
                   strokeWidth={2}
                   fill="none"
                   markerEnd={`url(#${markerId})`}
@@ -392,12 +416,18 @@ export default function WorldWorkspace({ onOpenLevel, onBackToScene }: Props) {
                   {level.asset_ref.split("/").pop()}
                 </span>
                 {hasError && (
-                  <span className="world-workspace__badge world-workspace__badge--error" title="Missing asset reference">
+                  <span
+                    className="world-workspace__badge world-workspace__badge--error"
+                    title="Missing asset reference"
+                  >
                     ⚠
                   </span>
                 )}
                 {hasWarning && !hasError && (
-                  <span className="world-workspace__badge world-workspace__badge--warning" title="Topology issue">
+                  <span
+                    className="world-workspace__badge world-workspace__badge--warning"
+                    title="Topology issue"
+                  >
                     ⚠
                   </span>
                 )}
@@ -441,8 +471,14 @@ export default function WorldWorkspace({ onOpenLevel, onBackToScene }: Props) {
             })}
             {/* Viewport rectangle */}
             <rect
-              x={(-viewport.pan.x / viewport.zoom - worldBounds.minX) * minimapWorldScale}
-              y={(-viewport.pan.y / viewport.zoom - worldBounds.minY) * minimapWorldScale}
+              x={
+                (-viewport.pan.x / viewport.zoom - worldBounds.minX) *
+                minimapWorldScale
+              }
+              y={
+                (-viewport.pan.y / viewport.zoom - worldBounds.minY) *
+                minimapWorldScale
+              }
               width={(800 / viewport.zoom) * minimapWorldScale}
               height={(600 / viewport.zoom) * minimapWorldScale}
               fill="none"
@@ -457,12 +493,16 @@ export default function WorldWorkspace({ onOpenLevel, onBackToScene }: Props) {
       {/* Status bar */}
       <div className="world-workspace__status">
         <span>
-          {worldDoc.levels.length} level{worldDoc.levels.length !== 1 ? "s" : ""}
+          {worldDoc.levels.length} level
+          {worldDoc.levels.length !== 1 ? "s" : ""}
         </span>
-        <span>{worldDoc.links.length} link{worldDoc.links.length !== 1 ? "s" : ""}</span>
+        <span>
+          {worldDoc.links.length} link{worldDoc.links.length !== 1 ? "s" : ""}
+        </span>
         {topologyIssues.length > 0 && (
           <span className="world-workspace__status--warning">
-            {topologyIssues.length} issue{topologyIssues.length !== 1 ? "s" : ""}
+            {topologyIssues.length} issue
+            {topologyIssues.length !== 1 ? "s" : ""}
           </span>
         )}
       </div>

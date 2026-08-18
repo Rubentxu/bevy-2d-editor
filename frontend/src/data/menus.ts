@@ -179,8 +179,7 @@ export function createMenuConfig(
       {
         label: "World Workspace",
         shortcut: "F10",
-        onClick:
-          handlers.handleOpenWorldWorkspace ?? todo("World Workspace"),
+        onClick: handlers.handleOpenWorldWorkspace ?? todo("World Workspace"),
         testId: "menu-world-workspace",
       },
       // ── Workspace presets (v0.81 Tier 1b) ──────────────────────────────
