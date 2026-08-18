@@ -8,6 +8,11 @@
 //! - LDtk AutoLayer rules → `LevelLayer::Auto` with rules on `metadata`
 //! - Level neighbours → `SceneInstanceLayer.metadata.neighbours`
 //!
+//! ## World Workspace (ADR-0037 v0.95)
+//!
+//! When an `LdtkWorld` contains ≥2 levels, the importer also emits a `WorldDocument`
+//! with `WorldLevelRef`s for each level and `WorldLink`s derived from `__neighbours`.
+//!
 //! ## LDtk JSON format (概要)
 //!
 //! ```json
@@ -30,6 +35,7 @@
 //!         },
 //!         {
 //!           "__type": "Entities",
+//!           "identifier": "Actors",
 //!           "entityInstances": [{
 //!             "entityId": 0,
 //!             "gridX": 5, "gridY": 3,
@@ -51,6 +57,7 @@
 //! - Entity instances map to `SceneInstance` with `Transform2D` + field `ComponentInstance`s.
 //! - `ValidationIssue { category: Import, code: "unknown_intgrid_identifier", severity: Warning }`
 //!   emitted per dropped IntGrid cell with unknown identifier.
+//! - World emission threshold: ≥2 levels per LdtkWorld (per spec §ww-ldtk-bridge).
 
 use editor_model::ComponentInstance;
 use editor_model::SceneInstance;
@@ -69,6 +76,10 @@ use editor_model::scene_asset::{
 use editor_model::session::EditorSnapshot;
 use editor_model::tile_layer::{TileLayer, TileLayerId};
 use editor_model::tileset::{TileRef, TilesetId};
+use editor_model::world::{
+    LayoutPolicy, LinkDirection, StreamingPolicy, WorldDocument, WorldId, WorldLevelRef, WorldLink,
+    WorldLinkKind,
+};
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -108,10 +119,10 @@ struct LdtkLevel {
     /// Human-readable name.
     identifier: String,
     /// World-space X coordinate in pixels.
-    #[serde(default)]
+    #[serde(default, rename = "worldX")]
     world_x: i32,
     /// World-space Y coordinate in pixels.
-    #[serde(default)]
+    #[serde(default, rename = "worldY")]
     world_y: i32,
     /// Level width in pixels.
     #[serde(rename = "pxWid")]
@@ -310,6 +321,10 @@ struct LevelParseOutput {
     entity_instances: Vec<SceneInstance>,
     /// Source mappings for this level.
     mappings: Vec<SourceMapping>,
+    /// Level UID from LDtk (used for world link resolution).
+    level_uid: i32,
+    /// World name this level belongs to.
+    world_name: String,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -463,6 +478,8 @@ impl LdtkImporter {
             layers,
             entity_instances,
             mappings,
+            level_uid: level.uid,
+            world_name: world_name.unwrap_or("").to_string(),
         })
     }
 
@@ -725,6 +742,7 @@ impl Importer for LdtkImporter {
                     .unwrap_or_default(),
             ),
             detected_version_parsed: None,
+            raw_source_json: Some(source.bytes.to_vec()),
         })
     }
 
@@ -734,24 +752,21 @@ impl Importer for LdtkImporter {
         _snapshot: EditorSnapshot,
     ) -> Result<BuildChangeSetOutput, ImporterError> {
         use crate::asset_command::AssetCommand;
+        use crate::world_command::WorldCommand;
 
         // Re-parse to get full level data for build_change_set
-        // NOTE: In a full implementation we would cache the parse output,
-        // but for now we re-parse. A production implementation would
-        // pass the full LevelParseOutput through ResourceDraft or cache it.
-        let level_outputs = self
-            .parse_json(
-                draft
-                    .detected_version
-                    .as_ref()
-                    .map(|s| s.as_bytes())
-                    .unwrap_or(&[]),
-            )
+        // Use raw_source_json (passed through from parse()) instead of detected_version
+        // which only contains the version string, not the actual JSON bytes.
+        let json_bytes = draft.raw_source_json.as_deref().unwrap_or(&[]);
+
+        let ldtk_json: LdtkJson = serde_json::from_slice(json_bytes)
             .map_err(|e| ImporterError::ParseError(format!("re-parse failed: {}", e)))?;
 
-        let mut all_commands: Vec<AssetCommand> = Vec::new();
+        let level_outputs = self.parse_json(json_bytes)?;
 
-        for output in level_outputs {
+        let mut all_commands: Vec<serde_json::Value> = Vec::new();
+
+        for output in &level_outputs {
             // Build SceneAssetDocument for this level
             let doc = SceneAssetDocument {
                 asset_id: format!("lvl_{}", output.logical_path.replace("/", "_")),
@@ -762,20 +777,187 @@ impl Importer for LdtkImporter {
                 relationships: vec![],
                 exposed_properties: vec![],
                 metadata: SceneAssetMetadata::default(),
-                layers: output.layers,
+                layers: output.layers.clone(),
             };
 
             let doc_json = serde_json::to_string(&doc)
                 .map_err(|e| ImporterError::ParseError(format!("serialization error: {}", e)))?;
 
-            all_commands.push(AssetCommand::AddComponent {
+            let cmd = serde_json::to_value(AssetCommand::AddComponent {
                 local_id: format!("lvl_{}_root", output.logical_path.replace("/", "_")),
                 type_id: "editor.LevelDocument".to_string(),
                 values: serde_json::json!({
                     "logical_path": output.logical_path,
                     "document": doc_json
                 }),
-            });
+            })
+            .map_err(|e| ImporterError::ParseError(format!("serialization error: {}", e)))?;
+            all_commands.push(cmd);
+        }
+
+        // Create WorldDocument for worlds with ≥2 levels
+        // Re-parse the JSON to extract world and level info with UIDs
+        for world in &ldtk_json.worlds {
+            if world.levels.len() >= 2 {
+                // Build WorldDocument for this world
+                let world_name = &world.identifier;
+                let world_id = format!("world-{}", world_name.to_lowercase().replace(' ', "-"));
+
+                // Create a map of uid -> level_info for link resolution
+                let mut uid_to_level_id: std::collections::HashMap<i32, String> =
+                    std::collections::HashMap::new();
+
+                // First pass: create WorldLevelRefs for each level
+                let mut world_levels: Vec<WorldLevelRef> = Vec::new();
+                for (idx, level) in world.levels.iter().enumerate() {
+                    let level_path = format!("levels/{}/{}", world_name, level.identifier);
+                    let level_id = format!("lvl_{}_{}", world_name.to_lowercase(), idx);
+
+                    // Get position from worldX/worldY (convert from pixels to world coordinates)
+                    // LDtk uses pixels, we store as-is
+                    let position = [level.world_x as f32, level.world_y as f32];
+
+                    // Get dimensions from pxWid/pxHei
+                    let dimensions = Some([level.px_wid as u32, level.px_hei as u32]);
+
+                    uid_to_level_id.insert(level.uid, level_id.clone());
+
+                    world_levels.push(WorldLevelRef {
+                        level_id,
+                        asset_ref: level_path,
+                        position,
+                        dimensions,
+                        tags: vec![],
+                        streaming: StreamingPolicy::default(),
+                    });
+                }
+
+                // Second pass: create WorldLinks from __neighbours
+                let mut world_links: Vec<WorldLink> = Vec::new();
+                for level in &world.levels {
+                    let from_level_id = uid_to_level_id.get(&level.uid).cloned();
+
+                    if let Some(from_id) = from_level_id {
+                        for neighbour in &level.neighbours {
+                            let to_level_id = uid_to_level_id.get(&neighbour.level_uid).cloned();
+
+                            if let Some(to_id) = to_level_id {
+                                let direction = match neighbour.dir.as_str() {
+                                    "north" => LinkDirection::North,
+                                    "south" => LinkDirection::South,
+                                    "east" => LinkDirection::East,
+                                    "west" => LinkDirection::West,
+                                    _ => LinkDirection::Undirected,
+                                };
+
+                                let link_id = format!("link_{}_{}", from_id, to_id);
+                                world_links.push(WorldLink {
+                                    id: link_id,
+                                    from: from_id.clone(),
+                                    to: to_id,
+                                    direction,
+                                    kind: WorldLinkKind::OneWay,
+                                    entrance: None,
+                                    exit: None,
+                                });
+                            }
+                        }
+                    }
+                }
+
+                // Create the WorldDocument
+                let world_doc = WorldDocument {
+                    id: WorldId::new(world_id),
+                    name: world_name.clone(),
+                    version: 1,
+                    layout_policy: LayoutPolicy::Free,
+                    levels: world_levels,
+                    links: world_links,
+                    updated_at: 0,
+                };
+
+                // Emit WorldCreate command
+                let create_cmd = serde_json::to_value(WorldCommand::WorldCreate {
+                    name: world_name.clone(),
+                    layout_policy: LayoutPolicy::Free,
+                })
+                .map_err(|e| {
+                    ImporterError::ParseError(format!("WorldCommand serialization error: {}", e))
+                })?;
+                all_commands.push(create_cmd);
+
+                // Emit WorldPlaceLevel commands for each level
+                for level_ref in &world_doc.levels {
+                    let place_cmd = serde_json::to_value(WorldCommand::WorldPlaceLevel {
+                        world_path: world_doc.id.as_str().to_string(),
+                        level_id: level_ref.level_id.clone(),
+                        asset_ref: level_ref.asset_ref.clone(),
+                        position: level_ref.position,
+                        dimensions: level_ref.dimensions,
+                        tags: level_ref.tags.clone(),
+                        streaming: level_ref.streaming,
+                    })
+                    .map_err(|e| {
+                        ImporterError::ParseError(format!(
+                            "WorldCommand serialization error: {}",
+                            e
+                        ))
+                    })?;
+                    all_commands.push(place_cmd);
+                }
+
+                // Emit WorldConnectLevels commands for each link
+                for link in &world_doc.links {
+                    let connect_cmd = serde_json::to_value(WorldCommand::WorldConnectLevels {
+                        world_path: world_doc.id.as_str().to_string(),
+                        link_id: link.id.clone(),
+                        from: link.from.clone(),
+                        to: link.to.clone(),
+                        direction: link.direction,
+                        kind: link.kind.clone(),
+                        entrance: link.entrance.clone(),
+                        exit: link.exit.clone(),
+                    })
+                    .map_err(|e| {
+                        ImporterError::ParseError(format!(
+                            "WorldCommand serialization error: {}",
+                            e
+                        ))
+                    })?;
+                    all_commands.push(connect_cmd);
+                }
+
+                // Emit WorldSave command to version the document
+                let save_cmd = serde_json::to_value(WorldCommand::WorldSave {
+                    world_path: world_doc.id.as_str().to_string(),
+                })
+                .map_err(|e| {
+                    ImporterError::ParseError(format!("WorldCommand serialization error: {}", e))
+                })?;
+                all_commands.push(save_cmd);
+
+                // Invoke create_room_chain recipe: emit WorldConnectLevels for each
+                // consecutive pair of levels in the world (East direction).
+                let level_ids: Vec<String> = world_doc
+                    .levels
+                    .iter()
+                    .map(|l| l.level_id.clone())
+                    .collect();
+                let chain_commands = crate::world_recipes::create_room_chain(
+                    &world_doc,
+                    &level_ids,
+                    LinkDirection::East,
+                );
+                for cmd in chain_commands {
+                    let cmd_value = serde_json::to_value(cmd).map_err(|e| {
+                        ImporterError::ParseError(format!(
+                            "WorldCommand serialization error: {}",
+                            e
+                        ))
+                    })?;
+                    all_commands.push(cmd_value);
+                }
+            }
         }
 
         let change_set_json = serde_json::to_string(&all_commands)
