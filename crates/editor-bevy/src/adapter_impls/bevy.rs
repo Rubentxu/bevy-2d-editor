@@ -40,7 +40,7 @@ impl EditorAdapter for BevyRuntimeAdapter {
         AdapterFidelity::ExportOnlyLossy
     }
 
-    fn encode(&self, model: &SemanticModel<'_>) -> Result<Vec<u8>, AdapterError> {
+    fn encode(&self, model: &SemanticModel) -> Result<Vec<u8>, AdapterError> {
         // Serialize the semantic model as JSON bytes.
         // The caller uses this to drive Bevy ECS projection via the existing
         // projection functions (export_dynamic_scene, project_instances, etc.).
@@ -84,7 +84,7 @@ impl EditorAdapter for BevyRuntimeAdapter {
         }
     }
 
-    fn decode(&self, _bytes: &[u8]) -> Result<SemanticModel<'static>, AdapterError> {
+    fn decode(&self, _bytes: &[u8]) -> Result<SemanticModel, AdapterError> {
         // Bevy ECS entities carry no editor metadata — projection is one-way only.
         Err(AdapterError::ExportOnly {
             adapter: self.name().into(),
@@ -109,7 +109,7 @@ mod tests {
             entities: vec![],
             instances: BTreeMap::new(),
         };
-        let result = adapter.encode(&SemanticModel::Scene(&doc));
+        let result = adapter.encode(&SemanticModel::Scene(doc));
         assert!(result.is_ok(), "encode failed: {:?}", result.err());
         let json = String::from_utf8(result.unwrap()).unwrap();
         assert!(json.contains(r#""scene_id":"test""#));
@@ -128,7 +128,7 @@ mod tests {
             worlds: vec![],
             active_world: None,
         };
-        let result = adapter.encode(&SemanticModel::ProjectMetadata(&pm));
+        let result = adapter.encode(&SemanticModel::ProjectMetadata(pm));
         assert!(result.is_ok(), "encode failed: {:?}", result.err());
         let json = String::from_utf8(result.unwrap()).unwrap();
         assert!(json.contains(r#""name":"Test Project""#));
@@ -160,7 +160,7 @@ mod tests {
             nodes: vec![],
             edges: vec![],
         };
-        let result = adapter.encode(&SemanticModel::LogicGraph(&graph));
+        let result = adapter.encode(&SemanticModel::LogicGraph(graph));
         assert!(result.is_ok(), "encode failed: {:?}", result.err());
     }
 
@@ -176,7 +176,7 @@ mod tests {
             links: vec![],
             updated_at: 0,
         };
-        let result = adapter.encode(&SemanticModel::World(&world));
+        let result = adapter.encode(&SemanticModel::World(world));
         assert!(result.is_ok(), "encode failed: {:?}", result.err());
     }
 }

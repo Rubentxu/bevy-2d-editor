@@ -9,8 +9,8 @@
 //! > in a `SceneAssetDocument` entity will cause decode to fail. All other document
 //! > types silently drop unknown fields (via `#[serde(default)]`). This asymmetry means
 //! > a `SceneAssetDocument` that round-tripped through a format that added fields would
-//! > not be byte-exact. S4 (extension bag) will address this by promoting all types to
-//! > true lossless discipline.
+//! > not be byte-exact. SDD-0046 S2 (D4) removes this attribute; S4 (extension bag)
+//! > will address the general case by promoting all types to true lossless discipline.
 //!
 //! The 6 wrapped JSON writer sites are:
 //! - `crates/editor-bevy/src/lib.rs` — `SceneDocument` save/load (2 sites)
@@ -51,7 +51,7 @@ impl EditorAdapter for JsonProjectAdapter {
         AdapterFidelity::Lossless
     }
 
-    fn encode(&self, model: &SemanticModel<'_>) -> Result<Vec<u8>, AdapterError> {
+    fn encode(&self, model: &SemanticModel) -> Result<Vec<u8>, AdapterError> {
         let name = self.name();
         match model {
             SemanticModel::Scene(doc) => {
@@ -93,7 +93,7 @@ impl EditorAdapter for JsonProjectAdapter {
         }
     }
 
-    fn decode(&self, bytes: &[u8]) -> Result<SemanticModel<'static>, AdapterError> {
+    fn decode(&self, bytes: &[u8]) -> Result<SemanticModel, AdapterError> {
         let name = self.name();
         let json: Value = serde_json::from_slice(bytes).map_err(|e| AdapterError::Decode {
             adapter: name.into(),
@@ -105,52 +105,47 @@ impl EditorAdapter for JsonProjectAdapter {
             source: "JSON value is not an object".into(),
         })?;
 
-        // Key sniff — 8 lines, per D5.
-        // Deserialize to owned value, leak to get &'static ref for SemanticModel.
+        // Key sniff — 8 lines, per D5. Decode directly into OWNED values
+        // (no Box::leak — SDD-0046 S2 D1).
         if obj.contains_key("nodes") && obj.contains_key("edges") {
             let owned: LogicGraphAsset =
-                serde_json::from_value(json.clone()).map_err(|e| AdapterError::Decode {
+                serde_json::from_value(json).map_err(|e| AdapterError::Decode {
                     adapter: name.into(),
                     source: e.into(),
                 })?;
-            let leaked: &'static LogicGraphAsset = Box::leak(Box::new(owned));
-            return Ok(SemanticModel::LogicGraph(leaked));
+            return Ok(SemanticModel::LogicGraph(owned));
         }
         if obj.contains_key("scenes") && obj.contains_key("schemas") {
             let owned: ProjectMetadata =
-                serde_json::from_value(json.clone()).map_err(|e| AdapterError::Decode {
+                serde_json::from_value(json).map_err(|e| AdapterError::Decode {
                     adapter: name.into(),
                     source: e.into(),
                 })?;
-            let leaked: &'static ProjectMetadata = Box::leak(Box::new(owned));
-            return Ok(SemanticModel::ProjectMetadata(leaked));
+            return Ok(SemanticModel::ProjectMetadata(owned));
         }
         if obj.contains_key("levels") && obj.contains_key("links") {
             let owned: WorldDocument =
-                serde_json::from_value(json.clone()).map_err(|e| AdapterError::Decode {
+                serde_json::from_value(json).map_err(|e| AdapterError::Decode {
                     adapter: name.into(),
                     source: e.into(),
                 })?;
-            let leaked: &'static WorldDocument = Box::leak(Box::new(owned));
-            return Ok(SemanticModel::World(leaked));
+            return Ok(SemanticModel::World(owned));
         }
         if obj.contains_key("scene_id") && obj.contains_key("entities") {
             let owned: SceneDocument =
-                serde_json::from_value(json.clone()).map_err(|e| AdapterError::Decode {
+                serde_json::from_value(json).map_err(|e| AdapterError::Decode {
                     adapter: name.into(),
                     source: e.into(),
                 })?;
-            let leaked: &'static SceneDocument = Box::leak(Box::new(owned));
-            return Ok(SemanticModel::Scene(leaked));
+            return Ok(SemanticModel::Scene(owned));
         }
         if obj.contains_key("asset_id") && obj.contains_key("entities") {
             let owned: SceneAssetDocument =
-                serde_json::from_value(json.clone()).map_err(|e| AdapterError::Decode {
+                serde_json::from_value(json).map_err(|e| AdapterError::Decode {
                     adapter: name.into(),
                     source: e.into(),
                 })?;
-            let leaked: &'static SceneAssetDocument = Box::leak(Box::new(owned));
-            return Ok(SemanticModel::SceneAsset(leaked));
+            return Ok(SemanticModel::SceneAsset(owned));
         }
 
         Err(AdapterError::Decode {
@@ -169,17 +164,21 @@ mod tests {
     use editor_model::scene_asset::{SceneAssetEntity, SceneAssetMetadata, SceneAssetRole};
     use std::collections::BTreeMap;
 
-    #[test]
-    fn encode_scene_document() {
-        let adapter = JsonProjectAdapter::new();
-        let doc = SceneDocument {
+    fn sample_scene() -> SceneDocument {
+        SceneDocument {
             version: "0.1".into(),
             scene_id: "test-scene".into(),
             name: "Test Scene".into(),
             entities: vec![],
             instances: BTreeMap::new(),
-        };
-        let bytes = adapter.encode(&SemanticModel::Scene(&doc)).unwrap();
+        }
+    }
+
+    #[test]
+    fn encode_scene_document() {
+        let adapter = JsonProjectAdapter::new();
+        let doc = sample_scene();
+        let bytes = adapter.encode(&SemanticModel::Scene(doc)).unwrap();
         let json_str = String::from_utf8(bytes).unwrap();
         assert!(json_str.contains(r#""scene_id":"test-scene""#));
         assert!(json_str.contains(r#""version":"0.1""#));
@@ -251,7 +250,7 @@ mod tests {
             entities: vec![],
             instances: BTreeMap::new(),
         };
-        let encoded = adapter.encode(&SemanticModel::Scene(&doc)).unwrap();
+        let encoded = adapter.encode(&SemanticModel::Scene(doc)).unwrap();
         let decoded = adapter.decode(&encoded).unwrap();
         match decoded {
             SemanticModel::Scene(d) => {
@@ -275,9 +274,7 @@ mod tests {
             worlds: vec![],
             active_world: None,
         };
-        let encoded = adapter
-            .encode(&SemanticModel::ProjectMetadata(&pm))
-            .unwrap();
+        let encoded = adapter.encode(&SemanticModel::ProjectMetadata(pm)).unwrap();
         let decoded = adapter.decode(&encoded).unwrap();
         match decoded {
             SemanticModel::ProjectMetadata(d) => {
@@ -315,5 +312,23 @@ mod tests {
             msg.contains("unrecognised JSON top-level keys"),
             "got: {msg}"
         );
+    }
+
+    /// Spec §sem2-owned-model scenario 15: 1000 decodes must not leak.
+    ///
+    /// Regression guard for the S1 `Box::leak` pattern. If decode leaks even
+    /// one allocation per call, the test binary would still pass (leaks are
+    /// not detectable by assertion), so the real guard is the ABSENCE of
+    /// `Box::leak` in this file (enforced by review) plus this smoke test
+    /// proving decode returns owned values repeatedly without panic/error.
+    #[test]
+    fn decode_does_not_leak_smoke() {
+        let adapter = JsonProjectAdapter::new();
+        let json =
+            r#"{"version":"0.1","scene_id":"s1","name":"My Scene","entities":[],"instances":{}}"#;
+        for _ in 0..1000 {
+            let model = adapter.decode(json.as_bytes()).unwrap();
+            assert!(matches!(model, SemanticModel::Scene(_)));
+        }
     }
 }

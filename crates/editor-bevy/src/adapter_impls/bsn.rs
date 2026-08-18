@@ -38,7 +38,7 @@ impl EditorAdapter for BsnExportAdapter {
         AdapterFidelity::SemanticLossless
     }
 
-    fn encode(&self, model: &SemanticModel<'_>) -> Result<Vec<u8>, AdapterError> {
+    fn encode(&self, model: &SemanticModel) -> Result<Vec<u8>, AdapterError> {
         match model {
             SemanticModel::SceneAsset(doc) => {
                 let name = self.name();
@@ -61,7 +61,7 @@ impl EditorAdapter for BsnExportAdapter {
         }
     }
 
-    fn decode(&self, _bytes: &[u8]) -> Result<SemanticModel<'static>, AdapterError> {
+    fn decode(&self, _bytes: &[u8]) -> Result<SemanticModel, AdapterError> {
         Err(AdapterError::ExportOnly {
             adapter: self.name().into(),
         })
@@ -120,7 +120,7 @@ mod tests {
     fn encode_actor_asset() {
         let adapter = BsnExportAdapter::new();
         let doc = make_actor_asset();
-        let result = adapter.encode(&SemanticModel::SceneAsset(&doc));
+        let result = adapter.encode(&SemanticModel::SceneAsset(doc));
         assert!(result.is_ok());
         let text = String::from_utf8(result.unwrap()).unwrap();
         // BSN format starts with "bsn!{"
@@ -132,7 +132,7 @@ mod tests {
         // BSN is SemanticLossless, not Lossless — verify it encodes without error.
         let adapter = BsnExportAdapter::new();
         let doc = make_actor_asset();
-        let encoded = adapter.encode(&SemanticModel::SceneAsset(&doc));
+        let encoded = adapter.encode(&SemanticModel::SceneAsset(doc));
         assert!(encoded.is_ok(), "encode failed: {:?}", encoded.err());
     }
 
@@ -170,7 +170,7 @@ mod tests {
             entities: vec![],
             instances: BTreeMap::new(),
         };
-        let result = adapter.encode(&SemanticModel::Scene(&doc));
+        let result = adapter.encode(&SemanticModel::Scene(doc));
         assert!(matches!(result, Err(AdapterError::UnsupportedModel { .. })));
     }
 }

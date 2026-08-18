@@ -79,7 +79,7 @@ fn json_adapter_round_trips_scene_asset_losslessly() {
     let original = make_actor_asset();
 
     let encoded = adapter
-        .encode(&SemanticModel::SceneAsset(&original))
+        .encode(&SemanticModel::SceneAsset(original.clone()))
         .unwrap();
     let decoded = adapter.decode(&encoded).unwrap();
 
@@ -100,7 +100,7 @@ fn json_adapter_round_trips_logic_graph_losslessly() {
     let original = make_logic_asset();
 
     let encoded = adapter
-        .encode(&SemanticModel::LogicGraph(&original))
+        .encode(&SemanticModel::LogicGraph(original.clone()))
         .unwrap();
     let decoded = adapter.decode(&encoded).unwrap();
 
@@ -128,7 +128,7 @@ fn bsn_adapter_encodes_actor_asset_to_bsn_text() {
     let adapter = BsnExportAdapter::new();
     let asset = make_actor_asset();
 
-    let result = adapter.encode(&SemanticModel::SceneAsset(&asset));
+    let result = adapter.encode(&SemanticModel::SceneAsset(asset.clone()));
     assert!(
         result.is_ok(),
         "encode should succeed for Actor role, got {result:?}"
@@ -143,7 +143,7 @@ fn bsn_adapter_rejects_logic_graph() {
     let adapter = BsnExportAdapter::new();
     let logic = make_logic_asset();
 
-    let result = adapter.encode(&SemanticModel::LogicGraph(&logic));
+    let result = adapter.encode(&SemanticModel::LogicGraph(logic.clone()));
     assert!(
         matches!(
             result,
@@ -172,7 +172,7 @@ fn bevy_runtime_adapter_encodes_scene_asset() {
     let adapter = BevyRuntimeAdapter::new();
     let asset = make_actor_asset();
 
-    let result = adapter.encode(&SemanticModel::SceneAsset(&asset));
+    let result = adapter.encode(&SemanticModel::SceneAsset(asset.clone()));
     assert!(
         result.is_ok(),
         "BevyRuntimeAdapter should encode SceneAsset, got {result:?}"
@@ -184,7 +184,7 @@ fn bevy_runtime_adapter_encodes_logic_graph() {
     let adapter = BevyRuntimeAdapter::new();
     let logic = make_logic_asset();
 
-    let result = adapter.encode(&SemanticModel::LogicGraph(&logic));
+    let result = adapter.encode(&SemanticModel::LogicGraph(logic.clone()));
     assert!(
         result.is_ok(),
         "BevyRuntimeAdapter should encode LogicGraph, got {result:?}"
@@ -241,4 +241,39 @@ fn adapter_names_are_stable_and_distinct() {
         names.len(),
         "adapter names must be distinct: {names:?}"
     );
+}
+
+// ---------------------------------------------------------------------------
+// SDD-0046 S2 scenario 16 — initialized registry is observable from any thread
+// ---------------------------------------------------------------------------
+
+#[test]
+fn initialized_registry_is_observable_from_any_thread() {
+    // One-shot init per test binary (OnceLock::set panics on double call).
+    // This is the ONLY test in this binary that calls init_registry.
+    editor_model::adapter::init_registry(all_adapters_init());
+
+    let expected: Vec<&str> = vec!["json.project.v1", "bsn.export.v1", "bevy.runtime.v1"];
+    let handles: Vec<_> = (0..8)
+        .map(|_| {
+            std::thread::spawn(|| {
+                let adapters = editor_model::adapter::all_adapters();
+                adapters
+                    .iter()
+                    .map(|a| a.name().to_string())
+                    .collect::<Vec<_>>()
+            })
+        })
+        .collect();
+
+    for handle in handles {
+        let names = handle.join().expect("thread should not panic");
+        assert_eq!(names.len(), 3, "all threads see 3 adapters: {names:?}");
+        for name in &expected {
+            assert!(
+                names.iter().any(|n| n == name),
+                "missing {name} in {names:?}"
+            );
+        }
+    }
 }
