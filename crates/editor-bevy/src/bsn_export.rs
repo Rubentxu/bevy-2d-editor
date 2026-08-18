@@ -360,6 +360,7 @@ mod tests {
             exposed_properties: vec![],
             metadata: SceneAssetMetadata::default(),
             layers: vec![],
+            extension_data: BTreeMap::new(),
         }
     }
 
@@ -380,6 +381,7 @@ mod tests {
                 type_id: "editor.Name".to_string(),
                 values: serde_json::json!({"name": "Root"}),
             }],
+            extension_data: BTreeMap::new(),
         }];
         let doc = make_doc(entities);
         let text = export_to_bsn_text(&doc).unwrap();
@@ -396,6 +398,7 @@ mod tests {
             local_path: "root".to_string(),
             name: "Root".to_string(),
             components: vec![],
+            extension_data: BTreeMap::new(),
         }];
         let doc = make_doc(entities);
         let text = export_to_bsn_text(&doc).unwrap();
@@ -412,12 +415,14 @@ mod tests {
             local_path: "root".to_string(),
             name: "Root".to_string(),
             components: vec![],
+            extension_data: BTreeMap::new(),
         };
         let child = SceneAssetEntity {
             local_id: LocalId::new("child"),
             local_path: "root/child".to_string(),
             name: "Child".to_string(),
             components: vec![],
+            extension_data: BTreeMap::new(),
         };
         let mut doc = make_doc(vec![root.clone(), child.clone()]);
         doc.relationships
@@ -455,6 +460,7 @@ mod tests {
                 type_id: "editor.Name".to_string(),
                 values: serde_json::json!({"name": "Root"}),
             }],
+            extension_data: BTreeMap::new(),
         }];
         let mut doc = make_doc(entities);
         doc.role = crate::scene_asset::SceneAssetRole::Logic;
@@ -476,6 +482,7 @@ mod tests {
                 type_id: "editor.Name".to_string(),
                 values: serde_json::json!({"name": "Root"}),
             }],
+            extension_data: BTreeMap::new(),
         }];
         let doc = make_doc(entities);
         let text = export_to_bsn_text(&doc).unwrap();

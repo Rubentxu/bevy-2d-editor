@@ -157,6 +157,7 @@ mod tests {
             relationships,
             exposed_properties: vec![],
             metadata: Default::default(),
+            extension_data: BTreeMap::new(),
         }
     }
 
@@ -174,6 +175,7 @@ mod tests {
             local_path: "root".to_string(),
             name: "Single Entity".to_string(),
             components: vec![],
+            extension_data: BTreeMap::new(),
         };
         let asset = make_asset(vec![entity], vec![]);
         let roots = root_local_ids(&asset);
@@ -189,12 +191,14 @@ mod tests {
             local_path: "root".to_string(),
             name: "Root".to_string(),
             components: vec![],
+            extension_data: BTreeMap::new(),
         };
         let child = SceneAssetEntity {
             local_id: LocalId::new("child".to_string()),
             local_path: "root/child".to_string(),
             name: "Child".to_string(),
             components: vec![],
+            extension_data: BTreeMap::new(),
         };
         let relationships = vec![SceneAssetRelationship {
             from_local_id: LocalId::new("root".to_string()),
@@ -217,12 +221,14 @@ mod tests {
             local_path: "entity1".to_string(),
             name: "Entity 1".to_string(),
             components: vec![],
+            extension_data: BTreeMap::new(),
         };
         let entity2 = SceneAssetEntity {
             local_id: LocalId::new("entity2".to_string()),
             local_path: "entity2".to_string(),
             name: "Entity 2".to_string(),
             components: vec![],
+            extension_data: BTreeMap::new(),
         };
         let asset = make_asset(vec![entity1, entity2], vec![]);
 
@@ -242,18 +248,21 @@ mod tests {
             local_path: "root".to_string(),
             name: "Root".to_string(),
             components: vec![],
+            extension_data: BTreeMap::new(),
         };
         let child1 = SceneAssetEntity {
             local_id: LocalId::new("child1".to_string()),
             local_path: "root/child1".to_string(),
             name: "Child1".to_string(),
             components: vec![],
+            extension_data: BTreeMap::new(),
         };
         let grandchild = SceneAssetEntity {
             local_id: LocalId::new("grandchild".to_string()),
             local_path: "root/child1/grandchild".to_string(),
             name: "Grandchild".to_string(),
             components: vec![],
+            extension_data: BTreeMap::new(),
         };
         let relationships = vec![
             SceneAssetRelationship {
@@ -284,18 +293,21 @@ mod tests {
             local_path: "root1".to_string(),
             name: "Root1".to_string(),
             components: vec![],
+            extension_data: BTreeMap::new(),
         };
         let child1 = SceneAssetEntity {
             local_id: LocalId::new("child1".to_string()),
             local_path: "root1/child1".to_string(),
             name: "Child1".to_string(),
             components: vec![],
+            extension_data: BTreeMap::new(),
         };
         let root2 = SceneAssetEntity {
             local_id: LocalId::new("root2".to_string()),
             local_path: "root2".to_string(),
             name: "Root2".to_string(),
             components: vec![],
+            extension_data: BTreeMap::new(),
         };
         let relationships = vec![SceneAssetRelationship {
             from_local_id: LocalId::new("root1".to_string()),

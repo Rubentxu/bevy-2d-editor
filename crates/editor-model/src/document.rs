@@ -94,6 +94,9 @@ pub struct SceneDocument {
     /// Placed Scene Instances indexed by StableId.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub instances: BTreeMap<StableId, SceneInstance>,
+    /// Unknown JSON fields preserved for forward compatibility (ADR-0046 rule 2).
+    #[serde(default, flatten)]
+    pub extension_data: BTreeMap<String, serde_json::Value>,
 }
 
 impl Default for SceneDocument {
@@ -104,6 +107,7 @@ impl Default for SceneDocument {
             name: String::new(),
             entities: Vec::new(),
             instances: BTreeMap::new(),
+            extension_data: BTreeMap::new(),
         }
     }
 }
@@ -123,6 +127,9 @@ pub struct Entity {
     pub parent: Option<StableId>,
     /// Components attached to this entity.
     pub components: Vec<ComponentInstance>,
+    /// Unknown JSON fields preserved for forward compatibility (ADR-0046 rule 2).
+    #[serde(default, flatten)]
+    pub extension_data: BTreeMap<String, serde_json::Value>,
 }
 
 #[cfg(test)]
@@ -141,8 +148,10 @@ mod tests {
                 name: "Player".to_string(),
                 parent: None,
                 components: vec![],
+                extension_data: BTreeMap::new(),
             }],
             instances: BTreeMap::new(),
+            extension_data: BTreeMap::new(),
         };
 
         let json = serde_json::to_string(&doc).unwrap();
@@ -160,6 +169,7 @@ mod tests {
             name: "Empty Scene".to_string(),
             entities: vec![],
             instances: BTreeMap::new(),
+            extension_data: BTreeMap::new(),
         };
 
         let json = serde_json::to_string(&doc).unwrap();
@@ -208,6 +218,7 @@ mod tests {
                     name: "Parent".to_string(),
                     parent: None,
                     components: vec![],
+                    extension_data: BTreeMap::new(),
                 },
                 Entity {
                     id: StableId::new("child_01"),
@@ -215,9 +226,11 @@ mod tests {
                     name: "Child".to_string(),
                     parent: Some(StableId::new("parent_01")),
                     components: vec![],
+                    extension_data: BTreeMap::new(),
                 },
             ],
             instances: BTreeMap::new(),
+            extension_data: BTreeMap::new(),
         };
 
         let json = serde_json::to_string(&doc).unwrap();
@@ -236,6 +249,7 @@ mod tests {
             name: "Player".to_string(),
             parent: None,
             components: vec![],
+            extension_data: BTreeMap::new(),
         };
 
         entity.name = "PlayerSpawn".to_string();
@@ -306,6 +320,7 @@ mod tests {
             name: "Test".to_string(),
             entities: vec![],
             instances: BTreeMap::new(),
+            extension_data: BTreeMap::new(),
         };
 
         let json = serde_json::to_string(&doc).unwrap();

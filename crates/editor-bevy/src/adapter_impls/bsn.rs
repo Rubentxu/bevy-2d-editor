@@ -94,11 +94,13 @@ mod tests {
                 local_path: String::from("root"),
                 name: "Hero".into(),
                 components: vec![],
+                extension_data: BTreeMap::new(),
             }],
             relationships: vec![],
             exposed_properties: vec![],
             metadata: SceneAssetMetadata::default(),
             layers: vec![],
+            extension_data: BTreeMap::new(),
         }
     }
 
@@ -113,6 +115,7 @@ mod tests {
             exposed_properties: vec![],
             metadata: SceneAssetMetadata::default(),
             layers: vec![],
+            extension_data: BTreeMap::new(),
         }
     }
 
@@ -169,6 +172,7 @@ mod tests {
             name: "Test".into(),
             entities: vec![],
             instances: BTreeMap::new(),
+            extension_data: BTreeMap::new(),
         };
         let result = adapter.encode(&SemanticModel::Scene(doc));
         assert!(matches!(result, Err(AdapterError::UnsupportedModel { .. })));

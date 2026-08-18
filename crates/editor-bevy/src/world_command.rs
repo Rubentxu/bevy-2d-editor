@@ -11,6 +11,7 @@
 //! | `WorldConnectLevels` | `WorldRemoveLink` |
 //! | `WorldSetLayoutPolicy` | `WorldSetLayoutPolicy` (captures pre-policy) |
 //! | `WorldSetStreamingPolicy` | `WorldSetStreamingPolicy` (captures pre-policy) |
+use std::collections::BTreeMap;
 
 use editor_model::world::{
     LayoutPolicy, LinkDirection, StreamingPolicy, WorldDocument, WorldId, WorldLevelRef, WorldLink,
@@ -390,6 +391,7 @@ mod tests {
             levels: Vec::new(),
             links: Vec::new(),
             updated_at: 0,
+            extension_data: BTreeMap::new(),
         }
     }
 

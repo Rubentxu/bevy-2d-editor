@@ -688,6 +688,7 @@ mod tests {
             relationships: vec![],
             exposed_properties: vec![],
             metadata: Default::default(),
+            extension_data: BTreeMap::new(),
         }
     }
 
@@ -721,6 +722,7 @@ mod tests {
                 type_id: component_type_id.to_string(),
                 values: component_values,
             }],
+            extension_data: BTreeMap::new(),
         });
         asset
     }
@@ -734,6 +736,7 @@ mod tests {
                 local_path: (*local_path).to_string(),
                 name: (*name).to_string(),
                 components: vec![],
+                extension_data: BTreeMap::new(),
             });
         }
         asset
@@ -753,6 +756,7 @@ mod tests {
                     type_id: (*component_type_id).to_string(),
                     values: component_values.clone(),
                 }],
+                extension_data: BTreeMap::new(),
             });
         }
         asset

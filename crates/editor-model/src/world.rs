@@ -12,6 +12,7 @@
 //! or any field that duplicates `SceneAssetDocument`.
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 /// Opaque stable identifier for a WorldDocument (parallel to `AssetId`).
 ///
@@ -184,6 +185,9 @@ pub struct WorldDocument {
     pub links: Vec<WorldLink>,
     /// Unix millis of the last write (set by `save_world_wasm`).
     pub updated_at: u64,
+    /// Unknown JSON fields preserved for forward compatibility (ADR-0046 rule 2).
+    #[serde(default, flatten)]
+    pub extension_data: BTreeMap<String, serde_json::Value>,
 }
 
 /// Catalog entry — shadow of `WorldDocument` kept on `ProjectMetadata`.
@@ -480,6 +484,7 @@ mod tests {
             levels: Vec::new(),
             links: Vec::new(),
             updated_at: 0,
+            extension_data: BTreeMap::new(),
         };
         assert_eq!(doc.name, "demo");
         assert_eq!(doc.version, 1);
@@ -524,6 +529,7 @@ mod tests {
                 exit: None,
             }],
             updated_at: 1_700_000_000_000_u64,
+            extension_data: BTreeMap::new(),
         };
         let json = serde_json::to_string(&doc).unwrap();
         let rt: WorldDocument = serde_json::from_str(&json).unwrap();

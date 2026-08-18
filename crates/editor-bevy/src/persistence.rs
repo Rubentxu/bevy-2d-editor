@@ -14,6 +14,7 @@
 //!   separate `AssetCommand` surface for authoring mutations.
 //! - [ADR-0008](../../adr/0008-path-based-scene-asset-opfs-layout.md):
 //!   `assets/<logical_path>.asset.json` path layout; catalog in `ProjectMetadata`.
+use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -154,6 +155,7 @@ mod tests {
             scene_assets: vec![],
             worlds: vec![],
             active_world: None,
+            extension_data: BTreeMap::new(),
         };
         let json = serde_json::to_string(&pm).unwrap();
         let rt: ProjectMetadata = serde_json::from_str(&json).unwrap();
@@ -270,6 +272,7 @@ mod tests {
             scene_assets: vec![],
             worlds: vec![],
             active_world: None,
+            extension_data: BTreeMap::new(),
         };
         let json = serde_json::to_string(&pm).unwrap();
         let rt: ProjectMetadata = serde_json::from_str(&json).unwrap();

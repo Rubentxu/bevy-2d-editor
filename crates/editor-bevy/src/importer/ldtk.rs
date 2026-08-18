@@ -81,6 +81,7 @@ use editor_model::world::{
     WorldLinkKind,
 };
 use serde::Deserialize;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -824,6 +825,7 @@ impl LdtkImporter {
                 levels: world_levels_refs,
                 links: world_links,
                 updated_at: 0,
+                extension_data: BTreeMap::new(),
             };
 
             // Emit WorldCreate
@@ -960,6 +962,7 @@ impl Importer for LdtkImporter {
                 exposed_properties: vec![],
                 metadata: SceneAssetMetadata::default(),
                 layers: output.layers.clone(),
+                extension_data: BTreeMap::new(),
             };
 
             let doc_json = serde_json::to_string(&doc)

@@ -4,6 +4,7 @@
 //! saved scenes, schemas, and catalogs for scene assets and world documents.
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 use crate::scene_asset_catalog::SceneAssetCatalogEntry;
 use crate::world::WorldCatalogEntry;
@@ -39,6 +40,9 @@ pub struct ProjectMetadata {
     /// files without this field still parse (None).
     #[serde(default)]
     pub active_world: Option<String>,
+    /// Unknown JSON fields preserved for forward compatibility (ADR-0046 rule 2).
+    #[serde(default, flatten)]
+    pub extension_data: BTreeMap<String, serde_json::Value>,
 }
 
 impl Default for ProjectMetadata {
@@ -52,6 +56,7 @@ impl Default for ProjectMetadata {
             scene_assets: Vec::new(),
             worlds: Vec::new(),
             active_world: None,
+            extension_data: BTreeMap::new(),
         }
     }
 }

@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::component::ComponentInstance;
 use crate::ids::SceneAssetLocalId;
 use crate::scene_instance::SceneInstance;
+use std::collections::BTreeMap;
 
 /// Logical Project path (human-readable), e.g. "assets/characters/player".
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -69,15 +70,18 @@ pub struct SceneAssetDocument {
     /// Level layers for this asset.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub layers: Vec<LevelLayer>,
+    /// Unknown JSON fields preserved for forward compatibility (ADR-0046 rule 2).
+    #[serde(default, flatten)]
+    pub extension_data: BTreeMap<String, serde_json::Value>,
 }
 
 /// One entity inside a Scene Asset.
 ///
-/// Fidelity note (SDD-0046 S2 D4): unknown JSON fields are tolerated and
-/// silently dropped, matching the `JsonProjectAdapter::Lossless` discipline
-/// used by every other editor-model document type. The previous
-/// `#[serde(deny_unknown_fields)]` violated that claim by rejecting documents
-/// that round-tripped through formats that added fields.
+/// Fidelity note (SDD-0046 S2 D4 + S4): unknown JSON fields are preserved in
+/// `extension_data` (ADR-0046 rule 2 / SEM-3). The previous
+/// `#[serde(deny_unknown_fields)]` violated the `JsonProjectAdapter::Lossless`
+/// claim by rejecting documents that round-tripped through formats that added
+/// fields; S2 removed the rejection, S4 upgrades drop → preserve.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SceneAssetEntity {
     /// Stable local identifier within this asset.
@@ -88,6 +92,9 @@ pub struct SceneAssetEntity {
     pub name: String,
     /// Components attached to this entity.
     pub components: Vec<ComponentInstance>,
+    /// Unknown JSON fields preserved for forward compatibility (ADR-0046 rule 2).
+    #[serde(default, flatten)]
+    pub extension_data: BTreeMap<String, serde_json::Value>,
 }
 
 /// Typed relationship between entities.
@@ -283,6 +290,7 @@ mod tests {
             exposed_properties: vec![],
             metadata: SceneAssetMetadata::default(),
             layers: vec![],
+            extension_data: BTreeMap::new(),
         };
         let json = serde_json::to_string(&doc).unwrap();
         let parsed: SceneAssetDocument = serde_json::from_str(&json).unwrap();
