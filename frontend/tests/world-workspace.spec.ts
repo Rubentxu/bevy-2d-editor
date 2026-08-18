@@ -163,4 +163,31 @@ test.describe("World Workspace — Slice 4 Smoke", () => {
     await expect(status).toContainText("0 levels");
     await expect(status).toContainText("0 links");
   });
+
+  test("View → World Workspace menu opens world mode (T3.6 follow-up)", async ({
+    page,
+  }) => {
+    // Start in scene mode (the default).
+    await page.locator('[data-testid="menu-view"] .menu-trigger').click();
+    await expect(
+      page.locator('[data-testid="menu-view"] .menu-dropdown'),
+    ).toBeVisible();
+
+    // Click the World Workspace entry — the handler used to fall through to a
+    // `todo("World Workspace")` console warning (v0.95.0 risk R2). After the
+    // fix it must switch the editor mode to "world" so the canvas mounts.
+    await page.evaluate(() => {
+      const el = document.querySelector<HTMLButtonElement>(
+        '[data-testid="menu-world-workspace"]',
+      );
+      if (!el) throw new Error("World Workspace menu entry not found");
+      el.click();
+    });
+
+    // WorldWorkspace canvas must become visible — proves the menu handler
+    // is wired to setEditorMode("world"), not the placeholder todo().
+    await expect(page.locator(".world-workspace")).toBeVisible({
+      timeout: 5_000,
+    });
+  });
 });
