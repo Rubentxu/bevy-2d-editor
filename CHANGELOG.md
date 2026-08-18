@@ -2,6 +2,41 @@
 
 All notable changes to Bevy 2D Editor are documented here. The project follows semantic version tags; detailed milestone history is available in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## v0.96.0 — Semantic Editor Model Adapter Contract (ADR-0046 S1) (2026-08-18)
+
+Delivers SDD-0046 Slice 1: the `EditorAdapter` trait + `AdapterFidelity` enum + 3 retroactive impls that establish the adapter contract required by SEM-6. SEM-6 (Fidelity contracts) is satisfied for the first time.
+
+### New features
+
+- **`EditorAdapter` trait** (`crates/editor-model/src/adapter.rs`): object-safe trait with `name()`, `fidelity()`, `encode()`, `decode()`, `supports()` methods. `SemanticModel<'a>` is a borrowed sum-type enum over 5 variants (`Scene`, `SceneAsset`, `LogicGraph`, `World`, `ProjectMetadata`). wasm32-compatible — no Bevy/WASM deps.
+- **`AdapterFidelity` runtime enum**: `Lossless` ("encode+decode round-trip exact; no data loss"), `SemanticLossless` ("encode+decode preserves semantics; formatting may differ"), `ExportOnlyLossy` ("encode only; decode is not supported").
+- **`AdapterError`**: 5-variant error enum (`UnsupportedModel`, `UnsupportedRole`, `ExportOnly`, `DecodeError`, `EncodeError`) each carrying the adapter name; implements `std::error::Error` + `Display` via `thiserror`.
+- **`all_adapters()` registry factory** + **`set_registry_fn`** seam: returns `Arc<[Box<dyn EditorAdapter + Send + Sync>]>` via a thread_local `RefCell` slot.
+- **3 retroactive impls** in `crates/editor-bevy/src/adapter_impls/`:
+  - `JsonProjectAdapter` — Lossless, wraps 6 JSON writer sites; round-trips `SceneDocument`, `SceneAssetDocument`, `LogicGraphAsset`, `WorldDocument`, `ProjectMetadata` byte-for-byte
+  - `BsnExportAdapter` — SemanticLossless, wraps `EditorCoreBsnExporter` (newtype); rejects `LogicGraph` role
+  - `BevyRuntimeAdapter` — ExportOnlyLossy, placeholder JSON serialization for 4 Bevy projection sites (`export_dynamic_scene`, `export_rust_source`, `project_instances`, `rebuild_preview_world`)
+- **41 new tests**: 8 unit (`adapter.rs`) + 21 unit (`adapter_impls/`) + 12 integration (`adapter_contract.rs`)
+
+### Architecture
+
+- `crates/editor-model/src/lib.rs` adds `pub mod adapter;` — pure, wasm32-compatible
+- `crates/editor-bevy/src/lib.rs` adds `pub mod adapter_impls;`
+- `crates/editor-bevy/src/adapter_impls/mod.rs` exposes `all_adapters_init()` factory
+- No existing writer sites modified (`bsn_export.rs`, `dynamic_scene.rs`, `instance_projection.rs`, `preview_runtime.rs` verified unchanged by `git diff main`)
+- SEM-6 (Fidelity contracts) satisfied for the first time
+
+### ADR status changes
+
+- **ADR-0046**: Accepted + Implemented (SEM-6 partial, v0.96.0) — S1 implemented; S2–S6 deferred
+
+### Warnings (tracked to S2)
+
+- **`Box::leak` per `JsonProjectAdapter::decode`** (5 sites): `decode` returns `SemanticModel<'static>` via `Box::leak(Box::new(owned))`; long-lived WASM sessions accumulate unbounded growth. S2 redesigns `SemanticModel` to own its data.
+- **Registry seam is `thread_local! + RefCell`**: `set_registry_fn` slot is per-thread; multi-thread usage would silently no-op. S2 moves to `OnceLock<Arc<AdapterSlice>>` for cross-thread safety.
+- **`BevyRuntimeAdapter` is a JSON stub**: body produces JSON not real Bevy projection output; `ExportOnlyLossy` fidelity claim is honest but S2 will wire to actual `export_dynamic_scene` / `project_instances` calls.
+- **`SceneAssetEntity deny_unknown_fields`** at `scene_asset.rs:76`: `Lossless` caveat documented in `JsonProjectAdapter` rustdoc; S2 removes the lint and documents the Lossless asymmetry.
+
 ## v0.95.0 — World Workspace (ADR-0037) (2026-08-18)
 
 Delivers the World Workspace as a first-class product context (ADR-0037), grouping

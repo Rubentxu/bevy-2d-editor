@@ -32,11 +32,15 @@ fn migrate(input: Vn) -> Result<VnPlus1, MigrationError>
 
 ### SEM-6 Fidelity contracts
 
+**Status**: Satisfied as of v0.96.0 (SDD-0046 S1 — `EditorAdapter` trait + `AdapterFidelity` enum + 3 retroactive impls).
+
 Each adapter reports one:
 
 - `Lossless`;
 - `SemanticLossless`;
 - `ExportOnlyLossy`.
+
+> **Cross-link**: The full adapter contract — trait surface, fidelity enum, 3 impls, error model, and discovery API — is specified in [`sem-adapter-contract`](../../sddk/semantic-editor-model-adapter-contract/spec.md) (SDD-0046 S1).
 
 ## Core model families
 

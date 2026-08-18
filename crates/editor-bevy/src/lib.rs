@@ -9,6 +9,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
 pub mod actuator_bus;
+pub mod adapter_impls;
 pub mod asset_command;
 pub mod asset_files;
 pub mod asset_state;
@@ -201,6 +202,7 @@ pub use dynamic_scene::{
     DynamicSceneExport, EXPORT_VERSION, EntityExport, ExportError, ExportWarning,
     anchor_str_to_normalized_offset, export_dynamic_scene, is_known_anchor_str,
 };
+pub use editor_model::ProjectMetadata;
 pub use instance_projection::{PreviewEntity, project_instances, root_local_ids};
 pub use logic_command::{LogicCommand, LogicCommandError, LogicOperationLog};
 pub use logic_evaluator::{
@@ -216,8 +218,8 @@ pub use logic_recipes::{is_builtin_recipe, list_builtin_recipes, seed_builtin_re
 pub use logic_validation::{LogicValidationIssue, LogicValidationIssueCode, validate_logic_graph};
 pub use operation_log::{LogEntry, OperationLog, OperationLogError};
 pub use persistence::{
-    ASSETS_DIR, AssetPathError, PROJECT_FILE, ProjectMetadata, SCENES_DIR, SCHEMAS_DIR,
-    TILESETS_DIR, asset_path, tileset_path, validate_logical_path,
+    ASSETS_DIR, AssetPathError, PROJECT_FILE, SCENES_DIR, SCHEMAS_DIR, TILESETS_DIR, asset_path,
+    tileset_path, validate_logical_path,
 };
 pub use preview_inspector::{PreviewMappingEntry, PreviewMetrics, PreviewProvenance};
 // §6: CausalityEdge + RebuildCause re-exported from editor-model for preview_inspector.rs.

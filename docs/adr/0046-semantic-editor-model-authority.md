@@ -4,8 +4,18 @@
 
 ## Status
 
-Accepted — 2026-08-14
+Accepted + Implemented (SEM-6 partial, v0.96.0) — 2026-08-14
 
+### Implementation Progress
+
+| Slice | Version | Scope | Status |
+|-------|---------|-------|--------|
+| **S1** | v0.96.0 | `EditorAdapter` trait + `AdapterFidelity` enum + 3 retroactive impls (JsonProjectAdapter, BsnExportAdapter, BevyRuntimeAdapter) | **Implemented** |
+| **S2** | deferred | JSON writer refactor — `SemanticModel` owns its data, replacing `Box::leak` decode pattern | deferred |
+| **S3** | deferred | `Migrate<Vn> → Vn+1` migration framework | deferred |
+| **S4** | deferred | Extension bags for forward-compat unknown data; `SceneAssetEntity deny_unknown_fields` removal | deferred |
+| **S5** | deferred | `BevyBsnAdapter` swap-in (Bevy PR #23639) | deferred |
+| **S6** | deferred | Bevy preview non-promotion invariant test | deferred |
 
 ## Relationship to existing ADRs
 
