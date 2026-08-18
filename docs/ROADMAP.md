@@ -642,7 +642,7 @@ All Hito 1 items completed in v0.12-v0.20. Deferred items:
 | ADR-0034 | Typed EditorBackend Contract Replaces Global Window Bridge | Accepted (2026-08-14) |
 | ADR-0035 | Clock and IdGenerator Are Explicit Application Ports | Accepted (2026-08-14) |
 | ADR-0036 | Bevy Runtime Preview Is an Ephemeral Projection Adapter | Accepted (2026-08-14) |
-| ADR-0037 | World Workspace Is a First-Class Product Context | Accepted (2026-08-14) |
+| ADR-0037 | World Workspace Is a First-Class Product Context | Accepted + Implemented (v0.95.0) |
 | ADR-0038 | Workflow and Gameplay Recipes Compile Intent into Typed Changes | Accepted (2026-08-14) |
 | ADR-0039 | Change Workbench Is the Unified Review and Approval Surface | Accepted (2026-08-14) |
 | ADR-0040 | Editor Extension SDK Is Capability-First and Transactional | Accepted (2026-08-14) |

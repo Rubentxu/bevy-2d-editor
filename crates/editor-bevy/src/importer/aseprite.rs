@@ -355,6 +355,7 @@ impl Importer for AsepriteImporter {
             ownership_rules: vec![ownership],
             detected_version: Some(ir.version.clone()),
             detected_version_parsed: ImporterVersion::parse(&ir.version),
+            raw_source_json: None,
         })
     }
 

@@ -527,6 +527,7 @@ impl Importer for TiledImporter {
             ownership_rules: vec![ownership],
             detected_version: None,
             detected_version_parsed: None,
+            raw_source_json: None,
         })
     }
 

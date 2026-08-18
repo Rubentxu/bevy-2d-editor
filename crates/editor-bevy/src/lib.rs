@@ -68,6 +68,8 @@ mod wasm_recipes;
 mod wasm_scene_instance;
 mod wasm_tile;
 pub mod world_command;
+pub mod world_recipes;
+pub mod world_recipes_registry;
 pub mod world_state;
 pub mod world_validation;
 
