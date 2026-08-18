@@ -92,7 +92,7 @@ fn with_pending_change_sets<R, F: FnOnce(&BTreeMap<String, PendingChangeSet>) ->
 ///   "origin": "Agent",
 ///   "actor": "agent:code-writer",
 ///   "rationale": "Refactor entity naming",
-///   "ops": [{ /* SceneCommand as JSON */ }]
+///   "ops": [SceneCommand as JSON]
 /// }
 /// ```
 ///

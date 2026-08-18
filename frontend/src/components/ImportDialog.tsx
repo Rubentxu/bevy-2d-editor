@@ -121,9 +121,8 @@ export default function ImportDialog({
     setState({ phase: "importing" });
 
     // Read the file as base64
-    const fileInput = document.querySelector<HTMLInputElement>(
-      'input[type="file"]',
-    );
+    const fileInput =
+      document.querySelector<HTMLInputElement>('input[type="file"]');
     const file = fileInput?.files?.[0];
     if (!file) {
       setState({ phase: "error", message: "No file selected" });
@@ -145,10 +144,7 @@ export default function ImportDialog({
     }
 
     const importResult = result.value;
-    console.info(
-      `[ImportDialog] Import result:`,
-      importResult,
-    );
+    console.info(`[ImportDialog] Import result:`, importResult);
 
     // Check if there are pending change sets (conflicts go to ChangeWorkbench)
     // The import result will have a change_set_id if it's queued
@@ -237,9 +233,7 @@ export default function ImportDialog({
                 accept=".json,.ldtk"
                 onChange={handleFileSelect}
               />
-              {fileName && (
-                <span className="file-name">{fileName}</span>
-              )}
+              {fileName && <span className="file-name">{fileName}</span>}
             </div>
 
             {/* Destination path */}
@@ -302,8 +296,8 @@ export default function ImportDialog({
               ⚠ Conflicts detected — review required
             </p>
             <p style={{ color: "#cbd5e0", fontSize: 13 }}>
-              The source file has changed since the last import.
-              Some changes conflict with your edits.
+              The source file has changed since the last import. Some changes
+              conflict with your edits.
             </p>
             {state.result.diff && (
               <div className="conflict-summary">

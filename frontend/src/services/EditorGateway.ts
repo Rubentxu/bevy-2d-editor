@@ -304,6 +304,19 @@ interface WindowWithBridge {
   remove_link_wasm?: (linkId: string) => Promise<string> | string;
   set_layout_policy_wasm?: (policyJson: string) => Promise<string> | string;
   open_level_from_world_wasm?: (levelId: string) => Promise<string> | string;
+  // §8 External Source Importers WASM exports (ADR-0041 / v0.93)
+  list_importers_wasm?: (kind?: string) => Promise<string> | string;
+  register_importer_wasm?: (
+    id: string,
+    version: string,
+    display_name: string,
+  ) => Promise<string> | string;
+  import_external_source_wasm?: (
+    source_path: string,
+    importer_id: string,
+  ) => Promise<string> | string;
+  reimport_external_source_wasm?: (asset_id: string) => Promise<string> | string;
+  get_external_source_wasm?: (asset_id: string) => Promise<string> | string;
 }
 
 function readBridge(): WindowWithBridge | null {

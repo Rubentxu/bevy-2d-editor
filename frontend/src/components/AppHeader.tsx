@@ -22,6 +22,7 @@ export interface AppHeaderProps {
   onBackToScene?: () => void;
   onOpenLogic?: () => void;
   onOpenCode?: () => void;
+  onOpenWorldWorkspace?: () => void;
   logState: LogState;
   onUndo: () => void;
   onRedo: () => void;

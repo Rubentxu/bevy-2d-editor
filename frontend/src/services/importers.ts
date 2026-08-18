@@ -19,6 +19,17 @@ import { waitForEditorReady } from "../utils/waitForEditorReady";
 interface WindowWithBridge {
   __bridge?: Record<string, unknown>;
   __bevyEngineStarted?: boolean;
+  // §8 External Source Importers WASM exports (ADR-0041 / v0.93)
+  list_importers_wasm?: (kind?: string) => Promise<string>;
+  register_importer_wasm?: (json: string) => Promise<string>;
+  import_external_source_wasm?: (
+    kind: string,
+    source_uri: string,
+    bytes_b64: string,
+    target_resource_ref: string,
+  ) => Promise<string>;
+  reimport_external_source_wasm?: (source_uri?: string) => Promise<string>;
+  get_external_source_wasm?: (resource_ref: string) => Promise<string>;
 }
 
 /** Read the WASM bridge from the window object. */
@@ -29,8 +40,7 @@ function readBridge(): WindowWithBridge | null {
 
 /** Result wrapper for importer operations. */
 export type ImporterResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; error: string };
+  { ok: true; value: T } | { ok: false; error: string };
 
 /** Descriptor for a registered importer. */
 export interface ImporterDescriptor {
@@ -78,7 +88,9 @@ export interface ExternalSource {
 }
 
 /** Call a WASM export that takes no arguments. */
-async function callNoArg<T>(fn: (() => Promise<string>) | undefined): Promise<ImporterResult<T>> {
+async function callNoArg<T>(
+  fn: (() => Promise<string>) | undefined,
+): Promise<ImporterResult<T>> {
   if (!fn) return { ok: false, error: "wasm export not available" };
   try {
     const result = await fn();
@@ -221,7 +233,10 @@ export async function getExternalSource(
   await waitForEditorReady();
   const w = readBridge();
   if (!w?.get_external_source_wasm) {
-    return { ok: false, error: "get_external_source_wasm export not available" };
+    return {
+      ok: false,
+      error: "get_external_source_wasm export not available",
+    };
   }
   try {
     const result = await w.get_external_source_wasm(resourceRef);

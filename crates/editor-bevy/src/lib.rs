@@ -2752,6 +2752,7 @@ pub async fn create_scene_asset(name: &str, role: &str) -> Result<String, JsValu
         exposed_properties: vec![],
         metadata: Default::default(),
         layers: vec![],
+        extension_data: Default::default(),
     };
 
     let doc_json = serde_json::to_string(&doc).map_err(|e| JsValue::from_str(&e.to_string()))?;
@@ -3173,6 +3174,7 @@ pub async fn create_world_wasm(name: &str) -> Result<String, JsValue> {
         levels: Vec::new(),
         links: Vec::new(),
         updated_at: now,
+        extension_data: Default::default(),
     };
 
     let doc_json = serde_json::to_string(&doc).map_err(|e| JsValue::from_str(&e.to_string()))?;

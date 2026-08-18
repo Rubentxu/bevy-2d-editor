@@ -40,7 +40,7 @@ export default function RuntimePreviewInspector({ onJumpToSource }: Props) {
     data: PreviewProvenance;
   } | null>(null);
   // PR4 correction: use useLogicActivation hook instead of inline (window as any) cast
-  const { snapshot: logicLog, rebuildCause } = useLogicActivation({
+  const { legacy: logicLog, rebuildCause } = useLogicActivation({
     pollIntervalMs: 500,
   });
   const [hotReloadEvents, setHotReloadEvents] = useState<HotReloadEvent[]>([]);
