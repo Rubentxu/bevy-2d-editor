@@ -41,6 +41,7 @@ fn s1_scene_asset_document_roundtrip() {
                         }),
                     },
                 ],
+                extension_data: Default::default(),
             },
             SceneAssetEntity {
                 local_id: LocalId::new("weapon".to_string()),
@@ -54,6 +55,7 @@ fn s1_scene_asset_document_roundtrip() {
                         "anchor": "Center"
                     }),
                 }],
+                extension_data: Default::default(),
             },
         ],
         relationships: vec![SceneAssetRelationship {
@@ -74,6 +76,7 @@ fn s1_scene_asset_document_roundtrip() {
             updated_at: None,
             notes: Some("Basic player actor".to_string()),
         },
+        extension_data: Default::default(),
     };
 
     let json = serde_json::to_string(&doc).expect("serialize SceneAssetDocument");
@@ -224,6 +227,7 @@ fn s7_scene_asset_document_with_layers_roundtrip() {
         relationships: vec![],
         exposed_properties: vec![],
         metadata: Default::default(),
+        extension_data: Default::default(),
     };
 
     let json = serde_json::to_string(&doc).expect("serialize level asset");

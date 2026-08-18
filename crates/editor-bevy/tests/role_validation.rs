@@ -19,10 +19,12 @@ fn s7_fragment_standalone_warning() {
             local_path: "health".to_string(),
             name: "Health Pickup".to_string(),
             components: vec![],
+            extension_data: Default::default(),
         }],
         relationships: vec![],
         exposed_properties: vec![],
         metadata: SceneAssetMetadata::default(),
+        extension_data: Default::default(),
     };
 
     let warnings = validate_role(SceneAssetRole::Fragment, &doc);
@@ -52,12 +54,14 @@ fn s9_hierarchy_via_relationships_only() {
                 local_path: "root".to_string(),
                 name: "Player".to_string(),
                 components: vec![],
+                extension_data: Default::default(),
             },
             SceneAssetEntity {
                 local_id: LocalId::new("weapon".to_string()),
                 local_path: "root/weapon".to_string(),
                 name: "Weapon".to_string(),
                 components: vec![],
+                extension_data: Default::default(),
             },
         ],
         relationships: vec![SceneAssetRelationship {
@@ -68,6 +72,7 @@ fn s9_hierarchy_via_relationships_only() {
         }],
         exposed_properties: vec![],
         metadata: SceneAssetMetadata::default(),
+        extension_data: Default::default(),
     };
 
     let json = serde_json::to_string(&doc).expect("serialize doc");

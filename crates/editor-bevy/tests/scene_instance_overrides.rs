@@ -28,6 +28,7 @@ fn make_asset(entities: Vec<SceneAssetEntity>, version: u32) -> SceneAssetDocume
         relationships: vec![],
         exposed_properties: vec![],
         metadata: Default::default(),
+        extension_data: Default::default(),
     }
 }
 
@@ -64,6 +65,7 @@ fn classify_overrides_namespaced_active() {
                 type_id: "editor.Sprite2D".to_string(),
                 values: serde_json::json!({"asset": "player.png"}),
             }],
+            extension_data: Default::default(),
         }],
         1,
     );
@@ -96,6 +98,7 @@ fn classify_overrides_short_form_orphans() {
                 type_id: "editor.Sprite2D".to_string(),
                 values: serde_json::json!({"asset": "player.png"}),
             }],
+            extension_data: Default::default(),
         }],
         1,
     );
@@ -130,6 +133,7 @@ fn resync_preserves_override_on_rename() {
                 type_id: "editor.Sprite2D".to_string(),
                 values: serde_json::json!({"asset": "player.png"}),
             }],
+            extension_data: Default::default(),
         }],
         2,
     );
@@ -221,6 +225,7 @@ fn resync_marks_stale_on_field_rename() {
                 type_id: "editor.Sprite2D".to_string(),
                 values: serde_json::json!({"asset": "player.png"}),
             }],
+            extension_data: Default::default(),
         }],
         1,
     );
@@ -250,6 +255,7 @@ fn resync_marks_stale_on_field_rename() {
                 type_id: "editor.Sprite2D".to_string(),
                 values: serde_json::json!({"image": "player.png"}),
             }],
+            extension_data: Default::default(),
         }],
         2,
     );
@@ -280,6 +286,7 @@ fn resync_marks_conflict_on_type_change() {
                 type_id: "editor.Health".to_string(),
                 values: serde_json::json!({"current": "full"}),
             }],
+            extension_data: Default::default(),
         }],
         2,
     );
@@ -348,6 +355,7 @@ fn resync_rebinds_via_local_path() {
                 type_id: "editor.Sprite2D".to_string(),
                 values: serde_json::json!({"asset": "player.png"}),
             }],
+            extension_data: Default::default(),
         }],
         3,
     );
@@ -382,7 +390,8 @@ fn effective_values_with_no_overrides_returns_asset_unchanged() {
                     type_id: "editor.Sprite2D".to_string(),
                     values: serde_json::json!({"asset": "a.png"}),
                 }],
-            },
+                extension_data: Default::default(),
+        },
             SceneAssetEntity {
                 local_id: LocalId::new("b"),
                 local_path: "b".to_string(),
@@ -391,6 +400,7 @@ fn effective_values_with_no_overrides_returns_asset_unchanged() {
                     type_id: "editor.Sprite2D".to_string(),
                     values: serde_json::json!({"asset": "b.png"}),
                 }],
+                extension_data: Default::default(),
             },
         ],
         1,
@@ -426,12 +436,14 @@ fn resync_extends_id_map_on_new_entity() {
                 local_path: "a".to_string(),
                 name: "A".to_string(),
                 components: vec![],
+                extension_data: Default::default(),
             },
             SceneAssetEntity {
                 local_id: LocalId::new("b"),
                 local_path: "b".to_string(),
                 name: "B".to_string(),
                 components: vec![],
+                extension_data: Default::default(),
             },
         ],
         1,
@@ -455,18 +467,21 @@ fn resync_extends_id_map_on_new_entity() {
                 local_path: "a".to_string(),
                 name: "A".to_string(),
                 components: vec![],
+                extension_data: Default::default(),
             },
             SceneAssetEntity {
                 local_id: LocalId::new("b"),
                 local_path: "b".to_string(),
                 name: "B".to_string(),
                 components: vec![],
+                extension_data: Default::default(),
             },
             SceneAssetEntity {
                 local_id: LocalId::new("c"),
                 local_path: "c".to_string(),
                 name: "C".to_string(),
                 components: vec![],
+                extension_data: Default::default(),
             },
         ],
         2,
@@ -501,6 +516,7 @@ fn validate_overrides_returns_issues_for_each_failure() {
                 type_id: "editor.Sprite2D".to_string(),
                 values: serde_json::json!({"asset": "player.png"}),
             }],
+            extension_data: Default::default(),
         }],
         1,
     );

@@ -31,6 +31,7 @@ fn make_scene_asset(
         relationships,
         exposed_properties: vec![],
         metadata: Default::default(),
+        extension_data: Default::default(),
     }
 }
 
@@ -44,6 +45,7 @@ fn scene_entity(
         local_path: format!("root/{}", name),
         name: name.to_string(),
         components,
+        extension_data: Default::default(),
     }
 }
 

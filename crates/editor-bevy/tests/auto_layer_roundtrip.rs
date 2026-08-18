@@ -61,6 +61,7 @@ fn level_asset_with_auto_layer(
         exposed_properties: vec![],
         metadata: Default::default(),
         layers: vec![LevelLayer::Tile(source_tl), LevelLayer::Auto(auto_layer)],
+        extension_data: Default::default(),
     };
     doc
 }
@@ -380,6 +381,7 @@ fn test_regenerate_auto_layer_apply_and_inverse() {
         exposed_properties: vec![],
         metadata: Default::default(),
         layers: vec![LevelLayer::Tile(source_tl), LevelLayer::Auto(auto_layer)],
+        extension_data: Default::default(),
     };
 
     // C1: pre-regen cached (should be empty)
@@ -468,6 +470,7 @@ fn test_auto_layer_full_roundtrip_add_rule_regen_undo_redo() {
         exposed_properties: vec![],
         metadata: Default::default(),
         layers: vec![LevelLayer::Tile(source_tl), LevelLayer::Auto(auto_layer)],
+        extension_data: Default::default(),
     };
 
     // Step 1: Add a rule to the AutoLayer
@@ -584,6 +587,7 @@ fn test_auto_layer_requires_valid_source_layer_id() {
         exposed_properties: vec![],
         metadata: Default::default(),
         layers: vec![LevelLayer::Auto(auto_layer)],
+        extension_data: Default::default(),
         // No TileLayer in document
     };
 

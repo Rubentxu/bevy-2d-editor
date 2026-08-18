@@ -61,6 +61,7 @@ fn asset_request_invalidates_body_cache() {
                 relationships: vec![],
                 exposed_properties: vec![],
                 metadata: editor_bevy::scene_asset::SceneAssetMetadata::default(),
+                extension_data: Default::default(),
             },
         );
     });
@@ -102,6 +103,7 @@ fn force_reload_emits_force_variant() {
                 relationships: vec![],
                 exposed_properties: vec![],
                 metadata: editor_bevy::scene_asset::SceneAssetMetadata::default(),
+                extension_data: Default::default(),
             },
         );
     });

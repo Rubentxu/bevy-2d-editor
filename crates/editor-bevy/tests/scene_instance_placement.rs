@@ -31,10 +31,12 @@ fn make_single_entity_asset(asset_id: &str, local_id: &str) -> SceneAssetDocumen
             local_path: local_id.to_string(),
             name: "Root Entity".to_string(),
             components: vec![],
+            extension_data: Default::default(),
         }],
         relationships: vec![],
         exposed_properties: vec![],
         metadata: Default::default(),
+        extension_data: Default::default(),
     }
 }
 
@@ -52,17 +54,20 @@ fn make_multi_root_asset(asset_id: &str) -> SceneAssetDocument {
                 local_path: "root1".to_string(),
                 name: "Root 1".to_string(),
                 components: vec![],
+                extension_data: Default::default(),
             },
             SceneAssetEntity {
                 local_id: LocalId::new("root2".to_string()),
                 local_path: "root2".to_string(),
                 name: "Root 2".to_string(),
                 components: vec![],
+                extension_data: Default::default(),
             },
         ],
         relationships: vec![],
         exposed_properties: vec![],
         metadata: Default::default(),
+        extension_data: Default::default(),
     }
 }
 
@@ -78,6 +83,7 @@ fn make_empty_asset(asset_id: &str) -> SceneAssetDocument {
         relationships: vec![],
         exposed_properties: vec![],
         metadata: Default::default(),
+        extension_data: Default::default(),
     }
 }
 

@@ -98,6 +98,7 @@ fn project_metadata_with_scene_assets_roundtrip() {
         ],
         worlds: vec![],
         active_world: None,
+        extension_data: Default::default(),
     };
     let json = serde_json::to_string(&pm).unwrap();
     let rt: ProjectMetadata = serde_json::from_str(&json).unwrap();

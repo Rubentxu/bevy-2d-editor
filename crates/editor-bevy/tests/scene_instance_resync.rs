@@ -50,6 +50,7 @@ fn make_asset(asset_id: &str, entities: Vec<SceneAssetEntity>) -> SceneAssetDocu
         relationships: vec![],
         exposed_properties: vec![],
         metadata: Default::default(),
+        extension_data: Default::default(),
     }
 }
 
@@ -78,6 +79,7 @@ fn s8_version_bump_triggers_resync() {
             local_path: "root".to_string(),
             name: "Player".to_string(),
             components: vec![],
+            extension_data: Default::default(),
         }],
     );
 
@@ -140,6 +142,7 @@ fn s9_resync_never_silently_deletes_overrides() {
             local_path: "root".to_string(),
             name: "Enemy".to_string(),
             components: vec![],
+            extension_data: Default::default(),
         }],
     );
 
@@ -185,6 +188,7 @@ fn s8_multiple_version_bumps() {
             local_path: "root".to_string(),
             name: "NPC".to_string(),
             components: vec![],
+            extension_data: Default::default(),
         }],
     );
 
@@ -263,6 +267,7 @@ fn s9_multiple_orphaned_overrides() {
                     "scale": {"x": 1.0, "y": 1.0},
                 }),
             }],
+            extension_data: Default::default(),
         }],
     );
 

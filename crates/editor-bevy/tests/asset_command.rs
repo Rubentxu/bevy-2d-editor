@@ -25,6 +25,7 @@ fn empty_asset_doc(asset_id: &str, logical_path: &str) -> SceneAssetDocument {
         relationships: vec![],
         exposed_properties: vec![],
         metadata: Default::default(),
+        extension_data: Default::default(),
     }
 }
 
@@ -34,6 +35,7 @@ fn entity(local_id: &str, name: &str, components: Vec<ComponentInstance>) -> Sce
         local_path: format!("./{}", local_id),
         name: name.to_string(),
         components,
+        extension_data: Default::default(),
     }
 }
 

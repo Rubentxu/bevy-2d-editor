@@ -24,10 +24,12 @@ fn make_test_asset(logical_path: &str) -> SceneAssetDocument {
             local_path: "root".to_string(),
             name: "Test Entity".to_string(),
             components: vec![],
+            extension_data: Default::default(),
         }],
         relationships: vec![],
         exposed_properties: vec![],
         metadata: SceneAssetMetadata::default(),
+        extension_data: Default::default(),
     }
 }
 

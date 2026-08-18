@@ -56,6 +56,7 @@ fn s8_local_path_and_name_independent_of_local_id() {
         local_path: "root/weapon".into(),
         name: "Weapon".into(),
         components: vec![],
+        extension_data: Default::default(),
     };
 
     // Serialize and deserialize.
