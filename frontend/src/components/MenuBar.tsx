@@ -33,6 +33,7 @@ export interface MenuBarProps {
   onToggleAutoLayer: () => void;
   autoLayerPanelOpen: boolean;
   onTogglePlay?: () => void;
+  onOpenWorldWorkspace?: () => void;
   onOpenSearch?: () => void;
   onOpenCheatSheet?: () => void;
   onWelcomeTour?: () => void;
@@ -73,6 +74,7 @@ export default function MenuBar({
   onToggleAutoLayer,
   autoLayerPanelOpen,
   onTogglePlay,
+  onOpenWorldWorkspace,
   onOpenSearch,
   onOpenCheatSheet,
   onWelcomeTour,
@@ -125,6 +127,7 @@ export default function MenuBar({
         handleToggleAutoLayer: onToggleAutoLayer,
         handleOpenLogic: onOpenLogic ?? (() => {}),
         handleOpenCode: onOpenCode ?? (() => {}),
+        handleOpenWorldWorkspace: onOpenWorldWorkspace ?? (() => {}),
         handleTogglePlay: onTogglePlay ?? (() => {}),
         handleOpenCheatSheet: onOpenCheatSheet ?? (() => {}),
         handleWelcomeTour:
@@ -151,6 +154,7 @@ export default function MenuBar({
       onOpenCheatSheet,
       onOpenCode,
       onOpenLogic,
+      onOpenWorldWorkspace,
       onRedo,
       onSave,
       onSaveAs,

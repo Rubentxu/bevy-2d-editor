@@ -832,6 +832,13 @@ function AppInner() {
     setEditorMode("code");
   }, []);
 
+  // ── World Workspace handler (ADR-0037 Slice 3 T3.6 follow-up) ────────────
+  // Reaches the WorldWorkspace canvas (ADR-0037 §ww-ui) via the existing
+  // editorMode="world" path that already mounts <WorldWorkspace /> in App.
+  const handleOpenWorldWorkspace = useCallback(() => {
+    setEditorMode("world");
+  }, []);
+
   // Cross-mode jump-to-source handler (scene inspector → code editor).
   // Resolves the type_id → source location and navigates to the file + line.
   const handleJumpToSource = useCallback(async (typeId: string) => {
@@ -1659,6 +1666,7 @@ function AppInner() {
               }
               onOpenLogic={editorMode === "scene" ? handleOpenLogic : undefined}
               onOpenCode={editorMode === "scene" ? handleOpenCode : undefined}
+              onOpenWorldWorkspace={handleOpenWorldWorkspace}
               logState={editorMode === "scene" ? logState : assetLogState}
               onUndo={editorMode === "scene" ? handleUndo : handleAssetUndo}
               onRedo={editorMode === "scene" ? handleRedo : handleAssetRedo}

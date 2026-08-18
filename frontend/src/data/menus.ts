@@ -39,7 +39,7 @@ export interface MenuHandlers {
   // menu still works in surface-level previews (tests, snapshots).
   handleApplyPreset?: (presetId: string) => void;
   handleSaveWorkspacePreset?: () => void;
-  handleOpenWorldWorkspace?: () => void;
+  handleOpenWorldWorkspace: () => void;
   setTheme: (theme: "dark" | "light") => void;
   selectedEntityId: string | null;
   editorMode: "scene" | "asset-authoring" | "logic" | "code" | "play" | "world";
