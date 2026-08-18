@@ -5,6 +5,7 @@
 
 #![deny(missing_docs)]
 
+pub mod adapter;
 pub mod auto_layer;
 pub mod causality;
 pub mod component;
@@ -18,6 +19,7 @@ pub mod logic_activation;
 pub mod logic_graph;
 pub mod pending_change_set;
 pub mod ports;
+pub mod project_metadata;
 pub mod rebuild_cause;
 pub mod runtime_delta;
 pub mod scene_asset;
@@ -93,6 +95,9 @@ pub use rebuild_cause::RebuildCause;
 // v0.90 PR1: EditorSessionPort trait + RuntimeDelta
 pub use runtime_delta::RuntimeDelta;
 pub use session_port::EditorSessionPort;
+
+// Project metadata (moved from editor-bevy/persistence for ADR-0046 S1)
+pub use project_metadata::ProjectMetadata;
 
 // v0.93 PR1: External source provenance (ADR-0041) + Importer protocol (ADR-0040 step 3)
 pub use external_source::{
