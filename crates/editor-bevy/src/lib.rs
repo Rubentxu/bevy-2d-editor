@@ -9,6 +9,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
 pub mod actuator_bus;
+pub mod adapter_impls;
 pub mod asset_command;
 pub mod asset_files;
 pub mod asset_state;

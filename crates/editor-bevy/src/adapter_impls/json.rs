@@ -54,30 +54,36 @@ impl EditorAdapter for JsonProjectAdapter {
     fn encode(&self, model: &SemanticModel<'_>) -> Result<Vec<u8>, AdapterError> {
         let name = self.name();
         match model {
-            SemanticModel::Scene(doc) => serde_json::to_string(doc)
-                .map(Into::into)
-                .map_err(|e| AdapterError::Encode {
-                    adapter: name.into(),
-                    source: e.into(),
-                }),
-            SemanticModel::SceneAsset(doc) => serde_json::to_string(doc)
-                .map(Into::into)
-                .map_err(|e| AdapterError::Encode {
-                    adapter: name.into(),
-                    source: e.into(),
-                }),
+            SemanticModel::Scene(doc) => {
+                serde_json::to_string(doc)
+                    .map(Into::into)
+                    .map_err(|e| AdapterError::Encode {
+                        adapter: name.into(),
+                        source: e.into(),
+                    })
+            }
+            SemanticModel::SceneAsset(doc) => {
+                serde_json::to_string(doc)
+                    .map(Into::into)
+                    .map_err(|e| AdapterError::Encode {
+                        adapter: name.into(),
+                        source: e.into(),
+                    })
+            }
             SemanticModel::LogicGraph(asset) => serde_json::to_string(asset)
                 .map(Into::into)
                 .map_err(|e| AdapterError::Encode {
                     adapter: name.into(),
                     source: e.into(),
                 }),
-            SemanticModel::World(doc) => serde_json::to_string(doc)
-                .map(Into::into)
-                .map_err(|e| AdapterError::Encode {
-                    adapter: name.into(),
-                    source: e.into(),
-                }),
+            SemanticModel::World(doc) => {
+                serde_json::to_string(doc)
+                    .map(Into::into)
+                    .map_err(|e| AdapterError::Encode {
+                        adapter: name.into(),
+                        source: e.into(),
+                    })
+            }
             SemanticModel::ProjectMetadata(pm) => serde_json::to_string(pm)
                 .map(Into::into)
                 .map_err(|e| AdapterError::Encode {
@@ -94,48 +100,57 @@ impl EditorAdapter for JsonProjectAdapter {
             source: e.into(),
         })?;
 
-        let obj = json
-            .as_object()
-            .ok_or_else(|| AdapterError::Decode {
-                adapter: name.into(),
-                source: "JSON value is not an object".into(),
-            })?;
+        let obj = json.as_object().ok_or_else(|| AdapterError::Decode {
+            adapter: name.into(),
+            source: "JSON value is not an object".into(),
+        })?;
 
         // Key sniff — 8 lines, per D5.
+        // Deserialize to owned value, leak to get &'static ref for SemanticModel.
         if obj.contains_key("nodes") && obj.contains_key("edges") {
-            let doc = serde_json::from_value(json).map_err(|e| AdapterError::Decode {
-                adapter: name.into(),
-                source: e.into(),
-            })?;
-            return Ok(SemanticModel::LogicGraph(doc));
+            let owned: LogicGraphAsset =
+                serde_json::from_value(json.clone()).map_err(|e| AdapterError::Decode {
+                    adapter: name.into(),
+                    source: e.into(),
+                })?;
+            let leaked: &'static LogicGraphAsset = Box::leak(Box::new(owned));
+            return Ok(SemanticModel::LogicGraph(leaked));
         }
         if obj.contains_key("scenes") && obj.contains_key("schemas") {
-            let doc = serde_json::from_value(json).map_err(|e| AdapterError::Decode {
-                adapter: name.into(),
-                source: e.into(),
-            })?;
-            return Ok(SemanticModel::ProjectMetadata(doc));
+            let owned: ProjectMetadata =
+                serde_json::from_value(json.clone()).map_err(|e| AdapterError::Decode {
+                    adapter: name.into(),
+                    source: e.into(),
+                })?;
+            let leaked: &'static ProjectMetadata = Box::leak(Box::new(owned));
+            return Ok(SemanticModel::ProjectMetadata(leaked));
         }
         if obj.contains_key("levels") && obj.contains_key("links") {
-            let doc = serde_json::from_value(json).map_err(|e| AdapterError::Decode {
-                adapter: name.into(),
-                source: e.into(),
-            })?;
-            return Ok(SemanticModel::World(doc));
+            let owned: WorldDocument =
+                serde_json::from_value(json.clone()).map_err(|e| AdapterError::Decode {
+                    adapter: name.into(),
+                    source: e.into(),
+                })?;
+            let leaked: &'static WorldDocument = Box::leak(Box::new(owned));
+            return Ok(SemanticModel::World(leaked));
         }
         if obj.contains_key("scene_id") && obj.contains_key("entities") {
-            let doc = serde_json::from_value(json).map_err(|e| AdapterError::Decode {
-                adapter: name.into(),
-                source: e.into(),
-            })?;
-            return Ok(SemanticModel::Scene(doc));
+            let owned: SceneDocument =
+                serde_json::from_value(json.clone()).map_err(|e| AdapterError::Decode {
+                    adapter: name.into(),
+                    source: e.into(),
+                })?;
+            let leaked: &'static SceneDocument = Box::leak(Box::new(owned));
+            return Ok(SemanticModel::Scene(leaked));
         }
         if obj.contains_key("asset_id") && obj.contains_key("entities") {
-            let doc = serde_json::from_value(json).map_err(|e| AdapterError::Decode {
-                adapter: name.into(),
-                source: e.into(),
-            })?;
-            return Ok(SemanticModel::SceneAsset(doc));
+            let owned: SceneAssetDocument =
+                serde_json::from_value(json.clone()).map_err(|e| AdapterError::Decode {
+                    adapter: name.into(),
+                    source: e.into(),
+                })?;
+            let leaked: &'static SceneAssetDocument = Box::leak(Box::new(owned));
+            return Ok(SemanticModel::SceneAsset(leaked));
         }
 
         Err(AdapterError::Decode {
@@ -148,10 +163,10 @@ impl EditorAdapter for JsonProjectAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use editor_model::ComponentInstance;
     use editor_model::adapter::SemanticModel;
     use editor_model::ids::StableId;
     use editor_model::scene_asset::{SceneAssetEntity, SceneAssetMetadata, SceneAssetRole};
-    use editor_model::ComponentInstance;
     use std::collections::BTreeMap;
 
     #[test]
@@ -173,7 +188,8 @@ mod tests {
     #[test]
     fn decode_scene_document() {
         let adapter = JsonProjectAdapter::new();
-        let json = r#"{"version":"0.1","scene_id":"s1","name":"My Scene","entities":[],"instances":{}}"#;
+        let json =
+            r#"{"version":"0.1","scene_id":"s1","name":"My Scene","entities":[],"instances":{}}"#;
         let model = adapter.decode(json.as_bytes()).unwrap();
         match model {
             SemanticModel::Scene(doc) => {
@@ -201,7 +217,7 @@ mod tests {
     #[test]
     fn decode_world_document() {
         let adapter = JsonProjectAdapter::new();
-        let json = r#"{"id":"w1","name":"World","version":1,"layout_policy":"grid","levels":[],"links":[],"updated_at":0}"#;
+        let json = r#"{"id":"w1","name":"World","version":1,"layout_policy":{"kind":"grid","cell_size":32},"levels":[],"links":[],"updated_at":0}"#;
         let model = adapter.decode(json.as_bytes()).unwrap();
         match model {
             SemanticModel::World(doc) => {
@@ -215,7 +231,7 @@ mod tests {
     #[test]
     fn decode_logic_graph_asset() {
         let adapter = JsonProjectAdapter::new();
-        let json = r#"{"asset_id":"lg1","logical_path":"logic/test","role":"logic","version":1,"nodes":[],"edges":[],"metadata":{"tags":[],"notes":""}}"#;
+        let json = r#"{"asset_id":"lg1","logical_path":"logic/test","version":1,"builtin":false,"nodes":[],"edges":[]}"#;
         let model = adapter.decode(json.as_bytes()).unwrap();
         match model {
             SemanticModel::LogicGraph(doc) => {
@@ -259,7 +275,9 @@ mod tests {
             worlds: vec![],
             active_world: None,
         };
-        let encoded = adapter.encode(&SemanticModel::ProjectMetadata(&pm)).unwrap();
+        let encoded = adapter
+            .encode(&SemanticModel::ProjectMetadata(&pm))
+            .unwrap();
         let decoded = adapter.decode(&encoded).unwrap();
         match decoded {
             SemanticModel::ProjectMetadata(d) => {
@@ -274,7 +292,7 @@ mod tests {
     #[test]
     fn decode_scene_asset_document() {
         let adapter = JsonProjectAdapter::new();
-        let json = r#"{"asset_id":"a1","logical_path":"actors/hero","role":"actor","version":1,"entities":[],"relationships":[],"metadata":{"tags":[],"notes":""},"layers":[]}"#;
+        let json = r#"{"asset_id":"a1","logical_path":"actors/hero","role":"actor","version":1,"entities":[],"relationships":[],"metadata":{"tags":null,"notes":""},"layers":[]}"#;
         let model = adapter.decode(json.as_bytes()).unwrap();
         match model {
             SemanticModel::SceneAsset(doc) => {
@@ -293,6 +311,9 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         let msg = err.to_string();
-        assert!(msg.contains("unrecognised JSON top-level keys"), "got: {msg}");
+        assert!(
+            msg.contains("unrecognised JSON top-level keys"),
+            "got: {msg}"
+        );
     }
 }

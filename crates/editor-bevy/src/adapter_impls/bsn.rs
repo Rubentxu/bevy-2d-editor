@@ -14,10 +14,10 @@
 //! `crates/editor-bevy/src/bsn_export.rs:72`). Attempting to encode a Logic
 //! asset returns [`AdapterError::UnsupportedRole`].
 
+use crate::bsn_export::{BsnExportError, export_to_bsn_text};
+use editor_model::SceneAssetDocument;
 use editor_model::adapter::{AdapterError, AdapterFidelity, EditorAdapter, SemanticModel};
 use editor_model::scene_asset::SceneAssetRole;
-use editor_model::SceneAssetDocument;
-use crate::bsn_export::{export_to_bsn_text, BsnExportError};
 
 /// BSN export adapter — semantic-lossless encode of `SceneAssetDocument` to `.bsn` text.
 #[derive(Debug, Clone, Copy, Default)]
@@ -77,19 +77,21 @@ impl EditorAdapter for BsnExportAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use editor_model::ComponentInstance;
     use editor_model::adapter::SemanticModel;
     use editor_model::scene_asset::{SceneAssetEntity, SceneAssetMetadata, SceneAssetRole};
-    use editor_model::ComponentInstance;
     use std::collections::BTreeMap;
 
     fn make_actor_asset() -> SceneAssetDocument {
+        use editor_model::ids::SceneAssetLocalId;
         SceneAssetDocument {
             asset_id: "hero".into(),
             logical_path: "actors/hero".into(),
             role: SceneAssetRole::Actor,
             version: 1,
             entities: vec![SceneAssetEntity {
-                local_id: editor_model::ids::LocalId::new("e1".into()),
+                local_id: SceneAssetLocalId::new(String::from("e1")),
+                local_path: String::from("root"),
                 name: "Hero".into(),
                 components: vec![],
             }],
