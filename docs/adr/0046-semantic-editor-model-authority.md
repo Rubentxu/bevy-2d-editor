@@ -13,8 +13,7 @@ Accepted + Implemented (S1 v0.96.0 + S2 v0.97.0) — 2026-08-14
 | **S1** | v0.96.0 | `EditorAdapter` trait + `AdapterFidelity` enum + 3 retroactive impls (JsonProjectAdapter, BsnExportAdapter, BevyRuntimeAdapter) | **Implemented** |
 | **S2** | v0.97.0 | Impl hardening: owned `SemanticModel` (no `Box::leak`), `OnceLock` registry (cross-thread safe), real Bevy dispatch for `Scene`, `SceneAssetEntity deny_unknown_fields` removal (Lossless claim honest) | **Implemented** |
 | **S3** | v0.98.0 | SEM-5 migration framework: `MigrationError`, `parse_version_string`, typed `migrate::<type>` fns, wiring into adapter decode + project.json load paths, corpus (v0.94-era shapes) | **Implemented** |
-| **S3** | deferred | `Migrate<Vn> → Vn+1` migration framework | deferred |
-| **S4** | deferred | Extension bags for forward-compat unknown data | deferred |
+| **S4** | v0.99.0 | Extension bags: `#[serde(flatten)] extension_data` on 7 core types (5 docs + 2 entities); unknown fields PRESERVED (SEM-3); deterministic BTreeMap ordering | **Implemented** |
 | **S5** | deferred | `BevyBsnAdapter` swap-in (Bevy PR #23639) | deferred |
 | **S6** | deferred | Bevy preview non-promotion invariant test | deferred |
 
