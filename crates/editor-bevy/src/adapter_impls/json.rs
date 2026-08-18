@@ -102,45 +102,62 @@ impl EditorAdapter for JsonProjectAdapter {
         })?;
 
         // Key sniff — 8 lines, per D5. Decode directly into OWNED values
-        // (no Box::leak — SDD-0046 S2 D1).
+        // (no Box::leak — SDD-0046 S2 D1), then run SEM-5 migrations
+        // (SDD-0046 S3): old documents upgrade to CURRENT_VERSION, future
+        // documents fail loudly via MigrationError → AdapterError::Decode.
         if obj.contains_key("nodes") && obj.contains_key("edges") {
-            let owned: LogicGraphAsset =
+            let mut owned: LogicGraphAsset =
                 serde_json::from_value(json).map_err(|e| AdapterError::Decode {
                     adapter: name.into(),
                     source: e.into(),
                 })?;
+            editor_model::migration::migrate::logic_graph_asset(owned.version, &mut owned)
+                .map_err(Into::<AdapterError>::into)?;
             return Ok(SemanticModel::LogicGraph(owned));
         }
         if obj.contains_key("scenes") && obj.contains_key("schemas") {
-            let owned: ProjectMetadata =
+            let mut owned: ProjectMetadata =
                 serde_json::from_value(json).map_err(|e| AdapterError::Decode {
                     adapter: name.into(),
                     source: e.into(),
                 })?;
+            let v =
+                editor_model::migration::parse_version_string("ProjectMetadata", &owned.version)
+                    .map_err(Into::<AdapterError>::into)?;
+            editor_model::migration::migrate::project_metadata(v, &mut owned)
+                .map_err(Into::<AdapterError>::into)?;
             return Ok(SemanticModel::ProjectMetadata(owned));
         }
         if obj.contains_key("levels") && obj.contains_key("links") {
-            let owned: WorldDocument =
+            let mut owned: WorldDocument =
                 serde_json::from_value(json).map_err(|e| AdapterError::Decode {
                     adapter: name.into(),
                     source: e.into(),
                 })?;
+            editor_model::migration::migrate::world_document(owned.version, &mut owned)
+                .map_err(Into::<AdapterError>::into)?;
             return Ok(SemanticModel::World(owned));
         }
         if obj.contains_key("scene_id") && obj.contains_key("entities") {
-            let owned: SceneDocument =
+            let mut owned: SceneDocument =
                 serde_json::from_value(json).map_err(|e| AdapterError::Decode {
                     adapter: name.into(),
                     source: e.into(),
                 })?;
+            let v = editor_model::migration::parse_version_string("SceneDocument", &owned.version)
+                .map_err(Into::<AdapterError>::into)?;
+            editor_model::migration::migrate::scene_document(v, &mut owned)
+                .map_err(Into::<AdapterError>::into)?;
             return Ok(SemanticModel::Scene(owned));
         }
         if obj.contains_key("asset_id") && obj.contains_key("entities") {
-            let owned: SceneAssetDocument =
+            let mut owned: SceneAssetDocument =
                 serde_json::from_value(json).map_err(|e| AdapterError::Decode {
                     adapter: name.into(),
                     source: e.into(),
                 })?;
+            editor_model::migration::migrate::scene_asset_document(owned.version, &mut owned)
+                .map_err(Into::<AdapterError>::into)?;
             return Ok(SemanticModel::SceneAsset(owned));
         }
 
