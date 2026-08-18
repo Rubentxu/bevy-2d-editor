@@ -65,7 +65,11 @@ fn ownership_rule_round_trip_all_variants() {
 
 #[test]
 fn source_mapping_round_trip() {
-    let mapping = SourceMapping::new("entity_42", "actors/goblin.json", OwnershipRule::SourceOwned);
+    let mapping = SourceMapping::new(
+        "entity_42",
+        "actors/goblin.json",
+        OwnershipRule::SourceOwned,
+    );
     let json = serde_json::to_string(&mapping).unwrap();
     let parsed: SourceMapping = serde_json::from_str(&json).unwrap();
     assert_eq!(parsed.source_object_id, "entity_42");
@@ -89,9 +93,11 @@ fn source_mapping_with_local_id_round_trip() {
 #[test]
 fn provenance_diff_round_trip() {
     let diff = ProvenanceDiff {
-        added: vec![
-            SourceMapping::new("e1", "actors/a.json", OwnershipRule::SourceOwned),
-        ],
+        added: vec![SourceMapping::new(
+            "e1",
+            "actors/a.json",
+            OwnershipRule::SourceOwned,
+        )],
         removed: vec![],
         modified_source: vec![],
         modified_editor: vec![],
@@ -197,10 +203,8 @@ fn importer_version_parse() {
 #[test]
 fn importer_version_range_contains() {
     use editor_model::importer::ImporterVersionRange;
-    let range = ImporterVersionRange::new(
-        ImporterVersion::new(1, 0, 0),
-        ImporterVersion::new(2, 0, 0),
-    );
+    let range =
+        ImporterVersionRange::new(ImporterVersion::new(1, 0, 0), ImporterVersion::new(2, 0, 0));
     assert!(range.contains(ImporterVersion::new(1, 3, 0)));
     assert!(range.contains(ImporterVersion::new(2, 0, 0)));
     assert!(!range.contains(ImporterVersion::new(3, 0, 0)));

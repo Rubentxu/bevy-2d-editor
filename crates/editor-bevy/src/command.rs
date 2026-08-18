@@ -170,6 +170,11 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         scene_asset_id: Option<String>,
     },
+    // ─────────────────────────────────────────────────────────────────────────
+    // ADR-0037 — World Workspace commands
+    // ─────────────────────────────────────────────────────────────────────────
+    /// World workspace commands (topology + navigation).
+    World(crate::world_command::WorldCommand),
 }
 
 /// Metadata attached to each command for future agent auditing (Hito 0 §6.4).

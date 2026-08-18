@@ -134,6 +134,19 @@ pub struct LogicSessionState {
     pub graph_docs: std::collections::BTreeMap<String, crate::logic_graph::LogicGraphAsset>,
 }
 
+/// Per-world session state. Parallel to `SceneSessionState`. The owning
+/// map lives on `EditorSession` (keyed by logical path); `EditorSessionPort`
+/// exposes `world_state_mut(path)` / `world_state(path)` (create-on-write,
+/// matches `scene_state_mut` pattern at `editor-application/src/session.rs:616`).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct WorldSessionState {
+    /// Currently open world document, if any.
+    pub doc: Option<crate::world::WorldDocument>,
+    /// Catalog warnings collected on the last build/refresh (e.g. dangling
+    /// `asset_ref` against `SceneAssetCatalog`).
+    pub warnings: Vec<crate::scene_asset_catalog::CatalogWarning>,
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // v0.90 PR5: Move ChangeSetSummary from editor-application to editor-model.
 // ─────────────────────────────────────────────────────────────────────────────

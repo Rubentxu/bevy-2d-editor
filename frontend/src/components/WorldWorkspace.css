@@ -1,0 +1,238 @@
+/**
+ * WorldWorkspace styles (ADR-0037 §ww-ui)
+ */
+
+.world-workspace {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: #1a1a1a;
+  color: #e4e4e7;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+}
+
+.world-workspace--empty {
+  align-items: center;
+  justify-content: center;
+}
+
+.world-workspace__empty-state {
+  text-align: center;
+  color: #71717a;
+}
+
+.world-workspace__empty-state p {
+  margin: 4px 0;
+}
+
+/* ── Toolbar ─────────────────────────────────────────────── */
+
+.world-workspace__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  background: #27272a;
+  border-bottom: 1px solid #3f3f46;
+  flex-shrink: 0;
+}
+
+.world-workspace__toolbar-title {
+  font-weight: 500;
+  color: #fafafa;
+}
+
+.world-workspace__toolbar-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.world-workspace__layout-btn {
+  padding: 4px 8px;
+  background: #3f3f46;
+  border: 1px solid #52525b;
+  border-radius: 4px;
+  color: #a1a1aa;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.world-workspace__layout-btn:hover {
+  background: #52525b;
+  color: #e4e4e7;
+}
+
+.world-workspace__layout-btn.active {
+  background: #6366f1;
+  border-color: #818cf8;
+  color: #fff;
+}
+
+.world-workspace__back-btn {
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid #3f3f46;
+  border-radius: 4px;
+  color: #a1a1aa;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.world-workspace__back-btn:hover {
+  background: #3f3f46;
+  color: #e4e4e7;
+}
+
+/* ── Canvas wrapper ───────────────────────────────────────── */
+
+.world-workspace__canvas-wrapper {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Main canvas ─────────────────────────────────────────── */
+
+.world-workspace__canvas {
+  position: absolute;
+  inset: 0;
+  cursor: grab;
+  background:
+    linear-gradient(90deg, #252525 1px, transparent 1px),
+    linear-gradient(#252525 1px, transparent 1px),
+    #1a1a1a;
+  background-size: 40px 40px;
+  transform-origin: 0 0;
+}
+
+.world-workspace__canvas:active {
+  cursor: grabbing;
+}
+
+/* ── Level squares ───────────────────────────────────────── */
+
+.world-workspace__level {
+  position: absolute;
+  background: #3f3f46;
+  border: 2px solid #52525b;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  overflow: hidden;
+}
+
+.world-workspace__level:hover {
+  border-color: #60a5fa;
+}
+
+.world-workspace__level--selected {
+  border-color: #818cf8;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4);
+}
+
+.world-workspace__level--error {
+  border-color: #ef4444;
+}
+
+.world-workspace__level--error.world-workspace__level--selected {
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.4);
+}
+
+.world-workspace__level--warning {
+  border-color: #f59e0b;
+}
+
+.world-workspace__level--warning.world-workspace__level--selected {
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.4);
+}
+
+.world-workspace__level-name {
+  font-size: 11px;
+  color: #e4e4e7;
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 4px;
+}
+
+/* ── Badge (topology issue indicator) ───────────────────── */
+
+.world-workspace__badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid #1a1a1a;
+}
+
+.world-workspace__badge--error {
+  background: #ef4444;
+  color: #fff;
+}
+
+.world-workspace__badge--warning {
+  background: #f59e0b;
+  color: #000;
+}
+
+/* ── Minimap ──────────────────────────────────────────────── */
+
+.world-workspace__minimap {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  background: #27272a;
+  border: 1px solid #3f3f46;
+  border-radius: 6px;
+  padding: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.world-workspace__minimap-title {
+  font-size: 10px;
+  color: #71717a;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+
+.world-workspace__minimap-svg {
+  display: block;
+  border-radius: 3px;
+}
+
+/* ── Status bar ──────────────────────────────────────────── */
+
+.world-workspace__status {
+  display: flex;
+  gap: 16px;
+  padding: 4px 12px;
+  background: #27272a;
+  border-top: 1px solid #3f3f46;
+  font-size: 11px;
+  color: #71717a;
+  flex-shrink: 0;
+}
+
+.world-workspace__status--warning {
+  color: #f59e0b;
+}

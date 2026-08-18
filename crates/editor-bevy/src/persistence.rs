@@ -17,6 +17,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use editor_model::WorldCatalogEntry;
 use editor_model::scene_asset_catalog::SceneAssetCatalogEntry;
 
 /// Filename for the project metadata file at OPFS root.
@@ -36,6 +37,9 @@ pub const TILESETS_DIR: &str = "tilesets";
 
 /// Subdirectory containing LogicGraphAsset bodies (parallel to ASSETS_DIR for scene assets).
 pub const LOGIC_GRAPHS_DIR: &str = "logic_graphs";
+
+/// Subdirectory containing WorldDocument bodies (ADR-0037).
+pub const WORLDS_DIR: &str = "worlds";
 
 // RESOURCE_DIR is defined in `asset_files.rs` (the canonical location used by
 // the asset pipeline). The duplicate here was unused; left only the active
@@ -61,6 +65,14 @@ pub struct ProjectMetadata {
     /// See ADR-0008 §Decision rule 2.
     #[serde(default)]
     pub scene_assets: Vec<SceneAssetCatalogEntry>,
+    /// Catalog of World Documents in this project (ADR-0037). `#[serde(default)]`
+    /// so old project.json files without this field still parse (empty Vec).
+    #[serde(default)]
+    pub worlds: Vec<WorldCatalogEntry>,
+    /// The currently active world. `#[serde(default)]` so old project.json
+    /// files without this field still parse (None).
+    #[serde(default)]
+    pub active_world: Option<String>,
 }
 
 impl Default for ProjectMetadata {
@@ -72,6 +84,8 @@ impl Default for ProjectMetadata {
             schemas: Vec::new(),
             active_scene: None,
             scene_assets: Vec::new(),
+            worlds: Vec::new(),
+            active_world: None,
         }
     }
 }
@@ -105,6 +119,11 @@ pub fn tileset_path(id: &str) -> String {
 /// `logical_path` MUST be already-normalized (segments joined by '/').
 pub fn logic_graph_path(logical_path: &str) -> String {
     format!("{}/{}.logic.json", LOGIC_GRAPHS_DIR, logical_path)
+}
+
+/// Resolve the OPFS path for a WorldDocument body: `worlds/<logical_path>.world.json`.
+pub fn world_path(logical_path: &str) -> String {
+    format!("{}/{}.world.json", WORLDS_DIR, logical_path)
 }
 
 /// Error type for asset path validation.
@@ -175,6 +194,8 @@ mod tests {
             schemas: vec!["game.PlayerHealth".to_string()],
             active_scene: None,
             scene_assets: vec![],
+            worlds: vec![],
+            active_world: None,
         };
         let json = serde_json::to_string(&pm).unwrap();
         let rt: ProjectMetadata = serde_json::from_str(&json).unwrap();
@@ -289,6 +310,8 @@ mod tests {
             schemas: vec![],
             active_scene: None,
             scene_assets: vec![],
+            worlds: vec![],
+            active_world: None,
         };
         let json = serde_json::to_string(&pm).unwrap();
         let rt: ProjectMetadata = serde_json::from_str(&json).unwrap();

@@ -1,0 +1,119 @@
+[
+  {
+    "local_id": "lvl_levels_SampleWorld_Room_0_root",
+    "type": "AddComponent",
+    "type_id": "editor.LevelDocument",
+    "values": {
+      "document": "{\"asset_id\":\"lvl_levels_SampleWorld_Room_0\",\"logical_path\":\"levels/SampleWorld/Room_0\",\"role\":\"level\",\"version\":1,\"entities\":[],\"metadata\":{}}",
+      "logical_path": "levels/SampleWorld/Room_0"
+    }
+  },
+  {
+    "local_id": "lvl_levels_SampleWorld_Room_1_root",
+    "type": "AddComponent",
+    "type_id": "editor.LevelDocument",
+    "values": {
+      "document": "{\"asset_id\":\"lvl_levels_SampleWorld_Room_1\",\"logical_path\":\"levels/SampleWorld/Room_1\",\"role\":\"level\",\"version\":1,\"entities\":[],\"metadata\":{}}",
+      "logical_path": "levels/SampleWorld/Room_1"
+    }
+  },
+  {
+    "local_id": "lvl_levels_SampleWorld_Room_2_root",
+    "type": "AddComponent",
+    "type_id": "editor.LevelDocument",
+    "values": {
+      "document": "{\"asset_id\":\"lvl_levels_SampleWorld_Room_2\",\"logical_path\":\"levels/SampleWorld/Room_2\",\"role\":\"level\",\"version\":1,\"entities\":[],\"metadata\":{}}",
+      "logical_path": "levels/SampleWorld/Room_2"
+    }
+  },
+  {
+    "layout_policy": { "kind": "free" },
+    "name": "SampleWorld",
+    "type": "WorldCreate"
+  },
+  {
+    "world_path": "world-sampleworld",
+    "level_id": "lvl_sampleworld_0",
+    "asset_ref": "levels/SampleWorld/Room_0",
+    "position": [0.0, 0.0],
+    "dimensions": [640, 480],
+    "streaming": "always_resident",
+    "type": "WorldPlaceLevel"
+  },
+  {
+    "world_path": "world-sampleworld",
+    "level_id": "lvl_sampleworld_1",
+    "asset_ref": "levels/SampleWorld/Room_1",
+    "position": [640.0, 0.0],
+    "dimensions": [640, 480],
+    "streaming": "always_resident",
+    "type": "WorldPlaceLevel"
+  },
+  {
+    "world_path": "world-sampleworld",
+    "level_id": "lvl_sampleworld_2",
+    "asset_ref": "levels/SampleWorld/Room_2",
+    "position": [640.0, 480.0],
+    "dimensions": [640, 480],
+    "streaming": "always_resident",
+    "type": "WorldPlaceLevel"
+  },
+  {
+    "world_path": "world-sampleworld",
+    "link_id": "link_lvl_sampleworld_0_lvl_sampleworld_1",
+    "from": "lvl_sampleworld_0",
+    "to": "lvl_sampleworld_1",
+    "direction": "east",
+    "kind": { "kind": "one_way" },
+    "type": "WorldConnectLevels"
+  },
+  {
+    "world_path": "world-sampleworld",
+    "link_id": "link_lvl_sampleworld_1_lvl_sampleworld_0",
+    "from": "lvl_sampleworld_1",
+    "to": "lvl_sampleworld_0",
+    "direction": "west",
+    "kind": { "kind": "one_way" },
+    "type": "WorldConnectLevels"
+  },
+  {
+    "world_path": "world-sampleworld",
+    "link_id": "link_lvl_sampleworld_1_lvl_sampleworld_2",
+    "from": "lvl_sampleworld_1",
+    "to": "lvl_sampleworld_2",
+    "direction": "south",
+    "kind": { "kind": "one_way" },
+    "type": "WorldConnectLevels"
+  },
+  {
+    "world_path": "world-sampleworld",
+    "link_id": "link_lvl_sampleworld_2_lvl_sampleworld_1",
+    "from": "lvl_sampleworld_2",
+    "to": "lvl_sampleworld_1",
+    "direction": "north",
+    "kind": { "kind": "one_way" },
+    "type": "WorldConnectLevels"
+  },
+  {
+    "world_path": "world-sampleworld",
+    "link_id": "chain_lvl_sampleworld_0_lvl_sampleworld_1",
+    "from": "lvl_sampleworld_0",
+    "to": "lvl_sampleworld_1",
+    "direction": "east",
+    "kind": { "kind": "one_way" },
+    "type": "WorldConnectLevels"
+  },
+  {
+    "world_path": "world-sampleworld",
+    "link_id": "chain_lvl_sampleworld_1_lvl_sampleworld_2",
+    "from": "lvl_sampleworld_1",
+    "to": "lvl_sampleworld_2",
+    "direction": "east",
+    "kind": { "kind": "one_way" },
+    "type": "WorldConnectLevels"
+  },
+  {
+    "world_path": "world-sampleworld",
+    "type": "WorldSave"
+  }
+]

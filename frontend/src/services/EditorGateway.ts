@@ -92,6 +92,121 @@ export interface ApproveSelectedOpsResult {
   remaining: unknown;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// World Workspace types (ADR-0037)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** How a world lays out its levels on the canvas. */
+export type LayoutPolicy =
+  | { kind: "Free" }
+  | { kind: "Grid"; cell_size: number }
+  | { kind: "Horizontal" }
+  | { kind: "Vertical" }
+  | { kind: "Custom"; value: string };
+
+/** Direction of a WorldLink. */
+export type LinkDirection = "north" | "south" | "east" | "west" | "undirected";
+
+/** One-way / bidirectional discriminator for WorldLink. */
+export type WorldLinkKind =
+  | { kind: "OneWay" }
+  | { kind: "Bidirectional" }
+  | { kind: "Custom"; value: string };
+
+/** A single placed Level Scene Asset inside a WorldDocument. */
+export interface WorldLevelRef {
+  level_id: string;
+  asset_ref: string;
+  position: [number, number];
+  dimensions?: [number, number];
+  tags: string[];
+  streaming: "AlwaysResident" | "OnDemand" | "Manual";
+}
+
+/** A directed connection between two levels. */
+export interface WorldLink {
+  id: string;
+  from: string;
+  to: string;
+  direction: LinkDirection;
+  kind: WorldLinkKind;
+  entrance?: { level_id: string; anchor: string };
+  exit?: { level_id: string; anchor: string };
+}
+
+/** Snapshot of a world for the canvas / frontend consumption. */
+export interface WorldSummary {
+  id: string;
+  world_id: string;
+  name: string;
+  layout_policy: LayoutPolicy;
+  levels: WorldLevelRef[];
+  links: WorldLink[];
+  current_version: number;
+  updated_at: number;
+}
+
+/** Catalog entry for a world. */
+export interface WorldCatalogEntry {
+  world_id: string;
+  logical_path: string;
+  current_version: number;
+  updated_at: number;
+  created_at: number;
+}
+
+/** Severity level for topology issues. */
+export type TopologySeverity = "Warning" | "Error";
+
+/** Issue code for topology validation errors. */
+export type TopologyIssueCode =
+  "Unreachable" | "InvalidReciprocal" | "MissingNeighbour" | "MissingLevelRef";
+
+/** A single topology validation issue. */
+export interface TopologyIssue {
+  code: TopologyIssueCode;
+  world_id: string;
+  level_id?: string;
+  link_id?: string;
+  severity: TopologySeverity;
+  message: string;
+}
+
+/** World Workspace API surface. */
+export interface WorldApi {
+  /** Create a new World Document. */
+  createWorld(name: string): Promise<ReadResult<WorldSummary>>;
+  /** Save the active World Document. */
+  saveWorld(): Promise<ReadResult<WorldSummary>>;
+  /** Load a World Document by name. */
+  loadWorld(name: string): Promise<ReadResult<WorldSummary>>;
+  /** List all world catalog entries. */
+  listWorlds(): Promise<ReadResult<WorldCatalogEntry[]>>;
+  /** Delete a World Document. */
+  deleteWorld(worldId: string): Promise<ReadResult<void>>;
+  /** Validate world topology and return issues. */
+  validateTopology(worldId: string): Promise<ReadResult<TopologyIssue[]>>;
+  /** Place a level in the active world at the given position. */
+  placeLevel(
+    levelId: string,
+    x: number,
+    y: number,
+  ): Promise<ReadResult<WorldSummary>>;
+  /** Connect two levels with a directional link. */
+  connectLevels(
+    from: string,
+    to: string,
+    direction: string,
+    kind: string,
+  ): Promise<ReadResult<WorldSummary>>;
+  /** Remove a link from the active world. */
+  removeLink(linkId: string): Promise<ReadResult<WorldSummary>>;
+  /** Set the layout policy of the active world. */
+  setLayoutPolicy(policy: LayoutPolicy): Promise<ReadResult<WorldSummary>>;
+  /** Open a level from the world workspace (returns asset ref). */
+  openLevel(levelId: string): Promise<ReadResult<string>>;
+}
+
 export interface EditorGateway {
   /** Whether the gateway has been wired to a live WASM bridge. */
   isReady(): boolean;
@@ -134,6 +249,8 @@ export interface EditorGateway {
   rejectChangeSet(id: string): Promise<ReadResult<void>>;
   /** Get recent ChangeSet summaries from the operation log. */
   getChangeSetSummaries(): Promise<ReadResult<ChangeSetSummary[]>>;
+  /** World Workspace (ADR-0037). */
+  world: WorldApi;
 }
 
 interface WindowWithBridge {
@@ -165,9 +282,28 @@ interface WindowWithBridge {
     deltaIdsJson: string,
   ) => Promise<string> | string;
   get_tunable_baselines_wasm?: () => Promise<string> | string | null;
-  enter_play_mode?: () => Promise<string> | string;
-  exit_play_mode?: () => Promise<string> | string;
   __bevyEngineStarted?: boolean;
+  // World Workspace WASM exports (ADR-0037)
+  create_world_wasm?: (name: string) => Promise<string> | string;
+  save_world_wasm?: () => Promise<string> | string;
+  load_world_wasm?: (name: string) => Promise<string> | string;
+  list_worlds_wasm?: () => Promise<string> | string;
+  delete_world_wasm?: (worldId: string) => Promise<string> | string;
+  validate_world_topology_wasm?: (worldId: string) => Promise<string> | string;
+  place_level_in_world_wasm?: (
+    levelId: string,
+    x: number,
+    y: number,
+  ) => Promise<string> | string;
+  connect_levels_wasm?: (
+    from: string,
+    to: string,
+    direction: string,
+    kind: string,
+  ) => Promise<string> | string;
+  remove_link_wasm?: (linkId: string) => Promise<string> | string;
+  set_layout_policy_wasm?: (policyJson: string) => Promise<string> | string;
+  open_level_from_world_wasm?: (levelId: string) => Promise<string> | string;
 }
 
 function readBridge(): WindowWithBridge | null {
@@ -398,6 +534,183 @@ function createEditorGateway(): EditorGateway {
       await ensureReady();
       const w = readBridge();
       return callNoArg<ChangeSetSummary[]>(w?.get_change_set_summaries);
+    },
+    // ─── World Workspace (ADR-0037) ─────────────────────────────────────────
+    world: {
+      createWorld: async (name) => {
+        await ensureReady();
+        const w = readBridge();
+        if (!w?.create_world_wasm) {
+          return { ok: false, error: "create_world_wasm not available" };
+        }
+        try {
+          const result = await w.create_world_wasm(name);
+          return { ok: true, value: JSON.parse(result) as WorldSummary };
+        } catch (e) {
+          return {
+            ok: false,
+            error: e instanceof Error ? e.message : String(e),
+          };
+        }
+      },
+      saveWorld: async () => {
+        await ensureReady();
+        const w = readBridge();
+        if (!w?.save_world_wasm) {
+          return { ok: false, error: "save_world_wasm not available" };
+        }
+        try {
+          const result = await w.save_world_wasm();
+          return { ok: true, value: JSON.parse(result) as WorldSummary };
+        } catch (e) {
+          return {
+            ok: false,
+            error: e instanceof Error ? e.message : String(e),
+          };
+        }
+      },
+      loadWorld: async (name) => {
+        await ensureReady();
+        const w = readBridge();
+        if (!w?.load_world_wasm) {
+          return { ok: false, error: "load_world_wasm not available" };
+        }
+        try {
+          const result = await w.load_world_wasm(name);
+          return { ok: true, value: JSON.parse(result) as WorldSummary };
+        } catch (e) {
+          return {
+            ok: false,
+            error: e instanceof Error ? e.message : String(e),
+          };
+        }
+      },
+      listWorlds: async () => {
+        await ensureReady();
+        const w = readBridge();
+        return callNoArg<WorldCatalogEntry[]>(w?.list_worlds_wasm);
+      },
+      deleteWorld: async (worldId) => {
+        await ensureReady();
+        const w = readBridge();
+        if (!w?.delete_world_wasm) {
+          return { ok: false, error: "delete_world_wasm not available" };
+        }
+        try {
+          await w.delete_world_wasm(worldId);
+          return { ok: true, value: undefined };
+        } catch (e) {
+          return {
+            ok: false,
+            error: e instanceof Error ? e.message : String(e),
+          };
+        }
+      },
+      validateTopology: async (worldId) => {
+        await ensureReady();
+        const w = readBridge();
+        if (!w?.validate_world_topology_wasm) {
+          return {
+            ok: false,
+            error: "validate_world_topology_wasm not available",
+          };
+        }
+        try {
+          const result = await w.validate_world_topology_wasm(worldId);
+          return { ok: true, value: JSON.parse(result) as TopologyIssue[] };
+        } catch (e) {
+          return {
+            ok: false,
+            error: e instanceof Error ? e.message : String(e),
+          };
+        }
+      },
+      placeLevel: async (levelId, x, y) => {
+        await ensureReady();
+        const w = readBridge();
+        if (!w?.place_level_in_world_wasm) {
+          return {
+            ok: false,
+            error: "place_level_in_world_wasm not available",
+          };
+        }
+        try {
+          const result = await w.place_level_in_world_wasm(levelId, x, y);
+          return { ok: true, value: JSON.parse(result) as WorldSummary };
+        } catch (e) {
+          return {
+            ok: false,
+            error: e instanceof Error ? e.message : String(e),
+          };
+        }
+      },
+      connectLevels: async (from, to, direction, kind) => {
+        await ensureReady();
+        const w = readBridge();
+        if (!w?.connect_levels_wasm) {
+          return { ok: false, error: "connect_levels_wasm not available" };
+        }
+        try {
+          const result = await w.connect_levels_wasm(from, to, direction, kind);
+          return { ok: true, value: JSON.parse(result) as WorldSummary };
+        } catch (e) {
+          return {
+            ok: false,
+            error: e instanceof Error ? e.message : String(e),
+          };
+        }
+      },
+      removeLink: async (linkId) => {
+        await ensureReady();
+        const w = readBridge();
+        if (!w?.remove_link_wasm) {
+          return { ok: false, error: "remove_link_wasm not available" };
+        }
+        try {
+          const result = await w.remove_link_wasm(linkId);
+          return { ok: true, value: JSON.parse(result) as WorldSummary };
+        } catch (e) {
+          return {
+            ok: false,
+            error: e instanceof Error ? e.message : String(e),
+          };
+        }
+      },
+      setLayoutPolicy: async (policy) => {
+        await ensureReady();
+        const w = readBridge();
+        if (!w?.set_layout_policy_wasm) {
+          return { ok: false, error: "set_layout_policy_wasm not available" };
+        }
+        try {
+          const result = await w.set_layout_policy_wasm(JSON.stringify(policy));
+          return { ok: true, value: JSON.parse(result) as WorldSummary };
+        } catch (e) {
+          return {
+            ok: false,
+            error: e instanceof Error ? e.message : String(e),
+          };
+        }
+      },
+      openLevel: async (levelId) => {
+        await ensureReady();
+        const w = readBridge();
+        if (!w?.open_level_from_world_wasm) {
+          return {
+            ok: false,
+            error: "open_level_from_world_wasm not available",
+          };
+        }
+        try {
+          const result = await w.open_level_from_world_wasm(levelId);
+          return { ok: true, value: JSON.parse(result) as string };
+        } catch (e) {
+          return {
+            ok: false,
+            error: e instanceof Error ? e.message : String(e),
+          };
+        }
+      },
     },
   };
 }

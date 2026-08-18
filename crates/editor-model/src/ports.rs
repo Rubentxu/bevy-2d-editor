@@ -9,7 +9,9 @@
 //! the circular dependency: both `editor_application` and `editor_core` can access
 //! them via `editor_model::ports` without depending on each other.
 
-use crate::importer::{ImporterDescriptor, ImporterError, ImporterHandle, ImporterInput, ParseOutput};
+use crate::importer::{
+    ImporterDescriptor, ImporterError, ImporterHandle, ImporterInput, ParseOutput,
+};
 use crate::session_port::EditorSessionPort;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
@@ -167,9 +169,7 @@ pub fn with_session<R, F: FnOnce(&dyn EditorSessionPort) -> R>(f: F) -> Option<R
 // and thread_local allow `editor_core` (Bevy systems) to check extension
 // permissions without importing `editor_application`.
 
-use crate::extension::{
-    ExtensionError, ExtensionHandle, ExtensionManifest, ExtensionSummary,
-};
+use crate::extension::{ExtensionError, ExtensionHandle, ExtensionManifest, ExtensionSummary};
 
 /// Port trait for the extension registry.
 ///

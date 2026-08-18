@@ -29,11 +29,7 @@ const EXPECTED_BUILTIN_EXTENSIONS: &[&str] = &[
 ///
 /// These declare `Capability::Importers` and are registered in the importer
 /// registry (not the extension registry).
-const EXPECTED_BUILTIN_IMPORTERS: &[&str] = &[
-    "builtin.aseprite",
-    "builtin.ldtk",
-    "builtin.tiled",
-];
+const EXPECTED_BUILTIN_IMPORTERS: &[&str] = &["builtin.aseprite", "builtin.ldtk", "builtin.tiled"];
 
 // ─── Extension registry assertions ─────────────────────────────────────────────
 
@@ -65,21 +61,30 @@ fn builtin_extensions_declare_correct_capabilities() {
     // builtin.logic-bricks.controllers → Capability::Commands
     let manifest = registry.get("builtin.logic-bricks.controllers").unwrap();
     assert!(
-        manifest.capabilities.iter().any(|c| c.kind == Capability::Commands),
+        manifest
+            .capabilities
+            .iter()
+            .any(|c| c.kind == Capability::Commands),
         "builtin.logic-bricks.controllers should declare Capability::Commands"
     );
 
     // builtin.logic-recipes → Capability::Recipes
     let manifest = registry.get("builtin.logic-recipes").unwrap();
     assert!(
-        manifest.capabilities.iter().any(|c| c.kind == Capability::Recipes),
+        manifest
+            .capabilities
+            .iter()
+            .any(|c| c.kind == Capability::Recipes),
         "builtin.logic-recipes should declare Capability::Recipes"
     );
 
     // builtin.scene-validator → Capability::Validators
     let manifest = registry.get("builtin.scene-validator").unwrap();
     assert!(
-        manifest.capabilities.iter().any(|c| c.kind == Capability::Validators),
+        manifest
+            .capabilities
+            .iter()
+            .any(|c| c.kind == Capability::Validators),
         "builtin.scene-validator should declare Capability::Validators"
     );
 }
@@ -129,7 +134,10 @@ fn builtin_importers_resolve_via_list_by_kind() {
 
     // Unknown kind → empty
     let unknown_list = registry.list_by_kind(&ExternalSourceKind::Custom("unknown".into()));
-    assert!(unknown_list.is_empty(), "Unknown kind should return empty list");
+    assert!(
+        unknown_list.is_empty(),
+        "Unknown kind should return empty list"
+    );
 }
 
 #[test]
@@ -137,7 +145,9 @@ fn builtin_importers_have_valid_version_ranges() {
     let registry = ImporterRegistry::with_builtins();
 
     for id in EXPECTED_BUILTIN_IMPORTERS {
-        let desc = registry.get_descriptor(id).expect("importer descriptor should exist");
+        let desc = registry
+            .get_descriptor(id)
+            .expect("importer descriptor should exist");
         assert!(
             !desc.supported_versions.is_empty(),
             "importer '{}' should have non-empty version range",
@@ -145,7 +155,8 @@ fn builtin_importers_have_valid_version_ranges() {
         );
         // Verify the range contains the lower bound (sanity check)
         assert!(
-            desc.supported_versions.contains(desc.supported_versions.min),
+            desc.supported_versions
+                .contains(desc.supported_versions.min),
             "importer '{}' version range should contain its min",
             id
         );
@@ -169,7 +180,8 @@ fn fake_session_total_builtin_count_is_six() {
 
     let total_builtins = ext_registry.len() + imp_registry.len();
     assert_eq!(
-        total_builtins, 6,
+        total_builtins,
+        6,
         "FakeSession should have 6 built-in extensions (3 extensions + 3 importers), \
          got {} (extensions: {}, importers: {})",
         total_builtins,

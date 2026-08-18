@@ -25,7 +25,11 @@ pub struct ImporterVersion {
 impl ImporterVersion {
     /// Construct a version from major.minor.patch.
     pub fn new(major: u32, minor: u32, patch: u32) -> Self {
-        Self { major, minor, patch }
+        Self {
+            major,
+            minor,
+            patch,
+        }
     }
 
     /// Parse from a string like `"1.2.3"`.
@@ -34,7 +38,11 @@ impl ImporterVersion {
         let major = parts.next()?.parse().ok()?;
         let minor = parts.next()?.parse().ok()?;
         let patch = parts.next()?.parse().ok()?;
-        Some(Self { major, minor, patch })
+        Some(Self {
+            major,
+            minor,
+            patch,
+        })
     }
 }
 
@@ -198,6 +206,12 @@ pub struct ParseOutput {
     /// Detected schema version as structured `ImporterVersion` (for range check).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detected_version_parsed: Option<ImporterVersion>,
+    /// Raw source JSON bytes — passed through from `ImporterInput.bytes` so that
+    /// `build_change_set` can re-parse the full document without a second file read.
+    /// This is the only way to get the original JSON into build_change_set since
+    /// the ImporterInput is consumed by parse() and not available afterward.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub raw_source_json: Option<Vec<u8>>,
 }
 
 impl ParseOutput {

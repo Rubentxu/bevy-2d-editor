@@ -96,6 +96,8 @@ fn project_metadata_with_scene_assets_roundtrip() {
             entry("id_1", "player", SceneAssetRole::Actor, 1),
             entry("id_2", "menu", SceneAssetRole::Ui, 1),
         ],
+        worlds: vec![],
+        active_world: None,
     };
     let json = serde_json::to_string(&pm).unwrap();
     let rt: ProjectMetadata = serde_json::from_str(&json).unwrap();

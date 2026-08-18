@@ -30,18 +30,22 @@ pub mod tile_layer;
 pub mod tileset;
 pub mod time;
 pub mod transaction;
+pub mod world;
 
 // Re-export all public types at the root for ergonomic use.
 pub use auto_layer::{
     AutoLayer, AutoLayerId, Pattern3x3, PatternCell, is_auto_layer_stale, regenerate,
 };
+pub use component::ComponentInstance;
+pub use document::{Anchor, Color, Entity, SceneDocument, Vec2};
 pub use extension::{
     Capability, CapabilityDescriptor, ExtensionError, ExtensionHandle, ExtensionId,
     ExtensionManifest, ExtensionSummary, Permission, PermissionArea, PermissionScope, SemVer,
 };
-pub use component::ComponentInstance;
-pub use document::{Anchor, Color, Entity, SceneDocument, Vec2};
 pub use ids::{AssetId, DocumentId, EntityId, LayerId, LocalId, SceneAssetLocalId, StableId};
+pub use int_grid::{
+    IntGridCell, IntGridCoord, IntGridLayer, IntGridLayerId, IntGridMap, IntGridSchemaKind,
+};
 pub use logic_graph::{
     LogicEdge, LogicGraphAsset, LogicInstance, LogicNode, LogicNodeRole, NodeId, NodeTypeId,
     PortId, count_logic_bindings, editor_logic_binding_component, find_dangling_edge_nodes,
@@ -67,14 +71,13 @@ pub use schema::{
 };
 pub use session::{
     AppliedChangeMeta, AssetSessionState, ChangeSetSummary, HistoryScope, LogicSessionState,
-    PreviewInspectorState, SceneSessionState, SourceFilesCache,
+    PreviewInspectorState, SceneSessionState, SourceFilesCache, WorldSessionState,
 };
 pub use tile_layer::TileLayer;
 pub use tileset::{
     AsepriteFrame, AsepriteMetadata, AsepriteSlice, AsepriteTag, TileCoord, TileGrid, TileRef,
     TilesetAsset, TilesetId, TilesetManager, TilesetMetadata,
 };
-pub use int_grid::{IntGridCell, IntGridCoord, IntGridLayer, IntGridLayerId, IntGridMap, IntGridSchemaKind};
 pub use time::{Clock, Timestamp};
 pub use transaction::{
     Applier, ApprovalPolicy, ChangeOrigin, ChangeSet, DiffSummary, EffectsSummary, ResourceRef,
@@ -93,9 +96,14 @@ pub use session_port::EditorSessionPort;
 
 // v0.93 PR1: External source provenance (ADR-0041) + Importer protocol (ADR-0040 step 3)
 pub use external_source::{
-    ConflictPolicy, ExternalSource, ExternalSourceKind, OwnershipRule, ProvenanceDiff, SourceMapping,
+    ConflictPolicy, ExternalSource, ExternalSourceKind, OwnershipRule, ProvenanceDiff,
+    SourceMapping,
 };
 pub use importer::{
     BuildChangeSetOutput, Importer, ImporterDescriptor, ImporterError, ImporterHandle,
     ImporterInput, ImporterVersion, ImporterVersionRange, ParseOutput, ResourceDraft,
+};
+pub use world::{
+    EntranceRef, LayoutPolicy, LinkDirection, StreamingPolicy, WorldCatalogEntry, WorldDocument,
+    WorldId, WorldLevelRef, WorldLink, WorldLinkKind,
 };

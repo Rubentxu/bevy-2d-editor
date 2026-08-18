@@ -329,6 +329,11 @@ pub fn validate(doc: &SceneDocument, cmd: &Command) -> Result<(), CommandError> 
                 return Err(CommandError::InstanceNotFound(instance_id.clone()));
             }
         }
+        Command::World(_) => {
+            return Err(crate::command::CommandError::Unsupported(
+                "World commands must be applied via WorldDocumentApplier".to_string(),
+            ));
+        }
     }
     Ok(())
 }
@@ -746,6 +751,11 @@ pub fn apply_with_context(
                     })
                 }
             }
+        }
+        Command::World(_) => {
+            return Err(crate::command::CommandError::Unsupported(
+                "World commands must be applied via WorldDocumentApplier".to_string(),
+            ));
         }
     }
 }

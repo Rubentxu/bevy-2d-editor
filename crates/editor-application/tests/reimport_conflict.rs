@@ -2,15 +2,12 @@
 //!
 //! Tests the ProvenanceDiff computation and ownership-aware merge logic.
 
-use editor_model::external_source::{ExternalSource, ExternalSourceKind, SourceMapping};
 use editor_model::external_source::OwnershipRule;
+use editor_model::external_source::{ExternalSource, ExternalSourceKind, SourceMapping};
 use editor_model::importer::ImporterVersion;
 
 // Reimport functionality under test
-use editor_application::reimport::{
-    compute_fingerprint,
-    compute_provenance_diff,
-};
+use editor_application::reimport::{compute_fingerprint, compute_provenance_diff};
 
 /// Helper: create an ExternalSource with minimal fields.
 fn make_external_source(
@@ -80,7 +77,11 @@ fn test_provenance_diff_added_mappings() {
     let old = make_external_source(
         "test.ldtk",
         "abc123",
-        vec![SourceMapping::new("entity:1", "level_1.json", OwnershipRule::SourceOwned)],
+        vec![SourceMapping::new(
+            "entity:1",
+            "level_1.json",
+            OwnershipRule::SourceOwned,
+        )],
     );
     let new = make_external_source(
         "test.ldtk",
@@ -110,7 +111,11 @@ fn test_provenance_diff_removed_mappings() {
     let new = make_external_source(
         "test.ldtk",
         "def456",
-        vec![SourceMapping::new("entity:1", "level_1.json", OwnershipRule::SourceOwned)],
+        vec![SourceMapping::new(
+            "entity:1",
+            "level_1.json",
+            OwnershipRule::SourceOwned,
+        )],
     );
     let diff = compute_provenance_diff(&old, &new);
     assert!(diff.added.is_empty());
@@ -124,12 +129,20 @@ fn test_provenance_diff_modified_source() {
     let old = make_external_source(
         "test.ldtk",
         "abc123",
-        vec![SourceMapping::new("entity:1", "level_1.json", OwnershipRule::SourceOwned)],
+        vec![SourceMapping::new(
+            "entity:1",
+            "level_1.json",
+            OwnershipRule::SourceOwned,
+        )],
     );
     let mut new = make_external_source(
         "test.ldtk",
         "def456",
-        vec![SourceMapping::new("entity:1", "level_1.json", OwnershipRule::SourceOwned)],
+        vec![SourceMapping::new(
+            "entity:1",
+            "level_1.json",
+            OwnershipRule::SourceOwned,
+        )],
     );
     // Simulate source changed the target (e.g., entity moved to different position)
     new.mappings[0].target_resource_ref = "level_2.json".to_string();
@@ -201,7 +214,10 @@ fn test_provenance_diff_editor_owned_preserved() {
 
     let diff = compute_provenance_diff(&old, &new);
     // Editor-owned unchanged → no diff at mapping level
-    assert!(diff.is_empty(), "editor-owned unchanged should produce empty diff");
+    assert!(
+        diff.is_empty(),
+        "editor-owned unchanged should produce empty diff"
+    );
 }
 
 #[test]
@@ -231,7 +247,10 @@ fn test_provenance_diff_editor_owned_target_changed() {
 
     let diff = compute_provenance_diff(&old, &new);
     // target_resource_ref changed → source modification (not editor conflict)
-    assert!(diff.ownership_conflicts.is_empty(), "editor-owned should not cause conflict when ref changes");
+    assert!(
+        diff.ownership_conflicts.is_empty(),
+        "editor-owned should not cause conflict when ref changes"
+    );
     assert_eq!(diff.modified_source.len(), 1);
     assert_eq!(diff.modified_source[0].source_object_id, "entity:1");
 }

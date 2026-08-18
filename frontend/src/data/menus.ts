@@ -39,9 +39,10 @@ export interface MenuHandlers {
   // menu still works in surface-level previews (tests, snapshots).
   handleApplyPreset?: (presetId: string) => void;
   handleSaveWorkspacePreset?: () => void;
+  handleOpenWorldWorkspace?: () => void;
   setTheme: (theme: "dark" | "light") => void;
   selectedEntityId: string | null;
-  editorMode: "scene" | "asset-authoring" | "logic" | "code" | "play";
+  editorMode: "scene" | "asset-authoring" | "logic" | "code" | "play" | "world";
 }
 
 const separator = (): MenuItem => ({ label: "", separator: true });
@@ -172,6 +173,14 @@ export function createMenuConfig(
         label: "Reset Layout",
         onClick: handlers.handleResetLayout ?? todo("Reset Layout"),
         testId: "menu-reset-layout",
+      },
+      separator(),
+      // ── World Workspace (ADR-0037 Slice 3 T3.8) ───────────────────────
+      {
+        label: "World Workspace",
+        shortcut: "F10",
+        onClick: handlers.handleOpenWorldWorkspace ?? todo("World Workspace"),
+        testId: "menu-world-workspace",
       },
       // ── Workspace presets (v0.81 Tier 1b) ──────────────────────────────
       // Built-in layouts target common game genres (2D Platformer, Top-Down

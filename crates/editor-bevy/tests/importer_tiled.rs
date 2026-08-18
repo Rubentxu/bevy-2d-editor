@@ -170,7 +170,8 @@ fn parse_rejects_type_tmx_in_json() {
       "tilewidth": 16,
       "tileheight": 16,
       "layers": []
-    }"#.as_slice();
+    }"#
+    .as_slice();
     let input = ImporterInput {
         bytes: json,
         source_uri: "map.json",
@@ -195,7 +196,8 @@ fn parse_rejects_unsupported_version() {
       "tilewidth": 16,
       "tileheight": 16,
       "layers": []
-    }"#.as_slice();
+    }"#
+    .as_slice();
     let input = ImporterInput {
         bytes: json,
         source_uri: "old.json",
@@ -203,7 +205,10 @@ fn parse_rejects_unsupported_version() {
     };
     let err = importer.parse(input).unwrap_err();
     assert!(
-        matches!(err, editor_model::importer::ImporterError::UnsupportedVersion { .. }),
+        matches!(
+            err,
+            editor_model::importer::ImporterError::UnsupportedVersion { .. }
+        ),
         "expected UnsupportedVersion, got: {}",
         err
     );
@@ -220,7 +225,8 @@ fn parse_accepts_supported_version_1_10() {
       "tilewidth": 16,
       "tileheight": 16,
       "layers": []
-    }"#.as_slice();
+    }"#
+    .as_slice();
     let input = ImporterInput {
         bytes: json,
         source_uri: "v1.10.json",
@@ -235,7 +241,10 @@ fn parse_accepts_supported_version_1_10() {
 fn importer_descriptor_has_correct_kind() {
     let importer = TiledImporter::new();
     let desc = importer.descriptor();
-    assert_eq!(desc.kind, editor_model::external_source::ExternalSourceKind::Tiled);
+    assert_eq!(
+        desc.kind,
+        editor_model::external_source::ExternalSourceKind::Tiled
+    );
     assert_eq!(desc.id, "builtin.tiled");
 }
 
@@ -275,7 +284,10 @@ fn build_change_set_produces_level_document() {
 
     assert!(!commands.is_empty());
     assert!(commands.iter().any(|c| {
-        matches!(c, editor_bevy::asset_command::AssetCommand::AddComponent { .. })
+        matches!(
+            c,
+            editor_bevy::asset_command::AssetCommand::AddComponent { .. }
+        )
     }));
 }
 
@@ -323,7 +335,8 @@ fn tile_layer_round_trip() {
           "data": [1, 2, 3, 4, 5, 6]
         }
       ]
-    }"#.as_slice();
+    }"#
+    .as_slice();
 
     let input = ImporterInput {
         bytes: json,

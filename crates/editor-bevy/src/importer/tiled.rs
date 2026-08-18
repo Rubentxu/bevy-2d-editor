@@ -58,14 +58,13 @@
 //! - Tile/object/image layers map to `LevelLayer::Tile` and `LevelLayer::SceneInstance`.
 //! - Object transforms map to `SceneInstance.instance_components[Transform2D]`.
 
-use editor_model::external_source::{
-    ExternalSourceKind, OwnershipRule, SourceMapping,
-};
+use editor_model::ComponentInstance;
+use editor_model::external_source::{ExternalSourceKind, OwnershipRule, SourceMapping};
+use editor_model::ids::{LayerId, StableId};
 use editor_model::importer::{
     BuildChangeSetOutput, Importer, ImporterDescriptor, ImporterError, ImporterInput,
     ImporterVersion, ImporterVersionRange, ParseOutput, ResourceDraft,
 };
-use editor_model::ids::{LayerId, StableId};
 use editor_model::scene_asset::{
     AssetReference, LevelLayer, SceneAssetDocument, SceneAssetMetadata, SceneAssetRole,
     SceneInstanceLayer, SceneInstanceLayerKind,
@@ -73,8 +72,7 @@ use editor_model::scene_asset::{
 use editor_model::scene_instance::SceneInstance;
 use editor_model::session::EditorSnapshot;
 use editor_model::tile_layer::{TileLayer, TileLayerId};
-use editor_model::tileset::{TilesetId, TileCoord, TileRef};
-use editor_model::ComponentInstance;
+use editor_model::tileset::{TileCoord, TileRef, TilesetId};
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -311,9 +309,8 @@ impl TiledImporter {
             return Err(ImporterError::UnsupportedKind("xml".to_string()));
         }
 
-        let json: TiledJson = serde_json::from_slice(bytes).map_err(|e| {
-            ImporterError::ParseError(format!("invalid Tiled JSON: {}", e))
-        })?;
+        let json: TiledJson = serde_json::from_slice(bytes)
+            .map_err(|e| ImporterError::ParseError(format!("invalid Tiled JSON: {}", e)))?;
 
         // Reject TMX/XML encoded JSON (some exporters set type="tmx" or encoding="xml")
         if json.r#type == "tmx" || json.r#type == "xml" {
@@ -322,8 +319,8 @@ impl TiledImporter {
 
         // Version check
         if let Some(ref version_str) = json.tiledversion {
-            let detected = ImporterVersion::parse(version_str)
-                .unwrap_or(ImporterVersion::new(1, 0, 0));
+            let detected =
+                ImporterVersion::parse(version_str).unwrap_or(ImporterVersion::new(1, 0, 0));
 
             if !self.descriptor.supported_versions.contains(detected) {
                 return Err(ImporterError::UnsupportedVersion {
@@ -378,7 +375,10 @@ impl TiledImporter {
         for tileset in &json.tilesets {
             if tileset.source.is_none() {
                 // Embedded tileset — we create a TilesetAsset path
-                let ts_name = tileset.name.clone().unwrap_or_else(|| "tileset".to_string());
+                let ts_name = tileset
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| "tileset".to_string());
                 let ts_path = format!("tilesets/{}.json", ts_name);
                 tileset_paths.push(ts_path);
             }
@@ -527,6 +527,7 @@ impl Importer for TiledImporter {
             ownership_rules: vec![ownership],
             detected_version: None,
             detected_version_parsed: None,
+            raw_source_json: None,
         })
     }
 
@@ -560,9 +561,8 @@ impl Importer for TiledImporter {
             let cache = self.last_source_bytes.lock().unwrap();
             cache.clone()
         };
-        let bytes = cached_bytes.ok_or_else(|| {
-            ImporterError::ParseError("no cached source bytes found".to_string())
-        })?;
+        let bytes = cached_bytes
+            .ok_or_else(|| ImporterError::ParseError("no cached source bytes found".to_string()))?;
         let map_output = self
             .parse_json(&bytes)
             .map_err(|e| ImporterError::ParseError(format!("re-parse failed: {}", e)))?;
@@ -592,8 +592,8 @@ impl Importer for TiledImporter {
             }),
         }];
 
-        let change_set_json =
-            serde_json::to_string(&commands).map_err(|e| ImporterError::ParseError(e.to_string()))?;
+        let change_set_json = serde_json::to_string(&commands)
+            .map_err(|e| ImporterError::ParseError(e.to_string()))?;
 
         Ok(BuildChangeSetOutput {
             provenance_diff: None,
@@ -691,7 +691,8 @@ mod tests {
               }
             }
           ]
-        }"#.as_bytes()
+        }"#
+        .as_bytes()
     }
 
     #[test]
@@ -772,7 +773,8 @@ mod tests {
           "tilewidth": 16,
           "tileheight": 16,
           "layers": []
-        }"#.as_slice();
+        }"#
+        .as_slice();
         let input = ImporterInput {
             bytes: old_json,
             source_uri: "old.json",
@@ -797,7 +799,8 @@ mod tests {
           "tilewidth": 16,
           "tileheight": 16,
           "layers": []
-        }"#.as_slice();
+        }"#
+        .as_slice();
         let input = ImporterInput {
             bytes: json,
             source_uri: "v1.10.json",
@@ -820,7 +823,8 @@ mod tests {
           "tilewidth": 16,
           "tileheight": 16,
           "layers": []
-        }"#.as_slice();
+        }"#
+        .as_slice();
         let input = ImporterInput {
             bytes: json,
             source_uri: "map.json",
@@ -876,9 +880,11 @@ mod tests {
                 .expect("change_set_json should be valid AssetCommand JSON");
 
         assert!(!commands.is_empty());
-        assert!(commands
-            .iter()
-            .any(|c| matches!(c, crate::asset_command::AssetCommand::AddComponent { .. })));
+        assert!(
+            commands
+                .iter()
+                .any(|c| matches!(c, crate::asset_command::AssetCommand::AddComponent { .. }))
+        );
     }
 
     #[test]
@@ -893,7 +899,8 @@ mod tests {
           "tileheight": 16,
           "infinite": true,
           "layers": []
-        }"#.as_slice();
+        }"#
+        .as_slice();
         let input = ImporterInput {
             bytes: infinite_json,
             source_uri: "infinite.json",

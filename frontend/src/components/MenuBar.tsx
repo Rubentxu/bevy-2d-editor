@@ -6,7 +6,7 @@ import { createMenuConfig } from "../data/menus";
 import MenuDropdown from "./Menu/MenuDropdown";
 
 export type EditorMode =
-  "scene" | "asset-authoring" | "logic" | "code" | "play";
+  "scene" | "asset-authoring" | "logic" | "code" | "play" | "world";
 
 export interface MenuBarProps {
   editorMode?: EditorMode;

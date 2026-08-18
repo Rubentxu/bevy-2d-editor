@@ -156,7 +156,11 @@ impl OpfsProjectStore {
         bridge: Arc<dyn RawStoreBridge>,
         clock: Arc<dyn editor_model::time::Clock>,
     ) -> Self {
-        Self { core, bridge, clock }
+        Self {
+            core,
+            bridge,
+            clock,
+        }
     }
 
     /// Eagerly hydrate the in-memory mirror from OPFS.
@@ -221,9 +225,7 @@ impl OpfsProjectStore {
                 PendingOp::Write { path, .. } => path.clone(),
                 PendingOp::Delete { path } => path.clone(),
             };
-            flush_op(&path, op)
-                .await
-                .map_err(|e| StoreError::Io(e))?;
+            flush_op(&path, op).await.map_err(|e| StoreError::Io(e))?;
         }
         Ok(())
     }
@@ -298,9 +300,7 @@ impl ProjectStore for OpfsProjectStore {
                     PendingOp::Write { path, .. } => path.clone(),
                     PendingOp::Delete { path } => path.clone(),
                 };
-                flush_op(&path, op)
-                    .await
-                    .map_err(|e| StoreError::Io(e))?;
+                flush_op(&path, op).await.map_err(|e| StoreError::Io(e))?;
             }
             Ok(())
         })

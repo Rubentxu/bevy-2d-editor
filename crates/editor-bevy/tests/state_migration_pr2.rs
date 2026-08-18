@@ -28,7 +28,12 @@ impl EditorSessionPort for FakeSession {
     fn logic_state_mut(&mut self, path: &str) -> &mut support::LogicSessionState {
         self.inner.logic_state_mut(path)
     }
-    fn tunable_baselines_mut(&mut self) -> &mut std::collections::BTreeMap<String, serde_json::Value> {
+    fn world_state_mut(&mut self, path: &str) -> &mut support::WorldSessionState {
+        self.inner.world_state_mut(path)
+    }
+    fn tunable_baselines_mut(
+        &mut self,
+    ) -> &mut std::collections::BTreeMap<String, serde_json::Value> {
         self.inner.tunable_baselines_mut()
     }
     fn last_rebuild_cause_mut(&mut self) -> &mut Option<support::RebuildCause> {
@@ -36,8 +41,7 @@ impl EditorSessionPort for FakeSession {
     }
     fn pending_causality_edges_mut(
         &mut self,
-    ) -> &mut std::collections::BTreeMap<support::StableId, Vec<support::CausalityEdge>>
-    {
+    ) -> &mut std::collections::BTreeMap<support::StableId, Vec<support::CausalityEdge>> {
         self.inner.pending_causality_edges_mut()
     }
     fn runtime_delta_buffer_mut(

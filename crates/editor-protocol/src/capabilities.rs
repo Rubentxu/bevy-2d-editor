@@ -22,8 +22,12 @@ pub trait SceneApi {
         field: String,
         value: serde_json::Value,
     ) -> Result<(), DispatchError>;
-    fn get_field(&self, entity: StableId, component: String, field: String)
-        -> Result<serde_json::Value, DispatchError>;
+    fn get_field(
+        &self,
+        entity: StableId,
+        component: String,
+        field: String,
+    ) -> Result<serde_json::Value, DispatchError>;
 }
 
 /// Scene asset authoring capability — place, replace, validate overrides.
@@ -39,18 +43,64 @@ pub trait SceneAssetApi {
         instance_id: StableId,
         new_asset_ref: String,
     ) -> Result<(), DispatchError>;
-    fn validate_overrides(
-        &self,
-        instance_id: StableId,
-    ) -> Result<ValidationReport, DispatchError>;
+    fn validate_overrides(&self, instance_id: StableId) -> Result<ValidationReport, DispatchError>;
     fn get_override_status(&self, instance_id: StableId) -> Result<OverrideStatus, DispatchError>;
 }
 
 /// World workspace capability — topology and navigation per ADR-0037.
+///
+/// Expanded from the 3-method stub at `capabilities.rs:50–54`. The new
+/// shape mirrors `SceneAssetApi` (level mutation) plus the validation
+/// extension (LDtk-faithful topology rules per spec §ww-validation).
 pub trait WorldApi {
-    fn get_workspace(&self) -> Result<WorkspaceSnapshot, DispatchError>;
-    fn add_level(&mut self, name: String) -> Result<StableId, DispatchError>;
-    fn remove_level(&mut self, id: StableId) -> Result<(), DispatchError>;
+    /// Snapshot the active world (or the only one) for canvas read.
+    fn get_workspace(&self) -> Result<WorldSummary, DispatchError>;
+
+    /// Add a level ref to the world. Returns the new `level_id`.
+    /// ADR-0037 + workspace cap: errors with `WorkspaceTooLarge` past 100.
+    fn add_level_to_world(
+        &mut self,
+        asset_ref: String,
+        position: [f32; 2],
+    ) -> Result<String, DispatchError>;
+
+    /// Remove a level ref and all incident links.
+    fn remove_level_from_world(&mut self, level_id: String) -> Result<(), DispatchError>;
+
+    /// Insert a one-way or bidirectional link between two level refs.
+    fn connect_levels(
+        &mut self,
+        from: String,
+        to: String,
+        direction: LinkDirection,
+        kind: WorldLinkKind,
+    ) -> Result<String, DispatchError>;
+
+    /// Move a level ref to a new world-space position.
+    fn place_level(&mut self, level_id: String, position: [f32; 2]) -> Result<(), DispatchError>;
+
+    /// Replace the active `LayoutPolicy`.
+    fn set_layout_policy(&mut self, policy: LayoutPolicy) -> Result<(), DispatchError>;
+
+    /// Return the list of level ids unreachable from the world entry.
+    /// Forwarded to `validate_topology` (Warning severity, not Error).
+    fn find_unreachable(&self) -> Result<Vec<String>, DispatchError>;
+
+    /// Compute a non-binding layout proposal for the current `levels`
+    /// list under the active `LayoutPolicy` (positions are returned,
+    /// not applied). Used by the canvas toolbar to snap alignment.
+    fn layout_world_proposal(&self) -> Result<Vec<[f32; 2]>, DispatchError>;
+
+    /// Set per-level streaming policy.
+    fn set_streaming_policy(
+        &mut self,
+        level_id: String,
+        policy: StreamingPolicy,
+    ) -> Result<(), DispatchError>;
+
+    /// Run topology validation. Returns the full `Vec<TopologyIssue>`
+    /// so the Validation Center can dedupe / cluster.
+    fn validate_topology(&self) -> Result<Vec<TopologyIssue>, DispatchError>;
 }
 
 /// Logic graph authoring capability — nodes and edges.
@@ -89,20 +139,20 @@ pub trait RuntimeApi {
 /// Code authoring capability — source file CRUD per ADR-0043.
 /// Corresponds to CodeApi in typed-editor-backend spec.
 pub trait CodeApi {
-    fn create_source_file(&mut self, path: String, content: String)
-        -> Result<(), DispatchError>;
-    fn write_source_file(&mut self, path: String, content: String)
-        -> Result<(), DispatchError>;
+    fn create_source_file(&mut self, path: String, content: String) -> Result<(), DispatchError>;
+    fn write_source_file(&mut self, path: String, content: String) -> Result<(), DispatchError>;
     // D2: delete and rename are FORBIDDEN in v1
 }
 
 /// Validation and diagnostics capability.
 pub trait ValidationApi {
     fn get_validation_issues(&self) -> Result<ValidationReport, DispatchError>;
-    fn get_resync_reports(
-        &self,
-        instance_id: StableId,
-    ) -> Result<Vec<ResyncReport>, DispatchError>;
+    fn get_resync_reports(&self, instance_id: StableId)
+    -> Result<Vec<ResyncReport>, DispatchError>;
+
+    /// Topology issues for the given world. Returns an empty Vec when
+    /// the world has no validation problems.
+    fn get_topology_issues(&self, world_id: StableId) -> Result<Vec<TopologyIssue>, DispatchError>;
 }
 
 /// Change submission and approval capability.
@@ -111,8 +161,10 @@ pub trait ChangeApi {
     fn submit_pending_change_set(&mut self) -> Result<ChangeSetSummary, DispatchError>;
     fn approve_change_set(&mut self, id: StableId) -> Result<ApplyReceipt, DispatchError>;
     fn reject_change_set(&mut self, id: StableId, reason: String) -> Result<(), DispatchError>;
-    fn get_change_history(&self, scope: HistoryScope)
-        -> Result<Vec<ChangeSetSummary>, DispatchError>;
+    fn get_change_history(
+        &self,
+        scope: HistoryScope,
+    ) -> Result<Vec<ChangeSetSummary>, DispatchError>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -120,7 +172,10 @@ pub trait ChangeApi {
 // ─────────────────────────────────────────────────────────────────────────────
 
 use crate::dispatch_error::DispatchError;
-use editor_model::StableId;
+pub use editor_model::StableId;
+use editor_model::world::{
+    LayoutPolicy, LinkDirection, StreamingPolicy, WorldId, WorldLevelRef, WorldLink, WorldLinkKind,
+};
 
 /// Reference to a port on a logic node.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -219,4 +274,71 @@ pub struct StaleOverride {
     pub component_type_id: String,
     pub field_path: Vec<String>,
     pub reason: String,
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// World Workspace DTOs (ADR-0037)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Snapshot of a world for the canvas / frontend consumption.
+/// Replaces the old `WorkspaceSnapshot` / `LevelSummary` pair.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct WorldSummary {
+    pub id: WorldId,
+    pub world_id: String,
+    pub name: String,
+    pub layout_policy: LayoutPolicy,
+    pub levels: Vec<WorldLevelRef>,
+    pub links: Vec<WorldLink>,
+    pub current_version: u32,
+    pub updated_at: u64,
+}
+
+/// Summary of a world link for lightweight canvas rendering.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct WorldLinkSummary {
+    pub id: String,
+    pub from: String,
+    pub to: String,
+    pub direction: LinkDirection,
+    pub kind: WorldLinkKind,
+}
+
+/// Issue code for topology validation errors.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TopologyIssueCode {
+    /// Level unreachable from the world entry.
+    Unreachable,
+    /// Reciprocal link mismatch (A→B but B has no link to A).
+    InvalidReciprocal,
+    /// LDtk neighbour reference points to a level not in the world.
+    MissingNeighbour,
+    /// WorldLevelRef.asset_ref does not resolve in SceneAssetCatalog.
+    MissingLevelRef,
+}
+
+/// Severity level for topology issues.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TopologySeverity {
+    Warning,
+    Error,
+}
+
+/// A single topology validation issue.
+///
+/// LDtk-faithful severity matrix:
+/// - `Unreachable` → Warning
+/// - `InvalidReciprocal` → Warning
+/// - `MissingNeighbour` → Warning
+/// - `MissingLevelRef` → Error
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct TopologyIssue {
+    pub code: TopologyIssueCode,
+    pub world_id: String,
+    pub level_id: Option<String>,
+    pub link_id: Option<String>,
+    pub severity: TopologySeverity,
+    pub message: String,
 }

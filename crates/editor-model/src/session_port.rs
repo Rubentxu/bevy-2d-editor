@@ -44,6 +44,9 @@ pub trait EditorSessionPort {
     /// Logic session state (per logic graph path).
     fn logic_state_mut(&mut self, path: &str) -> &mut crate::session::LogicSessionState;
 
+    /// World session state (per world path).
+    fn world_state_mut(&mut self, path: &str) -> &mut crate::session::WorldSessionState;
+
     /// Preview inspector state (FPS, mapping, provenance, last rebuild cause).
     fn preview_inspector_mut(&mut self) -> &mut crate::session::PreviewInspectorState;
 

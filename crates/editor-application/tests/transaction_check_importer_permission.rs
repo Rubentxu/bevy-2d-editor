@@ -2,10 +2,12 @@
 
 use editor_application::importer_registry::ImporterRegistry;
 use editor_application::transaction::{
-    transaction_kernel_check_importer_permission, ChangeOrigin, ChangeSet, KernelError,
+    ChangeOrigin, ChangeSet, KernelError, transaction_kernel_check_importer_permission,
 };
-use editor_model::importer::{Importer, ImporterDescriptor, ImporterInput, ImporterVersion, ImporterVersionRange, ParseOutput};
-use editor_model::ports::{register_importer_registry, ImporterRegistryPort};
+use editor_model::importer::{
+    Importer, ImporterDescriptor, ImporterInput, ImporterVersion, ImporterVersionRange, ParseOutput,
+};
+use editor_model::ports::{ImporterRegistryPort, register_importer_registry};
 use std::sync::Arc;
 
 struct DummyImporter {
@@ -16,14 +18,18 @@ impl Importer for DummyImporter {
     fn descriptor(&self) -> ImporterDescriptor {
         self.descriptor.clone()
     }
-    fn parse(&self, _: ImporterInput<'_>) -> Result<ParseOutput, editor_model::importer::ImporterError> {
+    fn parse(
+        &self,
+        _: ImporterInput<'_>,
+    ) -> Result<ParseOutput, editor_model::importer::ImporterError> {
         Ok(ParseOutput::default())
     }
     fn build_change_set(
         &self,
         draft: ParseOutput,
         _: editor_model::session::EditorSnapshot,
-    ) -> Result<editor_model::importer::BuildChangeSetOutput, editor_model::importer::ImporterError> {
+    ) -> Result<editor_model::importer::BuildChangeSetOutput, editor_model::importer::ImporterError>
+    {
         Ok(editor_model::importer::BuildChangeSetOutput {
             provenance_diff: None,
             change_set_json: serde_json::to_string(&draft).unwrap(),

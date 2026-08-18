@@ -241,8 +241,8 @@ fn test_kernel_and_legacy_produce_same_results() {
 
     // Legacy path
     let mut legacy_clone = legacy_doc.clone();
-    let legacy_inverse = processor::apply(&mut legacy_clone, &cmd)
-        .expect("legacy apply should succeed");
+    let legacy_inverse =
+        processor::apply(&mut legacy_clone, &cmd).expect("legacy apply should succeed");
 
     // Kernel path
     let mut cs = ChangeSet::new(

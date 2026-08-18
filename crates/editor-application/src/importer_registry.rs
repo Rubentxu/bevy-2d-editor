@@ -8,8 +8,8 @@ use std::sync::Arc;
 
 use editor_model::external_source::ExternalSourceKind;
 use editor_model::importer::{Importer, ImporterDescriptor, ImporterError, ImporterHandle};
-use editor_model::ports::ImporterRegistryPort;
 use editor_model::importer::{ImporterInput, ParseOutput};
+use editor_model::ports::ImporterRegistryPort;
 
 /// In-memory importer registry.
 ///
@@ -78,8 +78,7 @@ impl ImporterRegistry {
             ),
             "Tiled",
         );
-        Self::register_single(&mut registry, tiled_desc)
-            .expect("builtin.tiled must not duplicate");
+        Self::register_single(&mut registry, tiled_desc).expect("builtin.tiled must not duplicate");
 
         registry
     }
@@ -120,8 +119,7 @@ impl ImporterRegistry {
             ),
             "LDtk",
         );
-        Self::register_single(&mut registry, ldtk_desc)
-            .expect("builtin.ldtk must not duplicate");
+        Self::register_single(&mut registry, ldtk_desc).expect("builtin.ldtk must not duplicate");
 
         // Built-in Tiled importer descriptor
         let tiled_desc = ImporterDescriptor::new(
@@ -133,8 +131,7 @@ impl ImporterRegistry {
             ),
             "Tiled",
         );
-        Self::register_single(&mut registry, tiled_desc)
-            .expect("builtin.tiled must not duplicate");
+        Self::register_single(&mut registry, tiled_desc).expect("builtin.tiled must not duplicate");
 
         registry
     }
@@ -325,10 +322,7 @@ mod tests {
             self.descriptor.clone()
         }
 
-        fn parse(
-            &self,
-            _source: ImporterInput<'_>,
-        ) -> Result<ParseOutput, ImporterError> {
+        fn parse(&self, _source: ImporterInput<'_>) -> Result<ParseOutput, ImporterError> {
             Ok(ParseOutput::default())
         }
 
@@ -348,10 +342,7 @@ mod tests {
         ImporterDescriptor::new(
             id,
             kind,
-            ImporterVersionRange::new(
-                ImporterVersion::new(1, 0, 0),
-                ImporterVersion::new(2, 0, 0),
-            ),
+            ImporterVersionRange::new(ImporterVersion::new(1, 0, 0), ImporterVersion::new(2, 0, 0)),
             id,
         )
     }
@@ -360,26 +351,40 @@ mod tests {
     fn register_list_unregister_round_trip() {
         let mut registry = ImporterRegistry::empty();
         let desc = make_descriptor("test.importer", ExternalSourceKind::Aseprite);
-        let importer: Arc<dyn Importer> =
-            Arc::new(DummyImporter { descriptor: desc.clone() });
+        let importer: Arc<dyn Importer> = Arc::new(DummyImporter {
+            descriptor: desc.clone(),
+        });
 
         let handle = registry.register(desc.clone(), importer).unwrap();
-        assert_eq!(registry.list_by_kind(&ExternalSourceKind::Aseprite).len(), 1);
+        assert_eq!(
+            registry.list_by_kind(&ExternalSourceKind::Aseprite).len(),
+            1
+        );
         assert!(registry.get("test.importer").is_some());
 
         registry.unregister("test.importer").unwrap();
-        assert!(registry.list_by_kind(&ExternalSourceKind::Aseprite).is_empty());
+        assert!(
+            registry
+                .list_by_kind(&ExternalSourceKind::Aseprite)
+                .is_empty()
+        );
     }
 
     #[test]
     fn duplicate_id_rejected() {
         let mut registry = ImporterRegistry::empty();
         let desc = make_descriptor("dup", ExternalSourceKind::Aseprite);
-        let importer: Arc<dyn Importer> =
-            Arc::new(DummyImporter { descriptor: desc.clone() });
+        let importer: Arc<dyn Importer> = Arc::new(DummyImporter {
+            descriptor: desc.clone(),
+        });
         registry.register(desc.clone(), importer).unwrap();
         let err = registry
-            .register(desc.clone(), Arc::new(DummyImporter { descriptor: make_descriptor("dup", ExternalSourceKind::Ldtk) }))
+            .register(
+                desc.clone(),
+                Arc::new(DummyImporter {
+                    descriptor: make_descriptor("dup", ExternalSourceKind::Ldtk),
+                }),
+            )
             .unwrap_err();
         assert!(matches!(err, ImporterError::DuplicateId(_)));
     }
@@ -400,9 +405,7 @@ mod tests {
             .register(make_descriptor("b", ExternalSourceKind::Ldtk), ldtk)
             .unwrap();
 
-        assert!(registry
-            .list_by_kind(&ExternalSourceKind::Tiled)
-            .is_empty());
+        assert!(registry.list_by_kind(&ExternalSourceKind::Tiled).is_empty());
         assert_eq!(
             registry.list_by_kind(&ExternalSourceKind::Aseprite).len(),
             1

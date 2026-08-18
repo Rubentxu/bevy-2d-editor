@@ -302,6 +302,94 @@ impl Applier for LogicCommandApplier {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// WorldDocumentApplier
+// ─────────────────────────────────────────────────────────────────────────────
+
+use crate::world_command::{WorldCommand, WorldCommandError, apply as world_apply};
+use editor_model::world::WorldDocument;
+
+/// `WorldDocumentApplier` adapts the world command processor to the `Applier` trait.
+///
+/// - `Operation = WorldCommand` — the typed world commands from `world_command.rs`.
+/// - `Document = WorldDocument` — the editor-owned world document.
+#[derive(Debug, Clone)]
+pub struct WorldDocumentApplier {
+    _priv: (),
+}
+
+impl WorldDocumentApplier {
+    /// Construct a new `WorldDocumentApplier`.
+    pub fn new() -> Self {
+        Self { _priv: () }
+    }
+}
+
+impl Default for WorldDocumentApplier {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Applier for WorldDocumentApplier {
+    type Operation = WorldCommand;
+    type Document = WorldDocument;
+    type Error = WorldCommandError;
+
+    fn preflight(&self, doc: &Self::Document, op: &Self::Operation) -> Result<(), Self::Error> {
+        // Simulate apply to validate without mutating.
+        let mut sim = doc.clone();
+        world_apply(&mut sim, op).map(|_| ())
+    }
+
+    fn apply(
+        &self,
+        doc: &mut Self::Document,
+        op: &Self::Operation,
+    ) -> Result<Self::Operation, Self::Error> {
+        world_apply(doc, op)
+    }
+
+    fn summarize(
+        &self,
+        _doc: &Self::Document,
+        ops: &[Self::Operation],
+    ) -> (EffectsSummary, DiffSummary) {
+        // World changes don't trigger Bevy preview rebuilds directly.
+        (
+            EffectsSummary {
+                runtime_rebuild_required: false,
+                build_output_changed: false,
+                notes: vec![format!("{} world ops", ops.len())],
+                ..Default::default()
+            },
+            DiffSummary {
+                added: ops
+                    .iter()
+                    .filter(|o| matches!(o, WorldCommand::WorldPlaceLevel { .. }))
+                    .count() as u64,
+                removed: ops
+                    .iter()
+                    .filter(|o| matches!(o, WorldCommand::WorldRemoveLevel { .. }))
+                    .count() as u64,
+                modified: ops
+                    .iter()
+                    .filter(|o| {
+                        matches!(
+                            o,
+                            WorldCommand::WorldSetLayoutPolicy { .. }
+                                | WorldCommand::WorldSetStreamingPolicy { .. }
+                                | WorldCommand::WorldConnectLevels { .. }
+                                | WorldCommand::WorldRemoveLink { .. }
+                        )
+                    })
+                    .count() as u64,
+                notes: Vec::new(),
+            },
+        )
+    }
+}
+
 // Type alias for the scene transaction kernel
 pub type SceneTransactionKernel = TransactionKernel<SceneCommandApplier>;
 
@@ -310,6 +398,9 @@ pub type AssetTransactionKernel = TransactionKernel<AssetCommandApplier>;
 
 /// Type alias for the logic transaction kernel.
 pub type LogicTransactionKernel = TransactionKernel<LogicCommandApplier>;
+
+/// Type alias for the world transaction kernel.
+pub type WorldTransactionKernel = TransactionKernel<WorldDocumentApplier>;
 
 /// Construct a `SceneTransactionKernel`.
 pub fn scene_transaction_kernel() -> SceneTransactionKernel {
@@ -324,6 +415,11 @@ pub fn asset_transaction_kernel() -> AssetTransactionKernel {
 /// Construct a `LogicTransactionKernel`.
 pub fn logic_transaction_kernel() -> LogicTransactionKernel {
     TransactionKernel::new(LogicCommandApplier::new())
+}
+
+/// Construct a `WorldTransactionKernel`.
+pub fn world_transaction_kernel() -> WorldTransactionKernel {
+    TransactionKernel::new(WorldDocumentApplier::new())
 }
 
 #[cfg(test)]

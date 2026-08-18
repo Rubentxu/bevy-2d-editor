@@ -13,4 +13,10 @@ pub enum DispatchError {
     KernelError(String),
     #[error("permission denied: {0}")]
     PermissionDenied(String),
+    /// WorldDocument has reached the documented 100-level cap.
+    #[error("workspace too large: {0} levels (max 100)")]
+    WorkspaceTooLarge(usize),
+    /// `WorldLevelRef.asset_ref` does not resolve in `SceneAssetCatalog`.
+    #[error("missing level reference: asset_ref '{0}' not in catalog")]
+    MissingLevelRef(String),
 }

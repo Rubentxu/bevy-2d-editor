@@ -71,7 +71,8 @@ fn sample_ldtk_json() -> &'static [u8] {
           ]
         }
       ]
-    }"#.as_bytes()
+    }"#
+    .as_bytes()
 }
 
 #[test]
@@ -85,11 +86,7 @@ fn parse_produces_one_level_draft() {
     let output = importer.parse(input).expect("parse should succeed");
 
     // One level draft
-    assert_eq!(
-        output.resource_drafts.len(),
-        1,
-        "expected 1 level draft"
-    );
+    assert_eq!(output.resource_drafts.len(), 1, "expected 1 level draft");
 
     // Check the draft is a Level
     let level = output
@@ -110,9 +107,7 @@ fn parse_logical_path_includes_world_and_level() {
     let output = importer.parse(input).expect("parse should succeed");
 
     let level_path = match &output.resource_drafts[0] {
-        editor_model::importer::ResourceDraft::Level {
-            logical_path, ..
-        } => logical_path.clone(),
+        editor_model::importer::ResourceDraft::Level { logical_path, .. } => logical_path.clone(),
         _ => panic!("expected Level draft"),
     };
 
@@ -134,7 +129,8 @@ fn parse_rejects_unsupported_version() {
     let old_json = r#"{
       "ldtkVersion": "99.0.0",
       "worlds": []
-    }"#.as_bytes();
+    }"#
+    .as_bytes();
     let input = ImporterInput {
         bytes: old_json,
         source_uri: "old.ldtk",
@@ -142,7 +138,10 @@ fn parse_rejects_unsupported_version() {
     };
     let err = importer.parse(input).unwrap_err();
     assert!(
-        matches!(err, editor_model::importer::ImporterError::UnsupportedVersion { .. }),
+        matches!(
+            err,
+            editor_model::importer::ImporterError::UnsupportedVersion { .. }
+        ),
         "expected UnsupportedVersion, got: {}",
         err
     );
@@ -207,10 +206,8 @@ fn importer_descriptor_has_correct_kind() {
 fn version_range_contains() {
     use editor_model::importer::{ImporterVersion, ImporterVersionRange};
 
-    let range = ImporterVersionRange::new(
-        ImporterVersion::new(1, 0, 0),
-        ImporterVersion::new(1, 5, 0),
-    );
+    let range =
+        ImporterVersionRange::new(ImporterVersion::new(1, 0, 0), ImporterVersion::new(1, 5, 0));
     assert!(range.contains(ImporterVersion::new(1, 0, 0)));
     assert!(range.contains(ImporterVersion::new(1, 3, 0)));
     assert!(range.contains(ImporterVersion::new(1, 5, 0)));
@@ -283,7 +280,10 @@ fn build_change_set_produces_level_documents() {
     let parse_output = importer.parse(input).expect("parse should succeed");
 
     // Verify the parse output contains what build_change_set would need
-    assert!(!parse_output.resource_drafts.is_empty(), "should have resource drafts");
+    assert!(
+        !parse_output.resource_drafts.is_empty(),
+        "should have resource drafts"
+    );
     assert_eq!(
         parse_output.resource_drafts.len(),
         1,
@@ -302,7 +302,11 @@ fn parse_int_grid_layer_int_grid_schema() {
     };
 
     let output = importer.parse(input).expect("parse should succeed");
-    assert_eq!(output.mappings.len(), 1, "should have one source mapping for the level");
+    assert_eq!(
+        output.mappings.len(),
+        1,
+        "should have one source mapping for the level"
+    );
 }
 
 #[test]

@@ -2,6 +2,80 @@
 
 All notable changes to Bevy 2D Editor are documented here. The project follows semantic version tags; detailed milestone history is available in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## v0.95.0 — World Workspace (ADR-0037) (2026-08-18)
+
+Delivers the World Workspace as a first-class product context (ADR-0037), grouping
+placed Level Scene Assets into a navigable authoring surface with topology validation,
+layout policies, neighbour/portal relationships, and an LDtk import bridge.
+
+### New features
+
+- **`WorldDocument`** family of types in `editor-model` (`crates/editor-model/src/world.rs`):
+  `WorldId`, `LayoutPolicy` (Free/Grid/Horizontal/Vertical), `WorldLinkKind`,
+  `EntranceRef`, `StreamingPolicy`, `WorldLevelRef`, `WorldLink`, `WorldDocument`,
+  `WorldCatalogEntry` — ADR-0037 line 14 invariant: WorldDocument **refers-to**
+  Level Scene Assets, never contains level content
+- **`WorldSessionState`** on `EditorSession` (`editor-application/session.rs:473`) with
+  create-on-write accessor; `EditorSessionPort` extended with `world_state_mut`
+- **WorldApi trait** (`editor-protocol/capabilities.rs:55-145`): 10 methods including
+  `get_workspace`, `add_level_to_world`, `connect_levels`, `place_level`,
+  `set_layout_policy`, `find_unreachable`, `layout_world_proposal`,
+  `set_streaming_policy`, `validate_topology`
+- **`ValidationApi::get_topology_issues`** wired for world-level topology validation
+  (orphan levels → Warning, reciprocal mismatch → Warning, missing neighbour → Warning,
+  missing asset_ref → Error)
+- **`WorldCommand` enum** (`editor-bevy/world_command.rs`): 9 variants
+  (WorldCreate, WorldPlaceLevel, WorldRemoveLevel, WorldConnectLevels,
+  WorldRemoveLink, WorldSetLayoutPolicy, WorldSetStreamingPolicy, WorldSave,
+  WorldDelete) with mechanical inverses for undo/redo
+- **`WorldDocumentApplier`** in `transaction_bridge.rs:305-391` implementing the
+  TransactionKernel `Applier` trait for world mutations
+- **11 WASM exports** in `editor-bevy/src/lib.rs`:
+  `create_world_wasm`, `save_world_wasm`, `load_world_wasm`, `list_worlds_wasm`,
+  `delete_world_wasm`, `validate_world_topology_wasm`, `place_level_in_world_wasm`,
+  `connect_levels_wasm`, `remove_link_wasm`, `set_layout_policy_wasm`,
+  `open_level_from_world_wasm`
+- **Frontend `WorldApi` TypeScript types** (`EditorGateway.ts:96-216`): `WorldSummary`,
+  `WorldLevelRef`, `WorldLink`, `EntranceRef`, `LayoutPolicyDto`, `TopologyIssue`,
+  `WorldCatalogEntry`, `TopologyIssueCode`, `TopologySeverity`
+- **`EditorGateway.world` namespace** (`EditorGateway.ts:547-722`): 11 methods delegating
+  to `window.*_wasm` exports
+- **`WorldWorkspace.tsx`** component (471 lines): canvas rendering of level squares,
+  directional link arrows, layout-policy toolbar (Free/Grid/Horizontal/Vertical),
+  minimap, drag-to-place, double-click-to-open
+- **`useWorldWorkspace` hook** (200 lines): exposes world document, topology issues,
+  selected level, drag state, viewport, and all editing operations
+- **`create_room_chain` recipe** (`editor-bevy/world_recipes.rs:30+`): emits
+  `WorldConnectLevels` commands for consecutive level pairs in a chain
+- **Recipe registry** (`world_recipes_registry.rs`): `world.room_chain.v1` with
+  `Capability::Commands`
+- **LDtk world bridge** (`importer/ldtk.rs:740-899`): when LDtk world has ≥2 levels,
+  emits `WorldCreate` + per-level `WorldPlaceLevel` + per-neighbour `WorldConnectLevels`
+  + `create_room_chain` results + `WorldSave`; golden snapshot at
+  `tests/fixtures/ldtk/expected_world.json`
+- **`EditorMode`** extended with `"world"` entry; `ModeContextBar` adds world domain label
+
+### Architecture
+
+- World state lives on `EditorSession.world_states: BTreeMap<String, WorldSessionState>`
+  (not a thread_local on the editing path — WASM↔Bevy seam thread_locals are separate)
+- `WORLDS_DIR = "worlds"`; world documents stored as `<path>.world.json` in project OPFS
+- `ProjectMetadata.worlds: Vec<WorldCatalogEntry>` + `active_world: Option<String>`
+  both `#[serde(default)]` for backward compat
+- `editor-storage-web` has no world-specific code (generic `ProjectStore` covers it)
+
+### ADR status changes
+
+- **ADR-0037**: **Implemented** (was: Accepted, 2026-08-14)
+
+### Known limitations
+
+- **`validation_center_tests::wasm_validation_cycle_in_active_graph`** test fails
+  (pre-existing on `origin/main`, unrelated to this cycle)
+- Pre-existing TypeScript errors in `editor_application.d.ts` (wasm-bindgen-generated)
+- Menu "View → World Workspace" entry falls through to `todo()` — use ModeContextBar
+  to enter World mode
+
 ## v0.94.0 — Hexagonal Crate Boundaries (ADR-0030) (2026-08-17)
 
 Implements the full 6-crate architecture from ADR-0030 with compile-time hexagonal

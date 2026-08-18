@@ -110,18 +110,18 @@ pub async fn read_op(path: &str) -> Result<Vec<u8>, String> {
 
 /// Async write operation — saves bytes to a file.
 pub async fn write_op(path: &str, bytes: &[u8]) -> Result<(), String> {
-    let promise = if path.ends_with(".json") || path.ends_with(".txt") || !bytes.iter().any(|&b| b > 127)
-    {
-        // Text mode
-        let text =
-            String::from_utf8(bytes.to_vec()).map_err(|e| format!("Not UTF-8: {}", e))?;
-        opfs_save_file_raw(path, &text)
-    } else {
-        // Binary mode
-        let js_bytes = js_sys::Uint8Array::new_with_length(bytes.len() as u32);
-        js_bytes.copy_from(bytes);
-        opfs_save_binary_raw(path, &js_bytes)
-    };
+    let promise =
+        if path.ends_with(".json") || path.ends_with(".txt") || !bytes.iter().any(|&b| b > 127) {
+            // Text mode
+            let text =
+                String::from_utf8(bytes.to_vec()).map_err(|e| format!("Not UTF-8: {}", e))?;
+            opfs_save_file_raw(path, &text)
+        } else {
+            // Binary mode
+            let js_bytes = js_sys::Uint8Array::new_with_length(bytes.len() as u32);
+            js_bytes.copy_from(bytes);
+            opfs_save_binary_raw(path, &js_bytes)
+        };
     let result = JsFuture::from(promise)
         .await
         .map_err(|e| format!("JS promise rejected: {:?}", e))?;

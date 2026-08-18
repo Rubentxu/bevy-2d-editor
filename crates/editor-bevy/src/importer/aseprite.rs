@@ -27,9 +27,8 @@
 //! - Sidecar `.meta.json` records `ExternalSource` provenance for both.
 
 use base64::Engine;
-use editor_model::external_source::{
-    ExternalSourceKind, OwnershipRule, SourceMapping,
-};
+use editor_model::TilesetId;
+use editor_model::external_source::{ExternalSourceKind, OwnershipRule, SourceMapping};
 use editor_model::importer::{
     BuildChangeSetOutput, Importer, ImporterDescriptor, ImporterError, ImporterInput,
     ImporterVersion, ImporterVersionRange, ParseOutput, ResourceDraft,
@@ -37,7 +36,6 @@ use editor_model::importer::{
 use editor_model::scene_asset::{LevelLayer, SceneAssetRole};
 use editor_model::session::EditorSnapshot;
 use editor_model::tile_layer::{TileLayer, TileLayerId};
-use editor_model::TilesetId;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -188,9 +186,8 @@ impl AsepriteImporter {
     /// Returns `Err(ImporterError::ParseError)` if the JSON is malformed.
     /// Returns `Err(ImporterError::UnsupportedVersion)` if the version is out of range.
     fn parse_json(&self, bytes: &[u8]) -> Result<AsepriteIr, ImporterError> {
-        let json: AsepriteJson = serde_json::from_slice(bytes).map_err(|e| {
-            ImporterError::ParseError(format!("invalid Aseprite JSON: {}", e))
-        })?;
+        let json: AsepriteJson = serde_json::from_slice(bytes)
+            .map_err(|e| ImporterError::ParseError(format!("invalid Aseprite JSON: {}", e)))?;
 
         // meta envelope is required
         let meta = json.meta;
@@ -202,8 +199,8 @@ impl AsepriteImporter {
 
         // Version check (parse the detected version)
         let detected_version = meta.version.as_deref().unwrap_or("1.0.0").to_string();
-        let detected = ImporterVersion::parse(&detected_version)
-            .unwrap_or(ImporterVersion::new(1, 0, 0));
+        let detected =
+            ImporterVersion::parse(&detected_version).unwrap_or(ImporterVersion::new(1, 0, 0));
 
         if !self.descriptor.supported_versions.contains(detected) {
             return Err(ImporterError::UnsupportedVersion {
@@ -358,6 +355,7 @@ impl Importer for AsepriteImporter {
             ownership_rules: vec![ownership],
             detected_version: Some(ir.version.clone()),
             detected_version_parsed: ImporterVersion::parse(&ir.version),
+            raw_source_json: None,
         })
     }
 
@@ -389,10 +387,17 @@ impl Importer for AsepriteImporter {
         // Format: "Basename (N frames)"
         let (image_basename, frame_count) = display_name
             .as_ref()
-            .ok_or_else(|| ImporterError::ParseError("Level draft missing display_name".to_string()))?
+            .ok_or_else(|| {
+                ImporterError::ParseError("Level draft missing display_name".to_string())
+            })?
             .strip_suffix(" frames)")
             .and_then(|s| s.rsplit_once(" ("))
-            .map(|(basename, count_str)| (basename.to_string(), count_str.parse::<usize>().unwrap_or(1)))
+            .map(|(basename, count_str)| {
+                (
+                    basename.to_string(),
+                    count_str.parse::<usize>().unwrap_or(1),
+                )
+            })
             .unwrap_or_else(|| (level_path.clone(), 1));
 
         let png_path = format!("resources/{}.png", image_basename);
@@ -459,8 +464,8 @@ impl Importer for AsepriteImporter {
             ],
         }];
 
-        let change_set_json =
-            serde_json::to_string(&commands).map_err(|e| ImporterError::ParseError(e.to_string()))?;
+        let change_set_json = serde_json::to_string(&commands)
+            .map_err(|e| ImporterError::ParseError(e.to_string()))?;
 
         Ok(BuildChangeSetOutput {
             provenance_diff: None,
@@ -545,7 +550,10 @@ mod tests {
                 false
             }
         });
-        assert!(aseprite_json.is_some(), "should have an .aseprite.json AssetFile draft");
+        assert!(
+            aseprite_json.is_some(),
+            "should have an .aseprite.json AssetFile draft"
+        );
 
         // Has 4 source mappings
         assert_eq!(output.mappings.len(), 4, "should have 4 source mappings");
@@ -580,7 +588,8 @@ mod tests {
         let old_json = r#"{
           "frames": { "a.png": { "frame": {"x":0,"y":0,"w":16,"h":16}, "duration": 100 } },
           "meta": { "version": "99.0.0", "size": {"w": 16, "h": 16 } }
-        }"#.as_bytes();
+        }"#
+        .as_bytes();
         let input = ImporterInput {
             bytes: old_json,
             source_uri: "old.json",
@@ -596,7 +605,8 @@ mod tests {
         let json = r#"{
           "frames": { "a.png": { "frame": {"x":0,"y":0,"w":16,"h":16}, "duration": 100 } },
           "meta": { "version": "1.3-rc12", "size": {"w": 16, "h": 16 } }
-        }"#.as_bytes();
+        }"#
+        .as_bytes();
         let input = ImporterInput {
             bytes: json,
             source_uri: "v13.json",
@@ -628,7 +638,11 @@ mod tests {
 
         assert!(!commands.is_empty());
         // Should have a Batch command
-        assert!(commands.iter().any(|c| matches!(c, crate::asset_command::AssetCommand::Batch { .. })));
+        assert!(
+            commands
+                .iter()
+                .any(|c| matches!(c, crate::asset_command::AssetCommand::Batch { .. }))
+        );
     }
 
     #[test]
@@ -641,10 +655,8 @@ mod tests {
 
     #[test]
     fn version_range_contains() {
-        let range = ImporterVersionRange::new(
-            ImporterVersion::new(1, 0, 0),
-            ImporterVersion::new(2, 0, 0),
-        );
+        let range =
+            ImporterVersionRange::new(ImporterVersion::new(1, 0, 0), ImporterVersion::new(2, 0, 0));
         assert!(range.contains(ImporterVersion::new(1, 0, 0)));
         assert!(range.contains(ImporterVersion::new(1, 3, 0)));
         assert!(range.contains(ImporterVersion::new(2, 0, 0)));
@@ -659,7 +671,8 @@ mod tests {
         let json = r#"{
           "frames": { "hero_run_05.png": { "frame": {"x":0,"y":0,"w":16,"h":16}, "duration": 50 } },
           "meta": { "version": "1.2", "size": {"w": 16, "h": 16 } }
-        }"#.as_bytes();
+        }"#
+        .as_bytes();
         let input = ImporterInput {
             bytes: json,
             source_uri: "hero_run.json",
@@ -678,6 +691,9 @@ mod tests {
                 }
             })
             .unwrap();
-        assert!(display_name.contains("hero_run"), "should extract basename as 'hero_run'");
+        assert!(
+            display_name.contains("hero_run"),
+            "should extract basename as 'hero_run'"
+        );
     }
 }

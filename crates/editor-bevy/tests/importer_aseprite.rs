@@ -38,7 +38,11 @@ fn parse_produces_three_resource_drafts() {
     let output = importer.parse(input).expect("parse should succeed");
 
     // Three drafts: PNG AssetFile, Aseprite JSON AssetFile, Level SceneAsset
-    assert_eq!(output.resource_drafts.len(), 3, "expected 3 resource drafts");
+    assert_eq!(
+        output.resource_drafts.len(),
+        3,
+        "expected 3 resource drafts"
+    );
 
     // Check each draft type is present
     let has_png = output.resource_drafts.iter().any(|r| {
@@ -72,7 +76,10 @@ fn parse_produces_four_source_mappings() {
     assert_eq!(output.mappings.len(), 4);
     // All mappings should be SourceOwned
     for m in &output.mappings {
-        assert_eq!(m.ownership, editor_model::external_source::OwnershipRule::SourceOwned);
+        assert_eq!(
+            m.ownership,
+            editor_model::external_source::OwnershipRule::SourceOwned
+        );
     }
 }
 
@@ -127,9 +134,18 @@ fn level_document_contains_four_tiles() {
 
     // Find the LevelDocument component value
     let level_doc_json = commands.iter().find_map(|c| {
-        if let editor_bevy::asset_command::AssetCommand::Batch { commands: batch_cmds, .. } = c {
+        if let editor_bevy::asset_command::AssetCommand::Batch {
+            commands: batch_cmds,
+            ..
+        } = c
+        {
             batch_cmds.iter().find_map(|cmd| {
-                if let editor_bevy::asset_command::AssetCommand::AddComponent { type_id, values, .. } = cmd {
+                if let editor_bevy::asset_command::AssetCommand::AddComponent {
+                    type_id,
+                    values,
+                    ..
+                } = cmd
+                {
                     if type_id == "editor.LevelDocument" {
                         Some(values)
                     } else {
@@ -145,7 +161,8 @@ fn level_document_contains_four_tiles() {
     });
 
     let level_doc_json = level_doc_json.expect("should have a LevelDocument component");
-    let doc_str = level_doc_json.get("document")
+    let doc_str = level_doc_json
+        .get("document")
         .and_then(|v| v.as_str())
         .expect("document field should be a string");
 
@@ -176,7 +193,8 @@ fn parse_rejects_unsupported_version() {
     let old_json = r#"{
       "frames": { "a.png": { "frame": {"x":0,"y":0,"w":16,"h":16}, "duration": 100 } },
       "meta": { "version": "99.0.0", "size": {"w": 16, "h": 16 } }
-    }"#.as_bytes();
+    }"#
+    .as_bytes();
     let input = ImporterInput {
         bytes: old_json,
         source_uri: "old.json",
@@ -209,7 +227,9 @@ fn parse_accepts_version_1_and_2() {
             source_uri: "test.json",
             fingerprint_hint: None,
         };
-        importer.parse(input).expect(&format!("version {} should be accepted", version));
+        importer
+            .parse(input)
+            .expect(&format!("version {} should be accepted", version));
     }
 }
 
@@ -231,9 +251,18 @@ fn texture_ref_points_to_png() {
         serde_json::from_str(&build_output.change_set_json).unwrap();
 
     let texture_ref = commands.iter().find_map(|c| {
-        if let editor_bevy::asset_command::AssetCommand::Batch { commands: batch_cmds, .. } = c {
+        if let editor_bevy::asset_command::AssetCommand::Batch {
+            commands: batch_cmds,
+            ..
+        } = c
+        {
             batch_cmds.iter().find_map(|cmd| {
-                if let editor_bevy::asset_command::AssetCommand::AddComponent { type_id, values, .. } = cmd {
+                if let editor_bevy::asset_command::AssetCommand::AddComponent {
+                    type_id,
+                    values,
+                    ..
+                } = cmd
+                {
                     if type_id == "editor.TextureRef" {
                         Some(values)
                     } else {
