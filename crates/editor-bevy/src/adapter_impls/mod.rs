@@ -25,9 +25,9 @@ pub use json::JsonProjectAdapter;
 
 /// Returns the owned vector of all adapter instances.
 ///
-/// This factory is passed to [`editor_model::adapter::set_registry_fn`] at WASM
-/// startup. Each call produces a fresh `Vec` — the registry takes ownership by
-/// leaking the boxes to `'static`.
+/// This factory is passed to [`editor_model::adapter::init_registry`] (SDD-0046
+/// S2 D2) at WASM startup. Each call produces a fresh `Vec` — the registry takes
+/// ownership exactly once via `OnceLock::set`.
 pub fn all_adapters_init() -> Vec<Box<dyn EditorAdapter + Send + Sync>> {
     vec![
         Box::new(json::JsonProjectAdapter::new()),
