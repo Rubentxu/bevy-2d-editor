@@ -17,6 +17,7 @@ pub mod importer;
 pub mod int_grid;
 pub mod logic_activation;
 pub mod logic_graph;
+pub mod migration;
 pub mod pending_change_set;
 pub mod ports;
 pub mod project_metadata;

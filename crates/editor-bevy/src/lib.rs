@@ -1208,8 +1208,14 @@ pub async fn list_scenes() -> Result<JsValue, JsValue> {
     let json_str = js_load_file(PROJECT_FILE)
         .await
         .map_err(|e| JsValue::from_str(&e))?;
-    let project: ProjectMetadata = serde_json::from_str(&json_str)
+    let mut project: ProjectMetadata = serde_json::from_str(&json_str)
         .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+    // SEM-5 (SDD-0046 S3): migrate old project formats; future versions
+    // surface a typed error (never a silent empty project).
+    let v = editor_model::migration::parse_version_string("ProjectMetadata", &project.version)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    editor_model::migration::migrate::project_metadata(v, &mut project)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
     serde_wasm_bindgen::to_value(&project.scenes).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
@@ -1253,7 +1259,25 @@ async fn update_project_metadata(scene_name: &str) -> Result<(), String> {
     // to PROJECT_STORE in a future PR.
     let project = if js_exists(PROJECT_FILE).await {
         match js_load_file(PROJECT_FILE).await {
-            Ok(json_str) => serde_json::from_str::<ProjectMetadata>(&json_str).unwrap_or_default(),
+            Ok(json_str) => {
+                match serde_json::from_str::<ProjectMetadata>(&json_str) {
+                    Ok(mut pm) => {
+                        // SEM-5 (SDD-0046 S3): upgrade old formats; reject
+                        // future versions instead of silently defaulting —
+                        // a silent default here would WRITE BACK an empty
+                        // project and destroy a v99 file.
+                        let v = editor_model::migration::parse_version_string(
+                            "ProjectMetadata",
+                            &pm.version,
+                        )
+                        .map_err(|e| e.to_string())?;
+                        editor_model::migration::migrate::project_metadata(v, &mut pm)
+                            .map_err(|e| e.to_string())?;
+                        pm
+                    }
+                    Err(_) => ProjectMetadata::default(),
+                }
+            }
             Err(_) => ProjectMetadata::default(),
         }
     } else {
@@ -1640,7 +1664,24 @@ pub fn find_entities_by_type(type_id: &str) -> Result<String, JsValue> {
 async fn update_project_schemas(type_id: &str, add: bool) -> Result<(), String> {
     let mut project = if js_exists(PROJECT_FILE).await {
         match js_load_file(PROJECT_FILE).await {
-            Ok(json_str) => serde_json::from_str::<ProjectMetadata>(&json_str).unwrap_or_default(),
+            Ok(json_str) => {
+                match serde_json::from_str::<ProjectMetadata>(&json_str) {
+                    Ok(mut pm) => {
+                        // SEM-5 (SDD-0046 S3): same as update_project_metadata —
+                        // a silent default here would destroy a future-version
+                        // project.json on write-back.
+                        let v = editor_model::migration::parse_version_string(
+                            "ProjectMetadata",
+                            &pm.version,
+                        )
+                        .map_err(|e| e.to_string())?;
+                        editor_model::migration::migrate::project_metadata(v, &mut pm)
+                            .map_err(|e| e.to_string())?;
+                        pm
+                    }
+                    Err(_) => ProjectMetadata::default(),
+                }
+            }
             Err(_) => ProjectMetadata::default(),
         }
     } else {
@@ -2049,8 +2090,14 @@ pub async fn load_project() -> Result<(), JsValue> {
     let project_json = js_load_file(PROJECT_FILE)
         .await
         .map_err(|e| JsValue::from_str(&e))?;
-    let project: ProjectMetadata = serde_json::from_str(&project_json)
+    let mut project: ProjectMetadata = serde_json::from_str(&project_json)
         .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+    // SEM-5 (SDD-0046 S3): migrate old project formats; future versions
+    // surface a typed error (never a silent empty project).
+    let v = editor_model::migration::parse_version_string("ProjectMetadata", &project.version)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    editor_model::migration::migrate::project_metadata(v, &mut project)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     // Step A: Clear ASSET_BODY_CACHE (D4)
     with_asset_body_cache_mut(|cache| {
