@@ -160,3 +160,23 @@ jobs:
 
       - name: Test editor-model
         run: cargo test -p editor-model --locked
+
+  architecture-fitness:
+    name: Architecture fitness
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install archcheck tool
+        working-directory: tools/archcheck
+        run: npm ci
+
+      - name: Run archcheck
+        working-directory: tools/archcheck
+        run: npm run check
