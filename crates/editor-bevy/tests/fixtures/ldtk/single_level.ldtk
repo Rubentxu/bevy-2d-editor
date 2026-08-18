@@ -1,0 +1,20 @@
+{
+  "ldtkVersion": "1.0.0",
+  "worlds": [
+    {
+      "identifier": "SingleLevelWorld",
+      "levels": [
+        {
+          "uid": 0,
+          "identifier": "Level_1",
+          "worldX": 0,
+          "worldY": 0,
+          "pxWid": 640,
+          "pxHei": 480,
+          "__neighbours": [],
+          "layerInstances": []
+        }
+      ]
+    }
+  ]
+}
