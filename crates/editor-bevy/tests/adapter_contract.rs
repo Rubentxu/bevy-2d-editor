@@ -287,3 +287,63 @@ fn initialized_registry_is_observable_from_any_thread() {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// SDD-0046 S3 — SEM-5 migration scenarios through JsonProjectAdapter
+// ---------------------------------------------------------------------------
+
+/// Spec §sem3-adapter-wiring scenario 12: v0.94-era ProjectMetadata (no
+/// `worlds` field) decodes and migrates through the adapter.
+#[test]
+fn decode_v0_project_metadata_without_worlds() {
+    let adapter = JsonProjectAdapter::new();
+    let json = r#"{"version":"0.1","name":"Legacy","scenes":[],"schemas":[],"active_scene":null,"scene_assets":[]}"#;
+    let model = adapter
+        .decode(json.as_bytes())
+        .expect("v0 shape must decode");
+    match model {
+        SemanticModel::ProjectMetadata(pm) => {
+            assert!(
+                pm.worlds.is_empty(),
+                "worlds must materialize: {:?}",
+                pm.worlds
+            );
+            assert!(pm.active_world.is_none());
+            assert_eq!(pm.name, "Legacy");
+        }
+        other => panic!("expected ProjectMetadata, got {other:?}"),
+    }
+}
+
+/// Spec §sem3-adapter-wiring scenario 11: future-version document is
+/// rejected with AdapterError::Decode wrapping MigrationError.
+#[test]
+fn decode_future_version_rejected() {
+    let adapter = JsonProjectAdapter::new();
+    let json = r#"{"version":"99.0","name":"Future","scenes":[],"schemas":[],"active_scene":null,"scene_assets":[]}"#;
+    let err = adapter
+        .decode(json.as_bytes())
+        .expect_err("v99 must be rejected");
+    let msg = err.to_string();
+    assert!(
+        msg.contains("unsupported version 99"),
+        "expected unsupported-version error, got: {msg}"
+    );
+}
+
+/// Spec §sem3-adapter-wiring scenario 10: unknown field dropped + migration
+/// defaults applied.
+#[test]
+fn decode_unknown_field_dropped_and_migrated() {
+    let adapter = JsonProjectAdapter::new();
+    let json =
+        r#"{"version":"0.1","scene_id":"s1","name":"N","entities":[],"future_field":{"a":1}}"#;
+    let model = adapter.decode(json.as_bytes()).expect("must decode");
+    match model {
+        SemanticModel::Scene(doc) => {
+            assert!(doc.instances.is_empty(), "instances must materialize");
+            assert_eq!(doc.scene_id, "s1");
+        }
+        other => panic!("expected Scene, got {other:?}"),
+    }
+}
