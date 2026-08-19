@@ -224,6 +224,7 @@ pub use persistence::{
     tileset_path, validate_logical_path,
 };
 pub use preview_inspector::{PreviewMappingEntry, PreviewMetrics, PreviewProvenance};
+pub use preview_inspector::{get_stable_id_entity, get_stable_id_index};
 // §6: CausalityEdge + RebuildCause re-exported from editor-model for preview_inspector.rs.
 pub use editor_model::RebuildCause;
 pub use editor_model::causality::{CausalityEdge, CausalityEdgeKind};

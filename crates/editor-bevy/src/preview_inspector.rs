@@ -8,12 +8,14 @@
 //! only.
 
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use serde::{Deserialize, Serialize};
 
 use crate::document::StableId;
 use crate::scene_asset::{AssetReference, LocalId};
+use crate::SceneInstanceChild;
+use bevy::prelude::Entity;
 
 /// Live preview metrics: frames per second, last frame time in milliseconds,
 /// and number of times the preview world has been rebuilt.
@@ -78,6 +80,12 @@ thread_local! {
     // through `editor_model::ports::with_session_mut`. ADR-0052 ratifies this
     // transition; the dual-write stance from v0.89 (thread_local + session
     // field) is collapsed to a single owner.
+
+    // RUNTIME-010: StableId -> EditorEntity index.
+    // Maps StableId to the ECS entity in the PreviewWorld that carries it.
+    // Populated by rebuild_preview_world after spawning scene entities.
+    static STABLE_ID_INDEX: RefCell<HashMap<StableId, Entity>> =
+        RefCell::new(HashMap::default());
 }
 
 /// Replace the live preview metrics. Called by `emit_events` and on rebuild.
@@ -119,6 +127,34 @@ pub fn get_mapping() -> Vec<PreviewMappingEntry> {
 pub fn get_provenance(stable_id: &str) -> Option<PreviewProvenance> {
     let sid = StableId::new(stable_id);
     PREVIEW_PROVENANCE.with(|p| p.borrow().get(&sid).cloned())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RUNTIME-010: StableId → EditorEntity index
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Replace the StableId → EditorEntity index.
+///
+/// Called by `rebuild_preview_world` after spawning all scene entities.
+/// The index maps each placed entity's StableId to its ECS Entity ID
+/// in the PreviewWorld, enabling O(1) lookup instead of iterative queries.
+pub fn set_stable_id_index(index: HashMap<StableId, Entity>) {
+    STABLE_ID_INDEX.with(|i| *i.borrow_mut() = index);
+}
+
+/// Get the StableId → EditorEntity index.
+///
+/// Returns a clone of the current index. O(n) where n = number of entities.
+/// For hot paths, prefer [`get_stable_id_entity`] for single lookups.
+pub fn get_stable_id_index() -> HashMap<StableId, Entity> {
+    STABLE_ID_INDEX.with(|i| i.borrow().clone())
+}
+
+/// Look up a single StableId in the index.
+///
+/// Returns the ECS Entity ID if found, None otherwise.
+pub fn get_stable_id_entity(stable_id: &StableId) -> Option<Entity> {
+    STABLE_ID_INDEX.with(|i| i.borrow().get(stable_id).copied())
 }
 
 // ─── §6 RebuildCause (v0.90 PR2: migrated to EditorSession via EditorSessionPort) ──
@@ -243,5 +279,47 @@ mod tests {
             "found Bevy Entity id leak"
         );
         assert!(!serialized.contains("entity_id"), "found entity id leak");
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RUNTIME-010 tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod stable_id_index_tests {
+    use super::*;
+
+    #[test]
+    fn stable_id_index_empty_by_default() {
+        let index = get_stable_id_index();
+        assert!(index.is_empty(), "index should be empty initially");
+    }
+
+    #[test]
+    fn set_and_get_stable_id_index() {
+        use std::collections::HashMap;
+        use bevy::prelude::Entity;
+
+        let mut map: HashMap<StableId, Entity> = HashMap::new();
+        let stable_id = StableId::new("test_entity_1");
+        let entity = Entity::from_bits(42u64);
+        map.insert(stable_id.clone(), entity);
+
+        set_stable_id_index(map);
+
+        let retrieved = get_stable_id_entity(&stable_id);
+        assert!(retrieved.is_some(), "should find the inserted StableId");
+        assert_eq!(retrieved.unwrap(), entity, "entity should match");
+
+        let full_index = get_stable_id_index();
+        assert_eq!(full_index.len(), 1, "index should have one entry");
+    }
+
+    #[test]
+    fn stable_id_index_none_for_missing_key() {
+        let missing = StableId::new("does_not_exist");
+        let result = get_stable_id_entity(&missing);
+        assert!(result.is_none(), "missing StableId should return None");
     }
 }

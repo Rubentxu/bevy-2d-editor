@@ -31,6 +31,7 @@ use crate::actuator_bus;
 use crate::bevy_anchor::anchor_str_to_bevy_anchor;
 use crate::bevy_logic_binding::LogicBinding;
 use crate::document::{Entity, SceneDocument, StableId};
+use std::collections::HashMap;
 use crate::dynamic_scene::is_known_anchor_str;
 use crate::editor_world::EditorWorld;
 use crate::instance_projection::{PreviewEntity, project_instances};
@@ -692,9 +693,13 @@ fn rebuild_preview_world(
         commands.entity(entity).despawn();
     }
 
+    // RUNTIME-010: Build StableId → Entity index while spawning.
+    let mut stable_id_index: HashMap<StableId, BevyEntity> = HashMap::new();
+
     // Spawn authored entities from the document
     for entity in state.document.entities.iter() {
-        spawn_entity(&mut commands, entity);
+        let bevy_entity = spawn_entity(&mut commands, entity);
+        stable_id_index.insert(entity.id.clone(), bevy_entity);
     }
 
     // Project and spawn Scene Instances
@@ -704,11 +709,12 @@ fn rebuild_preview_world(
     let projected = project_instances(&state.document, &resolver);
 
     for preview in &projected {
-        spawn_preview_entity(&mut commands, preview);
+        let bevy_entity = spawn_preview_entity(&mut commands, preview);
+        stable_id_index.insert(preview.stable_id.clone(), bevy_entity);
     }
 
     // runtime-preview-inspector: push mapping + provenance + bump rebuild_count
-    push_preview_inspector_state(&state.document, &projected);
+    push_preview_inspector_state(&state.document, &projected, stable_id_index);
 
     state.dirty = false;
     DIRTY_FLAG.with(|d| *d.borrow_mut() = false);
@@ -716,9 +722,15 @@ fn rebuild_preview_world(
 
 /// Update the runtime preview inspector thread-locals after a rebuild.
 /// `projected` is the list returned by `project_instances` for the same doc.
-fn push_preview_inspector_state(doc: &SceneDocument, projected: &[PreviewEntity]) {
+/// `stable_id_index` maps StableId → Bevy Entity for all spawned preview entities.
+fn push_preview_inspector_state(
+    doc: &SceneDocument,
+    projected: &[PreviewEntity],
+    stable_id_index: HashMap<StableId, BevyEntity>,
+) {
     use crate::preview_inspector::{
         PreviewMappingEntry, PreviewProvenance, set_mapping, set_provenance,
+        set_stable_id_index,
     };
     use std::collections::BTreeMap;
 
@@ -764,6 +776,8 @@ fn push_preview_inspector_state(doc: &SceneDocument, projected: &[PreviewEntity]
 
     set_mapping(mapping);
     set_provenance(provenance);
+    // RUNTIME-010: Publish StableId → Entity index
+    set_stable_id_index(stable_id_index);
     // §6: Apply any causality edges collected during logic evaluation.
     // Note: full BevyEntity→StableId mapping requires Query iteration;
     // edges stamped by submit_actuator_output are stored by entity bits
@@ -772,7 +786,7 @@ fn push_preview_inspector_state(doc: &SceneDocument, projected: &[PreviewEntity]
     crate::preview_inspector::increment_rebuild_count();
 }
 
-fn spawn_entity(commands: &mut Commands, entity: &Entity) {
+fn spawn_entity(commands: &mut Commands, entity: &Entity) -> BevyEntity {
     use bevy::prelude::Name as BevyName;
     use bevy::sprite::Anchor;
 
@@ -902,6 +916,7 @@ fn spawn_entity(commands: &mut Commands, entity: &Entity) {
         let bevy_anchor = anchor_str_to_bevy_anchor(raw_anchor);
         cmd.insert(Anchor::from(bevy_anchor.0));
     }
+    cmd.id()
 }
 
 /// Spawn a projected entity from a Scene Instance.
@@ -910,7 +925,7 @@ fn spawn_entity(commands: &mut Commands, entity: &Entity) {
 /// which carries the stable_id from the instance's id_map and the local_id
 /// from the source asset. The entity is tagged with `SceneInstanceChild`
 /// so it can be identified and despawned separately from authored entities.
-fn spawn_preview_entity(commands: &mut Commands, preview: &PreviewEntity) {
+fn spawn_preview_entity(commands: &mut Commands, preview: &PreviewEntity) -> BevyEntity {
     use bevy::prelude::Name as BevyName;
     use bevy::sprite::Anchor;
 
@@ -1051,6 +1066,7 @@ fn spawn_preview_entity(commands: &mut Commands, preview: &PreviewEntity) {
     if let Some(lb) = logic_binding {
         cmd.insert(lb);
     }
+    cmd.id()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
