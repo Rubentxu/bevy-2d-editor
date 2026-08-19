@@ -1,0 +1,63 @@
+schema: bevy-editor-uat/v1
+id: UAT-UX-001
+version: 1
+title: "Workspace and lens continuity"
+persona: technical-designer
+priority: P2
+release_gate: v1
+modes:
+  - manual-guided
+  - playwright
+goal: "Move through workspaces without losing subject context unexpectedly."
+fixture:
+  project: fixtures/ux_001
+preconditions:
+  - "Use an isolated copy of the fixture project."
+steps:
+  - id: step-1
+    instruction: "Select Player in Design."
+    action:
+      kind: manual-or-adapter
+      value: "Select Player in Design."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-2
+    instruction: "Open Dependencies lens."
+    action:
+      kind: manual-or-adapter
+      value: "Open Dependencies lens."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-3
+    instruction: "Switch to Logic and inspect binding."
+    action:
+      kind: manual-or-adapter
+      value: "Switch to Logic and inspect binding."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-4
+    instruction: "Enter Play and switch to Debug Trace."
+    action:
+      kind: manual-or-adapter
+      value: "Enter Play and switch to Debug Trace."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-5
+    instruction: "Return to Design."
+    action:
+      kind: manual-or-adapter
+      value: "Return to Design."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+final:
+  semantic:
+    - "same StableId remains addressable"
+  ui:
+    - "workspace transitions preserve expected context"
+evidence:
+  level: E2
+  capture:
+    - screenshot-on-failure
+    - changesets
+    - validation
+    - semantic-summary

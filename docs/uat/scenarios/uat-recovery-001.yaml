@@ -1,0 +1,62 @@
+schema: bevy-editor-uat/v1
+id: UAT-RECOVERY-001
+version: 1
+title: "Crash/reload recovery path"
+persona: qa-validator
+priority: P0
+release_gate: v1
+modes:
+  - manual-guided
+  - playwright
+goal: "Verify recoverable state after interruption according to recovery policy."
+fixture:
+  project: fixtures/recovery_001
+preconditions:
+  - "Use an isolated copy of the fixture project."
+steps:
+  - id: step-1
+    instruction: "Open recovery fixture."
+    action:
+      kind: manual-or-adapter
+      value: "Open recovery fixture."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-2
+    instruction: "Perform defined unsaved/partial work."
+    action:
+      kind: manual-or-adapter
+      value: "Perform defined unsaved/partial work."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-3
+    instruction: "Simulate supported interruption/reload."
+    action:
+      kind: manual-or-adapter
+      value: "Simulate supported interruption/reload."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-4
+    instruction: "Follow recovery UI."
+    action:
+      kind: manual-or-adapter
+      value: "Follow recovery UI."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-5
+    instruction: "Validate restored project."
+    action:
+      kind: manual-or-adapter
+      value: "Validate restored project."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+final:
+  semantic:
+    - "project not corrupted"
+    - "outcome matches documented recovery policy"
+evidence:
+  level: E2
+  capture:
+    - screenshot-on-failure
+    - changesets
+    - validation
+    - semantic-summary

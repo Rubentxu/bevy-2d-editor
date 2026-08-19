@@ -62,6 +62,18 @@ ADR numbering is monotonic and never reused. Superseded decisions keep their ori
 | [ADR-0050](./0050-apply-back-policy-not-mirrored.md)                              | ApplyBackPolicy Lives in editor-application (Mirror-Pair with editor-core)      | Accepted (2026-08-16) — v0.89 (`v0.89-change-runtime-workbench`)    |
 | [ADR-0051](./0051-change-workbench-bottom-dock-tab.md)                           | ChangeWorkbenchPanel Lives in Bottom-Dock as an Internal Tab (ADR-0039/0024)   | Accepted (2026-08-16) — v0.89 (`v0.89-change-runtime-workbench`)    |
 | [ADR-0052](./0052-runtime-causality-rebuild-cause.md)                            | Runtime Causality — RebuildCause + LogicActivationRing + CausalityEdge          | Accepted (2026-08-16) — v0.89 (`v0.89-change-runtime-workbench`)    |
+| [ADR-0053](./0053-bevy-native-editor-runtime.md)                                 | Bevy ECS Is the Runtime Substrate of the Editor                                  | Proposed (2026-08-19)                                                 |
+| [ADR-0054](./0054-editor-world-preview-world.md)                                | Separate EditorWorld and PreviewWorld Runtime Responsibilities                     | Proposed (2026-08-19)                                                 |
+| [ADR-0055](./0055-semantic-graph-reactive-ecs.md)                               | Semantic Graphs Compile to Reactive Bevy ECS Runtime Projections                  | Proposed (2026-08-19)                                                 |
+| [ADR-0056](./0056-events-observers-durable-journal.md)                          | Bevy Events/Observers Are Ephemeral Runtime Signals; Change Journal Is Durable    | Proposed (2026-08-19)                                                 |
+| [ADR-0057](./0057-compiled-incremental-logic-runtime.md)                      | Logic Graphs Use a Compiled Incremental Runtime                                  | Proposed (2026-08-19)                                                 |
+| [ADR-0058](./0058-typed-cqn-wasm-protocol.md)                                  | WASM Boundary Uses Typed Commands, Queries and Notifications                      | Proposed (2026-08-19)                                                 |
+| [ADR-0059](./0059-react-shell-bevy-runtime-boundary.md)                        | React Owns Dense Editor UI; Bevy Owns Runtime, Viewport and Simulation           | Proposed (2026-08-19)                                                 |
+| [ADR-0060](./0060-unified-causality-impact-trace.md)                           | Unified Causality Model Powers Impact, Why and Trace                             | Proposed (2026-08-19)                                                 |
+| [ADR-0061](./0061-uat-semantic-probe-dsl.md)                                   | UAT Uses a Shared Scenario DSL and Semantic/ECS Probes                           | Proposed (2026-08-19)                                                 |
+| [ADR-0062](./0062-contribution-registry.md)                                    | UI and Extension Features Register Typed Contributions                            | Proposed (2026-08-19)                                                 |
+| [ADR-0063](./0063-system-graph-observability.md)                                | Bevy Schedule and Runtime Systems Are Inspectable Product Data                    | Proposed (2026-08-19)                                                 |
+| [ADR-0064](./0064-scene-asset-variants-provenance.md)                           | Scene Asset Variants and Overrides Use Explicit Provenance                        | Proposed (2026-08-19)                                                 |
 
 ## Related Documents
 

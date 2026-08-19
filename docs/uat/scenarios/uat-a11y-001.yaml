@@ -1,0 +1,65 @@
+schema: bevy-editor-uat/v1
+id: UAT-A11Y-001
+version: 1
+title: "Keyboard-only critical authoring path"
+persona: qa-validator
+priority: P1
+release_gate: v1
+modes:
+  - manual-guided
+  - playwright
+goal: "Complete core workflow without mouse-only dependency."
+fixture:
+  project: fixtures/a11y_001
+preconditions:
+  - "Use an isolated copy of the fixture project."
+steps:
+  - id: step-1
+    instruction: "Open empty fixture."
+    action:
+      kind: manual-or-adapter
+      value: "Open empty fixture."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-2
+    instruction: "Navigate global search by keyboard."
+    action:
+      kind: manual-or-adapter
+      value: "Navigate global search by keyboard."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-3
+    instruction: "Create/select entity via keyboard-accessible commands."
+    action:
+      kind: manual-or-adapter
+      value: "Create/select entity via keyboard-accessible commands."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-4
+    instruction: "Open Inspector/Problems/Changes."
+    action:
+      kind: manual-or-adapter
+      value: "Open Inspector/Problems/Changes."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-5
+    instruction: "Start/stop Play and save."
+    action:
+      kind: manual-or-adapter
+      value: "Start/stop Play and save."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+final:
+  semantic:
+    - "workflow completed"
+  runtime:
+    - "play transitions"
+  ui:
+    - "focus visible/logical"
+evidence:
+  level: E3
+  capture:
+    - screenshot-on-failure
+    - changesets
+    - validation
+    - semantic-summary

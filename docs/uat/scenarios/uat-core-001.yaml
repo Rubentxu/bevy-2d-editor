@@ -1,0 +1,67 @@
+schema: bevy-editor-uat/v1
+id: UAT-CORE-001
+version: 1
+title: "Create, edit, play and save a minimal scene"
+persona: technical-designer
+priority: P1
+release_gate: v1
+modes:
+  - manual-guided
+  - playwright
+  - hybrid
+goal: "Create a minimal playable scene and verify the authoring/runtime boundary."
+fixture:
+  project: fixtures/core_001
+preconditions:
+  - "Use an isolated copy of the fixture project."
+steps:
+  - id: step-1
+    instruction: "Create a new project from the empty 2D fixture."
+    action:
+      kind: manual-or-adapter
+      value: "Create a new project from the empty 2D fixture."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-2
+    instruction: "Add a Player entity and assign a sprite."
+    action:
+      kind: manual-or-adapter
+      value: "Add a Player entity and assign a sprite."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-3
+    instruction: "Move Player in the viewport."
+    action:
+      kind: manual-or-adapter
+      value: "Move Player in the viewport."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-4
+    instruction: "Enter Play mode and verify a runtime projection exists."
+    action:
+      kind: manual-or-adapter
+      value: "Enter Play mode and verify a runtime projection exists."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-5
+    instruction: "Stop Play mode, save and reload the project."
+    action:
+      kind: manual-or-adapter
+      value: "Stop Play mode, save and reload the project."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+final:
+  semantic:
+    - "Player exists with a stable ID"
+    - "saved transform is preserved"
+    - "no validation errors"
+  runtime:
+    - "Preview entity maps from StableId"
+    - "runtime IDs are not persisted"
+evidence:
+  level: E3
+  capture:
+    - screenshot-on-failure
+    - changesets
+    - validation
+    - semantic-summary

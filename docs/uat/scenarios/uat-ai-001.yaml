@@ -1,0 +1,65 @@
+schema: bevy-editor-uat/v1
+id: UAT-AI-001
+version: 1
+title: "AI proposal is reviewed as a normal ChangeSet"
+persona: agent-supervisor
+priority: P1
+release_gate: v1
+modes:
+  - manual-guided
+  - playwright
+goal: "Ensure agent operations cannot bypass review policy."
+fixture:
+  project: fixtures/ai_001
+preconditions:
+  - "Use an isolated copy of the fixture project."
+steps:
+  - id: step-1
+    instruction: "Open AI-enabled fixture."
+    action:
+      kind: manual-or-adapter
+      value: "Open AI-enabled fixture."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-2
+    instruction: "Ask for a multi-resource gameplay change."
+    action:
+      kind: manual-or-adapter
+      value: "Ask for a multi-resource gameplay change."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-3
+    instruction: "Inspect proposal in Changes."
+    action:
+      kind: manual-or-adapter
+      value: "Inspect proposal in Changes."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-4
+    instruction: "Approve only allowed subset."
+    action:
+      kind: manual-or-adapter
+      value: "Approve only allowed subset."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-5
+    instruction: "Verify post-apply validation."
+    action:
+      kind: manual-or-adapter
+      value: "Verify post-apply validation."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+final:
+  semantic:
+    - "origin == Agent"
+    - "approval policy respected"
+    - "only approved operations applied"
+  causality:
+    - "agent ChangeSet traceable"
+evidence:
+  level: E3
+  capture:
+    - screenshot-on-failure
+    - changesets
+    - validation
+    - semantic-summary

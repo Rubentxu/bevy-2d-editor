@@ -1,0 +1,56 @@
+schema: bevy-editor-uat/v1
+id: UAT-EXT-001
+version: 1
+title: "Extension capability denial is safe"
+persona: extension-author
+priority: P1
+release_gate: v1
+modes:
+  - playwright
+  - headless
+goal: "Verify extension cannot use undeclared capabilities."
+fixture:
+  project: fixtures/ext_001
+preconditions:
+  - "Use an isolated copy of the fixture project."
+steps:
+  - id: step-1
+    instruction: "Load restricted test extension."
+    action:
+      kind: manual-or-adapter
+      value: "Load restricted test extension."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-2
+    instruction: "Invoke allowed read."
+    action:
+      kind: manual-or-adapter
+      value: "Invoke allowed read."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-3
+    instruction: "Attempt forbidden mutation."
+    action:
+      kind: manual-or-adapter
+      value: "Attempt forbidden mutation."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-4
+    instruction: "Inspect diagnostics."
+    action:
+      kind: manual-or-adapter
+      value: "Inspect diagnostics."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+final:
+  semantic:
+    - "forbidden mutation has no effect"
+  runtime:
+    - "denial diagnostic recorded without crash"
+evidence:
+  level: E3
+  capture:
+    - screenshot-on-failure
+    - changesets
+    - validation
+    - semantic-summary

@@ -1,0 +1,61 @@
+schema: bevy-editor-uat/v1
+id: UAT-PERF-001
+version: 1
+title: "Medium production fixture stays within accepted budgets"
+persona: qa-validator
+priority: P1
+release_gate: v1
+modes:
+  - playwright
+  - hybrid
+goal: "Detect material performance regressions using named budgets."
+fixture:
+  project: fixtures/perf_001
+preconditions:
+  - "Use an isolated copy of the fixture project."
+steps:
+  - id: step-1
+    instruction: "Open medium benchmark fixture."
+    action:
+      kind: manual-or-adapter
+      value: "Open medium benchmark fixture."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-2
+    instruction: "Measure load/index build."
+    action:
+      kind: manual-or-adapter
+      value: "Measure load/index build."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-3
+    instruction: "Edit referenced asset."
+    action:
+      kind: manual-or-adapter
+      value: "Edit referenced asset."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-4
+    instruction: "Measure graph invalidation/preview rebuild."
+    action:
+      kind: manual-or-adapter
+      value: "Measure graph invalidation/preview rebuild."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-5
+    instruction: "Execute medium Logic activation."
+    action:
+      kind: manual-or-adapter
+      value: "Execute medium Logic activation."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+final:
+  performance:
+    - "all named v1 budgets within accepted tolerance"
+evidence:
+  level: E4
+  capture:
+    - screenshot-on-failure
+    - changesets
+    - validation
+    - semantic-summary

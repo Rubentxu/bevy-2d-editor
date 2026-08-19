@@ -1,0 +1,71 @@
+schema: bevy-editor-uat/v1
+id: UAT-IMPORT-001
+version: 1
+title: "External source reimport preserves authored intent"
+persona: content-designer
+priority: P0
+release_gate: v1
+modes:
+  - manual-guided
+  - playwright
+  - hybrid
+goal: "Reimport an external source without unexpected loss of local authoring."
+fixture:
+  project: fixtures/import_001
+preconditions:
+  - "Use an isolated copy of the fixture project."
+steps:
+  - id: step-1
+    instruction: "Import supported source fixture."
+    action:
+      kind: manual-or-adapter
+      value: "Import supported source fixture."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-2
+    instruction: "Add documented local override."
+    action:
+      kind: manual-or-adapter
+      value: "Add documented local override."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-3
+    instruction: "Modify external source fixture."
+    action:
+      kind: manual-or-adapter
+      value: "Modify external source fixture."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-4
+    instruction: "Run reimport."
+    action:
+      kind: manual-or-adapter
+      value: "Run reimport."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-5
+    instruction: "Review diff/impact and approve."
+    action:
+      kind: manual-or-adapter
+      value: "Review diff/impact and approve."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-6
+    instruction: "Save/reload."
+    action:
+      kind: manual-or-adapter
+      value: "Save/reload."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+final:
+  semantic:
+    - "provenance preserved"
+    - "approved external changes applied"
+    - "protected local override preserved or conflict explicit"
+evidence:
+  level: E2
+  capture:
+    - screenshot-on-failure
+    - changesets
+    - validation
+    - semantic-summary

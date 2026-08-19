@@ -1,0 +1,65 @@
+schema: bevy-editor-uat/v1
+id: UAT-RUNTIME-002
+version: 1
+title: "Runtime Apply Back is explicit and scoped"
+persona: technical-designer
+priority: P1
+release_gate: v1
+modes:
+  - manual-guided
+  - playwright
+  - hybrid
+goal: "Change an authorable runtime value and apply it back through review."
+fixture:
+  project: fixtures/runtime_002
+preconditions:
+  - "Use an isolated copy of the fixture project."
+steps:
+  - id: step-1
+    instruction: "Enter Play."
+    action:
+      kind: manual-or-adapter
+      value: "Enter Play."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-2
+    instruction: "Change an authorable runtime field."
+    action:
+      kind: manual-or-adapter
+      value: "Change an authorable runtime field."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-3
+    instruction: "Open Apply Back review."
+    action:
+      kind: manual-or-adapter
+      value: "Open Apply Back review."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-4
+    instruction: "Approve only the intended field."
+    action:
+      kind: manual-or-adapter
+      value: "Approve only the intended field."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-5
+    instruction: "Stop and save."
+    action:
+      kind: manual-or-adapter
+      value: "Stop and save."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+final:
+  semantic:
+    - "approved field updated"
+    - "unapproved runtime-only fields unchanged"
+  causality:
+    - "ApplyBack frame/change linked"
+evidence:
+  level: E3
+  capture:
+    - screenshot-on-failure
+    - changesets
+    - validation
+    - semantic-summary

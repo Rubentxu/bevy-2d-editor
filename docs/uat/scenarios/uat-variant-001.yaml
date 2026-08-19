@@ -1,0 +1,72 @@
+schema: bevy-editor-uat/v1
+id: UAT-VARIANT-001
+version: 1
+title: "Scene Asset variant provenance and conflict workflow"
+persona: content-designer
+priority: P1
+release_gate: v1
+modes:
+  - manual-guided
+  - playwright
+  - hybrid
+goal: "Create variant lineage, local override and resolve a base change."
+fixture:
+  project: fixtures/variant_001
+preconditions:
+  - "Use an isolated copy of the fixture project."
+steps:
+  - id: step-1
+    instruction: "Create Base Enemy Scene Asset."
+    action:
+      kind: manual-or-adapter
+      value: "Create Base Enemy Scene Asset."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-2
+    instruction: "Create Fast Enemy variant."
+    action:
+      kind: manual-or-adapter
+      value: "Create Fast Enemy variant."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-3
+    instruction: "Place two variant instances."
+    action:
+      kind: manual-or-adapter
+      value: "Place two variant instances."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-4
+    instruction: "Override speed on one instance."
+    action:
+      kind: manual-or-adapter
+      value: "Override speed on one instance."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-5
+    instruction: "Change base property."
+    action:
+      kind: manual-or-adapter
+      value: "Change base property."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-6
+    instruction: "Inspect provenance/conflict, resolve and reload."
+    action:
+      kind: manual-or-adapter
+      value: "Inspect provenance/conflict, resolve and reload."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+final:
+  semantic:
+    - "variant graph acyclic"
+    - "effective values correct"
+    - "provenance identifies base/variant/instance"
+    - "resolution survives reload"
+evidence:
+  level: E2
+  capture:
+    - screenshot-on-failure
+    - changesets
+    - validation
+    - semantic-summary

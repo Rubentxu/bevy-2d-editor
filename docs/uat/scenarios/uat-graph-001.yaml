@@ -1,0 +1,62 @@
+schema: bevy-editor-uat/v1
+id: UAT-GRAPH-001
+version: 1
+title: "Incremental Project Graph equals rebuild"
+persona: bevy-developer
+priority: P1
+release_gate: milestone
+modes:
+  - headless
+goal: "Validate graph projection correctness."
+fixture:
+  project: fixtures/graph_001
+preconditions:
+  - "Use an isolated copy of the fixture project."
+steps:
+  - id: step-1
+    instruction: "Load graph corpus fixture."
+    action:
+      kind: manual-or-adapter
+      value: "Load graph corpus fixture."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-2
+    instruction: "Build graph from scratch."
+    action:
+      kind: manual-or-adapter
+      value: "Build graph from scratch."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-3
+    instruction: "Apply deterministic ChangeSet sequence incrementally."
+    action:
+      kind: manual-or-adapter
+      value: "Apply deterministic ChangeSet sequence incrementally."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-4
+    instruction: "Build second graph from final semantic state."
+    action:
+      kind: manual-or-adapter
+      value: "Build second graph from final semantic state."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-5
+    instruction: "Compare normalized graphs."
+    action:
+      kind: manual-or-adapter
+      value: "Compare normalized graphs."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+final:
+  graph:
+    - "node/edge sets equal"
+    - "reverse indexes consistent"
+    - "no dangling edges"
+evidence:
+  level: E2
+  capture:
+    - screenshot-on-failure
+    - changesets
+    - validation
+    - semantic-summary

@@ -1,0 +1,64 @@
+schema: bevy-editor-uat/v1
+id: UAT-PERSIST-001
+version: 1
+title: "Save/reload semantic round trip"
+persona: qa-validator
+priority: P0
+release_gate: v1
+modes:
+  - playwright
+  - headless
+  - hybrid
+goal: "Verify deterministic persistence across save/reload."
+fixture:
+  project: fixtures/persist_001
+preconditions:
+  - "Use an isolated copy of the fixture project."
+steps:
+  - id: step-1
+    instruction: "Open persistence fixture."
+    action:
+      kind: manual-or-adapter
+      value: "Open persistence fixture."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-2
+    instruction: "Perform three edits across scene and asset resources."
+    action:
+      kind: manual-or-adapter
+      value: "Perform three edits across scene and asset resources."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-3
+    instruction: "Record semantic hash after save."
+    action:
+      kind: manual-or-adapter
+      value: "Record semantic hash after save."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-4
+    instruction: "Reload project."
+    action:
+      kind: manual-or-adapter
+      value: "Reload project."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-5
+    instruction: "Recompute semantic hash and inspect validation."
+    action:
+      kind: manual-or-adapter
+      value: "Recompute semantic hash and inspect validation."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+final:
+  semantic:
+    - "hash after reload equals saved hash"
+    - "all resources exist"
+    - "validation_error_count == 0"
+evidence:
+  level: E2
+  capture:
+    - screenshot-on-failure
+    - changesets
+    - validation
+    - semantic-summary

@@ -1,0 +1,62 @@
+schema: bevy-editor-uat/v1
+id: UAT-TRACE-001
+version: 1
+title: "Explain why a runtime entity exists"
+persona: bevy-developer
+priority: P2
+release_gate: v1
+modes:
+  - manual-guided
+  - hybrid
+goal: "Use Why to connect runtime entity to authoring source."
+fixture:
+  project: fixtures/trace_001
+preconditions:
+  - "Use an isolated copy of the fixture project."
+steps:
+  - id: step-1
+    instruction: "Open scene with Scene Asset instance."
+    action:
+      kind: manual-or-adapter
+      value: "Open scene with Scene Asset instance."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-2
+    instruction: "Enter Play."
+    action:
+      kind: manual-or-adapter
+      value: "Enter Play."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-3
+    instruction: "Select projected runtime entity."
+    action:
+      kind: manual-or-adapter
+      value: "Select projected runtime entity."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-4
+    instruction: "Open Causality/Why lens."
+    action:
+      kind: manual-or-adapter
+      value: "Open Causality/Why lens."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-5
+    instruction: "Follow path to instance, definition and source."
+    action:
+      kind: manual-or-adapter
+      value: "Follow path to instance, definition and source."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+final:
+  causality:
+    - "path includes RuntimeProjection -> StableId -> instance/definition"
+    - "path deterministic"
+evidence:
+  level: E3
+  capture:
+    - screenshot-on-failure
+    - changesets
+    - validation
+    - semantic-summary

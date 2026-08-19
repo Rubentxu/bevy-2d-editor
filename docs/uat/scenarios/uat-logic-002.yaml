@@ -1,0 +1,57 @@
+schema: bevy-editor-uat/v1
+id: UAT-LOGIC-002
+version: 1
+title: "Logic type error is blocked before execution"
+persona: technical-designer
+priority: P1
+release_gate: v1
+modes:
+  - playwright
+  - headless
+  - hybrid
+goal: "Reject incompatible graph connections with actionable diagnostics."
+fixture:
+  project: fixtures/logic_002
+preconditions:
+  - "Use an isolated copy of the fixture project."
+steps:
+  - id: step-1
+    instruction: "Open logic fixture."
+    action:
+      kind: manual-or-adapter
+      value: "Open logic fixture."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-2
+    instruction: "Attempt incompatible port connection."
+    action:
+      kind: manual-or-adapter
+      value: "Attempt incompatible port connection."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-3
+    instruction: "Inspect Problems."
+    action:
+      kind: manual-or-adapter
+      value: "Inspect Problems."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-4
+    instruction: "Try Play."
+    action:
+      kind: manual-or-adapter
+      value: "Try Play."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+final:
+  semantic:
+    - "invalid connection rejected or graph invalid"
+  runtime:
+    - "invalid graph does not silently execute"
+evidence:
+  level: E3
+  capture:
+    - screenshot-on-failure
+    - changesets
+    - validation
+    - semantic-summary

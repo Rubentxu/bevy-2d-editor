@@ -130,6 +130,15 @@ SDK + capability permissions + 3 built-in extensions shipped. Importers deferred
 - extension and agent capability APIs have documented compatibility policy;
 - no critical architecture fitness exceptions remain.
 
+## Architecture evolution addendum (2026-08-19)
+
+The post-v0.95 Bevy-native evolution programme is defined in
+[BEVY_NATIVE_MASTER_ROADMAP.md](./BEVY_NATIVE_MASTER_ROADMAP.md).
+
+Its governing principle is **Bevy-native runtime, semantic-first authoring** and
+it introduces M0–M4 gates for EditorWorld, reactive project graphs, compiled Logic
+runtime, causality/trace, workflow UX and semantic UAT.
+
 ## Explicitly post-v1 unless pulled by evidence
 
 - marketplace;

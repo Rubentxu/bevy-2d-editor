@@ -1,0 +1,63 @@
+schema: bevy-editor-uat/v1
+id: UAT-MIGRATE-001
+version: 1
+title: "Old project migrates deterministically"
+persona: qa-validator
+priority: P0
+release_gate: v1
+modes:
+  - headless
+  - hybrid
+goal: "Migrate declared old-format project and preserve semantics."
+fixture:
+  project: fixtures/migrate_001
+preconditions:
+  - "Use an isolated copy of the fixture project."
+steps:
+  - id: step-1
+    instruction: "Load migration corpus fixture."
+    action:
+      kind: manual-or-adapter
+      value: "Load migration corpus fixture."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-2
+    instruction: "Run migration."
+    action:
+      kind: manual-or-adapter
+      value: "Run migration."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-3
+    instruction: "Validate."
+    action:
+      kind: manual-or-adapter
+      value: "Validate."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-4
+    instruction: "Save migrated project."
+    action:
+      kind: manual-or-adapter
+      value: "Save migrated project."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-5
+    instruction: "Reload and run migration again."
+    action:
+      kind: manual-or-adapter
+      value: "Reload and run migration again."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+final:
+  semantic:
+    - "expected target version"
+    - "second migration no-op/idempotent"
+    - "no critical data loss"
+evidence:
+  level: E2
+  capture:
+    - screenshot-on-failure
+    - changesets
+    - validation
+    - semantic-summary

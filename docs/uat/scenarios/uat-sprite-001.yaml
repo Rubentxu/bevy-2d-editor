@@ -1,0 +1,70 @@
+schema: bevy-editor-uat/v1
+id: UAT-SPRITE-001
+version: 1
+title: "Sprite sheet slicing and pivot round trip"
+persona: content-designer
+priority: P1
+release_gate: v1
+modes:
+  - manual-guided
+  - playwright
+goal: "Author sprite regions/pivots and verify runtime."
+fixture:
+  project: fixtures/sprite_001
+preconditions:
+  - "Use an isolated copy of the fixture project."
+steps:
+  - id: step-1
+    instruction: "Import sprite sheet."
+    action:
+      kind: manual-or-adapter
+      value: "Import sprite sheet."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-2
+    instruction: "Open Sprite Workspace."
+    action:
+      kind: manual-or-adapter
+      value: "Open Sprite Workspace."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-3
+    instruction: "Slice grid."
+    action:
+      kind: manual-or-adapter
+      value: "Slice grid."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-4
+    instruction: "Adjust pivot."
+    action:
+      kind: manual-or-adapter
+      value: "Adjust pivot."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-5
+    instruction: "Use sprite in scene."
+    action:
+      kind: manual-or-adapter
+      value: "Use sprite in scene."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-6
+    instruction: "Play, save and reload."
+    action:
+      kind: manual-or-adapter
+      value: "Play, save and reload."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+final:
+  semantic:
+    - "sprite regions/pivot persist"
+  runtime:
+    - "sprite projection valid"
+evidence:
+  level: E3
+  capture:
+    - screenshot-on-failure
+    - changesets
+    - validation
+    - semantic-summary

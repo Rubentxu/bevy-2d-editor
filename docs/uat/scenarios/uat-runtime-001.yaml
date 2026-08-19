@@ -1,0 +1,64 @@
+schema: bevy-editor-uat/v1
+id: UAT-RUNTIME-001
+version: 1
+title: "Preview rebuild does not mutate authoring truth"
+persona: bevy-developer
+priority: P0
+release_gate: v1
+modes:
+  - headless
+  - hybrid
+goal: "Verify runtime projection is disposable."
+fixture:
+  project: fixtures/runtime_001
+preconditions:
+  - "Use an isolated copy of the fixture project."
+steps:
+  - id: step-1
+    instruction: "Open runtime fixture."
+    action:
+      kind: manual-or-adapter
+      value: "Open runtime fixture."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-2
+    instruction: "Record semantic hash."
+    action:
+      kind: manual-or-adapter
+      value: "Record semantic hash."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-3
+    instruction: "Build preview."
+    action:
+      kind: manual-or-adapter
+      value: "Build preview."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-4
+    instruction: "Force a preview rebuild."
+    action:
+      kind: manual-or-adapter
+      value: "Force a preview rebuild."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-5
+    instruction: "Stop and rebuild preview again."
+    action:
+      kind: manual-or-adapter
+      value: "Stop and rebuild preview again."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+final:
+  semantic:
+    - "semantic hash unchanged"
+  runtime:
+    - "new runtime projection maps to same StableIds"
+    - "rebuild cause recorded"
+evidence:
+  level: E3
+  capture:
+    - screenshot-on-failure
+    - changesets
+    - validation
+    - semantic-summary

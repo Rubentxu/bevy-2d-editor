@@ -1,0 +1,72 @@
+schema: bevy-editor-uat/v1
+id: UAT-ANIM-001
+version: 1
+title: "Sprite animation timeline authoring"
+persona: content-designer
+priority: P1
+release_gate: v1
+modes:
+  - manual-guided
+  - playwright
+  - hybrid
+goal: "Create animation clip from sliced sprites and run it."
+fixture:
+  project: fixtures/anim_001
+preconditions:
+  - "Use an isolated copy of the fixture project."
+steps:
+  - id: step-1
+    instruction: "Open sprite fixture."
+    action:
+      kind: manual-or-adapter
+      value: "Open sprite fixture."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-2
+    instruction: "Create animation clip."
+    action:
+      kind: manual-or-adapter
+      value: "Create animation clip."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-3
+    instruction: "Add frames/durations and loop."
+    action:
+      kind: manual-or-adapter
+      value: "Add frames/durations and loop."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-4
+    instruction: "Preview."
+    action:
+      kind: manual-or-adapter
+      value: "Preview."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-5
+    instruction: "Attach to entity and Play."
+    action:
+      kind: manual-or-adapter
+      value: "Attach to entity and Play."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+  - id: step-6
+    instruction: "Save/reload."
+    action:
+      kind: manual-or-adapter
+      value: "Save/reload."
+    expect:
+      checkpoint: "No unexpected critical error; validate relevant final assertions."
+final:
+  semantic:
+    - "clip/timing/loop persist"
+  runtime:
+    - "animation advances"
+    - "no missing frame errors"
+evidence:
+  level: E3
+  capture:
+    - screenshot-on-failure
+    - changesets
+    - validation
+    - semantic-summary
