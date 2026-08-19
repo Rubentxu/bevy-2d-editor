@@ -4,6 +4,7 @@ import {
   listLogicGraphAssets,
 } from "../services/logic-graphs";
 import { waitForEditorReady } from "../utils/waitForEditorReady";
+import { callBridge, callBridgeSync } from "../services/bridge-call";
 
 /**
  * LogicGraph node representation for React Flow.
@@ -145,7 +146,7 @@ export function useLogicGraph() {
   const refreshLogState = useCallback(async () => {
     try {
       await waitForEngineReady();
-      const stateJson = await (window as any).get_logic_log_state();
+      const stateJson = (await callBridge("get_logic_log_state")) as string;
       setLogState(JSON.parse(stateJson));
     } catch (e) {
       console.error("useLogicGraph: refreshLogState failed:", e);
@@ -158,7 +159,7 @@ export function useLogicGraph() {
   const refreshGraph = useCallback(async () => {
     try {
       await waitForEngineReady();
-      const graphJson = await (window as any).get_logic_graph();
+      const graphJson = (await callBridge("get_logic_graph")) as string;
       setGraph(JSON.parse(graphJson));
     } catch (e) {
       console.error("useLogicGraph: refreshGraph failed:", e);
@@ -171,7 +172,7 @@ export function useLogicGraph() {
   const refreshDescriptors = useCallback(async () => {
     try {
       await waitForEngineReady();
-      const descJson = await (window as any).get_node_descriptors();
+      const descJson = (await callBridge("get_node_descriptors")) as string;
       setDescriptors(JSON.parse(descJson));
     } catch (e) {
       console.error("useLogicGraph: refreshDescriptors failed:", e);
@@ -214,7 +215,11 @@ export function useLogicGraph() {
   const create = useCallback(
     async (assetId: string, logicalPath: string) => {
       try {
-        await (window as any).create_logic_graph_asset(assetId, logicalPath);
+        await await callBridge(
+          "create_logic_graph_asset",
+          assetId,
+          logicalPath,
+        );
         await refresh();
         await refreshDescriptors();
       } catch (e) {
@@ -240,9 +245,10 @@ export function useLogicGraph() {
    */
   const dispatch = useCallback(
     async (command: object): Promise<string> => {
-      const result = await (window as any).dispatch_logic_command(
+      const result = (await callBridge(
+        "dispatch_logic_command",
         JSON.stringify(command),
-      );
+      )) as string;
       // Refresh graph and log state after dispatch
       await refresh();
       return result;
@@ -254,7 +260,7 @@ export function useLogicGraph() {
    * Undo the last logic command.
    */
   const undo = useCallback(async () => {
-    await (window as any).undo_logic();
+    await await callBridge("undo_logic");
     await refresh();
   }, [refresh]);
 
@@ -262,7 +268,7 @@ export function useLogicGraph() {
    * Redo the next logic command.
    */
   const redo = useCallback(async () => {
-    await (window as any).redo_logic();
+    await await callBridge("redo_logic");
     await refresh();
   }, [refresh]);
 

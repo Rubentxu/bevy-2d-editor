@@ -7,6 +7,7 @@
  */
 
 import type { LogicGraphAsset } from "../hooks/useLogicGraph";
+import { callBridge, bridgeReady } from "./bridge-call";
 
 /**
  * Logic graph catalog entry — lightweight metadata for the browser list.
@@ -20,14 +21,7 @@ export interface LogicGraphCatalogEntry {
 }
 
 async function waitForEngine(): Promise<void> {
-  let attempts = 0;
-  while (
-    typeof (window as any).list_logic_graph_assets !== "function" &&
-    attempts < 50
-  ) {
-    await new Promise((r) => setTimeout(r, 100));
-    attempts++;
-  }
+  await bridgeReady();
 }
 
 /**
@@ -38,7 +32,9 @@ export async function listLogicGraphAssets(): Promise<
   LogicGraphCatalogEntry[]
 > {
   await waitForEngine();
-  const result = (window as any).list_logic_graph_assets();
+  const result = await callBridge<LogicGraphCatalogEntry[]>(
+    "list_logic_graph_assets",
+  );
   return typeof result === "string" ? JSON.parse(result) : result;
 }
 
@@ -49,7 +45,7 @@ export async function listLogicGraphAssets(): Promise<
  */
 export async function openLogicGraphAsset(assetId: string): Promise<string> {
   await waitForEngine();
-  return (window as any).open_logic_graph_asset(assetId);
+  return await callBridge<string>("open_logic_graph_asset", assetId);
 }
 
 /**
@@ -59,7 +55,7 @@ export async function openLogicGraphAsset(assetId: string): Promise<string> {
 export async function getActiveLogicGraph(): Promise<LogicGraphAsset | null> {
   await waitForEngine();
   try {
-    const result = (window as any).get_logic_graph();
+    const result = await callBridge<string>("get_logic_graph");
     return result ? JSON.parse(result) : null;
   } catch {
     return null;

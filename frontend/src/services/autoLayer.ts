@@ -1,3 +1,4 @@
+import { callBridge, bridgeReady } from "./bridge-call";
 /**
  * Thin wrappers around window.auto_layer_* WASM bindings (auto-layer-generation PR2).
  * All functions wait for the engine to be ready before invoking.
@@ -60,15 +61,7 @@ export interface TileRefPayload {
 // ── Engine-ready guard ───────────────────────────────────────────────────────
 
 async function waitForEngine(): Promise<void> {
-  let attempts = 0;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  while (
-    typeof (window as any).is_auto_layer_stale_wasm !== "function" &&
-    attempts < 50
-  ) {
-    await new Promise((r) => setTimeout(r, 100));
-    attempts++;
-  }
+  await bridgeReady();
 }
 
 // ── AutoLayer WASM wrappers ───────────────────────────────────────────────────
@@ -89,7 +82,7 @@ export async function isAutoLayerStale(
 ): Promise<boolean> {
   await waitForEngine();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (window as any).is_auto_layer_stale_wasm(assetRef, layerId);
+  return await callBridge("is_auto_layer_stale_wasm", assetRef, layerId);
 }
 
 /**
@@ -108,7 +101,7 @@ export async function regenerateAutoLayer(
 ): Promise<string> {
   await waitForEngine();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (window as any).regenerate_auto_layer_wasm(assetRef, layerId);
+  return await callBridge("regenerate_auto_layer_wasm", assetRef, layerId);
 }
 
 /**
@@ -126,7 +119,8 @@ export async function addAutoRule(
 ): Promise<string> {
   await waitForEngine();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (window as any).add_auto_rule_wasm(
+  return await callBridge(
+    "add_auto_rule_wasm",
     assetRef,
     layerId,
     JSON.stringify(rule),
@@ -151,7 +145,8 @@ export async function updateAutoRule(
 ): Promise<string> {
   await waitForEngine();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (window as any).update_auto_rule_wasm(
+  return await callBridge(
+    "update_auto_rule_wasm",
     assetRef,
     layerId,
     ruleIndex,
@@ -175,5 +170,10 @@ export async function removeAutoRule(
 ): Promise<string> {
   await waitForEngine();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (window as any).remove_auto_rule_wasm(assetRef, layerId, ruleIndex);
+  return await callBridge(
+    "remove_auto_rule_wasm",
+    assetRef,
+    layerId,
+    ruleIndex,
+  );
 }

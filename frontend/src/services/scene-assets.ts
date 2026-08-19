@@ -1,3 +1,9 @@
+import { callBridge, bridgeReady } from "./bridge-call";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const raw = async (
+  name: keyof import("./EditorGateway").WindowWithBridge,
+  ...args: unknown[]
+): Promise<any> => callBridge(name, ...args);
 /**
  * Thin wrappers around window.scene_asset_* WASM bindings.
  * All functions wait for the engine to be ready before invoking.
@@ -182,14 +188,7 @@ export interface PreviewProvenance {
 }
 
 async function waitForEngine(): Promise<void> {
-  let attempts = 0;
-  while (
-    typeof (window as any).create_scene_asset !== "function" &&
-    attempts < 50
-  ) {
-    await new Promise((r) => setTimeout(r, 100));
-    attempts++;
-  }
+  await bridgeReady();
 }
 
 /**
@@ -203,7 +202,7 @@ export async function createSceneAsset(
   role: string,
 ): Promise<string> {
   await waitForEngine();
-  return (window as any).create_scene_asset(name, role);
+  return await raw("create_scene_asset", name, role);
 }
 
 /**
@@ -217,7 +216,7 @@ export async function renameSceneAsset(
   newPath: string,
 ): Promise<string> {
   await waitForEngine();
-  return (window as any).rename_scene_asset(assetId, newPath);
+  return await raw("rename_scene_asset", assetId, newPath);
 }
 
 /**
@@ -229,7 +228,7 @@ export async function renameSceneAsset(
  */
 export async function duplicateSceneAsset(assetId: string): Promise<string> {
   await waitForEngine();
-  return (window as any).duplicate_scene_asset(assetId);
+  return await raw("duplicate_scene_asset", assetId);
 }
 
 /**
@@ -238,7 +237,7 @@ export async function duplicateSceneAsset(assetId: string): Promise<string> {
  */
 export async function deleteSceneAsset(assetId: string): Promise<void> {
   await waitForEngine();
-  return (window as any).delete_scene_asset(assetId);
+  return await raw("delete_scene_asset", assetId);
 }
 
 /**
@@ -251,7 +250,7 @@ export async function listSceneAssets(
   roleFilter?: string,
 ): Promise<SceneAssetCatalogEntry[]> {
   await waitForEngine();
-  const result = (window as any).list_scene_assets(roleFilter ?? null);
+  const result = await raw("list_scene_assets", roleFilter ?? null);
   return typeof result === "string" ? JSON.parse(result) : result;
 }
 
@@ -262,18 +261,15 @@ export async function listSceneAssets(
  */
 export async function openSceneAsset(assetId: string): Promise<string> {
   await waitForEngine();
-  return (window as any).open_scene_asset(assetId);
+  return await raw("open_scene_asset", assetId);
 }
 
 /**
  * Close the currently open Scene Asset (drops SCENE_ASSET_DOC, resets log).
  * No file write occurs.
  */
-export function closeSceneAsset(): void {
-  if (typeof (window as any).close_scene_asset !== "function") {
-    throw new Error("close_scene_asset not available");
-  }
-  (window as any).close_scene_asset();
+export async function closeSceneAsset(): Promise<void> {
+  await raw("close_scene_asset");
 }
 
 /**
@@ -283,7 +279,7 @@ export function closeSceneAsset(): void {
  */
 export async function getAssetDocumentJson(): Promise<string> {
   await waitForEngine();
-  return (window as any).get_asset_document_json();
+  return await raw("get_asset_document_json");
 }
 
 /**
@@ -294,7 +290,7 @@ export async function getSceneAssetCatalogJson(): Promise<
   SceneAssetCatalogEntry[]
 > {
   await waitForEngine();
-  const result = (window as any).get_scene_asset_catalog_json();
+  const result = await raw("get_scene_asset_catalog_json");
   return typeof result === "string" ? JSON.parse(result) : result;
 }
 
@@ -305,7 +301,7 @@ export async function getSceneAssetCatalogJson(): Promise<
  */
 export async function dispatchAssetCommand(cmdJson: string): Promise<string> {
   await waitForEngine();
-  return (window as any).dispatch_asset_command(cmdJson);
+  return await raw("dispatch_asset_command", cmdJson);
 }
 
 /**
@@ -314,7 +310,7 @@ export async function dispatchAssetCommand(cmdJson: string): Promise<string> {
  */
 export async function undoAsset(): Promise<string> {
   await waitForEngine();
-  return (window as any).undo_asset();
+  return await raw("undo_asset");
 }
 
 /**
@@ -323,7 +319,7 @@ export async function undoAsset(): Promise<string> {
  */
 export async function redoAsset(): Promise<string> {
   await waitForEngine();
-  return (window as any).redo_asset();
+  return await raw("redo_asset");
 }
 
 /**
@@ -332,7 +328,7 @@ export async function redoAsset(): Promise<string> {
  */
 export async function getAssetLogState(): Promise<AssetLogState> {
   await waitForEngine();
-  const result = (window as any).get_asset_log_state();
+  const result = await raw("get_asset_log_state");
   return typeof result === "string" ? JSON.parse(result) : result;
 }
 
@@ -342,7 +338,7 @@ export async function getAssetLogState(): Promise<AssetLogState> {
  */
 export async function saveSceneAsset(): Promise<string> {
   await waitForEngine();
-  return (window as any).save_scene_asset();
+  return await raw("save_scene_asset");
 }
 
 // ── Scene Instance Types (PR3) ────────────────────────────────────────────────
@@ -420,7 +416,8 @@ export async function placeSceneInstance(
   translationJson?: { x: number; y: number },
 ): Promise<SceneInstanceCommandResult> {
   await waitForEngine();
-  const result = (window as any).place_scene_instance(
+  const result = await raw(
+    "place_scene_instance",
     assetId,
     translationJson ? JSON.stringify(translationJson) : null,
   );
@@ -437,7 +434,7 @@ export async function removeSceneInstance(
   instanceId: string,
 ): Promise<SceneInstanceCommandResult> {
   await waitForEngine();
-  const result = (window as any).remove_scene_instance(instanceId);
+  const result = await raw("remove_scene_instance", instanceId);
   return typeof result === "string" ? JSON.parse(result) : result;
 }
 
@@ -453,7 +450,8 @@ export async function replaceSceneInstanceAsset(
   newAssetId: string,
 ): Promise<SceneInstanceCommandResult> {
   await waitForEngine();
-  const result = (window as any).replace_scene_instance_asset(
+  const result = await raw(
+    "replace_scene_instance_asset",
     instanceId,
     newAssetId,
   );
@@ -469,7 +467,7 @@ export async function getSceneInstances(): Promise<
   Record<string, SceneInstance>
 > {
   await waitForEngine();
-  const result = (window as any).get_scene_instances();
+  const result = await raw("get_scene_instances");
   return typeof result === "string" ? JSON.parse(result) : result;
 }
 
@@ -481,7 +479,7 @@ export async function getInstanceComponents(
   instanceId: string,
 ): Promise<ComponentInstance[] | null> {
   await waitForEngine();
-  const result = (window as any).get_instance_components_wasm(instanceId);
+  const result = await raw("get_instance_components_wasm", instanceId);
   if (result === null || result === undefined) return null;
   return typeof result === "string" ? JSON.parse(result) : result;
 }
@@ -546,7 +544,8 @@ export async function validateOverrides(
   asset: SceneAssetDocument,
 ): Promise<OverrideIssue[]> {
   await waitForEngine();
-  const result = (window as any).validate_overrides_wasm(
+  const result = await raw(
+    "validate_overrides_wasm",
     JSON.stringify(instance),
     JSON.stringify(asset),
   );
@@ -562,7 +561,8 @@ export async function effectiveValues(
   asset: SceneAssetDocument,
 ): Promise<ResolvedScene> {
   await waitForEngine();
-  const result = (window as any).effective_values_wasm(
+  const result = await raw(
+    "effective_values_wasm",
     JSON.stringify(instance),
     JSON.stringify(asset),
   );
@@ -578,7 +578,8 @@ export async function tryRebind(
   asset: SceneAssetDocument,
 ): Promise<string | null> {
   await waitForEngine();
-  const result = (window as any).try_rebind_wasm(
+  const result = await raw(
+    "try_rebind_wasm",
     JSON.stringify(orphanedPatch),
     JSON.stringify(asset),
   );
@@ -594,7 +595,7 @@ export async function getResyncReports(): Promise<
   Array<[string, ResyncReport]>
 > {
   await waitForEngine();
-  const result = (window as any).get_resync_reports();
+  const result = await raw("get_resync_reports");
   return typeof result === "string" ? JSON.parse(result) : result;
 }
 
@@ -607,7 +608,8 @@ export async function overrideFieldStatus(
   instance: SceneInstance,
 ): Promise<FieldOverrideEntry[]> {
   await waitForEngine();
-  const result = (window as any).override_field_status_wasm(
+  const result = await raw(
+    "override_field_status_wasm",
     JSON.stringify(instance),
   );
   return typeof result === "string" ? JSON.parse(result) : result;
@@ -627,7 +629,8 @@ export async function upsertOverride(
   value: unknown,
 ): Promise<string> {
   await waitForEngine();
-  const result = (window as any).upsert_override_wasm(
+  const result = await raw(
+    "upsert_override_wasm",
     instanceId,
     localId,
     typeId,
@@ -650,7 +653,8 @@ export async function revertOverride(
   fieldPath: string[],
 ): Promise<string> {
   await waitForEngine();
-  const result = (window as any).revert_override_wasm(
+  const result = await raw(
+    "revert_override_wasm",
     instanceId,
     localId,
     typeId,
@@ -669,7 +673,7 @@ export async function listSceneInstanceLayers(
   assetJson: string,
 ): Promise<SceneInstanceLayerSummary[]> {
   await waitForEngine();
-  const result = (window as any).list_scene_instance_layers_wasm(assetJson);
+  const result = await raw("list_scene_instance_layers_wasm", assetJson);
   return typeof result === "string" ? JSON.parse(result) : result;
 }
 
@@ -684,7 +688,8 @@ export async function createSceneInstanceLayer(
   kind: SceneInstanceLayerKind,
 ): Promise<string> {
   await waitForEngine();
-  const result = (window as any).create_scene_instance_layer_wasm(
+  const result = await raw(
+    "create_scene_instance_layer_wasm",
     assetJson,
     name,
     kind,
@@ -703,7 +708,8 @@ export async function deleteSceneInstanceLayer(
   layerId: string,
 ): Promise<string> {
   await waitForEngine();
-  const result = (window as any).delete_scene_instance_layer_wasm(
+  const result = await raw(
+    "delete_scene_instance_layer_wasm",
     assetJson,
     layerId,
   );
@@ -720,7 +726,7 @@ export async function deleteSceneInstanceLayer(
  */
 export async function setAssetDocumentJson(assetJson: string): Promise<void> {
   await waitForEngine();
-  (window as any).set_asset_document_wasm(assetJson);
+  await raw("set_asset_document_wasm", assetJson);
 }
 
 // ── Runtime Preview Inspector wrappers (runtime-preview-inspector) ────────
@@ -730,7 +736,7 @@ export async function setAssetDocumentJson(assetJson: string): Promise<void> {
  */
 export async function getPreviewMetrics(): Promise<PreviewMetrics> {
   await waitForEngine();
-  const result = (window as any).get_preview_metrics_wasm();
+  const result = await raw("get_preview_metrics_wasm");
   return typeof result === "string" ? JSON.parse(result) : result;
 }
 
@@ -739,7 +745,7 @@ export async function getPreviewMetrics(): Promise<PreviewMetrics> {
  */
 export async function getPreviewMapping(): Promise<PreviewMappingEntry[]> {
   await waitForEngine();
-  const result = (window as any).get_preview_mapping_wasm();
+  const result = await raw("get_preview_mapping_wasm");
   return typeof result === "string" ? JSON.parse(result) : result;
 }
 
@@ -751,7 +757,7 @@ export async function getPreviewProvenance(
   stableId: string,
 ): Promise<PreviewProvenance | null> {
   await waitForEngine();
-  const result = (window as any).get_preview_provenance_wasm(stableId);
+  const result = await raw("get_preview_provenance_wasm", stableId);
   if (result === null || result === undefined) return null;
   return typeof result === "string" ? JSON.parse(result) : result;
 }
@@ -769,7 +775,7 @@ export async function getPreviewProvenance(
  */
 export async function exportAssetToBsn(assetId: string): Promise<string> {
   await waitForEngine();
-  const result = await (window as any).export_asset_to_bsn_wasm(assetId);
+  const result = await await raw("export_asset_to_bsn_wasm", assetId);
   if (typeof result === "string") return result;
   // Safety: coerce any error value to string.
   return String(result);

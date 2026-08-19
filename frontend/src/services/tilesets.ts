@@ -1,3 +1,4 @@
+import { callBridge, bridgeReady } from "./bridge-call";
 /**
  * Thin wrappers around window.paint_tile / window.erase_tile WASM bindings
  * and tileset CRUD operations.
@@ -16,11 +17,7 @@ export interface TilesetMetadata {
 }
 
 async function waitForEngine(): Promise<void> {
-  let attempts = 0;
-  while (typeof (window as any).paint_tile !== "function" && attempts < 50) {
-    await new Promise((r) => setTimeout(r, 100));
-    attempts++;
-  }
+  await bridgeReady();
 }
 
 /**
@@ -29,7 +26,7 @@ async function waitForEngine(): Promise<void> {
  */
 export async function listTilesets(): Promise<TilesetMetadata[]> {
   await waitForEngine();
-  const result = (window as any).list_tilesets();
+  const result = await callBridge<TilesetMetadata[]>("list_tilesets");
   return typeof result === "string" ? JSON.parse(result) : result;
 }
 
@@ -39,7 +36,7 @@ export async function listTilesets(): Promise<TilesetMetadata[]> {
  */
 export async function loadTileset(id: string): Promise<any> {
   await waitForEngine();
-  const result = (window as any).load_tileset(id);
+  const result = await callBridge("load_tileset", id);
   return typeof result === "string" ? JSON.parse(result) : result;
 }
 
@@ -50,7 +47,7 @@ export async function loadTileset(id: string): Promise<any> {
  */
 export async function saveTileset(tileset: any): Promise<string> {
   await waitForEngine();
-  const result = (window as any).save_tileset(JSON.stringify(tileset));
+  const result = await callBridge("save_tileset", JSON.stringify(tileset));
   return typeof result === "string" ? result : String(result);
 }
 
@@ -59,7 +56,7 @@ export async function saveTileset(tileset: any): Promise<string> {
  */
 export async function deleteTileset(id: string): Promise<void> {
   await waitForEngine();
-  return (window as any).delete_tileset(id);
+  return await callBridge("delete_tileset", id);
 }
 
 /**
@@ -108,7 +105,8 @@ export async function paintTile(
   localIndex: number,
 ): Promise<void> {
   await waitForEngine();
-  await (window as any).paint_tile(
+  await await callBridge(
+    "paint_tile",
     assetRef,
     layerId,
     x,
@@ -133,5 +131,5 @@ export async function eraseTile(
   y: number,
 ): Promise<void> {
   await waitForEngine();
-  await (window as any).erase_tile(assetRef, layerId, x, y);
+  await await callBridge("erase_tile", assetRef, layerId, x, y);
 }

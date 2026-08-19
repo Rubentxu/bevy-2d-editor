@@ -1,3 +1,4 @@
+import { callBridge, bridgeReady } from "./bridge-call";
 /**
  * BSN file import service.
  * Wraps the `import_bsn_asset_wasm` WASM binding for importing
@@ -16,7 +17,7 @@ export async function importBsnAsset(
   name: string,
   bsnText: string,
 ): Promise<string> {
-  const result = await (window as any).import_bsn_asset_wasm(name, bsnText);
+  const result = await await callBridge("import_bsn_asset_wasm", name, bsnText);
   if (typeof result !== "string") {
     throw new Error("Unexpected WASM return type for import_bsn_asset_wasm");
   }
@@ -65,7 +66,7 @@ export function importBsnAssetFromFile(
 export async function importBsnTextToDocument(
   bsnText: string,
 ): Promise<string> {
-  const result = (window as any).import_bsn_text_to_asset_wasm(bsnText);
+  const result = await callBridge("import_bsn_text_to_asset_wasm", bsnText);
   if (typeof result !== "string") {
     throw new Error(
       "Unexpected WASM return type for import_bsn_text_to_asset_wasm",

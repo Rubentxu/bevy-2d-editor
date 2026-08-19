@@ -1,20 +1,11 @@
+import { callBridge, bridgeReady } from "./bridge-call";
 // ─────────────────────────────────────────────────────────────────────────────
 // Validation Center — unified project-wide issue surfacing
 // Phase B: compose all issue classes per spec §3 `validation-center`
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function waitForEngine(): Promise<void> {
-  let attempts = 0;
-  while (
-    typeof (window as any).get_validation_issues_wasm !== "function" &&
-    attempts < 50
-  ) {
-    await new Promise((r) => setTimeout(r, 100));
-    attempts++;
-  }
-  if (attempts >= 50) {
-    throw new Error("WASM engine not ready");
-  }
+  await bridgeReady();
 }
 
 /**
@@ -97,11 +88,7 @@ async function getWasmIssues(): Promise<ValidationIssue[]> {
   } catch {
     return [];
   }
-  const fn = (window as any).get_validation_issues_wasm;
-  if (typeof fn !== "function") {
-    return [];
-  }
-  const raw = fn();
+  const raw = await callBridge("get_validation_issues_wasm");
   const parsed: WasmValidationIssue[] =
     typeof raw === "string" ? JSON.parse(raw) : raw;
   return parsed.map((iss) => ({
@@ -131,9 +118,7 @@ async function getOverrideResyncIssues(): Promise<ValidationIssue[]> {
   } catch {
     return [];
   }
-  const raw = (window as any).get_resync_reports;
-  if (typeof raw !== "function") return [];
-  const result = raw();
+  const result = await callBridge("get_resync_reports");
   const reports: Array<[string, ResyncReport]> =
     typeof result === "string" ? JSON.parse(result) : result;
   const issues: ValidationIssue[] = [];
@@ -198,9 +183,7 @@ async function listScenesExtended(): Promise<SceneInfo[]> {
   } catch {
     return [];
   }
-  const fn = (window as any).list_scenes_extended;
-  if (typeof fn !== "function") return [];
-  const result = fn();
+  const result = await callBridge<SceneInfo[]>("list_scenes_extended");
   return typeof result === "string" ? JSON.parse(result) : result;
 }
 

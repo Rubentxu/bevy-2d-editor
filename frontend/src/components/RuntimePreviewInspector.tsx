@@ -10,6 +10,7 @@ import {
 import { useHotReloadStatus } from "../hooks/useHotReloadStatus";
 import type { HotReloadEvent } from "../services/hot-reload";
 import { useLogicActivation } from "../hooks/useLogicActivation";
+import { callBridge, callBridgeSync } from "../services/bridge-call";
 
 interface Props {
   /** Optional callback to jump back to the source scene/asset for a given stable ID. */

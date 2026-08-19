@@ -6,6 +6,7 @@ import {
 import SearchResultRow from "./SearchResultRow";
 import type { NavigationTarget } from "../types/navigation";
 import { sceneSwitch } from "../services/scenes";
+import { callBridge, callBridgeSync } from "../services/bridge-call";
 
 const DEBOUNCE_MS = 150;
 

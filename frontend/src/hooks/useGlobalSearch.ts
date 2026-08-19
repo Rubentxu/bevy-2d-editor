@@ -3,6 +3,7 @@ import { useScenes } from "./useScenes";
 import { useSceneAssets } from "./useSceneAssets";
 import { useCodeFiles } from "./useCodeFiles";
 import { useAssetFiles } from "./useAssetFiles";
+import { callBridge, callBridgeSync } from "../services/bridge-call";
 
 export type GlobalSearchResultType =
   | "scene"
@@ -218,10 +219,8 @@ async function searchEntitiesInScene(
   out: GlobalSearchResult[],
 ): Promise<void> {
   if (typeof window === "undefined") return;
-  const fn = (window as any).list_scene_entities;
-  if (typeof fn !== "function") return;
   try {
-    const raw = fn(sceneId);
+    const raw = callBridgeSync("list_scene_entities", sceneId);
     const entities: SceneEntity[] =
       typeof raw === "string" ? JSON.parse(raw) : raw;
     for (const entity of entities) {
@@ -250,10 +249,8 @@ interface LogicGraphCatalogEntry {
 
 async function searchLogicGraphs(query: string): Promise<GlobalSearchResult[]> {
   if (typeof window === "undefined") return [];
-  const fn = (window as any).list_logic_graph_assets;
-  if (typeof fn !== "function") return [];
   try {
-    const raw = fn();
+    const raw = callBridgeSync("list_logic_graph_assets");
     const graphs: LogicGraphCatalogEntry[] =
       typeof raw === "string" ? JSON.parse(raw) : raw;
     return graphs
@@ -278,10 +275,8 @@ interface SchemaEntry {
 
 function searchSchemas(query: string): GlobalSearchResult[] {
   if (typeof window === "undefined") return [];
-  const fn = (window as any).list_schemas;
-  if (typeof fn !== "function") return [];
   try {
-    const raw = fn();
+    const raw = callBridgeSync("list_schemas");
     const schemas: SchemaEntry[] =
       typeof raw === "string" ? JSON.parse(raw) : raw;
     return schemas
@@ -312,10 +307,8 @@ interface ValidationIssueEntry {
 
 function searchValidationIssues(query: string): GlobalSearchResult[] {
   if (typeof window === "undefined") return [];
-  const fn = (window as any).get_validation_issues_wasm;
-  if (typeof fn !== "function") return [];
   try {
-    const raw = fn();
+    const raw = callBridgeSync("get_validation_issues_wasm");
     const issues: ValidationIssueEntry[] =
       typeof raw === "string" ? JSON.parse(raw) : raw;
     const q = query.toLowerCase();

@@ -251,6 +251,12 @@ export interface EditorGateway {
   getChangeSetSummaries(): Promise<ReadResult<ChangeSetSummary[]>>;
   /** World Workspace (ADR-0037). */
   world: WorldApi;
+  /**
+   * Typed bridge access for service adapters. Services keep their public
+   * signatures but route every WASM call through the gateway's bridge so
+   * `window.*` is never touched outside engine-bridge/EditorGateway.
+   */
+  bridge: WindowWithBridge | null;
 }
 
 /**
@@ -258,7 +264,7 @@ export interface EditorGateway {
  * `engine-bridge.initEngine()`. Generated from the wasm .d.ts signatures.
  * No payload-shape fields (dimensions, entrance, error, ...) live here.
  */
-interface WindowWithBridge {
+export interface WindowWithBridge {
   // ── Scene Document + commands ────────────────────────────────────────────
   load_scene_json?: (json: string) => Promise<string> | string;
   dispatch_command?: (json: string) => Promise<string> | string;
@@ -286,11 +292,16 @@ interface WindowWithBridge {
   create_scene_asset?: (name: string, role: string) => Promise<string> | string;
   delete_scene_asset?: (assetId: string) => Promise<string> | string;
   duplicate_scene_asset?: (assetId: string) => Promise<string> | string;
-  rename_scene_asset?: (assetId: string, newPath: string) => Promise<string> | string;
+  rename_scene_asset?: (
+    assetId: string,
+    newPath: string,
+  ) => Promise<string> | string;
   open_scene_asset?: (assetId: string) => Promise<string> | string;
   close_scene_asset?: () => Promise<string> | string;
   save_scene_asset?: () => Promise<string> | string;
-  list_scene_instance_layers_wasm?: (assetJson: string) => Promise<string> | string;
+  list_scene_instance_layers_wasm?: (
+    assetJson: string,
+  ) => Promise<string> | string;
   create_scene_instance_layer_wasm?: (
     assetJson: string,
     name: string,
@@ -310,7 +321,9 @@ interface WindowWithBridge {
     newAssetId: string,
   ) => Promise<string> | string;
   get_scene_instances?: () => Promise<string> | string;
-  get_instance_components_wasm?: (instanceId: string) => Promise<string> | string;
+  get_instance_components_wasm?: (
+    instanceId: string,
+  ) => Promise<string> | string;
   validate_overrides_wasm?: (
     instanceJson: string,
     assetJson: string,
@@ -324,7 +337,9 @@ interface WindowWithBridge {
     assetJson: string,
   ) => Promise<string> | string;
   get_resync_reports?: () => Promise<string> | string;
-  override_field_status_wasm?: (instanceJson: string) => Promise<string> | string;
+  override_field_status_wasm?: (
+    instanceJson: string,
+  ) => Promise<string> | string;
   upsert_override_wasm?: (
     instanceId: string,
     localId: string,
@@ -381,6 +396,31 @@ interface WindowWithBridge {
     layerId: string,
     x: number,
     y: number,
+  ) => Promise<string> | string;
+  list_scene_entities?: (sceneId: string) => Promise<string> | string;
+  add_auto_rule_wasm?: (
+    assetRef: string,
+    layerId: string,
+    ruleJson: string,
+  ) => Promise<string> | string;
+  update_auto_rule_wasm?: (
+    assetRef: string,
+    layerId: string,
+    ruleIndex: number,
+    ruleJson: string,
+  ) => Promise<string> | string;
+  remove_auto_rule_wasm?: (
+    assetRef: string,
+    layerId: string,
+    ruleIndex: number,
+  ) => Promise<string> | string;
+  regenerate_auto_layer_wasm?: (
+    assetRef: string,
+    layerId: string,
+  ) => Promise<string> | string;
+  is_auto_layer_stale_wasm?: (
+    assetRef: string,
+    layerId: string,
   ) => Promise<string> | string;
   // ── Logic graphs ─────────────────────────────────────────────────────────
   create_logic_graph_asset?: (
@@ -556,9 +596,7 @@ export function __resetEditorGatewayForTests(): void {
  * `createEditorGateway` returns a fresh instance each call; the singleton
  * accessor `getEditorGateway()` caches one instance for the app.
  */
-export function createEditorGateway(
-  bridge?: WindowWithBridge,
-): EditorGateway {
+export function createEditorGateway(bridge?: WindowWithBridge): EditorGateway {
   const resolvedBridge = bridge ?? readBridge();
 
   const ensureReady = (): Promise<void> => {
@@ -915,5 +953,6 @@ export function createEditorGateway(
         }
       },
     },
+    bridge: bridgeRef(),
   };
 }

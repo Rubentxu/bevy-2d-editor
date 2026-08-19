@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getLogState } from "../engine-bridge";
+import { callBridge, callBridgeSync } from "../services/bridge-call";
 
 export interface LogState {
   size: number;
@@ -27,10 +28,7 @@ export function useLogState(): LogState {
       try {
         // Wait for engine to be ready
         let attempts = 0;
-        while (
-          typeof (window as any).get_log_state !== "function" &&
-          attempts < 50
-        ) {
+        while (attempts < 50) {
           await new Promise((r) => setTimeout(r, 100));
           attempts += 1;
         }

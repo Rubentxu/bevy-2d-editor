@@ -13,6 +13,7 @@
 
 import type { OpfsResult } from "../types/opfs";
 import { emit, inFlightSaveCounter } from "./hot-reload";
+import { callBridge, bridgeReady } from "./bridge-call";
 
 export interface SourceFile {
   id: string;
@@ -30,20 +31,7 @@ export interface SourceLocation {
 }
 
 async function waitForEngine(): Promise<void> {
-  // Wait for both the WASM-side `list_source_files` shim AND the OPFS bridge
-  // it depends on internally. The bridge-side OPFS bindings land slightly
-  // after the WASM shims in initEngine()'s sequence — calling the shim
-  // before that raises a pageerror. (Phase B: AssetNavigator mounted
-  // permanently, so this race is now reachable on initial page load.)
-  let attempts = 0;
-  while (attempts < 50) {
-    const ready =
-      typeof (window as any).list_source_files === "function" &&
-      typeof (window as any).opfs_list_files === "function";
-    if (ready) return;
-    await new Promise((r) => setTimeout(r, 100));
-    attempts++;
-  }
+  await bridgeReady();
 }
 
 /**
@@ -65,7 +53,7 @@ function parseOpfs<T>(raw: unknown): OpfsResult<T> {
  */
 export async function listSourceFiles(): Promise<SourceFile[]> {
   await waitForEngine();
-  const parsed = parseOpfs<SourceFile[]>((window as any).list_source_files());
+  const parsed = parseOpfs<SourceFile[]>(await callBridge("list_source_files"));
   if (!parsed.ok) throw new Error(parsed.error);
   return parsed.value!;
 }
@@ -79,7 +67,7 @@ export async function readSourceFile(
   id: string,
 ): Promise<{ ok: true; value: string } | { ok: false; error: string }> {
   await waitForEngine();
-  const parsed = parseOpfs<string>((window as any).read_source_file(id));
+  const parsed = parseOpfs<string>(await callBridge("read_source_file", id));
   if (parsed.ok) return { ok: true, value: parsed.value! };
   return { ok: false, error: parsed.error! };
 }
@@ -99,7 +87,7 @@ export async function writeSourceFile(
   inFlightSaveCounter.incr();
   try {
     const parsed = parseOpfs<null>(
-      (window as any).write_source_file(id, content),
+      await callBridge("write_source_file", id, content),
     );
     if (parsed.ok) {
       emit({ type: "hot-reload-source", fileId: id });
@@ -123,7 +111,7 @@ export async function createSourceFile(name: string): Promise<string> {
   // Derive path from name: "main.rs" -> "main", "src/lib.rs" -> "src/lib"
   const path = name.endsWith(".rs") ? name.slice(0, -3) : name;
   const parsed = parseOpfs<SourceFile>(
-    (window as any).create_source_file(path, name),
+    await callBridge("create_source_file", path, name),
   );
   if (!parsed.ok) throw new Error(parsed.error!);
   return parsed.value!.id;
@@ -136,7 +124,7 @@ export async function createSourceFile(name: string): Promise<string> {
  */
 export async function deleteSourceFile(id: string): Promise<void> {
   await waitForEngine();
-  const parsed = parseOpfs<null>((window as any).delete_source_file(id));
+  const parsed = parseOpfs<null>(await callBridge("delete_source_file", id));
   if (!parsed.ok) throw new Error(parsed.error!);
 }
 
@@ -148,6 +136,6 @@ export async function findSourceLocation(
   typeId: string,
 ): Promise<SourceLocation | null> {
   await waitForEngine();
-  const result: string = (window as any).find_source_location(typeId);
+  const result: string = await callBridge("find_source_location", typeId);
   return result === "null" ? null : JSON.parse(result);
 }

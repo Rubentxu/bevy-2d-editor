@@ -1,7 +1,9 @@
 /**
- * Thin wrappers around window.scene_* WASM bindings.
- * All functions wait for the engine to be ready before invoking.
+ * Thin wrappers around scene WASM bindings — routed through the typed
+ * EditorGateway (Wave D1). Public signatures unchanged.
  */
+
+import { getEditorGateway } from "./EditorGateway";
 
 interface SceneInfo {
   id: string;
@@ -16,33 +18,42 @@ interface SwitchResult {
   source_name: string | null;
 }
 
+function bridge() {
+  return getEditorGateway().bridge;
+}
+
 async function waitForEngine(): Promise<void> {
-  let attempts = 0;
-  while (typeof (window as any).scene_create !== "function" && attempts < 50) {
-    await new Promise((r) => setTimeout(r, 100));
-    attempts++;
-  }
+  await getEditorGateway().whenReady();
 }
 
 export async function sceneCreate(name: string): Promise<string> {
   await waitForEngine();
-  return (window as any).scene_create(name);
+  const b = bridge();
+  if (!b?.scene_create) throw new Error("scene_create export not available");
+  return b.scene_create(name);
 }
 
 export async function sceneSwitch(id: string): Promise<SwitchResult> {
   await waitForEngine();
-  const result = (window as any).scene_switch(id);
+  const b = bridge();
+  if (!b?.scene_switch) throw new Error("scene_switch export not available");
+  const result = await b.scene_switch(id);
   return typeof result === "string" ? JSON.parse(result) : result;
 }
 
 export async function sceneSwitchCommit(id: string): Promise<void> {
   await waitForEngine();
-  (window as any).scene_switch_commit(id);
+  const b = bridge();
+  if (!b?.scene_switch_commit)
+    throw new Error("scene_switch_commit export not available");
+  await b.scene_switch_commit(id);
 }
 
 export async function sceneDelete(id: string): Promise<void> {
   await waitForEngine();
-  (window as any).scene_delete(id);
+  const b = bridge();
+  if (!b?.scene_delete) throw new Error("scene_delete export not available");
+  await b.scene_delete(id);
 }
 
 export async function sceneRename(
@@ -50,16 +61,24 @@ export async function sceneRename(
   newName: string,
 ): Promise<string> {
   await waitForEngine();
-  return (window as any).scene_rename(id, newName);
+  const b = bridge();
+  if (!b?.scene_rename) throw new Error("scene_rename export not available");
+  return b.scene_rename(id, newName);
 }
 
 export async function listScenesExtended(): Promise<SceneInfo[]> {
   await waitForEngine();
-  const result = (window as any).list_scenes_extended();
+  const b = bridge();
+  if (!b?.list_scenes_extended)
+    throw new Error("list_scenes_extended export not available");
+  const result = await b.list_scenes_extended();
   return typeof result === "string" ? JSON.parse(result) : result;
 }
 
 export async function getCurrentSceneId(): Promise<string | null> {
   await waitForEngine();
-  return (window as any).get_current_scene_id();
+  const b = bridge();
+  if (!b?.get_current_scene_id)
+    throw new Error("get_current_scene_id export not available");
+  return (await b.get_current_scene_id()) ?? null;
 }

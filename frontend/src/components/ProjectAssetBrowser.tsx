@@ -13,6 +13,7 @@ import type { LogicGraphCatalogEntry } from "../services/logic-graphs";
 import ThumbnailCell from "./ThumbnailCell";
 import PromptDialog from "./PromptDialog";
 import ConfirmDialog from "./ConfirmDialog";
+import { bridge, callBridge, callBridgeSync } from "../services/bridge-call";
 
 interface Props {
   entries: SceneAssetCatalogEntry[];
@@ -82,7 +83,7 @@ export default function ProjectAssetBrowser({
   >({});
 
   const refreshBindings = useCallback(async () => {
-    if (typeof (window as any).list_scene_component_schemas !== "function") {
+    if (typeof bridge()?.["list_scene_component_schemas"] !== "function") {
       return;
     }
     try {

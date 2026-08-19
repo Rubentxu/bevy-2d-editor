@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { SceneDocument } from "../hooks/useSceneState";
 import { SceneInstance, parseInstanceChild } from "../services/scene-assets";
+import { callBridge, callBridgeSync } from "../services/bridge-call";
 
 interface Props {
   scene: SceneDocument | null;
@@ -210,7 +211,8 @@ export default function HierarchyPanel({
   const reparent = (entityId: string, newParent: string | null) => {
     const currentParent =
       scene!.entities.find((e) => e.id === entityId)?.parent ?? null;
-    (window as any).dispatch_command(
+    callBridgeSync(
+      "dispatch_command",
       JSON.stringify({
         command: {
           type: "ReparentEntity",

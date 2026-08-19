@@ -1,3 +1,4 @@
+import { callBridge, bridgeReady } from "./bridge-call";
 /**
  * Code-export service — wraps the `export_code` WASM binding.
  * Returns `{ source: string, warnings: ExportWarning[] }`.
@@ -15,6 +16,6 @@ export interface ExportResult {
 }
 
 export async function exportToRust(sceneJson: string): Promise<ExportResult> {
-  const result = await (window as any).export_code(sceneJson);
+  const result = await await callBridge("export_code", sceneJson);
   return result as ExportResult;
 }

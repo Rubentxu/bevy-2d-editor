@@ -13,6 +13,7 @@ import {
   type DraftValidationIssue,
 } from "../services/scene-components";
 import type { SceneAssetCatalogEntry } from "../services/scene-assets";
+import { bridge, callBridge, callBridgeSync } from "../services/bridge-call";
 
 export interface ComponentSchema {
   type_id: string;
@@ -144,15 +145,15 @@ export default function SchemaAuthoringPanel({
     // Check if we already have full field data
     if (initial.fields && initial.fields.length > 0) {
       setIsBuiltin(
-        typeof (window as any).is_builtin_type === "function"
-          ? (window as any).is_builtin_type(initial.type_id)
+        typeof bridge()?.["is_builtin_type"] === "function"
+          ? callBridgeSync("is_builtin_type", initial.type_id)
           : false,
       );
       return;
     }
 
     // We have type_id but no field data - load the full schema
-    if (typeof (window as any).load_schema !== "function") {
+    if (typeof bridge()?.["load_schema"] !== "function") {
       setErrors({ general: "load_schema not available" });
       return;
     }
@@ -160,7 +161,10 @@ export default function SchemaAuthoringPanel({
     let cancelled = false;
     (async () => {
       try {
-        const schemaJson = await (window as any).load_schema(initial.type_id);
+        const schemaJson = await await callBridge(
+          "load_schema",
+          initial.type_id,
+        );
         if (cancelled) return;
 
         const schema =
@@ -184,8 +188,8 @@ export default function SchemaAuthoringPanel({
         );
 
         setIsBuiltin(
-          typeof (window as any).is_builtin_type === "function"
-            ? (window as any).is_builtin_type(schema.type_id)
+          typeof bridge()?.["is_builtin_type"] === "function"
+            ? await callBridge("is_builtin_type", schema.type_id)
             : false,
         );
       } catch (e: any) {
@@ -472,17 +476,11 @@ export default function SchemaAuthoringPanel({
 
     try {
       // Register the schema in memory
-      const regResult = (window as any).register_schema(JSON.stringify(schema));
-      if (
-        regResult instanceof Promise ||
-        (regResult && typeof regResult.then === "function")
-      ) {
-        await regResult;
-      }
+      await callBridge("register_schema", JSON.stringify(schema));
 
       // Persist to OPFS (async in WASM — must await)
       try {
-        await (window as any).save_schema(typeId);
+        await await callBridge("save_schema", typeId);
       } catch (e: any) {
         setErrors({
           general: `Schema registered but save failed: ${e?.message ?? "Unknown error"}. Available for this session.`,
@@ -506,8 +504,8 @@ export default function SchemaAuthoringPanel({
     if (!confirmed) return;
 
     try {
-      await (window as any).unregister_schema(typeId);
-      await (window as any).delete_schema(typeId);
+      await await callBridge("unregister_schema", typeId);
+      await await callBridge("delete_schema", typeId);
       onSaved();
     } catch (e: any) {
       setErrors({ general: `Delete failed: ${e?.message ?? "Unknown error"}` });

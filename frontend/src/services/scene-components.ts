@@ -18,6 +18,7 @@
  */
 
 import type { ComponentSchema } from "../types/schema";
+import { bridge, callBridge, bridgeReady } from "./bridge-call";
 import {
   getSceneAssetCatalogJson,
   placeSceneInstance,
@@ -38,18 +39,7 @@ declare global {
 }
 
 async function waitForEngine(): Promise<void> {
-  if (typeof window === "undefined") return;
-  if (window.create_scene_component && window.list_scene_component_schemas)
-    return;
-  // Wait briefly for the WASM bridge to register the bindings.
-  for (let i = 0; i < 50; i++) {
-    if (window.create_scene_component && window.list_scene_component_schemas)
-      return;
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  throw new Error(
-    "SceneComponent WASM bindings not available (engine not initialized)",
-  );
+  await bridgeReady();
 }
 
 /**
@@ -251,7 +241,8 @@ export async function placeSceneComponentInstance(
     throw new Error("placeSceneComponentInstance: typeId is required");
   }
   await waitForEngine();
-  const loadSchema = (window as any).load_schema;
+  const b = bridge();
+  const loadSchema = b?.load_schema;
   if (typeof loadSchema !== "function") {
     throw new Error(
       "placeSceneComponentInstance: load_schema binding not available",

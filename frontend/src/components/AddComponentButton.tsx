@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import SchemaAuthoringPanel, { ComponentSchema } from "./SchemaAuthoringPanel";
+import { bridge, callBridge, callBridgeSync } from "../services/bridge-call";
 
 interface Props {
   entityId: string;
@@ -47,17 +48,17 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
 
   // Hito 4 Order 7: refresh both the schema list and the SceneComponent subset.
   const refreshSchemas = () => {
-    if (typeof (window as any).list_schemas === "function") {
+    if (typeof bridge()?.["list_schemas"] === "function") {
       try {
-        const s = (window as any).list_schemas();
+        const s = callBridgeSync<string[]>("list_schemas");
         setSchemas(s);
       } catch (e) {
         console.error("list_schemas failed:", e);
       }
     }
-    if (typeof (window as any).list_scene_component_schemas === "function") {
+    if (typeof bridge()?.["list_scene_component_schemas"] === "function") {
       try {
-        const json = (window as any).list_scene_component_schemas();
+        const json = callBridgeSync<string>("list_scene_component_schemas");
         const arr = JSON.parse(json) as Array<{ type_id: string }>;
         setSceneComponentSchemas(new Set(arr.map((sc) => sc.type_id)));
       } catch (e) {
@@ -71,25 +72,24 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
     const fetchSchemas = async () => {
       // Wait for engine to be ready
       let attempts = 0;
-      while (
-        typeof (window as any).list_schemas !== "function" &&
-        attempts < 50
-      ) {
+      while (attempts < 50) {
         await new Promise((r) => setTimeout(r, 100));
         attempts += 1;
       }
-      if (typeof (window as any).list_schemas === "function") {
+      if (typeof bridge()?.["list_schemas"] === "function") {
         try {
-          const s = await (window as any).list_schemas();
+          const s = (await callBridge("list_schemas")) as string[];
           setSchemas(s);
         } catch (e) {
           console.error("list_schemas failed:", e);
         }
       }
       // Hito 4 Order 7: also fetch SceneComponent subset
-      if (typeof (window as any).list_scene_component_schemas === "function") {
+      if (typeof bridge()?.["list_scene_component_schemas"] === "function") {
         try {
-          const json = await (window as any).list_scene_component_schemas();
+          const json = (await callBridge(
+            "list_scene_component_schemas",
+          )) as string;
           const arr = JSON.parse(json) as Array<{ type_id: string }>;
           setSceneComponentSchemas(new Set(arr.map((sc) => sc.type_id)));
         } catch (e) {
@@ -102,8 +102,8 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
 
   async function handleEditClick(e: React.MouseEvent, schemaId: string) {
     e.stopPropagation();
-    if (typeof (window as any).is_builtin_type === "function") {
-      if ((window as any).is_builtin_type(schemaId)) {
+    if (typeof bridge()?.["is_builtin_type"] === "function") {
+      if (await callBridge("is_builtin_type", schemaId)) {
         return; // Can't edit builtins
       }
     }
@@ -123,9 +123,9 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
     }
 
     // Load schema data from OPFS
-    if (typeof (window as any).load_schema === "function") {
+    if (typeof bridge()?.["load_schema"] === "function") {
       try {
-        const schemaJson = await (window as any).load_schema(schemaId);
+        const schemaJson = await await callBridge("load_schema", schemaId);
         if (schemaJson) {
           const schema =
             typeof schemaJson === "string"
@@ -237,8 +237,8 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
             )}
             {filteredSchemas.map((s, idx) => {
               const isBuiltin =
-                typeof (window as any).is_builtin_type === "function"
-                  ? (window as any).is_builtin_type(s)
+                typeof bridge()?.["is_builtin_type"] === "function"
+                  ? callBridgeSync<boolean>("is_builtin_type", s)
                   : false;
               const isFocused = idx === focusIdx;
               return (

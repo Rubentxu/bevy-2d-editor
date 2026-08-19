@@ -31,6 +31,8 @@ import { useSceneState } from "../hooks/useSceneState";
 import { useScenes } from "../hooks/useScenes";
 import StatusSegment from "./StatusBar/StatusSegment";
 import MenuSeparator from "./Menu/MenuSeparator";
+import { callBridge, callBridgeSync } from "../services/bridge-call";
+import { bridge } from "../services/bridge-call";
 
 interface PreviewMetrics {
   fps?: number;
@@ -90,7 +92,7 @@ export default function StatusBar(props: StatusBarProps = {}) {
   useEffect(() => {
     const update = () => {
       try {
-        const getter = (window as any).get_preview_metrics_wasm;
+        const getter = bridge()?.get_preview_metrics_wasm;
         if (typeof getter === "function") {
           setMetrics(parseMetrics(getter()));
         }

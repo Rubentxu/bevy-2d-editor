@@ -21,6 +21,7 @@ import type { SourceFileRef } from "../types/ai";
 import { listSourceFiles, readSourceFile } from "../services/code-files";
 import { subscribe } from "../services/hot-reload";
 import { waitForEditorReady } from "../utils/waitForEditorReady";
+import { callBridge, callBridgeSync } from "../services/bridge-call";
 
 /** A batch of proposed commands with associated metadata */
 export interface Proposal {
@@ -118,7 +119,7 @@ export function useAIAssistant({
 
         const [sceneSnapshot, schemasJson] = await Promise.all([
           getSceneSnapshot(),
-          (window as any).get_combined_schemas_json(),
+          await callBridge<string>("get_combined_schemas_json"),
         ]);
 
         const schemas = schemasJson ? JSON.parse(schemasJson) : [];

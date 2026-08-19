@@ -1,3 +1,4 @@
+import { callBridge, bridgeReady } from "./bridge-call";
 /**
  * AI-Assisted Editing Frontend Service.
  *

@@ -9,6 +9,7 @@
  */
 
 import type { OpfsResult } from "../types/opfs";
+import { callBridge, bridgeReady } from "./bridge-call";
 import { emit, inFlightSaveCounter } from "./hot-reload";
 
 export type AssetFileKind = "Texture" | "Audio" | "Font";
@@ -23,21 +24,7 @@ export interface AssetFile {
 }
 
 async function waitForEngine(): Promise<void> {
-  // Wait for both the WASM-side `list_asset_files` shim AND the OPFS bridge
-  // it depends on internally (`window.opfs_list_files`). The WASM shim is
-  // attached before initEngine() returns, but the bridge-side OPFS bindings
-  // land later in the init sequence — calling the shim before that point
-  // raises a `window.opfs_list_files is not a function` pageerror that fails
-  // the error-hygiene smoke test (capabilities-smoke §Cross-cutting).
-  let attempts = 0;
-  while (attempts < 50) {
-    const ready =
-      typeof (window as any).list_asset_files === "function" &&
-      typeof (window as any).opfs_list_files === "function";
-    if (ready) return;
-    await new Promise((r) => setTimeout(r, 100));
-    attempts++;
-  }
+  await bridgeReady();
 }
 
 function parseOpfs<T>(raw: unknown): OpfsResult<T> {
@@ -54,7 +41,7 @@ function parseOpfs<T>(raw: unknown): OpfsResult<T> {
  */
 export async function listAssetFiles(): Promise<AssetFile[]> {
   await waitForEngine();
-  const parsed = parseOpfs<AssetFile[]>((window as any).list_asset_files());
+  const parsed = parseOpfs<AssetFile[]>(await callBridge("list_asset_files"));
   if (!parsed.ok) throw new Error(parsed.error);
   return parsed.value!;
 }
@@ -77,7 +64,7 @@ export async function importAssetFile(
   try {
     const jsBytes = new Uint8Array(bytes);
     const parsed = parseOpfs<AssetFile>(
-      (window as any).import_asset_file(name, mimeType, jsBytes),
+      await callBridge("import_asset_file", name, mimeType, jsBytes),
     );
     if (!parsed.ok) throw new Error(parsed.error);
     emit({ type: "hot-reload-asset", assetId: name });
@@ -95,7 +82,7 @@ export async function importAssetFile(
 export async function readAssetFileBytes(id: string): Promise<Uint8Array> {
   await waitForEngine();
   const parsed = parseOpfs<{ kind: "ok"; value: number[] }>(
-    (window as any).read_asset_file_bytes(id),
+    await callBridge("read_asset_file_bytes", id),
   );
   if (!parsed.ok) throw new Error(parsed.error);
   // value is a JSON-serialized array of bytes from serde_json
@@ -111,7 +98,7 @@ export async function deleteAssetFile(id: string): Promise<void> {
   await waitForEngine();
   inFlightSaveCounter.incr();
   try {
-    const parsed = parseOpfs<null>((window as any).delete_asset_file(id));
+    const parsed = parseOpfs<null>(await callBridge("delete_asset_file", id));
     if (!parsed.ok) throw new Error(parsed.error);
     emit({ type: "hot-reload-asset", assetId: id });
   } finally {
