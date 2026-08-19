@@ -383,8 +383,6 @@ const DEFAULT_SCENE_JSON: &str = r#"{
 thread_local! {
     pub(crate) static COMMAND_BUS: RefCell<Option<LinearBus>> = const { RefCell::new(None) };
     pub(crate) static EVENT_BUS: RefCell<Option<LinearBus>> = const { RefCell::new(None) };
-    pub(crate) static SCENE_DOC: RefCell<Option<SceneDocument>> = const { RefCell::new(None) };
-    pub(crate) static OPERATION_LOG: RefCell<OperationLog> = const { RefCell::new(OperationLog::new_const()) };
 }
 
 struct LinearBus {
@@ -593,7 +591,12 @@ pub fn dispatch_command_via_kernel(
     }
 
     // Get mutable access to the scene doc and operation log.
-    let (inverse, snapshot) = SCENE_DOC.with(|cell| {
+    // NOTE: single source of truth is `scene_session::SCENE_DOC` /
+    // `scene_session::OPERATION_LOG` (ADR-0031). The kernel path must
+    // operate on the SAME cells that `load_scene_json`, `get_scene_snapshot`,
+    // undo and redo use — a duplicate thread_local here caused edits to be
+    // applied to an orphan scene while the UI read a different one.
+    let (inverse, snapshot) = scene_session::SCENE_DOC.with(|cell| {
         let mut doc_ref = cell.borrow_mut();
         let doc = doc_ref
             .as_mut()
@@ -623,8 +626,8 @@ pub fn dispatch_command_via_kernel(
 
         // Record in OperationLog for undo/redo (byte-equality with legacy path).
         // Use record_with_provenance to pass origin, actor, and change_id from the ChangeSet.
-        OPERATION_LOG.with(|l| {
-            l.borrow_mut().record_with_provenance(
+        scene_session::OPERATION_LOG.with(|l| {
+            l.borrow_mut().as_mut().unwrap().record_with_provenance(
                 &envelope,
                 inverse.clone(),
                 format!("{:?}", origin),
@@ -847,7 +850,7 @@ pub fn replace_scene_instance_asset(
 /// Returns the `instances` BTreeMap serialized as JSON.
 #[wasm_bindgen]
 pub fn get_scene_instances() -> Result<String, JsValue> {
-    SCENE_DOC.with(|s| {
+    scene_session::SCENE_DOC.with(|s| {
         let doc_ref = s.borrow();
         let doc = doc_ref
             .as_ref()
@@ -1053,8 +1056,9 @@ pub fn redo() -> Result<String, JsValue> {
 /// Useful for UI to enable/disable undo/redo buttons.
 #[wasm_bindgen]
 pub fn get_log_state() -> String {
-    OPERATION_LOG.with(|l| {
-        let log = l.borrow();
+    scene_session::OPERATION_LOG.with(|l| {
+        let binding = l.borrow();
+        let log = binding.as_ref().unwrap();
         serde_json::json!({
             "size": log.get_log_size(),
             "can_undo": log.can_undo(),
@@ -1928,8 +1932,10 @@ pub fn scene_switch_commit(id: &str) -> Result<(), JsValue> {
 /// then loads registry[new_id] into the thread_locals.
 fn perform_scene_swap(old_id: &str, new_id: &str) {
     // Store current scene back to registry
-    let doc_opt = SCENE_DOC.with(|s| s.borrow().clone());
-    let log = OPERATION_LOG.with(|l| l.borrow().clone());
+    let doc_opt = scene_session::SCENE_DOC.with(|s| s.borrow().clone());
+    let log = scene_session::OPERATION_LOG
+        .with(|l| l.borrow().clone())
+        .unwrap_or_else(crate::operation_log::OperationLog::new_const);
 
     let (doc, log) = match doc_opt {
         Some(doc) => (doc, log),
@@ -1950,7 +1956,7 @@ fn perform_scene_swap(old_id: &str, new_id: &str) {
     // Load new scene from registry into thread_locals
     if let Some((new_doc, new_log)) = with_registry(|r| r.swap_in(new_id)) {
         scene_session::replace_active_doc(new_doc);
-        OPERATION_LOG.with(|l| *l.borrow_mut() = new_log);
+        scene_session::OPERATION_LOG.with(|l| *l.borrow_mut() = Some(new_log));
     }
 
     mark_dirty();
@@ -2025,7 +2031,7 @@ pub async fn discard_scene_changes(id: &str) -> Result<(), JsValue> {
 
     if current_id.as_deref() == Some(id) {
         scene_session::replace_active_doc(doc);
-        OPERATION_LOG.with(|l| *l.borrow_mut() = log);
+        scene_session::OPERATION_LOG.with(|l| *l.borrow_mut() = Some(log));
     }
 
     with_registry_mut(|r| r.clear_current_dirty());
@@ -4022,7 +4028,7 @@ mod rust_source_integration_tests {
 
     /// Test helper: set SCENE_DOC for testing.
     fn set_scene_doc_for_test(doc: Option<SceneDocument>) {
-        SCENE_DOC.with(|cell| {
+        scene_session::SCENE_DOC.with(|cell| {
             *cell.borrow_mut() = doc;
         });
     }

@@ -25,7 +25,7 @@ use crate::schema::ComponentTypeId;
 #[wasm_bindgen]
 pub fn get_instance_components_wasm(instance_id: &str) -> JsValue {
     let stable_id = crate::document::StableId::new(instance_id);
-    crate::SCENE_DOC.with(|s| {
+    crate::scene_session::SCENE_DOC.with(|s| {
         let doc_ref = s.borrow();
         match doc_ref.as_ref() {
             None => JsValue::NULL,

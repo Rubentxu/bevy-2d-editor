@@ -34,8 +34,8 @@ use crate::state::{
     with_asset_body_cache_mut, with_logic_graph_mut,
 };
 use crate::{
-    BevyEntity, OPERATION_LOG, OperationLogState, PlayMode, SceneDocumentState, SceneEntity,
-    SceneInstanceChild, TransformSnapshot, source_files,
+    BevyEntity, OperationLogState, PlayMode, SceneDocumentState, SceneEntity, SceneInstanceChild,
+    TransformSnapshot, source_files,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -72,7 +72,7 @@ pub fn capture_baselines_from_scene_doc() -> String {
     use crate::state::with_asset_body_cache;
     use std::collections::BTreeMap;
 
-    let doc = crate::SCENE_DOC.with(|s| s.borrow().clone());
+    let doc = crate::scene_session::SCENE_DOC.with(|s| s.borrow().clone());
     let doc = match doc {
         Some(d) => d,
         None => return String::new(),
@@ -258,7 +258,7 @@ fn setup(mut commands: Commands) {
     commands.spawn(Camera2d);
 
     // Try to load scene from thread-local SCENE_DOC, otherwise use default
-    let doc = crate::SCENE_DOC.with(|s| s.borrow().clone());
+    let doc = crate::scene_session::SCENE_DOC.with(|s| s.borrow().clone());
     let scene = match doc {
         Some(doc) => doc,
         None => match serde_json::from_str(DEFAULT_SCENE_JSON) {
@@ -288,7 +288,7 @@ fn setup(mut commands: Commands) {
     // so that `get_scene_snapshot()` (which reads from SCENE_DOC) returns
     // the same data as SceneDocumentState. Without this, the JS bridge
     // returns NULL on the very first call (before any load_scene_json).
-    crate::SCENE_DOC.with(|s| *s.borrow_mut() = Some(scene));
+    crate::scene_session::SCENE_DOC.with(|s| *s.borrow_mut() = Some(scene));
 
     mark_dirty();
 }
@@ -662,7 +662,7 @@ fn rebuild_preview_world(
 
     // Sync document from SCENE_DOC thread_local (value-swap source)
     // This ensures the preview reflects the currently active scene after a switch
-    let current_doc = crate::SCENE_DOC.with(|s| s.borrow().clone());
+    let current_doc = crate::scene_session::SCENE_DOC.with(|s| s.borrow().clone());
     if let Some(doc) = current_doc {
         state.document = doc;
     }
@@ -1125,8 +1125,9 @@ fn emit_events(
 /// Sync the OperationLogState Resource from the thread_local! OperationLog.
 /// UI hooks (future change) read this resource to enable/disable undo/redo buttons.
 fn sync_log_state(mut log_state: ResMut<OperationLogState>) {
-    OPERATION_LOG.with(|l| {
-        let log = l.borrow();
+    crate::scene_session::OPERATION_LOG.with(|l| {
+        let binding = l.borrow();
+        let log = binding.as_ref().unwrap();
         log_state.size = log.get_log_size();
         log_state.can_undo = log.can_undo();
         log_state.can_redo = log.can_redo();
@@ -1149,8 +1150,8 @@ fn sync_log_state(mut log_state: ResMut<OperationLogState>) {
 /// poll is called from the Bevy system below; tests call it directly.
 pub fn poll_recent_change_sets_inner() {
     use editor_model::ChangeSetSummary;
-    let entries: Vec<crate::operation_log::LogEntry> =
-        crate::OPERATION_LOG.with(|log| log.borrow().snapshot_entries());
+    let entries: Vec<crate::operation_log::LogEntry> = crate::scene_session::OPERATION_LOG
+        .with(|log| log.borrow().as_ref().unwrap().snapshot_entries());
     if entries.is_empty() {
         return;
     }
