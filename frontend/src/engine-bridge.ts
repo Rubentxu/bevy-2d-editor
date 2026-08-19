@@ -2,6 +2,7 @@ import {
   opfsDeleteFile,
   opfsExists,
   opfsListFiles,
+  opfsListTree,
   opfsLoadBinary,
   opfsLoadFile,
   opfsSaveBinary,
@@ -335,6 +336,7 @@ export async function initEngine(
   (window as any).opfs_save_file = opfsSaveFile;
   (window as any).opfs_load_file = opfsLoadFile;
   (window as any).opfs_list_files = opfsListFiles;
+  (window as any).opfs_list_tree = opfsListTree;
   (window as any).opfs_exists = opfsExists;
   (window as any).opfs_delete_file = opfsDeleteFile;
   (window as any).opfs_save_binary = opfsSaveBinary;

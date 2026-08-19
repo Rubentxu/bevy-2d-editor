@@ -30,6 +30,9 @@ extern "C" {
     #[wasm_bindgen(js_namespace = window, js_name = opfs_list_files)]
     fn opfs_list_files_raw(path: &str) -> js_sys::Promise;
 
+    #[wasm_bindgen(js_namespace = window, js_name = opfs_list_tree)]
+    fn opfs_list_tree_raw(path: &str) -> js_sys::Promise;
+
     #[wasm_bindgen(js_namespace = window, js_name = opfs_exists)]
     fn opfs_exists_raw(path: &str) -> js_sys::Promise;
 
@@ -77,6 +80,19 @@ fn parse_string_array(val: serde_json::Value) -> Result<Vec<String>, String> {
 /// Async list operation — lists files under a directory prefix.
 pub async fn list_op(dir: &str) -> Result<Vec<String>, String> {
     let promise = opfs_list_files_raw(dir);
+    let result = JsFuture::from(promise)
+        .await
+        .map_err(|e| format!("JS promise rejected: {:?}", e))?;
+    let val: serde_json::Value = serde_wasm_bindgen::from_value(result)
+        .map_err(|e| format!("Bad bridge response: {}", e))?;
+    parse_string_array(val)
+}
+
+/// Async recursive list operation — lists ALL files under a directory,
+/// including files inside subdirectories (paths are "/"-joined, relative to
+/// the OPFS namespace root, e.g. `schemas/game.PlayerHealth.schema.json`).
+pub async fn list_tree_op(dir: &str) -> Result<Vec<String>, String> {
+    let promise = opfs_list_tree_raw(dir);
     let result = JsFuture::from(promise)
         .await
         .map_err(|e| format!("JS promise rejected: {:?}", e))?;

@@ -165,9 +165,17 @@ impl OpfsProjectStore {
 
     /// Eagerly hydrate the in-memory mirror from OPFS.
     ///
-    /// Lists all paths under "/" via the bridge, reads each file, and populates
-    /// the mirror. Called **once** at WASM startup before the editor becomes
-    /// interactive.
+    /// Recursively lists all paths under "/" via the bridge, reads each file,
+    /// and populates the mirror. Called **once** at WASM startup before the
+    /// editor becomes interactive.
+    ///
+    /// ### Why recursive
+    ///
+    /// A flat `list_op("/")` only returns files at the namespace root
+    /// (project.json, dock-prefs.json) and silently skips subdirectories
+    /// (schemas/, scenes/, scene-assets/, ...). Without recursion those files
+    /// never reach the mirror, so `load_project` after a reload fails with
+    /// "Failed to load schema ..." and the project appears lost.
     ///
     /// ### Eager-load limitation
     ///
@@ -177,9 +185,9 @@ impl OpfsProjectStore {
     /// lazily read only the bytes needed per operation.
     #[cfg(target_arch = "wasm32")]
     pub async fn hydrate(&self) -> Result<(), String> {
-        use crate::wasm_bridge::{list_op, read_op};
+        use crate::wasm_bridge::{list_tree_op, read_op};
 
-        let paths = list_op("/")
+        let paths = list_tree_op("/")
             .await
             .map_err(|e| format!("hydrate: list failed: {}", e))?;
 

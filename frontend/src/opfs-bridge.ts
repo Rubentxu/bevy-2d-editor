@@ -114,6 +114,47 @@ export async function opfsListFiles(
   }
 }
 
+/**
+ * Recursively list ALL file paths under `path` (directories included in the
+ * walk, only files returned). Paths are namespace-relative, e.g.
+ * `["project.json", "schemas/game.PlayerHealth.schema.json"]`.
+ *
+ * Used by the Rust `OpfsProjectStore::hydrate()` so subdirectory files
+ * (schemas/, scenes/, scene-assets/, ...) are loaded into the in-memory
+ * mirror — without this, project restore after a reload cannot find them.
+ */
+export async function opfsListTree(
+  path: string,
+): Promise<OpfsResult<string[]>> {
+  try {
+    if (!navigator.storage?.getDirectory) {
+      return { ok: false, error: "OPFS unavailable" };
+    }
+    const segments = path.split("/").filter((s) => s.length > 0);
+    const dir = await getSubdir(segments, false);
+    if (!dir) {
+      return { ok: true, value: [] };
+    }
+    const out: string[] = [];
+    const walk = async (handle: FileSystemDirectoryHandle, prefix: string) => {
+      for await (const [name, child] of handle.entries()) {
+        if (child.kind === "file") {
+          out.push(prefix ? `${prefix}/${name}` : name);
+        } else if (child.kind === "directory") {
+          await walk(
+            child as FileSystemDirectoryHandle,
+            prefix ? `${prefix}/${name}` : name,
+          );
+        }
+      }
+    };
+    await walk(dir, segments.join("/"));
+    return { ok: true, value: out.sort() };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
 export async function opfsExists(path: string): Promise<boolean> {
   try {
     if (!navigator.storage?.getDirectory) {
