@@ -499,8 +499,8 @@ export default function HierarchyPanel({
                   const inst = instances[instId];
                   if (!inst) return null;
                   const allPatches = [
-                    ...inst.component_overrides,
-                    ...inst.orphaned_component_overrides,
+                    ...(inst.component_overrides ?? []),
+                    ...(inst.orphaned_component_overrides ?? []),
                   ];
                   if (allPatches.length === 0) return null;
                   // Dominant status for badge: conflict > orphaned > stale > active.

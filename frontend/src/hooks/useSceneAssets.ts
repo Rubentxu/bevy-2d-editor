@@ -69,10 +69,14 @@ export function useSceneAssets() {
         console.error("useSceneAssets: refreshCatalog failed:", result.error);
         return;
       }
-      const value = result.value as {
-        entries?: ReadonlyArray<SceneAssetCatalogEntry>;
-      } | null;
-      setEntries([...(value?.entries ?? [])]);
+      const raw = result.value as unknown;
+      // Backend returns a plain array (get_scene_asset_catalog_json);
+      // accept both shapes defensively.
+      const entries: ReadonlyArray<SceneAssetCatalogEntry> = Array.isArray(raw)
+        ? (raw as ReadonlyArray<SceneAssetCatalogEntry>)
+        : ((raw as { entries?: ReadonlyArray<SceneAssetCatalogEntry> } | null)
+            ?.entries ?? []);
+      setEntries([...entries]);
     } catch (e) {
       console.error("useSceneAssets: refreshCatalog failed:", e);
     }
