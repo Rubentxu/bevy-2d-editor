@@ -11,6 +11,7 @@ use std::collections::BTreeMap;
 use editor_bevy::adapter_impls::{
     BevyRuntimeAdapter, BsnExportAdapter, JsonProjectAdapter, all_adapters_init,
 };
+use editor_bevy::adapter_registry::{all_adapters, init_registry};
 use editor_model::LogicGraphAsset;
 use editor_model::adapter::{AdapterFidelity, EditorAdapter, SemanticModel};
 use editor_model::ids::SceneAssetLocalId;
@@ -266,13 +267,13 @@ fn adapter_names_are_stable_and_distinct() {
 fn initialized_registry_is_observable_from_any_thread() {
     // One-shot init per test binary (OnceLock::set panics on double call).
     // This is the ONLY test in this binary that calls init_registry.
-    editor_model::adapter::init_registry(all_adapters_init());
+    init_registry(all_adapters_init());
 
     let expected: Vec<&str> = vec!["json.project.v1", "bsn.export.v1", "bevy.runtime.v1"];
     let handles: Vec<_> = (0..8)
         .map(|_| {
             std::thread::spawn(|| {
-                let adapters = editor_model::adapter::all_adapters();
+                let adapters = all_adapters();
                 adapters
                     .iter()
                     .map(|a| a.name().to_string())

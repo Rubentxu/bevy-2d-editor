@@ -7,10 +7,8 @@
 //! # Architecture
 //!
 //! The trait lives in `editor-model` (ADR-0030: bevy-free, wasm-free). Implementations
-//! live in the `adapter_impls` module of the consumer crate. The [`all_adapters`]
-//! registry is populated via [`init_registry`] — a single-shot setter that takes
-//! ownership of the adapter `Vec` so `editor-model` need not depend on any consumer
-//! crate (SDD-0046 S2: `OnceLock`, cross-thread safe).
+//! live in the consumer crate. The registry (`OnceLock`, `init_registry`, `all_adapters`)
+//! has been moved to `editor-bevy` (ARCH-030) — `editor-model` owns only the trait.
 //!
 //! # Fidelity levels
 //!
@@ -22,7 +20,6 @@
 use crate::scene_asset::{SceneAssetDocument, SceneAssetRole};
 use crate::{LogicGraphAsset, ProjectMetadata, SceneDocument, WorldDocument};
 use std::error::Error;
-use std::sync::OnceLock;
 
 /// The semantic model variants that adapters can encode/decode.
 ///
@@ -152,40 +149,6 @@ pub trait EditorAdapter: Send + Sync {
     /// Default implementation returns `true` (adapters that handle all roles).
     fn supports(&self, _role: SceneAssetRole) -> bool {
         true
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Registry
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Global adapter registry, initialized exactly once via [`init_registry`].
-///
-/// `OnceLock` makes the registry cross-thread safe (unlike the S1
-/// `thread_local!` which silently no-op'd on secondary threads).
-static ADAPTERS: OnceLock<Vec<Box<dyn EditorAdapter + Send + Sync>>> = OnceLock::new();
-
-/// Returns a shared reference to the globally registered adapters.
-///
-/// Returns an empty slice if [`init_registry`] has not been called yet.
-pub fn all_adapters() -> &'static [Box<dyn EditorAdapter + Send + Sync>] {
-    ADAPTERS.get().map(Vec::as_slice).unwrap_or(&[])
-}
-
-/// Initializes the global adapter registry.
-///
-/// Takes ownership of the adapter `Vec`. This is the cross-crate seam that
-/// avoids an `editor-model → editor-bevy` dep (ADR-0030). Callers construct
-/// the `Vec` of concrete impls and hand it over exactly once.
-///
-/// # Panics
-///
-/// Panics if called more than once (single-shot by design — double
-/// initialization indicates a wiring bug).
-pub fn init_registry(adapters: Vec<Box<dyn EditorAdapter + Send + Sync>>) {
-    match ADAPTERS.set(adapters) {
-        Ok(()) => {}
-        Err(_) => panic!("init_registry must be called exactly once"),
     }
 }
 
@@ -332,22 +295,4 @@ mod tests {
         }
     }
 
-    /// Spec §sem2-once-lock-registry scenario 4: uninitialized registry
-    /// returns an empty slice. Safe in this test binary because no unit test
-    /// in `editor-model` calls `init_registry` (the integration test binary
-    /// has its own `static` instance).
-    #[test]
-    fn uninitialized_registry_returns_empty() {
-        assert!(all_adapters().is_empty());
-    }
-
-    /// Spec §sem2-once-lock-registry scenario 6: double init panics.
-    #[test]
-    #[should_panic(expected = "init_registry must be called exactly once")]
-    fn double_init_panics() {
-        let first: Vec<Box<dyn EditorAdapter + Send + Sync>> = vec![];
-        init_registry(first);
-        let second: Vec<Box<dyn EditorAdapter + Send + Sync>> = vec![];
-        init_registry(second);
-    }
 }

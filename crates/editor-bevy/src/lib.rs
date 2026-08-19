@@ -10,6 +10,7 @@ use wasm_bindgen_futures::JsFuture;
 
 pub mod actuator_bus;
 pub mod adapter_impls;
+pub mod adapter_registry;
 pub mod asset_command;
 pub mod asset_files;
 pub mod asset_state;
@@ -38,6 +39,7 @@ pub mod logic_validation;
 pub mod operation_log;
 mod persistence;
 pub mod preview_inspector;
+pub mod editor_world;
 pub mod preview_runtime;
 pub mod processor;
 pub mod scene_asset;

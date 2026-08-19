@@ -19,13 +19,20 @@
 //! `rebuild_preview_world`.
 
 use bevy::prelude::*;
+use std::sync::{Mutex, OnceLock};
 use wasm_bindgen::prelude::*;
+
+// Global EditorWorld instance (ADR-0054). Initialized once in `setup()`.
+// Non-Send due to World/EditorHotReloadBus interiors, but WASM is single-threaded
+// so this is safe. Wrapped in OnceLock for lazy init + leak-free drop.
+static EDITOR_WORLD: OnceLock<Mutex<EditorWorld>> = OnceLock::new();
 
 use crate::actuator_bus;
 use crate::bevy_anchor::anchor_str_to_bevy_anchor;
 use crate::bevy_logic_binding::LogicBinding;
 use crate::document::{Entity, SceneDocument, StableId};
 use crate::dynamic_scene::is_known_anchor_str;
+use crate::editor_world::EditorWorld;
 use crate::instance_projection::{PreviewEntity, project_instances};
 use crate::logic_dispatch;
 use crate::logic_evaluator;
@@ -182,11 +189,10 @@ pub fn start_engine(canvas_id: &str) {
         // (never running in parallel) and accepts the Transform/Sprite
         // mutable overlap with the scene-entity ParamSet below.
         .add_systems(Update, process_play_mode_request)
-        // process_hot_reload_requests drains the HOT_RELOAD_BUS each frame before rebuild
-        .add_systems(
-            Update,
-            process_hot_reload_requests.before(rebuild_preview_world),
-        )
+        // tick EditorWorld each frame — editor-only systems (sync_log, hot-reload,
+        // poll_change_sets) run in their own World+Schedule, independent of
+        // scene rebuilding. Ordering: tick_editor_world -> rebuild_preview_world.
+        .add_systems(Update, tick_editor_world_system.before(rebuild_preview_world))
         // Editor-only systems gated during play mode. `Without<SceneEntity>`
         // keeps these queries provably disjoint from play-mode systems that
         // write to scene-entity Transforms/Sprites (process_play_mode_request
@@ -203,20 +209,12 @@ pub fn start_engine(canvas_id: &str) {
                 .run_if(in_edit_mode)
                 .after(process_commands),
         )
-        .add_systems(
-            Update,
-            sync_log_state
-                .run_if(in_edit_mode)
-                .after(rebuild_preview_world),
-        )
-        // v0.92 HIGH-4: poll recent change sets after process_commands so
-        // each apply shows up in the ApplyBackPanel's "Recent History" view.
-        .add_systems(
-            Update,
-            poll_recent_change_sets_system
-                .run_if(in_edit_mode)
-                .after(process_commands),
-        )
+        // NOTE: sync_log_state and poll_recent_change_sets_system have moved to
+        // EditorWorld (ADR-0054). They are ticked by tick_editor_world_system
+        // each frame — no longer in the main App schedule.
+        //
+        // NOTE: process_hot_reload_requests has moved to EditorWorld.
+        //
         // Play-mode sensor systems — run before logic evaluation
         .add_systems(
             Update,
@@ -224,12 +222,14 @@ pub fn start_engine(canvas_id: &str) {
                 .run_if(in_play_mode)
                 .before(logic_dispatch::logic_evaluation_system),
         )
-        // Logic dispatch runs only in play mode
+        // Logic dispatch runs only in play mode.
+        // NOTE: .after(sync_log_state) removed — sync_log_state now runs in
+        // EditorWorld, ticked independently. Logic evaluation order relative to
+        // EditorWorld is guaranteed by tick_editor_world_system ordering above.
         .add_systems(
             Update,
             logic_dispatch::logic_evaluation_system
-                .run_if(in_play_mode)
-                .after(sync_log_state),
+                .run_if(in_play_mode),
         )
         // apply_actuator_outputs (play mode) is explicitly ordered AFTER
         // process_play_mode_request and process_commands so Bevy 0.19 treats
@@ -296,6 +296,24 @@ fn setup(mut commands: Commands) {
     crate::world_state::set_world_catalog(editor_model::scene_asset_catalog::SceneAssetCatalog::new());
 
     mark_dirty();
+
+    // Initialize EditorWorld (ADR-0054: separate EditorWorld from PreviewWorld).
+    // The EditorWorld manages its own World+Schedule for editor-only systems.
+    // Stored as a module-level OnceLock since NonSend can't be accessed via ResMut::lock.
+    // SAFETY: EditorWorld is Send+Sync (see editor_world.rs).
+    EDITOR_WORLD.get_or_init(|| Mutex::new(EditorWorld::new()));
+}
+
+/// System that ticks EditorWorld each frame.
+///
+/// Runs in `Update` before `rebuild_preview_world` so hot-reload
+/// invalidations from EditorWorld are visible to the rebuild pass.
+fn tick_editor_world_system() {
+    // SAFETY: EditorWorld is Send+Sync (World/Schedule are Send; interior mutability in
+    // EditorHotReloadBus is protected by unsafe impl Send + WASM single-thread).
+    // get_or_init is called in setup() before this system ever runs.
+    let mut guard = EDITOR_WORLD.get().expect("EditorWorld not initialized").lock().unwrap();
+    guard.run();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
