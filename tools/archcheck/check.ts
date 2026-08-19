@@ -21,6 +21,9 @@
  *       in crates/editor-protocol/src/; Cargo.toml lists no bevy/wasm-bindgen.
  *   B8  editor-model / editor-protocol have zero wasm imports; editor-application
  *       has zero wasm imports at root (wasm.rs excluded).
+ *   ARCH-040 No Bevy Entity in persisted/protocol model: editor-model and
+ *       editor-protocol must not contain `Entity` (bevy::Entity) in type positions.
+ *       editor-model defines its own `Entity` domain type in document.rs (excluded).
  *   C1  Dependency graph (cargo metadata): forbidden edges per ADR-0053/ADR-0030.
  *       editor-application may not depend on editor-bevy or editor-storage-web.
  *       editor-model may not depend on editor-bevy, editor-application, or
@@ -526,6 +529,54 @@ const ASSERTIONS: Assertion[] = [
     },
   },
   // ── C group: cargo metadata dependency graph (ARCH-001) ─────────────────────
+  {
+    id: "ARCH-040",
+    description:
+      "No Bevy Entity in persisted/protocol model: editor-model and editor-protocol " +
+      "must not contain `Entity` (bevy::Entity) in type positions. The domain uses " +
+      "StableId / LocalId instead. editor-model defines its own `Entity` domain type " +
+      "in document.rs — that definition is excluded.",
+    run() {
+      // Pattern: \bEntity\b in type position (excluding doc comments and the
+      // domain Entity definition in document.rs).
+      const entityPattern = /\bEntity\b/;
+      // Files that define or re-export the domain Entity type — skip these.
+      const domainEntityFiles = new Set(["document.rs", "lib.rs"]);
+      const description = this.description;
+
+      const checkCrate = (crateName: string): void => {
+        const crateSrc = join(root, `crates/${crateName}/src`);
+        if (!existsSync(crateSrc)) return;
+        const entries = readdirSync(crateSrc, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isFile() || !entry.name.endsWith(".rs")) continue;
+          if (domainEntityFiles.has(entry.name)) continue;
+          const filePath = join(crateSrc, entry.name);
+          const content = readFileSync(filePath, "utf8");
+          const lines = content.split("\n");
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            // Strip doc comments (/// and !//, single-line).
+            // Block comments /** */ are rare in this codebase; handle line-by-line.
+            const strippedLine = line
+              .replace(/\/\/.*$/, "")  // strip // comment
+              .replace(/^\s*#\[[^\]]*\]/, "") // strip outer attributes
+              .trim();
+            if (entityPattern.test(strippedLine)) {
+              failures.push(
+                `Assertion failed: ${description} — \`Entity\` found in ${crateName}/src/${entry.name}:${i + 1}`,
+              );
+              return;
+            }
+          }
+        }
+      };
+
+      for (const crateName of ["editor-model", "editor-protocol"]) {
+        checkCrate(crateName);
+      }
+    },
+  },
   {
     id: "C1",
     description:
