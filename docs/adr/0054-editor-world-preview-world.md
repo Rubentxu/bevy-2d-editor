@@ -1,6 +1,6 @@
 # ADR-0054 — Separate EditorWorld and PreviewWorld Runtime Responsibilities
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-08-19
 
 ## Context

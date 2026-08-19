@@ -1,6 +1,6 @@
 # ADR-0053 — Bevy ECS Is the Runtime Substrate of the Editor
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-08-19
 
 ## Context
