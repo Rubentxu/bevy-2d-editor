@@ -19,12 +19,21 @@
  *       editor-core duplicate struct was collapsed to a re-export in v0.88.
  *   B7  editor-protocol purity: no bevy:: / wasm_bindgen / web_sys / js_sys
  *       in crates/editor-protocol/src/; Cargo.toml lists no bevy/wasm-bindgen.
+ *   B8  editor-model / editor-protocol have zero wasm imports; editor-application
+ *       has zero wasm imports at root (wasm.rs excluded).
+ *   C1  Dependency graph (cargo metadata): forbidden edges per ADR-0053/ADR-0030.
+ *       editor-application may not depend on editor-bevy or editor-storage-web.
+ *       editor-model may not depend on editor-bevy, editor-application, or
+ *       editor-storage-web. editor-storage-web may not depend on editor-bevy.
+ *       editor-protocol may not depend on editor-bevy, editor-storage-web, or
+ *       editor-application.
  *
  * Exits with code 0 only when all assertions pass.
  */
 
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { execSync } from "node:child_process";
 
 function findRepoRoot(cwd: string): string {
   let dir = resolve(cwd);
@@ -424,6 +433,85 @@ const ASSERTIONS: Assertion[] = [
               `Assertion failed: ${this.description} — wasm_bindgen/web_sys/js_sys found in ${entry.name} (editor-application root must be pure)`,
             );
           }
+        }
+      }
+    },
+  },
+  // ── C group: cargo metadata dependency graph (ARCH-001) ─────────────────────
+  {
+    id: "C1",
+    description:
+      "Dependency graph (cargo metadata): forbidden edges per ADR-0053/ADR-0030. " +
+      "editor-application may not depend on editor-bevy or editor-storage-web. " +
+      "editor-model may not depend on editor-bevy, editor-application, or editor-storage-web. " +
+      "editor-storage-web may not depend on editor-bevy. " +
+      "editor-protocol may not depend on editor-bevy, editor-storage-web, or editor-application.",
+    run() {
+      // Run cargo metadata to get the dependency graph.
+      let metadataJson: string;
+      try {
+        metadataJson = execSync("cargo metadata --format-version 1 --no-deps", {
+          cwd: root,
+          encoding: "utf-8",
+          maxBuffer: 10 * 1024 * 1024,
+        });
+      } catch (e: unknown) {
+        const err = e as { message?: string };
+        failures.push(
+          `Assertion failed: ${this.description} — cargo metadata failed: ${err?.message ?? e}`,
+        );
+        return;
+      }
+
+      interface Package {
+        name: string;
+        dependencies: Array<{ name: string; optional: boolean }>;
+      }
+
+      interface Metadata {
+        packages: Package[];
+      }
+
+      let metadata: Metadata;
+      try {
+        metadata = JSON.parse(metadataJson) as Metadata;
+      } catch (e: unknown) {
+        failures.push(`Assertion failed: ${this.description} — failed to parse cargo metadata: ${e}`);
+        return;
+      }
+
+      const packages = new Map<string, Package>(
+        metadata.packages.map((p) => [p.name, p]),
+      );
+
+      // Forbidden edges: [consumer, supplier] = forbidden
+      const forbidden: Array<[string, string]> = [
+        // editor-application may not pull in the runtime adapters
+        ["editor-application", "editor-bevy"],
+        ["editor-application", "editor-storage-web"],
+        // editor-model must remain pure (no adapters, no app logic)
+        ["editor-model", "editor-bevy"],
+        ["editor-model", "editor-application"],
+        ["editor-model", "editor-storage-web"],
+        // editor-storage-web is a leaf adapter (may not depend on runtime)
+        ["editor-storage-web", "editor-bevy"],
+        // editor-protocol is a pure interface layer
+        ["editor-protocol", "editor-bevy"],
+        ["editor-protocol", "editor-storage-web"],
+        ["editor-protocol", "editor-application"],
+      ];
+
+      for (const [consumer, supplier] of forbidden) {
+        const pkg = packages.get(consumer);
+        if (!pkg) continue; // crate not in workspace, skip
+        const hasUnconditional = pkg.dependencies.some(
+          (d) => d.name === supplier && !d.optional,
+        );
+        if (hasUnconditional) {
+          failures.push(
+            `Assertion failed: ${this.description} — ` +
+              `forbidden edge: ${consumer} -> ${supplier} (unconditional dependency)`,
+          );
         }
       }
     },
