@@ -548,8 +548,22 @@ export function __resetEditorGatewayForTests(): void {
   sharedReadyPromise = null;
 }
 
-function createEditorGateway(): EditorGateway {
+/**
+ * Create a gateway bound to a specific bridge. The bridge defaults to the
+ * live `window` bridge (exposed by engine-bridge); tests may inject a mock
+ * bridge to exercise the gateway contract without a browser engine.
+ *
+ * `createEditorGateway` returns a fresh instance each call; the singleton
+ * accessor `getEditorGateway()` caches one instance for the app.
+ */
+export function createEditorGateway(
+  bridge?: WindowWithBridge,
+): EditorGateway {
+  const resolvedBridge = bridge ?? readBridge();
+
   const ensureReady = (): Promise<void> => {
+    // Injected bridges (tests) are considered ready immediately.
+    if (bridge) return Promise.resolve();
     if (sharedReadyPromise) return sharedReadyPromise;
     sharedReadyPromise = (async () => {
       await waitForEditorReady();
@@ -557,20 +571,22 @@ function createEditorGateway(): EditorGateway {
     return sharedReadyPromise;
   };
 
+  const bridgeRef = (): WindowWithBridge | null => resolvedBridge;
+
   return {
     isReady: () => {
-      const w = readBridge();
+      const w = bridgeRef();
       return Boolean(w?.__bevyEngineStarted);
     },
     whenReady: ensureReady,
     getSceneSnapshot: async () => {
       await ensureReady();
-      const w = readBridge();
+      const w = bridgeRef();
       return callNoArg<unknown>(w?.get_scene_snapshot);
     },
     dispatchCommand: async (envelope: unknown) => {
       await ensureReady();
-      const w = readBridge();
+      const w = bridgeRef();
       if (!w?.dispatch_command) {
         return { error: "wasm export not available" };
       }
@@ -587,36 +603,45 @@ function createEditorGateway(): EditorGateway {
     },
     loadScene: async (json: string) => {
       await ensureReady();
-      const w = readBridge();
+      const w = bridgeRef();
       return callNoArg<unknown>(
         w?.load_scene_json ? () => w.load_scene_json!(json) : undefined,
       );
     },
     getSceneAssetCatalog: async () => {
       await ensureReady();
-      const w = readBridge();
-      return callNoArg<SceneAssetCatalogSnapshot>(
-        w?.get_scene_asset_catalog_json,
-      );
+      const w = bridgeRef();
+      const result = await callNoArg<unknown>(w?.get_scene_asset_catalog_json);
+      if (!result.ok) return result as ReadResult<SceneAssetCatalogSnapshot>;
+      // Backend returns a plain array of entries; normalize to the
+      // documented { entries, warnings } shape (Wave D1).
+      const raw = result.value;
+      const entries = Array.isArray(raw)
+        ? (raw as SceneAssetCatalogSnapshot["entries"])
+        : ((raw as SceneAssetCatalogSnapshot | null)?.entries ?? []);
+      return {
+        ok: true,
+        value: { entries, warnings: [] } as SceneAssetCatalogSnapshot,
+      };
     },
     getSceneAssetDocumentJson: async () => {
       await ensureReady();
-      const w = readBridge();
+      const w = bridgeRef();
       return callNoArg<string | null>(w?.get_asset_document_json);
     },
     enterPlayMode: async () => {
       await ensureReady();
-      const w = readBridge();
+      const w = bridgeRef();
       return callNoArg<PlayModeState>(w?.enter_play_mode);
     },
     exitPlayMode: async () => {
       await ensureReady();
-      const w = readBridge();
+      const w = bridgeRef();
       return callNoArg<PlayModeState>(w?.exit_play_mode);
     },
     propose: async (args) => {
       await ensureReady();
-      const w = readBridge();
+      const w = bridgeRef();
       if (!w?.propose) {
         return { ok: false, error: "propose export not available" };
       }
@@ -634,7 +659,7 @@ function createEditorGateway(): EditorGateway {
     // ─── Change Workbench (ADR-0039) ─────────────────────────────────────────
     submitPendingChangeSet: async (cs) => {
       await ensureReady();
-      const w = readBridge();
+      const w = bridgeRef();
       if (!w?.submit_pending_change_set) {
         return {
           ok: false,
@@ -650,12 +675,12 @@ function createEditorGateway(): EditorGateway {
     },
     getPendingChangeSets: async () => {
       await ensureReady();
-      const w = readBridge();
+      const w = bridgeRef();
       return callNoArg<PendingChangeSetSummary[]>(w?.get_pending_change_sets);
     },
     approveChangeSet: async (id) => {
       await ensureReady();
-      const w = readBridge();
+      const w = bridgeRef();
       if (!w?.approve_change_set) {
         return { ok: false, error: "approve_change_set export not available" };
       }
@@ -668,7 +693,7 @@ function createEditorGateway(): EditorGateway {
     },
     approveSelectedOps: async (id, indices) => {
       await ensureReady();
-      const w = readBridge();
+      const w = bridgeRef();
       if (!w?.approve_selected_ops) {
         return {
           ok: false,
@@ -697,7 +722,7 @@ function createEditorGateway(): EditorGateway {
     },
     rejectChangeSet: async (id) => {
       await ensureReady();
-      const w = readBridge();
+      const w = bridgeRef();
       if (!w?.reject_change_set) {
         return { ok: false, error: "reject_change_set export not available" };
       }
@@ -710,14 +735,14 @@ function createEditorGateway(): EditorGateway {
     },
     getChangeSetSummaries: async () => {
       await ensureReady();
-      const w = readBridge();
+      const w = bridgeRef();
       return callNoArg<ChangeSetSummary[]>(w?.get_change_set_summaries);
     },
     // ─── World Workspace (ADR-0037) ─────────────────────────────────────────
     world: {
       createWorld: async (name) => {
         await ensureReady();
-        const w = readBridge();
+        const w = bridgeRef();
         if (!w?.create_world_wasm) {
           return { ok: false, error: "create_world_wasm not available" };
         }
@@ -733,7 +758,7 @@ function createEditorGateway(): EditorGateway {
       },
       saveWorld: async () => {
         await ensureReady();
-        const w = readBridge();
+        const w = bridgeRef();
         if (!w?.save_world_wasm) {
           return { ok: false, error: "save_world_wasm not available" };
         }
@@ -749,7 +774,7 @@ function createEditorGateway(): EditorGateway {
       },
       loadWorld: async (name) => {
         await ensureReady();
-        const w = readBridge();
+        const w = bridgeRef();
         if (!w?.load_world_wasm) {
           return { ok: false, error: "load_world_wasm not available" };
         }
@@ -765,12 +790,12 @@ function createEditorGateway(): EditorGateway {
       },
       listWorlds: async () => {
         await ensureReady();
-        const w = readBridge();
+        const w = bridgeRef();
         return callNoArg<WorldCatalogEntry[]>(w?.list_worlds_wasm);
       },
       deleteWorld: async (worldId) => {
         await ensureReady();
-        const w = readBridge();
+        const w = bridgeRef();
         if (!w?.delete_world_wasm) {
           return { ok: false, error: "delete_world_wasm not available" };
         }
@@ -786,7 +811,7 @@ function createEditorGateway(): EditorGateway {
       },
       validateTopology: async (worldId) => {
         await ensureReady();
-        const w = readBridge();
+        const w = bridgeRef();
         if (!w?.validate_world_topology_wasm) {
           return {
             ok: false,
@@ -805,7 +830,7 @@ function createEditorGateway(): EditorGateway {
       },
       placeLevel: async (levelId, x, y) => {
         await ensureReady();
-        const w = readBridge();
+        const w = bridgeRef();
         if (!w?.place_level_in_world_wasm) {
           return {
             ok: false,
@@ -824,7 +849,7 @@ function createEditorGateway(): EditorGateway {
       },
       connectLevels: async (from, to, direction, kind) => {
         await ensureReady();
-        const w = readBridge();
+        const w = bridgeRef();
         if (!w?.connect_levels_wasm) {
           return { ok: false, error: "connect_levels_wasm not available" };
         }
@@ -840,7 +865,7 @@ function createEditorGateway(): EditorGateway {
       },
       removeLink: async (linkId) => {
         await ensureReady();
-        const w = readBridge();
+        const w = bridgeRef();
         if (!w?.remove_link_wasm) {
           return { ok: false, error: "remove_link_wasm not available" };
         }
@@ -856,7 +881,7 @@ function createEditorGateway(): EditorGateway {
       },
       setLayoutPolicy: async (policy) => {
         await ensureReady();
-        const w = readBridge();
+        const w = bridgeRef();
         if (!w?.set_layout_policy_wasm) {
           return { ok: false, error: "set_layout_policy_wasm not available" };
         }
@@ -872,7 +897,7 @@ function createEditorGateway(): EditorGateway {
       },
       openLevel: async (levelId) => {
         await ensureReady();
-        const w = readBridge();
+        const w = bridgeRef();
         if (!w?.open_level_from_world_wasm) {
           return {
             ok: false,
