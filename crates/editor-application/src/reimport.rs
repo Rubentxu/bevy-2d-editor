@@ -417,10 +417,7 @@ fn build_change_set_from_diff(
         actor: format!("importer:{}", importer_id),
         rationale,
         ops: Vec::new(), // Ops are built by the scene-level change set application
-        submitted_at_ms: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64,
+        submitted_at_ms: editor_model::time::now_millis(),
     }
 }
 

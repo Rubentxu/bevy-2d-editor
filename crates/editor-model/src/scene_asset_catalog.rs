@@ -378,11 +378,9 @@ fn current_unix_millis() -> u64 {
 }
 
 pub fn random_hex_8() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos() as u64)
-        .unwrap_or(0);
+    // wasm-safe: SystemTime::now() traps on wasm32-unknown-unknown with
+    // rustc >= 1.96 (see editor_model::time::now_nanos).
+    let nanos = crate::time::now_nanos();
     let counter = static_counter();
     format!("{:016x}", nanos.wrapping_add(counter) & 0xFFFFFFFF)
 }

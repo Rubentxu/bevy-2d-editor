@@ -340,10 +340,7 @@ fn process_play_mode_request(
             // so the comparison reads the post-play-mode values from
             // EditorComponent. The closure reads each instance's current
             // EditorComponent from the Bevy query.
-            let now_ms = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_millis() as u64)
-                .unwrap_or(0);
+            let now_ms = crate::time::now_millis();
             let _count = compute_runtime_deltas_internal(
                 |instance_id| {
                     for (editor_comp, instance_child) in baseline_components.iter() {

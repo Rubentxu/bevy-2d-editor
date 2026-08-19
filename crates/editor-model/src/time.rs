@@ -84,10 +84,42 @@ impl Clock for FakeClock {
 
 /// Returns the current Unix time in milliseconds (v0.91 PR2: moved from
 /// editor-core for use by the new scene_asset_catalog module).
+///
+/// On `wasm32-unknown-unknown` with rustc >= 1.96, `std::time::SystemTime::now()`
+/// traps ("time not implemented on this platform"). Route through
+/// `js_sys::Date::now()` instead (editor-model already depends on js-sys for
+/// wasm32 targets). Mirrors `editor-bevy/src/time.rs`.
 pub fn now_millis() -> u64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
+    #[cfg(target_arch = "wasm32")]
+    {
+        js_sys::Date::now() as u64
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0)
+    }
+}
+
+/// Returns the current Unix time in nanoseconds.
+///
+/// On wasm32 the value is `Date::now() * 1e6` and has <= 1 ms precision. All
+/// current callers use this for opaque unique-string formatting, so the
+/// precision loss is semantically inert.
+pub fn now_nanos() -> u64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        (js_sys::Date::now() * 1e6) as u64
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(0)
+    }
 }

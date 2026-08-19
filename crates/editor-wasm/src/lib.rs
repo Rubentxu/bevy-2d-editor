@@ -216,10 +216,7 @@ fn approve_selected_ops_impl(change_id: &str, indices: &[usize]) -> Result<Strin
         let envelope = CommandEnvelope {
             command,
             metadata: CommandMetadata {
-                timestamp: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis() as u64,
+                timestamp: editor_model::time::now_millis(),
                 authorship: cs.actor.clone(),
                 rationale: Some(format!("[ChangeWorkbench] {}", cs.rationale)),
             },
@@ -439,10 +436,7 @@ pub fn create_apply_back_change_set_wasm(rationale: &str) -> Result<String, JsVa
 
     let change_id = format!(
         "apply-back:{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis()
+        editor_model::time::now_millis()
     );
 
     let cs = PendingChangeSet {
@@ -451,10 +445,7 @@ pub fn create_apply_back_change_set_wasm(rationale: &str) -> Result<String, JsVa
         actor: "runtime:apply-back".to_string(),
         rationale: rationale.to_string(),
         ops,
-        submitted_at_ms: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64,
+        submitted_at_ms: editor_model::time::now_millis() as u64,
     };
 
     with_pending_change_sets_mut(|map| {
@@ -706,10 +697,7 @@ pub fn import_external_source_wasm(
         "rationale": format!("Import from {}", source_uri),
         "ops": [],
         "resources": [],
-        "submitted_at_ms": std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64,
+        "submitted_at_ms": editor_model::time::now_millis() as u64,
     });
 
     let change_id = serde_json::from_value::<editor_model::PendingChangeSet>(pending_cs.clone())
@@ -762,10 +750,7 @@ pub fn reimport_external_source_wasm(source_uri: &str) -> Result<String, JsValue
             pending_change_sets,
             || {
                 editor_model::time::Timestamp(
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
-                        .as_millis() as u64,
+                    editor_model::time::now_millis(),
                 )
             },
         )
