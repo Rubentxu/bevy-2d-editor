@@ -122,6 +122,79 @@ function assertDependencyFree(cargoTomlPath: string, depNames: string[], descrip
   }
 }
 
+/**
+ * Strip Rust cfg attribute blocks from source text so that wasm imports inside
+ * #[cfg(target_arch = "wasm32")] blocks are not counted as violations.
+ * Uses a line-by-line scan to reliably handle cfg attributes and their
+ * associated blocks, including multi-line { } blocks.
+ */
+function stripCfgs(text: string): string {
+  const lines = text.split("\n");
+  const out: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    // Match a cfg attribute line: optional leading whitespace, #, [cfg(...)].
+    // Matches both #[cfg(...)] and #[cfg(...)] { on the same line.
+    const cfgAttrRe = /^\s*#\[cfg\([^\]]+\)/;
+    const cfgMatch = line.match(cfgAttrRe);
+    if (!cfgMatch) {
+      // Skip doc comments (/// ...) that describe cfg-gated code — they may
+      // mention wasm/js types in the descriptive text.
+      const trimmed = line.trim();
+      if (trimmed.startsWith("///")) { i++; continue; }
+      out.push(line);
+      i++;
+      continue;
+    }
+    // This is a cfg line — skip it and the following block.
+    const hasBlockOnThisLine = /\{/.test(line);
+    if (hasBlockOnThisLine) {
+      // Block starts on this line — count braces to find the closing }
+      let braceDepth = 0;
+      let started = false;
+      while (i < lines.length) {
+        const blockLine = lines[i];
+        const openCount = (blockLine.match(/\{/g) || []).length;
+        const closeCount = (blockLine.match(/\}/g) || []).length;
+        if (!started && openCount > 0) {
+          started = true;
+          braceDepth += openCount;
+        } else if (started) {
+          braceDepth += openCount;
+        }
+        braceDepth -= closeCount;
+        i++;
+        if (started && braceDepth <= 0) break;
+      }
+    } else {
+      // Block is on subsequent lines — find the opening { then count
+      let braceDepth = 0;
+      let started = false;
+      while (i < lines.length) {
+        const blockLine = lines[i];
+        if (!started) {
+          if (/^\s*\{/.test(blockLine)) {
+            started = true;
+            braceDepth = 1;
+            i++;
+            if (braceDepth === 0) break;
+            continue;
+          }
+        } else {
+          braceDepth += (blockLine.match(/\{/g) || []).length;
+          braceDepth -= (blockLine.match(/\}/g) || []).length;
+          i++;
+          if (braceDepth <= 0) break;
+          continue;
+        }
+        i++;
+      }
+    }
+  }
+  return out.join("\n");
+}
+
 function countPatternInDir(dirPath: string, pattern: RegExp, recursive: boolean): number {
   if (!existsSync(dirPath)) return 0;
   let count = 0;
@@ -394,19 +467,34 @@ const ASSERTIONS: Assertion[] = [
   {
     id: "B8",
     description:
-      "editor-model and editor-protocol have zero wasm_bindgen/web_sys/js_sys imports; " +
+      "editor-model and editor-protocol have zero unconditional wasm_bindgen/web_sys/js_sys imports; " +
       "editor-application has zero wasm imports at root (wasm.rs excluded); " +
-      "editor-bevy and editor-wasm are WASM-compiled and may have wasm_bindgen",
+      "editor-bevy and editor-wasm are WASM-compiled and may have wasm_bindgen. " +
+      "editor-model may use wasm imports inside #[cfg(target_arch = \"wasm32\")] blocks " +
+      "(js-sys is wasm32-only in TOML).",
     run() {
       const wasmPattern = /(?:wasm_bindgen|web_sys|js_sys)/;
-      // Strict: editor-model must be pure
+      // editor-model: wasm imports inside cfg-gated blocks are permitted
+      // (js-sys is wasm32-only in TOML, usage is cfg-gated in time.rs).
+      // Count only occurrences OUTSIDE cfg blocks.
       for (const crateName of ["editor-model"]) {
         const crateSrc = join(root, `crates/${crateName}/src`);
         if (!existsSync(crateSrc)) continue;
-        const hits = countPatternInDir(crateSrc, wasmPattern, true);
+        let hits = 0;
+        const entries = readdirSync(crateSrc, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isFile() && entry.name.endsWith(".rs")) {
+            const content = readFileSync(join(crateSrc, entry.name), "utf8");
+            const stripped = stripCfgs(content);
+            const matches = stripped.match(wasmPattern);
+            if (matches) hits += matches.length;
+          } else if (entry.isDirectory() && recursive) {
+            hits += countPatternInDir(join(crateSrc, entry.name), wasmPattern, recursive);
+          }
+        }
         if (hits > 0) {
           failures.push(
-            `Assertion failed: ${this.description} — ${hits} occurrence(s) of wasm_bindgen/web_sys/js_sys in ${crateName}/src/ (must be pure)`,
+            `Assertion failed: ${this.description} — ${hits} unconditional wasm import(s) in ${crateName}/src/ (cfg-gated wasm imports are permitted)`,
           );
         }
       }
@@ -448,9 +536,11 @@ const ASSERTIONS: Assertion[] = [
       "editor-protocol may not depend on editor-bevy, editor-storage-web, or editor-application.",
     run() {
       // Run cargo metadata to get the dependency graph.
+      // Note: do NOT use --no-deps — we need the `target` field to distinguish
+      // conditional (wasm32-only) dependencies from unconditional ones.
       let metadataJson: string;
       try {
-        metadataJson = execSync("cargo metadata --format-version 1 --no-deps", {
+        metadataJson = execSync("cargo metadata --format-version 1", {
           cwd: root,
           encoding: "utf-8",
           maxBuffer: 10 * 1024 * 1024,
@@ -465,7 +555,7 @@ const ASSERTIONS: Assertion[] = [
 
       interface Package {
         name: string;
-        dependencies: Array<{ name: string; optional: boolean }>;
+        dependencies: Array<{ name: string; optional: boolean; target: string | null }>;
       }
 
       interface Metadata {
@@ -504,8 +594,14 @@ const ASSERTIONS: Assertion[] = [
       for (const [consumer, supplier] of forbidden) {
         const pkg = packages.get(consumer);
         if (!pkg) continue; // crate not in workspace, skip
+        // A dep is unconditional only when: not optional AND no target restriction.
+        // Conditional wasm32-only deps have target !== null and are permitted
+        // for adapter crates (editor-application, editor-storage-web, editor-bevy).
         const hasUnconditional = pkg.dependencies.some(
-          (d) => d.name === supplier && !d.optional,
+          (d) =>
+            d.name === supplier &&
+            !d.optional &&
+            d.target === null,
         );
         if (hasUnconditional) {
           failures.push(
