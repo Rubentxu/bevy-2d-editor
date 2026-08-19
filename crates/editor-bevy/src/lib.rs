@@ -1852,9 +1852,13 @@ pub fn bind_scene_to_schema(type_id: &str, scene_asset_id: Option<String>) -> Re
 /// List all schemas with `kind = SceneComponent` as a JSON array.
 #[wasm_bindgen]
 pub fn list_scene_component_schemas() -> Result<JsValue, JsValue> {
-    let schemas: Vec<&schema::ComponentSchema> = schema::global_registry()
+    // Combined registry (built-ins + user): user-authored SceneComponents
+    // must surface here too, or the Asset Browser never shows their
+    // "Place (SceneComponent)" entry points.
+    let schemas: Vec<schema::ComponentSchema> = schema::combined_registry()
         .iter()
         .filter(|s| s.kind == schema::SchemaKind::SceneComponent)
+        .cloned()
         .collect();
     let json = serde_json::to_string(&schemas)
         .map_err(|e| JsValue::from_str(&format!("Serialize error: {}", e)))?;
@@ -1957,6 +1961,12 @@ fn perform_scene_swap(old_id: &str, new_id: &str) {
     if let Some((new_doc, new_log)) = with_registry(|r| r.swap_in(new_id)) {
         scene_session::replace_active_doc(new_doc);
         scene_session::OPERATION_LOG.with(|l| *l.borrow_mut() = Some(new_log));
+        // replace_active_doc sets the registry current to the DOC's internal
+        // scene_id (e.g. "scene-{nanos}"), which is NOT the registry key
+        // (the scene NAME). That breaks the name-keyed registry: subsequent
+        // dirty checks, tab highlights and switches miss the entry. Restore
+        // the registry key as current after the swap.
+        with_registry_mut(|r| r.set_current(Some(new_id.to_string())));
     }
 
     mark_dirty();
@@ -2793,6 +2803,14 @@ pub async fn create_scene_asset(name: &str, role: &str) -> Result<String, JsValu
     with_asset_catalog_mut(|cat| cat.register(entry.clone()))
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
+    // Warm ASSET_BODY_CACHE with the new body so in-session placement works
+    // without a load_project round-trip (load_project normally rebuilds the
+    // cache; without this, place_scene_instance fails with "Asset not in
+    // cache" for freshly created assets).
+    with_asset_body_cache_mut(|cache| {
+        cache.insert(normalized_path.clone(), doc.clone());
+    });
+
     // Update project.json (awaited). On failure roll back the in-memory
     // registration so we don't publish a ghost. ADR-0019.
     if let Err(e) = update_project_metadata_for_asset(&entry, "create").await {
@@ -3139,10 +3157,18 @@ pub async fn save_scene_asset() -> Result<String, JsValue> {
         log.clear();
     });
 
-    // Step 5: Invalidate ASSET_BODY_CACHE by logical_path (D4)
-    with_asset_body_cache_mut(|cache| {
-        cache.remove(&path);
-    });
+    // Step 5: Keep ASSET_BODY_CACHE in sync with the persisted body.
+    // Previously this INVALIDATED the entry (D4), but nothing re-warms it
+    // until load_project — so an in-session edit → save → place_scene_instance
+    // failed with "Asset not in cache". The freshly saved doc IS the current
+    // state; cache it.
+    {
+        let doc: SceneAssetDocument = serde_json::from_str(&doc_json)
+            .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+        with_asset_body_cache_mut(|cache| {
+            cache.insert(path.clone(), doc);
+        });
+    }
 
     Ok(format!("Saved {} v{}", path, new_version))
 }
