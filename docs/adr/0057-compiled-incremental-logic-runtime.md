@@ -1,6 +1,6 @@
 # ADR-0057 — Logic Graphs Use a Compiled Incremental Runtime
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-08-19
 
 ## Context

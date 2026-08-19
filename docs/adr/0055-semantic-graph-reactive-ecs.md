@@ -1,6 +1,6 @@
 # ADR-0055 — Semantic Graphs Compile to Reactive Bevy ECS Runtime Projections
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-08-19
 
 ## Context
