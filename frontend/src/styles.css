@@ -4620,7 +4620,7 @@ button.status-segment:last-of-type,
 .dock-header-move-button {
   background: transparent;
   border: 1px solid transparent;
-  color: var(--color-text-muted, #888);
+  color: var(--color-ink-muted);
   font-size: 11px;
   line-height: 1;
   padding: 2px 6px;

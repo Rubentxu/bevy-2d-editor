@@ -687,9 +687,9 @@ function AppInner() {
     async (id: string) => {
       if (id === currentId) return;
       const result = await sceneSwitch(id);
-      if (result.dirty_prompt_required) {
+      if (result.dirtyPromptRequired) {
         setPendingSwitchId(id);
-        setPendingSwitchSource(result.source_name);
+        setPendingSwitchSource(result.sourceName);
       }
       // If no dirty prompt, the switch already happened server-side
       await refresh();

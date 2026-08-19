@@ -1,6 +1,11 @@
 import { useEffect, useState, useRef } from "react";
 import SchemaAuthoringPanel, { ComponentSchema } from "./SchemaAuthoringPanel";
-import { bridge, callBridge, callBridgeSync } from "../services/bridge-call";
+import {
+  bridge,
+  bridgeReady,
+  callBridge,
+  callBridgeSync,
+} from "../services/bridge-call";
 
 interface Props {
   entityId: string;
@@ -70,11 +75,13 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
   useEffect(() => {
     // Fetch all schemas via window-exposed bridge function
     const fetchSchemas = async () => {
-      // Wait for engine to be ready
-      let attempts = 0;
-      while (attempts < 50) {
-        await new Promise((r) => setTimeout(r, 100));
-        attempts += 1;
+      // Wait for the engine to be ready (resolves fast when already up).
+      // Previously this was a fixed 5s sleep: it delayed every mount and
+      // raced with the dropdown opening right after entity selection.
+      try {
+        await bridgeReady();
+      } catch {
+        return; // Engine never became ready; leave the list empty.
       }
       if (typeof bridge()?.["list_schemas"] === "function") {
         try {
@@ -107,6 +114,11 @@ export default function AddComponentButton({ entityId, onAdd }: Props) {
         return; // Can't edit builtins
       }
     }
+
+    // Close the dropdown when entering edit mode: the edit panel overlays
+    // the dropdown, and leaving it open would make the next .add-btn click
+    // toggle it closed instead of opening it (schema-authoring test (c)).
+    setOpen(false);
 
     // Hito 7 — refresh catalog on edit-mode entry so the picker shows the
     // latest scene assets (S1, spec change UX PR1 / task 2.5).

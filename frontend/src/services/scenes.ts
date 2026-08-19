@@ -14,8 +14,8 @@ interface SceneInfo {
 
 interface SwitchResult {
   switched: boolean;
-  dirty_prompt_required: boolean;
-  source_name: string | null;
+  dirtyPromptRequired: boolean;
+  sourceName: string | null;
 }
 
 function bridge() {

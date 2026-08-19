@@ -193,6 +193,7 @@ export default function MenuBar({
           className="menubar-legacy-actions"
           aria-label="Quick actions"
           aria-hidden="true"
+          inert
         >
           <div data-testid="toolbar-group-mode">
             <button
