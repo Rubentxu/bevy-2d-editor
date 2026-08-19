@@ -9,24 +9,12 @@
  *   - Commits dispatch SetComponentFieldOnMultiple command
  *   - data-has-mixed-fields attribute is set correctly
  */
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
+
 
 import { expect, test, type Page } from "@playwright/test";
 
-const WASM_LOAD_TIMEOUT = 120_000;
 
-async function waitForEngine(page: Page): Promise<void> {
-  await page.goto("/?skip-welcome=1");
-  await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-  await page.waitForFunction(
-    () =>
-      typeof (window as any).dispatch_command === "function" &&
-      typeof (window as any).load_scene_json === "function",
-    undefined,
-    { timeout: WASM_LOAD_TIMEOUT },
-  );
-}
 
 /** Dismiss the Welcome overlay if present (mirrors mode-context-bar.spec.ts pattern). */
 async function dismissWelcomeIfPresent(page: Page): Promise<void> {
@@ -90,9 +78,10 @@ async function loadMultiSelectScene(page: Page): Promise<void> {
   }
 }
 
-test.describe("Inspector Multi-Select Summary (Phase 2.3)", () => {
+test.describe("Inspector Multi-Select Summary (Phase 2.3)", { tag: ["@domain"] }, () => {
   test.beforeEach(async ({ page }) => {
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await loadMultiSelectScene(page);
   });
 

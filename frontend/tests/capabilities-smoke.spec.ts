@@ -1,4 +1,5 @@
 import { test, expect, Page } from "@playwright/test";
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
 
 /**
  * Smoke Tests — Capabilities Matrix (no OPFS dependency)
@@ -19,23 +20,7 @@ import { test, expect, Page } from "@playwright/test";
  *   Hito 7  ─ SceneComponent authoring
  */
 
-const WASM_LOAD_TIMEOUT = 120_000;
 
-async function waitForEngine(page: Page): Promise<void> {
-  // Topbar visible first (means React mounted)
-  await expect(page.locator('[data-testid="topbar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-  // Then the WASM bridge wiring is in place (window-level helpers available)
-  await page.waitForFunction(
-    () =>
-      typeof (window as any).load_scene_json === "function" &&
-      typeof (window as any).dispatch_command === "function" &&
-      typeof (window as any).get_scene_snapshot === "function",
-    undefined,
-    { timeout: 30_000 }
-  );
-}
 
 async function assertBinding(
   page: Page,
@@ -53,10 +38,10 @@ async function assertBinding(
 // Hito 0 — Foundation
 // ─────────────────────────────────────────────────────────────────────────────
 
-test.describe("Hito 0 — Foundation smoke", () => {
+test.describe("Hito 0 — Foundation smoke", { tag: ['@smoke'] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/?skip-welcome=1");
-    await waitForEngine(page);
+    await waitForEditorReady(page);
   });
 
   test("core WASM bindings (load_scene_json / dispatch_command / undo / redo / get_log_state) are present", async ({
@@ -145,10 +130,11 @@ test.describe("Hito 0 — Foundation smoke", () => {
 // Hito 1 — AI bindings + Mock proxy
 // ─────────────────────────────────────────────────────────────────────────────
 
-test.describe("Hito 1 — AI bindings smoke", () => {
+test.describe("Hito 1 — AI bindings smoke", { tag: ["@smoke"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/?skip-welcome=1");
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
   });
 
   test("AI panel toggle button present and AI bindings wired", async ({
@@ -178,10 +164,11 @@ test.describe("Hito 1 — AI bindings smoke", () => {
 // Hito 2 — Scene Asset Authoring & Instance placement (binding presence + OPFS-tolerant)
 // ─────────────────────────────────────────────────────────────────────────────
 
-test.describe("Hito 2 — Scene Asset authoring smoke (OPFS-tolerant)", () => {
+test.describe("Hito 2 — Scene Asset authoring smoke (OPFS-tolerant)", { tag: ["@smoke"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/?skip-welcome=1");
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     for (const fn of [
       "create_scene_asset",
       "list_scene_assets",
@@ -227,15 +214,15 @@ test.describe("Hito 2 — Scene Asset authoring smoke (OPFS-tolerant)", () => {
     ]) await assertBinding(page, fn);
   });
 });
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Hito 3 — BSN import / Runtime preview
 // ─────────────────────────────────────────────────────────────────────────────
 
-test.describe("Hito 3 — BSN + Runtime preview smoke", () => {
+test.describe("Hito 3 — BSN + Runtime preview smoke", { tag: ["@smoke"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/?skip-welcome=1");
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
   });
 
   test("BSN import bindings present and reject garbage gracefully", async ({
@@ -284,10 +271,11 @@ test.describe("Hito 3 — BSN + Runtime preview smoke", () => {
 // Hito 4 — Code editor / Logic graphs / Hot reload / Source files
 // ─────────────────────────────────────────────────────────────────────────────
 
-test.describe("Hito 4 — Code + Logic + Hot-reload smoke", () => {
+test.describe("Hito 4 — Code + Logic + Hot-reload smoke", { tag: ["@smoke"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/?skip-welcome=1");
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
   });
 
   test("source files bindings present", async ({ page }) => {
@@ -388,10 +376,11 @@ test.describe("Hito 4 — Code + Logic + Hot-reload smoke", () => {
 // Hito 7 — SceneComponent authoring
 // ─────────────────────────────────────────────────────────────────────────────
 
-test.describe("Hito 7 — SceneComponent smoke", () => {
+test.describe("Hito 7 — SceneComponent smoke", { tag: ["@smoke"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/?skip-welcome=1");
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
   });
 
   test("SceneComponent bindings present and list is non-empty", async ({
@@ -414,14 +403,15 @@ test.describe("Hito 7 — SceneComponent smoke", () => {
 // Cross-cutting — Error / Warning hygiene
 // ─────────────────────────────────────────────────────────────────────────────
 
-test.describe("Cross-cutting — Error hygiene smoke", () => {
+test.describe("Cross-cutting — Error hygiene smoke", { tag: ["@smoke"] }, () => {
   test("no uncaught pageerror during normal page lifecycle (1)", async ({
     page,
   }) => {
     const pageerrors: string[] = [];
     page.on("pageerror", (e) => pageerrors.push(e.message));
     await page.goto("/?skip-welcome=1");
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await page.waitForTimeout(2_000);
     // OBS-1: useSceneAssets.refreshInstances() now downgrades the
     // "No scene loaded" warning to console.debug, so no page errors

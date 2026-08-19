@@ -16,7 +16,7 @@ import { test, expect } from "@playwright/test";
 
 const WASM_LOAD_TIMEOUT = 120_000;
 
-test.describe("AI Panel v2 (PR4 — AI Panel v2)", () => {
+test.describe("AI Panel v2 (PR4 — AI Panel v2)", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/?skip-welcome=1");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({

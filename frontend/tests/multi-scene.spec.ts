@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 const WASM_LOAD_TIMEOUT = 120_000;
 
-test.describe("Multi-Scene", () => {
+test.describe("Multi-Scene", { tag: ["@persistence"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({ timeout: WASM_LOAD_TIMEOUT });

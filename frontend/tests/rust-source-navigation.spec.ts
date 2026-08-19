@@ -15,7 +15,7 @@
 
 import { test, expect } from "@playwright/test";
 
-test.describe("Rust Source Navigation — rust-source-integration", () => {
+test.describe("Rust Source Navigation — rust-source-integration", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
     // Wait for WASM engine to be ready
     await page.goto("/");

@@ -11,7 +11,7 @@ const WASM_LOAD_TIMEOUT = 120_000;
  * NO prefab/template/blueprint/archetype terms allowed.
  */
 
-test.describe("Inspector Override Panel", () => {
+test.describe("Inspector Override Panel", { tag: ["@domain"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({
@@ -481,7 +481,7 @@ test.describe("Inspector Override Panel", () => {
   });
 });
 
-test.describe("Inspector Override UI Integration", () => {
+test.describe("Inspector Override UI Integration", { tag: ["@domain"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({

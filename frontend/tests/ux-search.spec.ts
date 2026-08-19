@@ -1,4 +1,5 @@
 import { expect, Page, test } from "@playwright/test";
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
 
 /**
  * v0.81 Tier 1 — Global Search tab.
@@ -13,20 +14,7 @@ import { expect, Page, test } from "@playwright/test";
  * test doesn't need to toggle F7 — it just selects the Search tab.
  */
 
-const WASM_LOAD_TIMEOUT = 120_000;
 
-async function waitForEngine(page: Page): Promise<void> {
-  await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-  await page.waitForFunction(
-    () =>
-      typeof (window as any).load_scene_json === "function" &&
-      typeof (window as any).dispatch_command === "function",
-    undefined,
-    { timeout: 30_000 },
-  );
-}
 
 /**
  * Dismiss the Phase E welcome overlay if it appears so the bottom dock
@@ -61,10 +49,11 @@ async function activateSearchTab(page: Page): Promise<void> {
   await expect(page.locator('[data-testid="bottom-tabpanel-search"]')).toBeVisible();
 }
 
-test.describe("Global Search (v0.81)", () => {
+test.describe("Global Search (v0.81)", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/?skip-welcome=1");
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await dismissWelcomeIfPresent(page);
     await activateSearchTab(page);
   });

@@ -29,7 +29,28 @@ export default defineConfig({
   ],
   projects: [
     {
-      name: "chromium",
+      name: "smoke",
+      grep: /@smoke/,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "domain",
+      grep: /@domain/,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "persistence",
+      grep: /@persistence/,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "accessibility",
+      grep: /@accessibility/,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "full",
+      grep: /@full/,
       use: { ...devices["Desktop Chrome"] },
     },
   ],

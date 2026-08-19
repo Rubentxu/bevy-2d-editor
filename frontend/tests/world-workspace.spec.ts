@@ -10,27 +10,10 @@
  *
  * Uses EditorGateway.world via the WASM bridge (Slice 3).
  */
-
 import { expect, Page, test } from "@playwright/test";
-
-const WASM_LOAD_TIMEOUT = 120_000;
-
-async function waitForEngine(page: Page): Promise<void> {
-  await page.goto("/?skip-welcome=1");
-  await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-  await page.waitForFunction(
-    () =>
-      typeof (window as any).load_scene_json === "function" &&
-      typeof (window as any).dispatch_command === "function" &&
-      typeof (window as any).create_world_wasm === "function",
-    undefined,
-    { timeout: 30_000 },
-  );
-}
-
 /** Dismiss the Welcome overlay if present. */
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
+
 async function dismissWelcomeIfPresent(page: Page): Promise<void> {
   await page.waitForTimeout(500);
   const overlay = page.locator('[data-testid="welcome-overlay"]');
@@ -53,10 +36,11 @@ async function switchMode(page: Page, mode: string): Promise<void> {
   await page.waitForTimeout(300);
 }
 
-test.describe("World Workspace — Slice 4 Smoke", () => {
+test.describe("World Workspace — Slice 4 Smoke", { tag: ["@domain"] }, () => {
   test.beforeEach(async ({ page }) => {
+    await page.goto("/?skip-welcome=1");
     await page.setViewportSize({ width: 1280, height: 800 });
-    await waitForEngine(page);
+    await waitForEditorReady(page);
     await dismissWelcomeIfPresent(page);
   });
 

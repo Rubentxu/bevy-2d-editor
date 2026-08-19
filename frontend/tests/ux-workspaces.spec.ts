@@ -13,19 +13,12 @@
  * DockLayout's CSS Grid template, so reading it is the closest end-to-end
  * signal we have without dipping into React internals.
  */
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
+
 
 import { expect, Page, test } from "@playwright/test";
 
-const WASM_LOAD_TIMEOUT = 120_000;
 
-async function waitForEngine(page: Page): Promise<void> {
-  await page.goto("/?skip-welcome=1");
-  await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-  // Wait for the View menu trigger so dropdowns can be opened reliably.
-  await expect(page.locator('[data-testid="menu-view"]')).toBeVisible();
-}
 
 /**
  * Open the View menu and hover the "Workspace" entry so the submenu is
@@ -80,9 +73,10 @@ async function readLeftWidth(page: Page): Promise<number> {
   });
 }
 
-test.describe("Workspace Presets (v0.81)", () => {
+test.describe("Workspace Presets (v0.81)", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
   });
 
   test("View > Workspace submenu exposes the five built-in presets", async ({

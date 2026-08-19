@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("BSN File Import", () => {
+test.describe("BSN File Import", { tag: ["@domain"] }, () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to the app and wait for it to be ready
     await page.goto("/");

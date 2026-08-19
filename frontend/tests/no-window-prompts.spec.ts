@@ -15,7 +15,7 @@ const WASM_LOAD_TIMEOUT = 120_000;
  * - Save Workspace Preset (App.tsx)
  */
 
-test.describe("No window.prompt/alert/confirm in core flows (T3.5)", () => {
+test.describe("No window.prompt/alert/confirm in core flows (T3.5)", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({

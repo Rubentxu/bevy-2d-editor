@@ -10,17 +10,12 @@
  *   - 1366×768   (desktop above threshold)
  *   - 1280×800   (desktop at threshold — common laptop resolution)
  */
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
+
 
 import { expect, type Page, test } from "@playwright/test";
 
-const WASM_LOAD_TIMEOUT = 120_000;
 
-async function waitForEngine(page: Page): Promise<void> {
-  await page.goto("/?skip-welcome=1");
-  await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-}
 
 async function dismissWelcomeIfPresent(page: Page): Promise<void> {
   await page.waitForTimeout(500);
@@ -36,7 +31,7 @@ async function dismissWelcomeIfPresent(page: Page): Promise<void> {
   }
 }
 
-test.describe("Status bar fills the grid region (T2.6)", () => {
+test.describe("Status bar fills the grid region (T2.6)", { tag: ["@full"] }, () => {
   for (const [label, width, height] of [
     ["1920×1080", 1920, 1080],
     ["1366×768", 1366, 768],
@@ -45,7 +40,8 @@ test.describe("Status bar fills the grid region (T2.6)", () => {
     test.describe(`at ${label}`, () => {
       test.beforeEach(async ({ page }) => {
         await page.setViewportSize({ width, height });
-        await waitForEngine(page);
+        await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
         await dismissWelcomeIfPresent(page);
       });
 

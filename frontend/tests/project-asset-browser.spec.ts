@@ -12,7 +12,7 @@ const WASM_LOAD_TIMEOUT = 120_000;
  *   - asset: `asset-unsaved-*`
  */
 
-test.describe("Project Asset Browser", () => {
+test.describe("Project Asset Browser", { tag: ["@domain"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({
@@ -146,7 +146,7 @@ test.describe("Project Asset Browser", () => {
   });
 });
 
-test.describe("Asset Authoring View", () => {
+test.describe("Asset Authoring View", { tag: ["@domain"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({
@@ -454,7 +454,7 @@ test.describe("Asset Authoring View", () => {
   });
 });
 
-test.describe("S20 — No Bevy Preview in Authoring Mode", () => {
+test.describe("S20 — No Bevy Preview in Authoring Mode", { tag: ["@domain"] }, () => {
   test("S20: canvas remains mounted but unused in authoring mode", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({
@@ -497,7 +497,7 @@ test.describe("S20 — No Bevy Preview in Authoring Mode", () => {
   });
 });
 
-test.describe("S21 — Terminology Guard", () => {
+test.describe("S21 — Terminology Guard", { tag: ["@domain"] }, () => {
   /**
    * S21: DOM contains no forbidden terminology
    * GIVEN the Project Asset Browser and Asset Authoring View are visible
@@ -580,7 +580,7 @@ test.describe("S21 — Terminology Guard", () => {
   });
 });
 
-test.describe("EC4 — Save-then-commit order", () => {
+test.describe("EC4 — Save-then-commit order", { tag: ["@domain"] }, () => {
   test("EC4: save persists commands in correct order", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({

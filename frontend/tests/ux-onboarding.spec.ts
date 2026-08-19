@@ -1,4 +1,5 @@
 import { test, expect, Page } from "@playwright/test";
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
 
 /**
  * Phase 1 — UX Overhaul: onboarding tests
@@ -13,21 +14,7 @@ import { test, expect, Page } from "@playwright/test";
  * to seed initial empty scene state, mirroring `capabilities-smoke.spec.ts`.
  */
 
-const WASM_LOAD_TIMEOUT = 120_000;
 
-async function waitForEngine(page: Page): Promise<void> {
-  await expect(page.locator('[data-testid="topbar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-  await page.waitForFunction(
-    () =>
-      typeof (window as any).load_scene_json === "function" &&
-      typeof (window as any).dispatch_command === "function" &&
-      typeof (window as any).get_scene_snapshot === "function",
-    undefined,
-    { timeout: 30_000 }
-  );
-}
 
 async function seedEmptyScene(page: Page, sceneId: string, sceneName: string): Promise<void> {
   await page.evaluate(
@@ -59,10 +46,11 @@ async function getEntityCount(page: Page): Promise<number> {
   return doc?.entities?.length ?? 0;
 }
 
-test.describe("UX Onboarding — Add Entity button + N shortcut", () => {
+test.describe("UX Onboarding — Add Entity button + N shortcut", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/?skip-welcome=1");
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await seedEmptyScene(page, "ux-onboarding", "UX Onboarding");
   });
 

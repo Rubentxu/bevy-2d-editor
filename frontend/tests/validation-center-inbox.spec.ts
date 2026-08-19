@@ -74,7 +74,7 @@ async function seedSchemaAndAIIssues(page: Page): Promise<void> {
   });
 }
 
-test.describe("Validation Center Inbox (T2.2)", () => {
+test.describe("Validation Center Inbox (T2.2)", { tag: ["@persistence"] }, () => {
   test.beforeEach(async ({ page }) => {
     const errors: string[] = [];
     page.on("console", (msg) => {

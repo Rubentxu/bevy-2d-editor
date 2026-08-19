@@ -15,7 +15,7 @@ import { test, expect } from "@playwright/test";
 
 const WASM_LOAD_TIMEOUT = 120_000;
 
-test.describe("InspectorPanel logic action buttons (PR4)", () => {
+test.describe("InspectorPanel logic action buttons (PR4)", { tag: ["@domain"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/?skip-welcome=1");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({
@@ -27,33 +27,31 @@ test.describe("InspectorPanel logic action buttons (PR4)", () => {
    * GIVEN the inspector panel logic action buttons exist in the DOM
    * THEN they are reachable via page locators (structural test)
    */
-  test("logic action buttons exist in DOM when inspector renders", async ({ page }) => {
+  test("logic action buttons exist in DOM when instance with Transform2D is selected", async ({ page }) => {
     // Use page-level locator to find buttons without requiring .inspector-panel visibility
     // The buttons are rendered when InspectorPanel is in the component tree
-    const attachLogicBtn = page.locator('[data-testid="inspector-attach-logic-btn"]');
-    const openBoundLogicBtn = page.locator('[data-testid="inspector-open-bound-logic-btn"]');
+    const attachLogicBtn = page.locator('[data-testid^="instance-attach-logic-btn-"]');
+    const openBoundLogicBtn = page.locator('[data-testid^="open-bound-logic-btn-"]');
     const createFromRecipeBtn = page.locator('[data-testid="inspector-create-from-recipe-btn"]');
     const inspectRuntimeLogicBtn = page.locator('[data-testid="inspector-inspect-runtime-logic-btn"]');
 
-    // Verify each button exists in the DOM (count >= 0)
-    // The buttons may or may not be visible depending on scene state
+    // Navigate to instance with Transform2D first to ensure buttons are rendered
+    // Select entity with Transform2D (the default entity in test fixtures)
+    const defaultEntity = page.locator('[data-testid="entity-item-entity-default"]');
+    await defaultEntity.click();
+
+    // Verify each button exists in the DOM when an entity is selected
     const attachCount = await attachLogicBtn.count();
     const openBoundCount = await openBoundLogicBtn.count();
     const createFromRecipeCount = await createFromRecipeBtn.count();
     const inspectRuntimeCount = await inspectRuntimeLogicBtn.count();
 
-    // Log counts for debugging but don't fail — these are structural tests
-    console.log("Inspector attach logic btn count:", attachCount);
-    console.log("Inspector open bound logic btn count:", openBoundCount);
-    console.log("Inspector create from recipe btn count:", createFromRecipeCount);
-    console.log("Inspector inspect runtime logic btn count:", inspectRuntimeCount);
-
     // At minimum, the DOM should have the button elements defined
-    // They will be visible only when an entity with logic bindings is selected
-    expect(attachCount).toBeGreaterThanOrEqual(0);
-    expect(openBoundCount).toBeGreaterThanOrEqual(0);
-    expect(createFromRecipeCount).toBeGreaterThanOrEqual(0);
-    expect(inspectRuntimeCount).toBeGreaterThanOrEqual(0);
+    // With a selected entity, buttons should be present (count > 0)
+    expect(attachCount).toBeGreaterThan(0);
+    expect(openBoundCount).toBeGreaterThan(0);
+    expect(createFromRecipeCount).toBeGreaterThan(0);
+    expect(inspectRuntimeCount).toBeGreaterThan(0);
   });
 
   /**
@@ -62,7 +60,7 @@ test.describe("InspectorPanel logic action buttons (PR4)", () => {
    * THEN no console error is thrown
    */
   test("Attach Logic button click does not throw", async ({ page }) => {
-    const attachLogicBtn = page.locator('[data-testid="inspector-attach-logic-btn"]');
+    const attachLogicBtn = page.locator('[data-testid="instance-attach-logic-btn-"]');
     const errors: string[] = [];
     page.on("console", (msg) => {
       if (msg.type() === "error") errors.push(msg.text());
@@ -70,7 +68,7 @@ test.describe("InspectorPanel logic action buttons (PR4)", () => {
 
     // Use dispatchEvent to bypass any overlay interception
     await page.evaluate(() => {
-      const btn = document.querySelector('[data-testid="inspector-attach-logic-btn"]');
+      const btn = document.querySelector('[data-testid="instance-attach-logic-btn-"]');
       btn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await page.waitForTimeout(500);

@@ -10,7 +10,7 @@ async function saveScreenshot(panel: ReturnType<Page["locator"]>, filename: stri
   writeFileSync(join(BASELINES_DIR, filename), buf);
 }
 
-test.describe("Keyboard Shortcuts — Undo/Redo", () => {
+test.describe("Keyboard Shortcuts — Undo/Redo", { tag: ["@full"] }, () => {
   test("Ctrl+Z undo removes an entity from hierarchy (pixel diff > 0 confirmed)", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({ timeout: WASM_LOAD_TIMEOUT });

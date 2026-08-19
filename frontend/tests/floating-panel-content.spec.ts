@@ -7,17 +7,8 @@
  *
  * Viewports: 1920×1080 (desktop above threshold).
  */
-
 import { expect, type Page, test } from "@playwright/test";
-
-const WASM_LOAD_TIMEOUT = 120_000;
-
-async function waitForEngine(page: Page): Promise<void> {
-  await page.goto("/?skip-welcome=1");
-  await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-}
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
 
 async function dismissWelcomeIfPresent(page: Page): Promise<void> {
   await page.waitForTimeout(500);
@@ -46,10 +37,11 @@ async function clickFloatToggle(page: Page, panelId: string): Promise<void> {
   await page.locator(sel).first().click({ force: true });
 }
 
-test.describe("Floating panel renders real dock content (T2.5)", () => {
+test.describe("Floating panel renders real dock content (T2.5)", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
+    await page.goto("/?skip-welcome=1");
     await page.setViewportSize({ width: 1920, height: 1080 });
-    await waitForEngine(page);
+    await waitForEditorReady(page);
     await dismissWelcomeIfPresent(page);
     await expect(page.locator('[data-testid="dock-layout"]')).toBeVisible();
   });

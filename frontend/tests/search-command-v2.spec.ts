@@ -74,7 +74,7 @@ async function waitForSearchIndex(page: Page): Promise<void> {
   );
 }
 
-test.describe("Search / Command v2 (T2.5)", () => {
+test.describe("Search / Command v2 (T2.5)", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
     const errors: string[] = [];
     page.on("console", (msg) => {

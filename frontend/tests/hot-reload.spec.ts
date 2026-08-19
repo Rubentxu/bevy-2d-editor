@@ -9,7 +9,7 @@
 
 import { test, expect } from "@playwright/test";
 
-test.describe("hot-reload", () => {
+test.describe("hot-reload", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
     // Wait for engine to be ready

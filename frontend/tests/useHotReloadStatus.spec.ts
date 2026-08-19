@@ -10,7 +10,7 @@ import type { HotReloadStatus } from "../src/hooks/useHotReloadStatus";
 
 // This test verifies the hook module exports the correct types and can be imported
 // without TypeScript errors. Full behavior is tested via GameOverlay and TopBar E2E.
-test("useHotReloadStatus exports correct interface", async () => {
+test("useHotReloadStatus exports correct interface", { tag: ["@full"] }, async () => {
   // Verify the type matches the expected shape
   const _status: HotReloadStatus = {
     lastReloadedAt: null,

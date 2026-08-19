@@ -13,7 +13,7 @@ import { test, expect, Page } from "@playwright/test";
 
 const WASM_LOAD_TIMEOUT = 120_000;
 
-test.describe("Logic RecipePicker (PR4 — Logic Workflow v2)", () => {
+test.describe("Logic RecipePicker (PR4 — Logic Workflow v2)", { tag: ["@domain"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/?skip-welcome=1");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({

@@ -26,25 +26,12 @@
  *     DOM (selected class on entity rows) plus the inspector
  *     `data-entity-count` attribute.
  */
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
+
 
 import { expect, test, type Page } from "@playwright/test";
 
-const WASM_LOAD_TIMEOUT = 120_000;
 
-async function waitForEngine(page: Page): Promise<void> {
-  await page.goto("/?skip-welcome=1");
-  await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-  // Bridge has to be bound before we can dispatch_command.
-  await page.waitForFunction(
-    () =>
-      typeof (window as any).dispatch_command === "function" &&
-      typeof (window as any).load_scene_json === "function",
-    undefined,
-    { timeout: WASM_LOAD_TIMEOUT },
-  );
-}
 
 async function loadTestScene(page: Page): Promise<void> {
   await page.evaluate(() =>
@@ -111,9 +98,10 @@ async function loadTestScene(page: Page): Promise<void> {
   }
 }
 
-test.describe("Multi-select (v0.82 P2, ADR-0025)", () => {
+test.describe("Multi-select (v0.82 P2, ADR-0025)", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await loadTestScene(page);
   });
 
@@ -255,15 +243,12 @@ test.describe("Multi-select (v0.82 P2, ADR-0025)", () => {
     await expect(
       multi.locator("[data-testid='component-Transform2D']"),
     ).toBeVisible();
-    // At least one field row carries the mixed state (translation is
-    // rendered as a single field with a Mixed button in our simplified
-    // MultiFieldRow — when the renderer upgrades to per-axis Mixed
-    // markers we still expect the row state to be "mixed" or
-    // "overriding").
+    // After selecting ms-a and ms-b (setup above), we expect mixed states
+    // to be present (> 0) since they have different Transform2D values
     const mixedStates = await multi
       .locator('.field-row.multi[data-field-state="mixed"]')
       .count();
-    expect(mixedStates).toBeGreaterThanOrEqual(0);
+    expect(mixedStates).toBeGreaterThan(0);
   });
 
   test("F9 — Multi-edit dispatches a single SetComponentFieldOnMultiple command", async ({

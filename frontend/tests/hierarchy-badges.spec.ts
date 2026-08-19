@@ -8,26 +8,10 @@
  *   - WarningBadge renders for entities with warning components (type_id ends with "Broken")
  *   - Each badge type carries the correct CSS class and data-testid
  */
-
 import { expect, test, type Page } from "@playwright/test";
-
-const WASM_LOAD_TIMEOUT = 120_000;
-
-async function waitForEngine(page: Page): Promise<void> {
-  await page.goto("/?skip-welcome=1");
-  await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-  await page.waitForFunction(
-    () =>
-      typeof (window as any).dispatch_command === "function" &&
-      typeof (window as any).load_scene_json === "function",
-    undefined,
-    { timeout: WASM_LOAD_TIMEOUT },
-  );
-}
-
 /** Dismiss the Welcome overlay if present (mirrors mode-context-bar.spec.ts pattern). */
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
+
 async function dismissWelcomeIfPresent(page: Page): Promise<void> {
   await page.waitForTimeout(500);
   const overlay = page.locator('[data-testid="welcome-overlay"]');
@@ -99,9 +83,10 @@ async function loadBadgeTestScene(page: Page): Promise<void> {
   }
 }
 
-test.describe("Hierarchy Badges (Phase 2.3)", () => {
+test.describe("Hierarchy Badges (Phase 2.3)", { tag: ["@domain"] }, () => {
   test.beforeEach(async ({ page }) => {
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await loadBadgeTestScene(page);
   });
 
@@ -183,18 +168,7 @@ test.describe("Hierarchy Badges (Phase 2.3)", () => {
   }) => {
     // Reload page to get fresh state (bypass the beforeEach that loads badge-test scene)
     await page.goto("/?skip-welcome=1");
-    await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-      timeout: WASM_LOAD_TIMEOUT,
-    });
-
-    // Wait for engine to be ready (same as waitForEngine)
-    await page.waitForFunction(
-      () =>
-        typeof (window as any).dispatch_command === "function" &&
-        typeof (window as any).load_scene_json === "function",
-      undefined,
-      { timeout: WASM_LOAD_TIMEOUT },
-    );
+    await waitForEditorReady(page);
 
     // Dismiss welcome overlay if present
     await dismissWelcomeIfPresent(page);
@@ -273,9 +247,11 @@ test.describe("Hierarchy Badges (Phase 2.3)", () => {
     await expect(overrideBadge).toHaveText("A");
 
     // Also verify the instance has the override via get_scene_instances
-    const instances = await page.evaluate(() =>
+    const rawInstances = await page.evaluate(() =>
       (window as any).get_scene_instances()
     );
+    const instances =
+      typeof rawInstances === "string" ? JSON.parse(rawInstances) : rawInstances;
     expect(instances.i001).toBeDefined();
     expect(instances.i001.component_overrides.length).toBeGreaterThan(0);
     expect(instances.i001.component_overrides[0].status).toBe("active");

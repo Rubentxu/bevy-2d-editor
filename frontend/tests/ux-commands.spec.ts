@@ -1,4 +1,5 @@
 import { test, expect, Page } from "@playwright/test";
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
 
 /**
  * Phase 3.2 — Command Palette (Ctrl+K) tests.
@@ -9,25 +10,13 @@ import { test, expect, Page } from "@playwright/test";
  *  - Escape closes the palette
  */
 
-const WASM_LOAD_TIMEOUT = 120_000;
 
-async function waitForEngine(page: Page): Promise<void> {
-  await expect(page.locator('[data-testid="topbar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-  await page.waitForFunction(
-    () =>
-      typeof (window as any).load_scene_json === "function" &&
-      typeof (window as any).get_scene_snapshot === "function",
-    undefined,
-    { timeout: 30_000 },
-  );
-}
 
-test.describe("UX Command Palette — Phase 3.2", () => {
+test.describe("UX Command Palette — Phase 3.2", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/?skip-welcome=1");
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
   });
 
   test("Ctrl+K opens the command palette", async ({ page }) => {

@@ -6,7 +6,7 @@ import { test, expect } from "@playwright/test";
 
 const WASM_LOAD_TIMEOUT = 120_000;
 
-test.describe("Code Export — ExportRustModal", () => {
+test.describe("Code Export — ExportRustModal", { tag: ["@full"] }, () => {
   test("modal opens and shows Rust source with ScenePlugin", async ({ page }) => {
     const consoleLogs: string[] = [];
     page.on("console", (msg) => consoleLogs.push(msg.text()));

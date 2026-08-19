@@ -17,7 +17,7 @@ const WASM_LOAD_TIMEOUT = 120_000;
 /** Mock proxy URL — matches the webServer entry in playwright.config.ts */
 const MOCK_PROXY_URL = "http://localhost:11436";
 
-test.describe("AI-Assisted Editing", () => {
+test.describe("AI-Assisted Editing", { tag: ["@full"] }, () => {
   // Per-test setup: navigate and wait for WASM
   test.beforeEach(async ({ page }) => {
     await page.goto("/");

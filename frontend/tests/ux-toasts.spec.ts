@@ -1,4 +1,5 @@
 import { test, expect, Page } from "@playwright/test";
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
 
 /**
  * Phase 5 — Toast system (UX Overhaul).
@@ -9,27 +10,15 @@ import { test, expect, Page } from "@playwright/test";
  *     grace period).
  */
 
-const WASM_LOAD_TIMEOUT = 120_000;
 
-async function waitForEngine(page: Page): Promise<void> {
-  await expect(page.locator('[data-testid="topbar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-  await page.waitForFunction(
-    () =>
-      typeof (window as any).load_scene_json === "function" &&
-      typeof (window as any).get_scene_snapshot === "function",
-    undefined,
-    { timeout: 30_000 },
-  );
-}
 
-test.describe("UX Toasts — Phase 5", () => {
+test.describe("UX Toasts — Phase 5", { tag: ["@full"] }, () => {
   test("Triggering an error surfaces a toast that auto-dismisses after 5s", async ({
     page,
   }) => {
     await page.goto("/?skip-welcome=1");
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
 
     // Drive a known error path through App.tsx: handleRename with no entity
     // selection would normally short-circuit, so instead we hit handleLoad

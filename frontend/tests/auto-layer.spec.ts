@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("Auto Layer Panel", () => {
+test.describe("Auto Layer Panel", { tag: ["@domain"] }, () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to the app and wait for it to load
     await page.goto("/");

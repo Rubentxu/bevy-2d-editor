@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
 /**
  * v0.81 Tier 1c — Drag-and-Dock infrastructure.
  *
@@ -20,14 +21,7 @@ import { expect, test, type Page } from "@playwright/test";
  * semantics never regress even if the wiring changes.
  */
 
-const WASM_LOAD_TIMEOUT = 120_000;
 
-async function waitForEngine(page: Page): Promise<void> {
-  await page.goto("/?skip-welcome=1");
-  await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-}
 
 /**
  * Dismiss the welcome overlay (Phase E) if it appears. Without this the
@@ -48,9 +42,10 @@ async function dismissWelcomeIfPresent(page: Page): Promise<void> {
   }
 }
 
-test.describe("Drag-and-Dock (v0.81 Tier 1c)", () => {
+test.describe("Drag-and-Dock (v0.81 Tier 1c)", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await dismissWelcomeIfPresent(page);
     await expect(page.locator('[data-testid="dock-layout"]')).toBeVisible();
   });
@@ -351,13 +346,15 @@ async function simulateDrop(
   }, opts);
 }
 
-test.describe("Drag-and-Dock swap (v0.82 P1, ADR-0024)", () => {
+test.describe("Drag-and-Dock swap (v0.82 P1, ADR-0024)", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await dismissWelcomeIfPresent(page);
     await resetDockPrefs(page);
     await page.reload();
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await dismissWelcomeIfPresent(page);
     await expect(page.locator('[data-testid="dock-layout"]')).toBeVisible();
   });
@@ -492,7 +489,8 @@ test.describe("Drag-and-Dock swap (v0.82 P1, ADR-0024)", () => {
     const historyLengthBefore = await page.evaluate(() => history.length);
 
     await page.reload();
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await dismissWelcomeIfPresent(page);
 
     // After rehydrate, fetch the OPFS prefs back. The strongest assertion:
@@ -561,7 +559,8 @@ test.describe("Drag-and-Dock swap (v0.82 P1, ADR-0024)", () => {
     // Reset before this test to isolate from any drops above.
     await resetDockPrefs(page);
     await page.reload();
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await dismissWelcomeIfPresent(page);
 
     // Open the Assets `Move →` menu and click "Move to Right".
@@ -629,7 +628,8 @@ test.describe("Drag-and-Dock swap (v0.82 P1, ADR-0024)", () => {
     });
 
     await page.reload();
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await dismissWelcomeIfPresent(page);
 
     // After hydration the React state should have the canonical layout.
@@ -689,9 +689,10 @@ test.describe("Drag-and-Dock swap (v0.82 P1, ADR-0024)", () => {
 // Pure reducer coverage (in-page, avoids a separate Vitest runner).
 // ─────────────────────────────────────────────────────────────────────────────
 
-test.describe("movePanel reducer (in-page unit, ADR-0024)", () => {
+test.describe("movePanel reducer (in-page unit, ADR-0024)", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await dismissWelcomeIfPresent(page);
   });
 

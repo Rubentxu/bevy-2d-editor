@@ -12,8 +12,8 @@ import type { HotReloadSourceEvent, HotReloadAssetEvent } from "../src/services/
 // @ts-expect-error — module not yet implemented
 import { subscribe, emit, inFlightSaveCounter } from "../src/services/hot-reload";
 
-test.describe("hot-reload bus", () => {
-  test("subscribe receives source event after emit", async () => {
+test.describe("hot-reload bus", { tag: ["@full"] }, () => {
+  test("subscribe receives source event after emit", { tag: ["@full"] }, async () => {
     const received: HotReloadSourceEvent[] = [];
     const unsub = subscribe("hot-reload-source", (event) => {
       received.push(event as HotReloadSourceEvent);
@@ -27,7 +27,7 @@ test.describe("hot-reload bus", () => {
     unsub();
   });
 
-  test("subscribe receives asset event after emit", async () => {
+  test("subscribe receives asset event after emit", { tag: ["@full"] }, async () => {
     const received: HotReloadAssetEvent[] = [];
     const unsub = subscribe("hot-reload-asset", (event) => {
       received.push(event as HotReloadAssetEvent);
@@ -41,7 +41,7 @@ test.describe("hot-reload bus", () => {
     unsub();
   });
 
-  test("unsubscribe stops delivery", async () => {
+  test("unsubscribe stops delivery", { tag: ["@full"] }, async () => {
     const received: unknown[] = [];
     const unsub = subscribe("hot-reload-source", (event) => {
       received.push(event);
@@ -53,7 +53,7 @@ test.describe("hot-reload bus", () => {
     expect(received).toHaveLength(0);
   });
 
-  test("subscriber error does not throw", async () => {
+  test("subscriber error does not throw", { tag: ["@full"] }, async () => {
     const handler = () => {
       throw new Error("handler error");
     };
@@ -63,7 +63,7 @@ test.describe("hot-reload bus", () => {
     expect(() => emit({ type: "hot-reload-source", fileId: "x.rs" })).not.toThrow();
   });
 
-  test("inFlightSaveCounter increments and decrements", async () => {
+  test("inFlightSaveCounter increments and decrements", { tag: ["@full"] }, async () => {
     expect(inFlightSaveCounter.value).toBe(0);
 
     inFlightSaveCounter.incr();

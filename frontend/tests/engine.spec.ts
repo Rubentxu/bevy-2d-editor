@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 const WASM_LOAD_TIMEOUT = 120_000;
 
-test.describe("Spike — Engine Lifecycle", () => {
+test.describe("Spike — Engine Lifecycle", { tag: ["@full"] }, () => {
   test("WASM loads and engine starts or shows error", async ({ page }) => {
     const errors: string[] = [];
     page.on("console", (msg) => {
@@ -33,7 +33,7 @@ test.describe("Spike — Engine Lifecycle", () => {
   });
 });
 
-test.describe("Spike — Command Bus (zero-cost)", () => {
+test.describe("Spike — Command Bus (zero-cost)", { tag: ["@full"] }, () => {
   test("move sprite updates position via shared memory bus", async ({ page }) => {
     await page.goto("/");
 
@@ -138,7 +138,7 @@ test.describe("Spike — Command Bus (zero-cost)", () => {
   });
 });
 
-test.describe("Spike — Multiple Commands", () => {
+test.describe("Spike — Multiple Commands", { tag: ["@full"] }, () => {
   test("rapid commands don't crash the engine", async ({ page }) => {
     await page.goto("/");
 
@@ -158,7 +158,7 @@ test.describe("Spike — Multiple Commands", () => {
   });
 });
 
-test.describe("Spike — Typed Command System", () => {
+test.describe("Spike — Typed Command System", { tag: ["@full"] }, () => {
   test("dispatch_command applies a CreateEntity from JS", async ({ page }) => {
     const initialScene = {
       version: "0.1",
@@ -327,7 +327,7 @@ test.describe("Spike — Typed Command System", () => {
   });
 });
 
-test.describe("Spike — Operation Log + Undo/Redo", () => {
+test.describe("Spike — Operation Log + Undo/Redo", { tag: ["@full"] }, () => {
   test("undo removes a dispatched CreateEntity", async ({ page }) => {
     const initialScene = {
       version: "0.1",
@@ -522,7 +522,7 @@ test.describe("Spike — Operation Log + Undo/Redo", () => {
   });
 });
 
-test.describe("Spike — OPFS Persistence", () => {
+test.describe("Spike — OPFS Persistence", { tag: ["@full"] }, () => {
   test("save_scene and load_scene roundtrip with 50 entities", async ({ page }) => {
     // Build a scene with 50 entities
     const entities = [];
@@ -669,7 +669,7 @@ test.describe("Spike — OPFS Persistence", () => {
   });
 });
 
-test.describe("Spike — Schema Registry Persistence", () => {
+test.describe("Spike — Schema Registry Persistence", { tag: ["@full"] }, () => {
   test("register custom schema and use it in AddComponent", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({ timeout: WASM_LOAD_TIMEOUT });
@@ -788,7 +788,7 @@ test.describe("Spike — Schema Registry Persistence", () => {
   });
 });
 
-test.describe("Spike — UI Panels", () => {
+test.describe("Spike — UI Panels", { tag: ["@full"] }, () => {
   test("UI hierarchy shows entities and supports selection", async ({ page }) => {
     await page.goto("/?skip-welcome=1&skip-onboarding=1");
     // Wait for UI panels to render (topbar is the first to appear)

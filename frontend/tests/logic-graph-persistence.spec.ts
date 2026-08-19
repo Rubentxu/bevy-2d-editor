@@ -11,7 +11,7 @@ const WASM_LOAD_TIMEOUT = 120_000;
  * - T1.7: open_logic_graph_asset loads a graph from OPFS into the active slot
  */
 
-test.describe("Logic Graph OPFS Persistence (T1.3, T1.4, T1.5, T1.7)", () => {
+test.describe("Logic Graph OPFS Persistence (T1.3, T1.4, T1.5, T1.7)", { tag: ["@persistence"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({

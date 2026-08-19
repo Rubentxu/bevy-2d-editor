@@ -1,4 +1,5 @@
 import { test, expect, Page } from "@playwright/test";
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
 
 /**
  * Phase C T3.5 — No duplicate onboarding surfaces (spec S5).
@@ -14,13 +15,7 @@ import { test, expect, Page } from "@playwright/test";
  * the "Don't show again" choice is shared between both surfaces.
  */
 
-const WASM_LOAD_TIMEOUT = 120_000;
 
-async function waitForEngine(page: Page): Promise<void> {
-  await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-}
 
 async function clearBothDismissedFlags(page: Page): Promise<void> {
   // Clear both OPFS flags so we simulate a true first-visit state
@@ -52,16 +47,15 @@ async function clearBothDismissedFlags(page: Page): Promise<void> {
   });
 }
 
-test.describe("No duplicate onboarding surfaces (Phase C T3.5 / spec S5)", () => {
+test.describe("No duplicate onboarding surfaces (Phase C T3.5 / spec S5)", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await clearBothDismissedFlags(page);
     // Reload to pick up cleared OPFS state as a true "first visit"
     await page.reload();
-    await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-      timeout: WASM_LOAD_TIMEOUT,
-    });
+    await waitForEditorReady(page);
   });
 
   test("Welcome overlay and OnboardingBanner are mutually exclusive on first visit", async ({ page }) => {
@@ -105,9 +99,7 @@ test.describe("No duplicate onboarding surfaces (Phase C T3.5 / spec S5)", () =>
 
     // Reload — both should stay hidden
     await page.reload();
-    await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-      timeout: WASM_LOAD_TIMEOUT,
-    });
+    await waitForEditorReady(page);
 
     // Neither should appear after reload
     await expect(welcomeOverlay).not.toBeVisible();

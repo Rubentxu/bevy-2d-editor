@@ -1,4 +1,5 @@
 import { test, expect, Page } from "@playwright/test";
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
 
 /**
  * Selected-entity wiring tests (T1.2 correction).
@@ -8,21 +9,7 @@ import { test, expect, Page } from "@playwright/test";
  * - When no entity is selected, selected_entity is null in the AI request
  */
 
-const WASM_LOAD_TIMEOUT = 120_000;
 
-async function waitForEngine(page: Page): Promise<void> {
-  await expect(page.locator('[data-testid="topbar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-  await page.waitForFunction(
-    () =>
-      typeof (window as any).load_scene_json === "function" &&
-      typeof (window as any).dispatch_command === "function" &&
-      typeof (window as any).get_scene_snapshot === "function",
-    undefined,
-    { timeout: 30_000 }
-  );
-}
 
 async function seedEmptyScene(page: Page, sceneId: string, sceneName: string): Promise<void> {
   await page.evaluate(
@@ -48,11 +35,12 @@ async function seedEmptyScene(page: Page, sceneId: string, sceneName: string): P
   );
 }
 
-test.describe("S1 selected_entity wiring (T1.2 correction)", () => {
+test.describe("S1 selected_entity wiring (T1.2 correction)", { tag: ["@domain"] }, () => {
   test.beforeEach(async ({ page }) => {
     // Use skip-welcome to bypass the welcome overlay
     await page.goto("/?skip-welcome=1", { waitUntil: "domcontentloaded" });
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     // The Welcome overlay may still render briefly — click Skip if visible
     const skipBtn = page.locator('[data-testid="welcome-skip-btn"]');
     try {

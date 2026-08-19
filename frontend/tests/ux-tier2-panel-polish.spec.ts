@@ -1,5 +1,6 @@
 import { expect, Page, test } from "@playwright/test";
 
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
 /**
  * v0.81 Tier 2 — Panel Polish.
  *
@@ -18,14 +19,7 @@ import { expect, Page, test } from "@playwright/test";
  * stay decoupled from implementation details.
  */
 
-const WASM_LOAD_TIMEOUT = 120_000;
 
-async function waitForEngine(page: Page): Promise<void> {
-  await page.goto("/?skip-welcome=1");
-  await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-}
 
 async function dismissWelcomeIfPresent(page: Page): Promise<void> {
   const overlay = page.locator('[data-testid="welcome-overlay"]');
@@ -142,9 +136,10 @@ async function readStatusHeight(page: Page): Promise<number> {
   });
 }
 
-test.describe("v0.81 Tier 2 — Panel Polish", () => {
+test.describe("v0.81 Tier 2 — Panel Polish", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await dismissWelcomeIfPresent(page);
     await expect(page.locator('[data-testid="dock-layout"]')).toBeVisible();
     // Clear prefs so persistence round-trips start clean. If OPFS is
@@ -153,7 +148,8 @@ test.describe("v0.81 Tier 2 — Panel Polish", () => {
     // Reload after clearing so the in-memory state matches the cleared
     // OPFS state.
     await page.reload();
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await dismissWelcomeIfPresent(page);
   });
 
@@ -200,7 +196,8 @@ test.describe("v0.81 Tier 2 — Panel Polish", () => {
 
     // Reload and re-assert. The OPFS write should have completed by now.
     await page.reload();
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await dismissWelcomeIfPresent(page);
 
     const after = await readStatusHeight(page);
@@ -237,7 +234,8 @@ test.describe("v0.81 Tier 2 — Panel Polish", () => {
 
     // Reload — the collapse must persist.
     await page.reload();
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await dismissWelcomeIfPresent(page);
 
     await expect(
@@ -309,7 +307,8 @@ test.describe("v0.81 Tier 2 — Panel Polish", () => {
     }
 
     await page.reload();
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await dismissWelcomeIfPresent(page);
 
     // Trigger a real pref change so the hook debounce-saves the migrated

@@ -12,24 +12,12 @@
  *   - Runtime Preview zone renders RuntimePreviewInspector
  *   - AI Actions zone contains New Schema button
  */
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
+
 
 import { expect, test, type Page } from "@playwright/test";
 
-const WASM_LOAD_TIMEOUT = 120_000;
 
-async function waitForEngine(page: Page): Promise<void> {
-  await page.goto("/?skip-welcome=1");
-  await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-  await page.waitForFunction(
-    () =>
-      typeof (window as any).dispatch_command === "function" &&
-      typeof (window as any).load_scene_json === "function",
-    undefined,
-    { timeout: WASM_LOAD_TIMEOUT },
-  );
-}
 
 /** Dismiss the Welcome overlay if present (mirrors mode-context-bar.spec.ts pattern). */
 async function dismissWelcomeIfPresent(page: Page): Promise<void> {
@@ -77,9 +65,10 @@ async function loadZonesTestScene(page: Page): Promise<void> {
   ).toBeVisible({ timeout: 10_000 });
 }
 
-test.describe("Inspector Zones (Phase 2.3)", () => {
+test.describe("Inspector Zones (Phase 2.3)", { tag: ["@domain"] }, () => {
   test.beforeEach(async ({ page }) => {
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await loadZonesTestScene(page);
     // Dismiss welcome overlay that may block the click.
     await dismissWelcomeIfPresent(page);

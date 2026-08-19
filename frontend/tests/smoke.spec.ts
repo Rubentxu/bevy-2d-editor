@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("Spike — Smoke Tests", () => {
+test.describe("Spike — Smoke Tests", { tag: ["@smoke"] }, () => {
   test("page loads with correct title", async ({ page }) => {
     await page.goto("/?skip-welcome=1&skip-onboarding=1");
     await expect(page).toHaveTitle("Bevy 2D Editor");

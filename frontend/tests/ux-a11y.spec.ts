@@ -1,4 +1,5 @@
 import { test, expect, Page } from "@playwright/test";
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
 import AxeBuilder from "@axe-core/playwright";
 
 /**
@@ -10,25 +11,13 @@ import AxeBuilder from "@axe-core/playwright";
  * logged for triage but do not fail the test.
  */
 
-const WASM_LOAD_TIMEOUT = 120_000;
 
-async function waitForEngine(page: Page): Promise<void> {
-  await expect(page.locator('[data-testid="topbar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-  await page.waitForFunction(
-    () =>
-      typeof (window as any).load_scene_json === "function" &&
-      typeof (window as any).get_scene_snapshot === "function",
-    undefined,
-    { timeout: 30_000 },
-  );
-}
 
-test.describe("UX Accessibility — Phase 4", () => {
+test.describe("UX Accessibility — Phase 4", { tag: ["@accessibility"] }, () => {
   test("landing screen has zero critical or serious axe violations", async ({ page }) => {
     await page.goto("/?skip-welcome=1");
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
 
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])

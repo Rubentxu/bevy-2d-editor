@@ -13,7 +13,7 @@ import { test, expect } from "@playwright/test";
 
 const WASM_LOAD_TIMEOUT = 120_000;
 
-test.describe("Preview Anchor Sync — Anchor Component insertion", () => {
+test.describe("Preview Anchor Sync — Anchor Component insertion", { tag: ["@domain"] }, () => {
   test("TopLeft anchor sprite round-trips through scene rebuild", async ({ page }) => {
     const consoleLogs: string[] = [];
     page.on("console", (msg) => consoleLogs.push(msg.text()));

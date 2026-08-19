@@ -7,6 +7,8 @@
  *   - Drop the refresh interval to 5s when no source files exist.
  *   - Pause polling on tab blur (visibilitychange).
  */
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
+
 
 import {
   expect,
@@ -15,14 +17,7 @@ import {
   test,
 } from "@playwright/test";
 
-const WASM_LOAD_TIMEOUT = 120_000;
 
-async function waitForEngine(page: Page): Promise<void> {
-  await page.goto("/?skip-welcome=1");
-  await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-}
 
 async function dismissWelcomeIfPresent(page: Page): Promise<void> {
   await page.waitForTimeout(500);
@@ -38,7 +33,7 @@ async function dismissWelcomeIfPresent(page: Page): Promise<void> {
   }
 }
 
-test.describe("useCodeFiles no error flood (T2.7)", () => {
+test.describe("useCodeFiles no error flood (T2.7)", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
 
@@ -61,7 +56,8 @@ test.describe("useCodeFiles no error flood (T2.7)", () => {
       };
     });
 
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await dismissWelcomeIfPresent(page);
   });
 

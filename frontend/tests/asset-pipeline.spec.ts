@@ -12,7 +12,7 @@ const WASM_LOAD_TIMEOUT = 120_000;
  * These tests run against the WASM engine, so they require a running
  * browser environment with the editor fully loaded.
  */
-test.describe("Asset Pipeline", () => {
+test.describe("Asset Pipeline", { tag: ["@domain"] }, () => {
   test.beforeEach(async ({ page }) => {
     const errors: string[] = [];
     page.on("console", (msg) => {

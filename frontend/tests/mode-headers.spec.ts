@@ -1,4 +1,5 @@
 import { test, expect, Page } from "@playwright/test";
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
 
 /**
  * Phase C T3.4 — Mode-aware dock header titles (spec S7).
@@ -12,18 +13,7 @@ import { test, expect, Page } from "@playwright/test";
  * for Playwright access to the internal editorMode state).
  */
 
-const WASM_LOAD_TIMEOUT = 120_000;
 
-async function waitForEngine(page: Page): Promise<void> {
-  await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-  await page.waitForFunction(
-    () => (window as any).__bevyEngineStarted === true,
-    undefined,
-    { timeout: 30_000 },
-  );
-}
 
 /** Drive editorMode via the App.tsx test hook. */
 async function setEditorMode(page: Page, mode: string): Promise<void> {
@@ -46,10 +36,11 @@ async function setEditorMode(page: Page, mode: string): Promise<void> {
   }
 }
 
-test.describe("Mode-aware dock header titles (Phase C T3.4 / spec S7)", () => {
+test.describe("Mode-aware dock header titles (Phase C T3.4 / spec S7)", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/?skip-welcome=1&skip-onboarding=1");
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
   });
 
   test("scene mode: Outline/Properties headers match their bodies", async ({ page }) => {

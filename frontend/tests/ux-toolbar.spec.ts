@@ -1,24 +1,13 @@
 import { expect, Page, test } from "@playwright/test";
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
 
-const WASM_LOAD_TIMEOUT = 120_000;
 
-async function waitForEngine(page: Page): Promise<void> {
-  await expect(page.locator('[data-testid="topbar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-  await page.waitForFunction(
-    () =>
-      typeof (window as any).load_scene_json === "function" &&
-      typeof (window as any).get_scene_snapshot === "function",
-    undefined,
-    { timeout: 30_000 }
-  );
-}
 
-test.describe("UX Toolbar — Phase 2", () => {
+test.describe("UX Toolbar — Phase 2", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/?skip-welcome=1");
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
   });
 
   test("toolbar groups exist and Run contains only Play", async ({ page }) => {

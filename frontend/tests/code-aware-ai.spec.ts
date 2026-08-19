@@ -19,7 +19,7 @@ import { test, expect } from "@playwright/test";
 const WASM_LOAD_TIMEOUT = 120_000;
 const MOCK_PROXY_URL = "http://localhost:11436";
 
-test.describe("code-aware-ai (Hito 4 Order 6)", () => {
+test.describe("code-aware-ai (Hito 4 Order 6)", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
     page.on("console", (msg) => {
       if (msg.type() === "error") {

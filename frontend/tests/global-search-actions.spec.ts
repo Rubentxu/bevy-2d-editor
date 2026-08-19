@@ -59,7 +59,7 @@ async function waitForSearchIndex(page: Page): Promise<void> {
   );
 }
 
-test.describe("Global Search Actionable Results (T2.3, T2.4, T2.5)", () => {
+test.describe("Global Search Actionable Results (T2.3, T2.4, T2.5)", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
     const errors: string[] = [];
     page.on("console", (msg) => {

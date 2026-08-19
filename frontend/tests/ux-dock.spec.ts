@@ -1,4 +1,5 @@
 import { expect, Page, test } from "@playwright/test";
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
 
 /**
  * Phase B — 3-region dock layout (Defold-inspired redesign).
@@ -14,19 +15,7 @@ import { expect, Page, test } from "@playwright/test";
  * maintained by useDockResize.
  */
 
-const WASM_LOAD_TIMEOUT = 120_000;
 
-async function waitForEngine(page: Page): Promise<void> {
-  await page.goto("/?skip-welcome=1&skip-onboarding=1");
-  await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-  await page.waitForFunction(
-    () => (window as any).__bevyEngineStarted === true,
-    undefined,
-    { timeout: 30_000 },
-  );
-}
 
 /**
  * Dismiss the Phase E welcome overlay if it appears. The overlay is rendered
@@ -77,9 +66,10 @@ async function readColumnWidths(page: Page): Promise<number[]> {
   });
 }
 
-test.describe("Defold-inspired 3-region dock layout", () => {
+test.describe("Defold-inspired 3-region dock layout", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     // Welcome overlay (Phase E) blocks pointer events for everything below
     // it. Dismiss it before exercising dock drag/click tests.
     await dismissWelcomeIfPresent(page);
@@ -191,9 +181,10 @@ test.describe("Defold-inspired 3-region dock layout", () => {
  * selection / project / scene+dirty / zoom / fps / build) and that the
  * zoom segment opens a dropdown with the documented zoom options.
  */
-test.describe("Defold-inspired status bar (Phase D)", () => {
+test.describe("Defold-inspired status bar (Phase D)", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await dismissWelcomeIfPresent(page);
     await expect(page.locator('[data-testid="status-bar"]')).toBeVisible();
   });
@@ -241,9 +232,10 @@ test.describe("Defold-inspired status bar (Phase D)", () => {
 /**
  * Phase E — F-keys + Reset Layout + fullscreen viewport.
  */
-test.describe("Defold-inspired F-keys + Reset Layout (Phase E)", () => {
+test.describe("Defold-inspired F-keys + Reset Layout (Phase E)", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await dismissWelcomeIfPresent(page);
     await expect(page.locator('[data-testid="dock-layout"]')).toBeVisible();
   });

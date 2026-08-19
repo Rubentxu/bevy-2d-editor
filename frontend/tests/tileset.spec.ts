@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test('create and list tileset', async ({ page }) => {
+test('create and list tileset', { tag: ["@domain"] }, async ({ page }) => {
   await page.goto('/');
 
   // Open tileset panel (assume there's a button or tab for it)

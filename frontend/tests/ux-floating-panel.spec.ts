@@ -20,18 +20,13 @@
  *   - `loadDockPrefs` waits for the OPFS bridge to bind before reading.
  *   - `dismissWelcomeIfPresent` keeps pointer events unblocked.
  */
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
+
 
 import { expect, test, type Page } from "@playwright/test";
 
-const WASM_LOAD_TIMEOUT = 120_000;
 const PREFERRED_FLOAT_PANEL_ID = "outline"; // outline has the cleanest header target
 
-async function waitForEngine(page: Page): Promise<void> {
-  await page.goto("/?skip-welcome=1");
-  await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-}
 
 async function dismissWelcomeIfPresent(page: Page): Promise<void> {
   await page.waitForTimeout(500);
@@ -112,9 +107,10 @@ async function clickFloatToggle(page: Page, panelId: string): Promise<void> {
   await loc.first().click({ force: true });
 }
 
-test.describe("Floating panels (v0.82 P2, ADR-0025)", () => {
+test.describe("Floating panels (v0.82 P2, ADR-0025)", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await dismissWelcomeIfPresent(page);
     await expect(page.locator('[data-testid="dock-layout"]')).toBeVisible();
     // Reset state once the OPFS bridge is bound (post-WASM mount).
@@ -205,7 +201,8 @@ test.describe("Floating panels (v0.82 P2, ADR-0025)", () => {
 
     // Reload and confirm the overlay mounts again.
     await page.reload();
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await expect(
       page.locator(
         `[data-testid="floating-panel-${PREFERRED_FLOAT_PANEL_ID}"]`,
@@ -254,7 +251,8 @@ test.describe("Floating panels (v0.82 P2, ADR-0025)", () => {
 
     // Reload so the loader + migration run.
     await page.reload();
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await dismissWelcomeIfPresent(page);
 
     // After migration the prefs file on disk is at v3 with panelRegions

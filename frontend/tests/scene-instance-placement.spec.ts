@@ -11,7 +11,7 @@ const WASM_LOAD_TIMEOUT = 120_000;
  * NO prefab/template/blueprint/archetype terms allowed.
  */
 
-test.describe("Scene Instance Placement", () => {
+test.describe("Scene Instance Placement", { tag: ["@domain"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({
@@ -580,12 +580,19 @@ test.describe("Scene Instance UI Integration", () => {
     );
     await page.waitForTimeout(300);
 
-    // Check if there's an instance badge in the hierarchy
+    // After placing a scene instance (setup above), badge should exist
     const instanceBadge = page.locator(".scene-instance-badge").first();
-    // Badge might not be visible if entities aren't shown in hierarchy
-    // This test just verifies the badge element exists
+    await page.waitForTimeout(300);
+
+    await page.evaluate(
+      (id: string) => (window as any).place_scene_instance(id),
+      assetId
+    );
+    await page.waitForTimeout(300);
+
+    // After placing instance, badge should be visible (> 0)
     const badgeCount = await page.locator(".scene-instance-badge").count();
-    expect(badgeCount).toBeGreaterThanOrEqual(0);
+    expect(badgeCount).toBeGreaterThan(0);
   });
 });
 

@@ -14,7 +14,7 @@ import { test, expect } from "@playwright/test";
 import path from "path";
 
 // Test fixtures directory
-const FIXTURES_DIR = path.join(__dirname, "..", "..", "crates", "editor-core", "tests", "fixtures");
+const FIXTURES_DIR = path.join(import.meta.dirname, "..", "..", "crates", "editor-core", "tests", "fixtures");
 
 test.describe("External Source Importers", () => {
   test.beforeEach(async ({ page }) => {

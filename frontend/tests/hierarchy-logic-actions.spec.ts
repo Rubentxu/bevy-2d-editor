@@ -15,7 +15,7 @@ import { test, expect } from "@playwright/test";
 
 const WASM_LOAD_TIMEOUT = 120_000;
 
-test.describe("HierarchyPanel logic action buttons (PR4)", () => {
+test.describe("HierarchyPanel logic action buttons (PR4)", { tag: ["@domain"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/?skip-welcome=1");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({
@@ -27,11 +27,20 @@ test.describe("HierarchyPanel logic action buttons (PR4)", () => {
    * GIVEN the hierarchy panel logic action buttons exist in the DOM
    * THEN they are reachable via page locators (structural test)
    */
-  test("logic action buttons exist in DOM when hierarchy panel renders", async ({ page }) => {
+  test("logic action buttons exist in DOM when hierarchy panel renders and entity selected", async ({ page }) => {
     // Use page-level locator to find buttons without requiring .hierarchy-panel visibility
-    const fromRecipeBtn = page.locator('[data-testid="hierarchy-from-recipe-btn"]');
-    const logicStateBtn = page.locator('[data-testid="hierarchy-logic-state-btn"]');
-    const openBoundLogicBtn = page.locator('[data-testid="hierarchy-open-bound-logic-btn"]');
+    const fromRecipeBtn = page.locator('[data-testid="hierarchy-create-from-recipe-btn"]');
+    const logicStateBtn = page.locator('[data-testid="hierarchy-inspect-runtime-btn"]');
+    const openBoundLogicBtn = page.locator('[data-testid^="hierarchy-open-logic-btn-"]');
+
+    // Navigate to any entity in hierarchy to ensure buttons are rendered
+    // Select the default entity in the hierarchy tree
+    const defaultEntity = page.locator('[data-testid^="entity-item-"]').first();
+    const entityCount = await defaultEntity.count();
+
+    if (entityCount > 0) {
+      await defaultEntity.click();
+    }
 
     const fromRecipeCount = await fromRecipeBtn.count();
     const logicStateCount = await logicStateBtn.count();
@@ -41,9 +50,10 @@ test.describe("HierarchyPanel logic action buttons (PR4)", () => {
     console.log("Hierarchy logic-state btn count:", logicStateCount);
     console.log("Hierarchy open-bound-logic btn count:", openBoundCount);
 
-    expect(fromRecipeCount).toBeGreaterThanOrEqual(0);
-    expect(logicStateCount).toBeGreaterThanOrEqual(0);
-    expect(openBoundCount).toBeGreaterThanOrEqual(0);
+    // With entity selected, buttons should be present (count > 0)
+    expect(fromRecipeCount).toBeGreaterThan(0);
+    expect(logicStateCount).toBeGreaterThan(0);
+    expect(openBoundCount).toBeGreaterThan(0);
   });
 
   /**

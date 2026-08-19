@@ -7,7 +7,7 @@ import { test, expect } from "@playwright/test";
 
 const WASM_LOAD_TIMEOUT = 120_000;
 
-test.describe("DynamicScene Export — WASM binding", () => {
+test.describe("DynamicScene Export — WASM binding", { tag: ["@domain"] }, () => {
   test("export_dynamic_scene_wasm on empty document", async ({ page }) => {
     const consoleLogs: string[] = [];
     page.on("console", (msg) => consoleLogs.push(msg.text()));

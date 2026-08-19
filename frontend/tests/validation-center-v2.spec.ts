@@ -106,7 +106,7 @@ async function seedAllDomainIssues(page: Page): Promise<void> {
   });
 }
 
-test.describe("Validation Center v2 Inbox (T2.4)", () => {
+test.describe("Validation Center v2 Inbox (T2.4)", { tag: ["@persistence"] }, () => {
   test.beforeEach(async ({ page }) => {
     const errors: string[] = [];
     page.on("console", (msg) => {

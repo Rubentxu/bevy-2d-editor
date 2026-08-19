@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-test("check scene field naming after creating scene", async ({ page }) => {
+test("check scene field naming after creating scene", { tag: ["@domain"] }, async ({ page }) => {
   await page.goto("/?skip-welcome=1&skip-onboarding=1");
   await page.waitForFunction(
     () =>

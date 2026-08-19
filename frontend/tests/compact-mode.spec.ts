@@ -14,21 +14,12 @@
  *
  * The Scene tab is the default and fills the main area.
  */
-
 import { expect, Page, test } from "@playwright/test";
-
-const WASM_LOAD_TIMEOUT = 120_000;
-
-async function waitForEngine(page: Page): Promise<void> {
-  await page.goto("/?skip-welcome=1");
-  await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-}
-
 /**
  * Dismiss the Welcome overlay if it appears.
  */
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
+
 async function dismissWelcomeIfPresent(page: Page): Promise<void> {
   const overlay = page.locator('[data-testid="welcome-overlay"]');
   await page.waitForTimeout(500);
@@ -51,15 +42,16 @@ async function isCompactMode(page: Page): Promise<boolean> {
   });
 }
 
-test.describe("Compact mode below 1280 px threshold", () => {
+test.describe("Compact mode below 1280 px threshold", { tag: ["@full"] }, () => {
   for (const [label, width, height] of [
     ["1024×768 (landscape)", 1024, 768],
     ["768×1024 (portrait)", 768, 1024],
   ] as const) {
     test.describe(`at ${label}`, () => {
       test.beforeEach(async ({ page }) => {
+        await page.goto("/?skip-welcome=1");
         await page.setViewportSize({ width, height });
-        await waitForEngine(page);
+        await waitForEditorReady(page);
         await dismissWelcomeIfPresent(page);
       });
 
@@ -178,10 +170,11 @@ test.describe("Compact mode below 1280 px threshold", () => {
  * use the desktop (non-compact) grid. This prevents compact mode from
  * accidentally triggering on valid 1280 px screens.
  */
-test.describe("At exactly 1280 px (threshold boundary)", () => {
+test.describe("At exactly 1280 px (threshold boundary)", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
+    await page.goto("/?skip-welcome=1");
     await page.setViewportSize({ width: 1280, height: 800 });
-    await waitForEngine(page);
+    await waitForEditorReady(page);
     await dismissWelcomeIfPresent(page);
   });
 

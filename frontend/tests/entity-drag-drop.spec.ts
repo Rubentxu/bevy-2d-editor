@@ -41,7 +41,7 @@ async function fireDragAndDrop(page: any, sourceSelector: string, targetSelector
   await page.locator(sourceSelector).dispatchEvent("dragend");
 }
 
-test.describe("Entity Drag-and-Drop Reparenting", () => {
+test.describe("Entity Drag-and-Drop Reparenting", { tag: ["@domain"] }, () => {
   test("drag entity onto panel background reparents to root", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({ timeout: WASM_LOAD_TIMEOUT });

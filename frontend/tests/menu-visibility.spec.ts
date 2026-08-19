@@ -14,17 +14,12 @@
  * Menu structure (File · Edit · View · Tools · Run · Help) is preserved per
  * spec invariant §5-1.
  */
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
+
 
 import { expect, Page, test } from "@playwright/test";
 
-const WASM_LOAD_TIMEOUT = 120_000;
 
-async function waitForEngine(page: Page): Promise<void> {
-  await page.goto("/?skip-welcome=1");
-  await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-}
 
 /**
  * Dismiss the Welcome overlay if it appears. The overlay is rendered after
@@ -65,7 +60,7 @@ async function openMenu(
   return page.locator('[data-testid="menu-dropdown"]');
 }
 
-test.describe("Menu visibility across viewports", () => {
+test.describe("Menu visibility across viewports", { tag: ["@full"] }, () => {
   for (const [label, width, height] of [
     ["1920×1080", 1920, 1080],
     ["1366×768", 1366, 768],
@@ -74,7 +69,8 @@ test.describe("Menu visibility across viewports", () => {
     test.describe(`at ${label}`, () => {
       test.beforeEach(async ({ page }) => {
         await page.setViewportSize({ width, height });
-        await waitForEngine(page);
+        await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
         await dismissWelcomeIfPresent(page);
       });
 

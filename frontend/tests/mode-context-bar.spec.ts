@@ -8,24 +8,12 @@
  *
  * Modes are driven via `window.__setEditorMode()` (exposed by App.tsx).
  */
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
+
 
 import { expect, Page, test } from "@playwright/test";
 
-const WASM_LOAD_TIMEOUT = 120_000;
 
-async function waitForEngine(page: Page): Promise<void> {
-  await page.goto("/?skip-welcome=1");
-  await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-  await page.waitForFunction(
-    () =>
-      typeof (window as any).load_scene_json === "function" &&
-      typeof (window as any).dispatch_command === "function",
-    undefined,
-    { timeout: 30_000 },
-  );
-}
 
 /** Dismiss the Welcome overlay if present. */
 async function dismissWelcomeIfPresent(page: Page): Promise<void> {
@@ -50,7 +38,7 @@ async function switchMode(page: Page, mode: string): Promise<void> {
   await page.waitForTimeout(300); // allow React + CSS transition
 }
 
-test.describe("ModeContextBar visibility by viewport", () => {
+test.describe("ModeContextBar visibility by viewport", { tag: ["@full"] }, () => {
   for (const [label, width, height] of [
     ["1280×800", 1280, 800],
     ["1366×768", 1366, 768],
@@ -59,7 +47,8 @@ test.describe("ModeContextBar visibility by viewport", () => {
     test.describe(`at ${label}`, () => {
       test.beforeEach(async ({ page }) => {
         await page.setViewportSize({ width, height });
-        await waitForEngine(page);
+        await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
         await dismissWelcomeIfPresent(page);
       });
 
@@ -106,10 +95,11 @@ test.describe("ModeContextBar visibility by viewport", () => {
   }
 });
 
-test.describe("ModeContextBar mode-switching", () => {
+test.describe("ModeContextBar mode-switching", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await dismissWelcomeIfPresent(page);
   });
 
@@ -173,10 +163,11 @@ test.describe("ModeContextBar mode-switching", () => {
   });
 });
 
-test.describe("ModeContextBar — no chrome increase regression", () => {
+test.describe("ModeContextBar — no chrome increase regression", { tag: ["@full"] }, () => {
   test("mode-context-bar height does not exceed 32px", async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await dismissWelcomeIfPresent(page);
 
     const height = await page.evaluate(() => {
@@ -196,7 +187,8 @@ test.describe("ModeContextBar — no chrome increase regression", () => {
       [1920, 1080],
     ] as const) {
       await page.setViewportSize({ width, height });
-      await waitForEngine(page);
+      await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
       await dismissWelcomeIfPresent(page);
 
       const count = await page.locator('[data-testid="mode-context-bar"]').count();

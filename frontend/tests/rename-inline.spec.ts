@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 const WASM_LOAD_TIMEOUT = 120_000;
 
-test.describe("Entity Inline Rename", () => {
+test.describe("Entity Inline Rename", { tag: ["@domain"] }, () => {
   test("double-click entity name enters edit mode and Enter commits rename", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({ timeout: WASM_LOAD_TIMEOUT });

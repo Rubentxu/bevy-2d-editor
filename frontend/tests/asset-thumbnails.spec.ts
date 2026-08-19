@@ -15,10 +15,11 @@
  * `<ThumbnailCell>` itself). This file exercises the data path that
  * the component reads.
  */
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
+
 
 import { test, expect } from "@playwright/test";
 
-const WASM_LOAD_TIMEOUT = 120_000;
 
 /** Minimal 1×1 RGBA PNG, 67 bytes. */
 const TINY_PNG_BASE64 =
@@ -33,7 +34,7 @@ async function waitForEngine(page: any) {
       typeof (window as any).opfs_load_file === "function" &&
       typeof (window as any).import_asset_file === "function" &&
       typeof (window as any).read_asset_file_bytes === "function",
-    { timeout: WASM_LOAD_TIMEOUT },
+    { timeout: 60_000 },
   );
 }
 
@@ -43,7 +44,7 @@ async function createAsset(page: any, name: string, role: string) {
   // post-load navigation.
   await page.waitForFunction(
     () => typeof (window as any).create_scene_asset === "function",
-    { timeout: WASM_LOAD_TIMEOUT },
+    { timeout: 60_000 },
   );
   // create_scene_asset returns the JSON-stringified entry; extract asset_id.
   const entryJson = await page.evaluate(
@@ -55,13 +56,14 @@ async function createAsset(page: any, name: string, role: string) {
   return parsed?.asset_id ?? null;
 }
 
-test.describe("Asset Browser Thumbnails data path (ADR-0026)", () => {
+test.describe("Asset Browser Thumbnails data path (ADR-0026)", { tag: ["@domain"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({
-      timeout: WASM_LOAD_TIMEOUT,
+      timeout: 60_000,
     });
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
 
     // Clean slate.
     const initial = await page.evaluate(async () => {

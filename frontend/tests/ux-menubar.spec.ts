@@ -1,17 +1,12 @@
 import { expect, Page, test } from "@playwright/test";
 
-const WASM_LOAD_TIMEOUT = 120_000;
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
 
-async function waitForEngine(page: Page): Promise<void> {
-  await page.goto("/?skip-welcome=1");
-  await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-}
 
-test.describe("Defold-inspired menu bar", () => {
+test.describe("Defold-inspired menu bar", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
   });
 
   test("shows all six menu headers", async ({ page }) => {

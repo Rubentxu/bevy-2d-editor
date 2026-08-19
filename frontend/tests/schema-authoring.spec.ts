@@ -80,7 +80,7 @@ async function saveSchema(page: Page) {
   await expect(page.locator(".schema-authoring-panel")).not.toBeVisible({ timeout: 5000 });
 }
 
-test.describe("Schema Authoring", () => {
+test.describe("Schema Authoring", { tag: ["@domain"] }, () => {
   test("(a) create game.PlayerHealth with 3 fields, save, appears in dropdown", async ({ page }) => {
     // Setup: load page and wait for WASM
     await page.goto("/");

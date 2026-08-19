@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 const WASM_LOAD_TIMEOUT = 120_000;
 
-test.describe("Delete Key Shortcut", () => {
+test.describe("Delete Key Shortcut", { tag: ["@domain"] }, () => {
   test("Delete key removes selected entity from hierarchy (screenshot diff)", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({ timeout: WASM_LOAD_TIMEOUT });

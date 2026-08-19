@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 const WASM_LOAD_TIMEOUT = 120_000;
 
-test("debug: check if load_schema returns promise", async ({ page }) => {
+test("debug: check if load_schema returns promise", { tag: ["@domain"] }, async ({ page }) => {
   // Setup: load page and wait for WASM
   await page.goto("/");
   await expect(page.locator('[data-testid="topbar"]')).toBeVisible({ timeout: WASM_LOAD_TIMEOUT });

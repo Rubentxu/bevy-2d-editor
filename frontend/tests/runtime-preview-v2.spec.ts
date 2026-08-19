@@ -15,7 +15,7 @@ import { test, expect, Page } from "@playwright/test";
 
 const WASM_LOAD_TIMEOUT = 120_000;
 
-test.describe("Runtime Preview Inspector v2 (PR4)", () => {
+test.describe("Runtime Preview Inspector v2 (PR4)", { tag: ["@domain"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/?skip-welcome=1");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({
@@ -143,9 +143,8 @@ test.describe("Runtime Preview Inspector v2 (PR4)", () => {
     // PR4 correction: verify jump button elements exist in the DOM structure
     // even if no data is projected (structural render path verified)
     const jumpButtons = page.locator('[data-testid^="rpi-jump-btn-"]');
-    // The count can be 0 without WASM data, but the locator must not throw
-    const count = await jumpButtons.count();
-    expect(count).toBeGreaterThanOrEqual(0);
+    // Without WASM data, no instance rows are rendered → expect 0 buttons
+    await expect(jumpButtons).toHaveCount(0);
   });
 
   /**
@@ -162,8 +161,8 @@ test.describe("Runtime Preview Inspector v2 (PR4)", () => {
     // lastRebuildCause is non-null (from getPreviewMetrics().last_rebuild_cause)
     // Without WASM mock, the section may be hidden but the element must not throw
     const rebuildCause = rpi.locator(".rpi-rebuild-cause");
-    const count = await rebuildCause.count();
-    expect(count).toBeGreaterThanOrEqual(0);
+    // Structural render path verified: element exists in DOM
+    await expect(rebuildCause).toBeVisible();
   });
 
   /**
@@ -177,8 +176,8 @@ test.describe("Runtime Preview Inspector v2 (PR4)", () => {
     await expect(rpi).toBeVisible({ timeout: 15000 });
 
     const warningsSection = rpi.locator(".rpi-warnings");
-    const count = await warningsSection.count();
-    expect(count).toBeGreaterThanOrEqual(0);
+    // Structural render path verified: element exists in DOM
+    await expect(warningsSection).toBeVisible();
   });
 
   /**
@@ -193,7 +192,7 @@ test.describe("Runtime Preview Inspector v2 (PR4)", () => {
     await expect(rpi).toBeVisible({ timeout: 15000 });
 
     const logicSummary = rpi.locator(".rpi-logic-summary");
-    const count = await logicSummary.count();
-    expect(count).toBeGreaterThanOrEqual(0);
+    // Structural render path verified: element exists in DOM
+    await expect(logicSummary).toBeVisible();
   });
 });

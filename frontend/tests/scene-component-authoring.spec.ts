@@ -164,7 +164,7 @@ async function registerSceneComponent(page: Page, typeId: string, assetId: strin
   await page.waitForTimeout(150);
 }
 
-test.describe("scene-component-authoring (Hito 4 Order 7)", () => {
+test.describe("scene-component-authoring (Hito 4 Order 7)", { tag: ["@domain"] }, () => {
   test("SchemaKind toggle reveals Bind picker when set to SceneComponent", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({
@@ -188,7 +188,7 @@ test.describe("scene-component-authoring (Hito 4 Order 7)", () => {
   });
 });
 
-test.describe("scene-component-authoring-ux PR1 (Hito 7)", () => {
+test.describe("scene-component-authoring-ux PR1 (Hito 7)", { tag: ["@domain"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({
@@ -390,7 +390,7 @@ test.describe("scene-component-authoring-ux PR1 (Hito 7)", () => {
   });
 });
 
-test.describe("scene-component-authoring-ux PR2 — Place Instance entry-point smoke (Hito 7)", () => {
+test.describe("scene-component-authoring-ux PR2 — Place Instance entry-point smoke (Hito 7)", { tag: ["@domain"] }, () => {
   // PR2 scope reduced: S5–S7 (click→undo parity, stale-ref-at-place, full
   // round-trip) move to PR3 (see docs/sddk/scene-component-authoring-ux/
   // tasks.md Phase 4). The PR2 spec only proves the button is rendered
@@ -499,7 +499,7 @@ test.describe("scene-component-authoring-ux PR2 — Place Instance entry-point s
  *    flake + Bevy 0.19 B0001 init panic). Both gates the Edit-mode + Asset
  *    Browser paths in this CI run.
  */
-test.describe("scene-component-authoring-ux PR3 — focused S5/S6 + deferred S7 (Hito 7)", () => {
+test.describe("scene-component-authoring-ux PR3 — focused S5/S6 + deferred S7 (Hito 7)", { tag: ["@domain"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({

@@ -21,7 +21,7 @@ import { test, expect } from "@playwright/test";
  * when WASM state is stable. Full validation: cargo test (389) + manual browser test.
  */
 
-test.describe("Code Editor — code-editor-foundation PR 4", () => {
+test.describe("Code Editor — code-editor-foundation PR 4", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(

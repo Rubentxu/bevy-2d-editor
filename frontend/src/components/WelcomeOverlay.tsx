@@ -138,15 +138,21 @@ export default function WelcomeOverlay({ onTakeTour, onSkip }: Props) {
   useEffect(() => {
     let cancelled = false;
     // Gate first render with a synchronous OPFS check when available.
+    // Compute skip synchronously at top level to avoid nested .then() race.
+    const skip =
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("skip-welcome") === "1";
+
     isWelcomePermanentlyDismissedSync().then((permanently) => {
       if (cancelled) return;
       setPermanentDismissal(permanently);
-      if (permanently) {
+      if (permanently || skip) {
         // User previously chose "Don't show again" — skip the async load.
+        // Also skip when URL explicitly opts out (skip-welcome=1).
         setHydrated(true);
         reportWelcomeShouldShow({
           shouldShow: false,
-          permanentDismissal: true,
+          permanentDismissal: permanently,
         });
         return;
       }
@@ -154,10 +160,6 @@ export default function WelcomeOverlay({ onTakeTour, onSkip }: Props) {
       isWelcomeDismissed().then((wasDismissed) => {
         if (cancelled) return;
         setHydrated(true);
-        const skip =
-          typeof window !== "undefined" &&
-          new URLSearchParams(window.location.search).get("skip-welcome") ===
-            "1";
         reportWelcomeShouldShow({
           shouldShow: !wasDismissed && !skip,
           permanentDismissal: false,
@@ -167,7 +169,7 @@ export default function WelcomeOverlay({ onTakeTour, onSkip }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [reportWelcomeShouldShow, urlSkip]);
+  }, [reportWelcomeShouldShow]);
 
   // Gate on isChecking (from WelcomeDismissalContext) to prevent both surfaces
   // from rendering during the async OPFS hydration window (spec S5).

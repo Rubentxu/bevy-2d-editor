@@ -1,4 +1,5 @@
 import { expect, Page, test } from "@playwright/test";
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
 
 /**
  * Phase E — Welcome overlay (Defold-inspired redesign).
@@ -11,14 +12,7 @@ import { expect, Page, test } from "@playwright/test";
  * visit" regardless of prior session state.
  */
 
-const WASM_LOAD_TIMEOUT = 120_000;
 
-async function waitForEngine(page: Page): Promise<void> {
-  await page.goto("/");
-  await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-    timeout: WASM_LOAD_TIMEOUT,
-  });
-}
 
 async function clearWelcomeDismissed(page: Page): Promise<void> {
   // The WelcomeOverlay reads from OPFS at `welcome-dismissed.json`. The
@@ -48,16 +42,15 @@ async function clearWelcomeDismissed(page: Page): Promise<void> {
   });
 }
 
-test.describe("Defold-inspired welcome overlay (Phase E)", () => {
+test.describe("Defold-inspired welcome overlay (Phase E)", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
-    await waitForEngine(page);
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await clearWelcomeDismissed(page);
     // Reload so the welcome-overlay re-reads OPFS fresh.
     await page.reload();
-    await expect(page.locator('[data-testid="menubar"]')).toBeVisible({
-      timeout: WASM_LOAD_TIMEOUT,
-    });
+    await waitForEditorReady(page);
   });
 
   test("appears on first visit with all 5 workflow cards", async ({ page }) => {
