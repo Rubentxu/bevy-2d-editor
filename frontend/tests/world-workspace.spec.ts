@@ -63,10 +63,8 @@ test.describe("World Workspace — Slice 4 Smoke", { tag: ["@domain"] }, () => {
   test("creating a world shows level squares", async ({ page }) => {
     // Create a world via WASM bridge
     await page.evaluate(async () => {
-      const { getEditorGateway } = await import("./services/EditorGateway");
-      const gateway = getEditorGateway();
-      // Create a new world named "test-world"
-      await gateway.world.createWorld("test-world-smoke");
+      // Direct WASM binding (exposed by engine-bridge, ADR-0037)
+      await (window as any).create_world_wasm("test-world-smoke");
     });
 
     await switchMode(page, "world");
@@ -80,7 +78,12 @@ test.describe("World Workspace — Slice 4 Smoke", { tag: ["@domain"] }, () => {
   });
 
   test("layout policy buttons exist", async ({ page }) => {
+    // A world must be active for the workspace toolbar to render.
+    await page.evaluate(async () => {
+      await (window as any).create_world_wasm("layout-test");
+    });
     await switchMode(page, "world");
+    await page.waitForTimeout(500);
 
     const freeBtn = page.locator(".world-workspace__layout-btn", { hasText: "Free" });
     const gridBtn = page.locator(".world-workspace__layout-btn", { hasText: "Grid" });
@@ -94,7 +97,11 @@ test.describe("World Workspace — Slice 4 Smoke", { tag: ["@domain"] }, () => {
   });
 
   test("minimap renders", async ({ page }) => {
+    await page.evaluate(async () => {
+      await (window as any).create_world_wasm("minimap-test");
+    });
     await switchMode(page, "world");
+    await page.waitForTimeout(500);
 
     const minimap = page.locator(".world-workspace__minimap");
     await expect(minimap).toBeVisible();
@@ -104,7 +111,11 @@ test.describe("World Workspace — Slice 4 Smoke", { tag: ["@domain"] }, () => {
   });
 
   test("back button returns to scene mode", async ({ page }) => {
+    await page.evaluate(async () => {
+      await (window as any).create_world_wasm("back-test");
+    });
     await switchMode(page, "world");
+    await page.waitForTimeout(500);
 
     const backBtn = page.locator(".world-workspace__back-btn");
     await expect(backBtn).toBeVisible();
@@ -132,9 +143,7 @@ test.describe("World Workspace — Slice 4 Smoke", { tag: ["@domain"] }, () => {
   test("status bar shows level and link counts", async ({ page }) => {
     // Create a world first
     await page.evaluate(async () => {
-      const { getEditorGateway } = await import("./services/EditorGateway");
-      const gateway = getEditorGateway();
-      await gateway.world.createWorld("status-test");
+      await (window as any).create_world_wasm("status-test");
     });
 
     await switchMode(page, "world");
@@ -153,20 +162,15 @@ test.describe("World Workspace — Slice 4 Smoke", { tag: ["@domain"] }, () => {
   }) => {
     // Start in scene mode (the default).
     await page.locator('[data-testid="menu-view"] .menu-trigger').click();
+    // The dropdown is portaled to body — locate it by its body-level data-testid.
     await expect(
-      page.locator('[data-testid="menu-view"] .menu-dropdown'),
+      page.locator('[data-testid="menu-dropdown"]'),
     ).toBeVisible();
 
     // Click the World Workspace entry — the handler used to fall through to a
     // `todo("World Workspace")` console warning (v0.95.0 risk R2). After the
     // fix it must switch the editor mode to "world" so the canvas mounts.
-    await page.evaluate(() => {
-      const el = document.querySelector<HTMLButtonElement>(
-        '[data-testid="menu-world-workspace"]',
-      );
-      if (!el) throw new Error("World Workspace menu entry not found");
-      el.click();
-    });
+    await page.locator('[data-testid="menu-world-workspace"]').click();
 
     // WorldWorkspace canvas must become visible — proves the menu handler
     // is wired to setEditorMode("world"), not the placeholder todo().

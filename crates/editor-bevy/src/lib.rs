@@ -2215,6 +2215,27 @@ pub async fn load_project() -> Result<(), JsValue> {
             .catalog = Some(catalog_clone);
     });
 
+    // Rebuild the World catalog from project.worlds (ADR-0037).
+    // Without this, WORLD_CATALOG stays unset and every world_*_wasm
+    // call panics ("WORLD_CATALOG is not set; call set_world_catalog()
+    // first"). World entries are SceneAssetCatalogEntry with role Level,
+    // mirroring what create_world_wasm registers.
+    let mut world_catalog = SceneAssetCatalog::new();
+    for entry in &project.worlds {
+        let catalog_entry = SceneAssetCatalogEntry {
+            asset_id: entry.world_id.as_str().to_string(),
+            logical_path: entry.logical_path.clone(),
+            role: SceneAssetRole::Level,
+            current_version: entry.current_version,
+            tags: Vec::new(),
+            created_at: entry.created_at,
+            updated_at: entry.updated_at,
+            preview_resource: None,
+        };
+        let _ = world_catalog.register(catalog_entry);
+    }
+    crate::world_state::set_world_catalog(world_catalog);
+
     // Step D4: Warm ASSET_BODY_CACHE with all scene asset bodies
     warm_asset_body_cache().await;
 

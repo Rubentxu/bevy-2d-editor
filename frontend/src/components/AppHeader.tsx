@@ -87,6 +87,7 @@ export default function AppHeader(props: AppHeaderProps) {
     onBackToScene,
     onOpenLogic,
     onOpenCode,
+    onOpenWorldWorkspace,
     logState,
     onUndo,
     onRedo,
@@ -145,6 +146,7 @@ export default function AppHeader(props: AppHeaderProps) {
         onBackToScene={onBackToScene}
         onOpenLogic={onOpenLogic}
         onOpenCode={onOpenCode}
+        onOpenWorldWorkspace={onOpenWorldWorkspace}
         logState={logState}
         onUndo={onUndo}
         onRedo={onRedo}

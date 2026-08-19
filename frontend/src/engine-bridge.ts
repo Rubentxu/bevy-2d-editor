@@ -391,6 +391,65 @@ export async function initEngine(
     wasm.hot_reload_asset_wasm(assetId);
   (window as any).force_reload_wasm = () => wasm.force_reload_wasm();
 
+  // ── ChangeWorkbench WASM exports (ADR-0039) ───────────────────────────────
+  (window as any).submit_pending_change_set = (json: string) =>
+    wasm.submit_pending_change_set(json);
+  (window as any).get_pending_change_sets = () =>
+    wasm.get_pending_change_sets();
+  (window as any).approve_change_set = (id: string) =>
+    wasm.approve_change_set(id);
+  (window as any).approve_selected_ops = (id: string, indicesJson: string) =>
+    wasm.approve_selected_ops(id, indicesJson);
+  (window as any).reject_change_set = (id: string) =>
+    wasm.reject_change_set(id);
+  (window as any).get_change_set_summaries = () =>
+    wasm.get_change_set_summaries();
+
+  // ── World Workspace WASM exports (ADR-0037) ───────────────────────────────
+  (window as any).create_world_wasm = (name: string) =>
+    wasm.create_world_wasm(name);
+  (window as any).save_world_wasm = () => wasm.save_world_wasm();
+  (window as any).load_world_wasm = (name: string) =>
+    wasm.load_world_wasm(name);
+  (window as any).list_worlds_wasm = () => wasm.list_worlds_wasm();
+  (window as any).delete_world_wasm = (worldId: string) =>
+    wasm.delete_world_wasm(worldId);
+  (window as any).validate_world_topology_wasm = (worldId: string) =>
+    wasm.validate_world_topology_wasm(worldId);
+  (window as any).place_level_in_world_wasm = (
+    levelId: string,
+    x: number,
+    y: number,
+  ) => wasm.place_level_in_world_wasm(levelId, x, y);
+  (window as any).connect_levels_wasm = (
+    from: string,
+    to: string,
+    direction: string,
+    kind: string,
+  ) => wasm.connect_levels_wasm(from, to, direction, kind);
+  (window as any).remove_link_wasm = (linkId: string) =>
+    wasm.remove_link_wasm(linkId);
+  (window as any).set_layout_policy_wasm = (policyJson: string) =>
+    wasm.set_layout_policy_wasm(policyJson);
+  (window as any).open_level_from_world_wasm = (levelId: string) =>
+    wasm.open_level_from_world_wasm(levelId);
+
+  // ── External Source Importers WASM exports (ADR-0041 / v0.93) ─────────────
+  (window as any).list_importers_wasm = (kind?: string) =>
+    wasm.list_importers_wasm(kind);
+  (window as any).register_importer_wasm = (json: string) =>
+    wasm.register_importer_wasm(json);
+  (window as any).import_external_source_wasm = (
+    kind: string,
+    sourceUri: string,
+    bytesB64: string,
+    targetResourceRef: string,
+  ) => wasm.import_external_source_wasm(kind, sourceUri, bytesB64, targetResourceRef);
+  (window as any).reimport_external_source_wasm = (assetId: string) =>
+    wasm.reimport_external_source_wasm(assetId);
+  (window as any).get_external_source_wasm = (assetId: string) =>
+    wasm.get_external_source_wasm(assetId);
+
   console.log("[bridge] initEngine resolved");
 }
 

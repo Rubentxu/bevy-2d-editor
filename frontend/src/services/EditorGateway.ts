@@ -253,37 +253,197 @@ export interface EditorGateway {
   world: WorldApi;
 }
 
+/**
+ * Typed window bridge — one optional property per binding exposed by
+ * `engine-bridge.initEngine()`. Generated from the wasm .d.ts signatures.
+ * No payload-shape fields (dimensions, entrance, error, ...) live here.
+ */
 interface WindowWithBridge {
-  get_scene_snapshot?: () => Promise<string> | string;
-  dispatch_command?: (json: string) => Promise<string> | string;
+  // ── Scene Document + commands ────────────────────────────────────────────
   load_scene_json?: (json: string) => Promise<string> | string;
+  dispatch_command?: (json: string) => Promise<string> | string;
+  get_scene_snapshot?: () => Promise<string> | string;
+  undo?: () => Promise<string> | string;
+  redo?: () => Promise<string> | string;
+  get_log_state?: () => Promise<string> | string;
+  scene_create?: (name: string) => Promise<string> | string;
+  scene_delete?: (id: string) => Promise<string> | string;
+  scene_rename?: (id: string, newName: string) => Promise<string> | string;
+  scene_switch?: (id: string) => Promise<string> | string;
+  scene_switch_commit?: (id: string) => Promise<string> | string;
+  list_scenes?: () => Promise<string> | string;
+  list_scenes_extended?: () => Promise<string> | string;
+  get_current_scene_id?: () => Promise<string | undefined> | string | undefined;
+  save_scene?: (name: string) => Promise<string> | string;
+  load_scene?: (name: string) => Promise<string> | string;
+  load_project?: () => Promise<string> | string;
+  project_exists?: () => Promise<string> | string;
+  // ── Scene Assets (ADR-0008) ──────────────────────────────────────────────
   get_scene_asset_catalog_json?: () => Promise<string> | string;
   get_asset_document_json?: () => Promise<string> | string;
+  set_asset_document_wasm?: (assetJson: string) => Promise<string> | string;
+  list_scene_assets?: (roleFilter?: string | null) => Promise<string> | string;
+  create_scene_asset?: (name: string, role: string) => Promise<string> | string;
+  delete_scene_asset?: (assetId: string) => Promise<string> | string;
+  duplicate_scene_asset?: (assetId: string) => Promise<string> | string;
+  rename_scene_asset?: (assetId: string, newPath: string) => Promise<string> | string;
+  open_scene_asset?: (assetId: string) => Promise<string> | string;
+  close_scene_asset?: () => Promise<string> | string;
+  save_scene_asset?: () => Promise<string> | string;
+  list_scene_instance_layers_wasm?: (assetJson: string) => Promise<string> | string;
+  create_scene_instance_layer_wasm?: (
+    assetJson: string,
+    name: string,
+    kind: string,
+  ) => Promise<string> | string;
+  delete_scene_instance_layer_wasm?: (
+    assetJson: string,
+    layerId: string,
+  ) => Promise<string> | string;
+  place_scene_instance?: (
+    assetId: string,
+    translationJson?: string | null,
+  ) => Promise<string> | string;
+  remove_scene_instance?: (instanceId: string) => Promise<string> | string;
+  replace_scene_instance_asset?: (
+    instanceId: string,
+    newAssetId: string,
+  ) => Promise<string> | string;
+  get_scene_instances?: () => Promise<string> | string;
+  get_instance_components_wasm?: (instanceId: string) => Promise<string> | string;
+  validate_overrides_wasm?: (
+    instanceJson: string,
+    assetJson: string,
+  ) => Promise<string> | string;
+  effective_values_wasm?: (
+    instanceJson: string,
+    assetJson: string,
+  ) => Promise<string> | string;
+  try_rebind_wasm?: (
+    orphanedOverrideJson: string,
+    assetJson: string,
+  ) => Promise<string> | string;
+  get_resync_reports?: () => Promise<string> | string;
+  override_field_status_wasm?: (instanceJson: string) => Promise<string> | string;
+  upsert_override_wasm?: (
+    instanceId: string,
+    localId: string,
+    typeId: string,
+    fieldPathJson: string,
+    valueJson: string,
+  ) => Promise<string> | string;
+  revert_override_wasm?: (
+    instanceId: string,
+    localId: string,
+    typeId: string,
+    fieldPathJson: string,
+  ) => Promise<string> | string;
+  // ── Asset files ──────────────────────────────────────────────────────────
+  list_asset_files?: () => Promise<string> | string;
+  read_asset_file_bytes?: (id: string) => Promise<string> | string;
+  import_asset_file?: (
+    name: string,
+    mimeType: string,
+    bytes: Uint8Array,
+  ) => Promise<string> | string;
+  delete_asset_file?: (id: string) => Promise<string> | string;
+  // ── Schema registry ──────────────────────────────────────────────────────
+  list_schemas?: () => Promise<string> | string;
+  save_schema?: (typeId: string) => Promise<string> | string;
+  load_schema?: (typeId: string) => Promise<string> | string;
+  delete_schema?: (typeId: string) => Promise<string> | string;
+  register_schema?: (json: string) => Promise<string> | string;
+  unregister_schema?: (typeId: string) => Promise<string> | string;
+  is_builtin_type?: (typeId: string) => Promise<string> | string;
+  combined_registry_size?: () => Promise<string> | string;
+  get_combined_schemas_json?: () => Promise<string> | string;
+  create_scene_component?: (schemaJson: string) => Promise<string> | string;
+  bind_scene_to_schema?: (
+    typeId: string,
+    sceneAssetId: string | null,
+  ) => Promise<string> | string;
+  list_scene_component_schemas?: () => Promise<string> | string;
+  // ── Tilesets / AutoLayer ─────────────────────────────────────────────────
+  list_tilesets?: () => Promise<string> | string;
+  save_tileset?: (tilesetJson: string) => Promise<string> | string;
+  delete_tileset?: (id: string) => Promise<string> | string;
+  load_tileset?: (id: string) => Promise<string> | string;
+  paint_tile?: (
+    assetRef: string,
+    layerId: string,
+    x: number,
+    y: number,
+    tilesetId: string,
+    localIndex: number,
+  ) => Promise<string> | string;
+  erase_tile?: (
+    assetRef: string,
+    layerId: string,
+    x: number,
+    y: number,
+  ) => Promise<string> | string;
+  // ── Logic graphs ─────────────────────────────────────────────────────────
+  create_logic_graph_asset?: (
+    assetId: string,
+    logicalPath: string,
+  ) => Promise<string> | string;
+  list_logic_graph_assets?: () => Promise<string> | string;
+  get_logic_graph?: () => Promise<string> | string;
+  open_logic_graph_asset?: (assetId: string) => Promise<string> | string;
+  dispatch_logic_command?: (cmdJson: string) => Promise<string> | string;
+  get_logic_log_state?: () => Promise<string> | string;
+  undo_logic?: () => Promise<string> | string;
+  redo_logic?: () => Promise<string> | string;
+  get_node_descriptors?: () => Promise<string> | string;
+  // ── Source files (code-aware AI) ─────────────────────────────────────────
+  list_source_files?: () => Promise<string> | string;
+  read_source_file?: (id: string) => Promise<string> | string;
+  write_source_file?: (id: string, content: string) => Promise<string> | string;
+  create_source_file?: (path: string, name: string) => Promise<string> | string;
+  delete_source_file?: (id: string) => Promise<string> | string;
+  find_source_location?: (typeId: string) => Promise<string> | string;
+  // ── Code export / BSN ────────────────────────────────────────────────────
+  export_code?: (docJson: string) => Promise<string> | string;
+  export_dynamic_scene_wasm?: (docJson: string) => Promise<string> | string;
+  export_asset_to_bsn_wasm?: (assetId: string) => Promise<string> | string;
+  import_bsn_text_to_asset_wasm?: (bsnText: string) => Promise<string> | string;
+  import_bsn_asset_wasm?: (
+    name: string,
+    bsnText: string,
+  ) => Promise<string> | string;
+  // ── Validation Center ────────────────────────────────────────────────────
+  get_validation_issues_wasm?: () => Promise<string> | string;
+  // ── Play mode / Runtime preview ──────────────────────────────────────────
   enter_play_mode?: () => Promise<string> | string;
   exit_play_mode?: () => Promise<string> | string;
+  get_preview_metrics_wasm?: () => Promise<string> | string;
+  get_preview_mapping_wasm?: () => Promise<string> | string;
+  get_preview_provenance_wasm?: (stableId: string) => Promise<string> | string;
+  // ── Hot reload ───────────────────────────────────────────────────────────
+  hot_reload_source_wasm?: (fileId: string) => Promise<string> | string;
+  hot_reload_asset_wasm?: (assetId: string) => Promise<string> | string;
+  force_reload_wasm?: () => Promise<string> | string;
+  // ── AI ───────────────────────────────────────────────────────────────────
   propose?: (json: string) => Promise<string> | string;
-  // ChangeWorkbench WASM exports (ADR-0039)
+  // ── ChangeWorkbench (ADR-0039) ───────────────────────────────────────────
   submit_pending_change_set?: (json: string) => Promise<string> | string;
   get_pending_change_sets?: () => Promise<string> | string;
   approve_change_set?: (id: string) => Promise<string> | string;
   approve_selected_ops?: (
     id: string,
-    indices_json: string,
+    indicesJson: string,
   ) => Promise<string> | string;
   reject_change_set?: (id: string) => Promise<string> | string;
   get_change_set_summaries?: () => Promise<string> | string;
-  // §6 Runtime Causality WASM exports (ADR-0052)
+  // ── Runtime causality (ADR-0052) / Apply-Back (ADR-0050) ─────────────────
   get_rebuild_cause_wasm?: () => Promise<string> | string | null;
   get_logic_activation_events_wasm?: () => Promise<string> | string | null;
-  get_preview_provenance_wasm?: () => Promise<string> | string | null;
-  // §7 Apply-Back WASM exports (ADR-0050)
   get_runtime_deltas_wasm?: () => Promise<string> | string | null;
   create_apply_back_change_set_wasm?: (
-    deltaIdsJson: string,
+    rationale: string,
   ) => Promise<string> | string;
   get_tunable_baselines_wasm?: () => Promise<string> | string | null;
-  __bevyEngineStarted?: boolean;
-  // World Workspace WASM exports (ADR-0037)
+  // ── World Workspace (ADR-0037) ───────────────────────────────────────────
   create_world_wasm?: (name: string) => Promise<string> | string;
   save_world_wasm?: () => Promise<string> | string;
   load_world_wasm?: (name: string) => Promise<string> | string;
@@ -304,19 +464,24 @@ interface WindowWithBridge {
   remove_link_wasm?: (linkId: string) => Promise<string> | string;
   set_layout_policy_wasm?: (policyJson: string) => Promise<string> | string;
   open_level_from_world_wasm?: (levelId: string) => Promise<string> | string;
-  // §8 External Source Importers WASM exports (ADR-0041 / v0.93)
-  list_importers_wasm?: (kind?: string) => Promise<string> | string;
-  register_importer_wasm?: (
-    id: string,
-    version: string,
-    display_name: string,
-  ) => Promise<string> | string;
+  // ── External Source Importers (ADR-0041 / v0.93) ─────────────────────────
+  list_importers_wasm?: (kind?: string | null) => Promise<string> | string;
+  register_importer_wasm?: (json: string) => Promise<string> | string;
   import_external_source_wasm?: (
-    source_path: string,
-    importer_id: string,
+    kind: string,
+    sourceUri: string,
+    bytesB64: string,
+    targetResourceRef: string,
   ) => Promise<string> | string;
-  reimport_external_source_wasm?: (asset_id: string) => Promise<string> | string;
-  get_external_source_wasm?: (asset_id: string) => Promise<string> | string;
+  reimport_external_source_wasm?: (assetId: string) => Promise<string> | string;
+  get_external_source_wasm?: (assetId: string) => Promise<string> | string;
+  // ── Asset command surface (ADR-0007) ─────────────────────────────────────
+  dispatch_asset_command?: (cmdJson: string) => Promise<string> | string;
+  get_asset_log_state?: () => Promise<string> | string;
+  undo_asset?: () => Promise<string> | string;
+  redo_asset?: () => Promise<string> | string;
+  // ── Engine ready signal ──────────────────────────────────────────────────
+  __bevyEngineStarted?: boolean;
 }
 
 function readBridge(): WindowWithBridge | null {

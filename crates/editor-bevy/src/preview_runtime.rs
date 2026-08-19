@@ -290,6 +290,11 @@ fn setup(mut commands: Commands) {
     // returns NULL on the very first call (before any load_scene_json).
     crate::scene_session::SCENE_DOC.with(|s| *s.borrow_mut() = Some(scene));
 
+    // Initialize the World catalog to an empty catalog so world_*_wasm
+    // calls do not panic before load_project() rebuilds it from OPFS
+    // (ADR-0037). create_world_wasm can then register into it.
+    crate::world_state::set_world_catalog(editor_model::scene_asset_catalog::SceneAssetCatalog::new());
+
     mark_dirty();
 }
 
