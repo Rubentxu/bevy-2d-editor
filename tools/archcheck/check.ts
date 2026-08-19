@@ -24,6 +24,9 @@
  *   ARCH-040 No Bevy Entity in persisted/protocol model: editor-model and
  *       editor-protocol must not contain `Entity` (bevy::Entity) in type positions.
  *       editor-model defines its own `Entity` domain type in document.rs (excluded).
+ *   SIZE-1 Rust production file > 50 KiB fails CI unless allowlisted. > 30 KiB warns.
+ *       Allowlisted: lib.rs, logic_evaluator.rs, preview_runtime.rs, processor.rs
+ *       (ARCH-050 tracks progressive split).
  *   C1  Dependency graph (cargo metadata): forbidden edges per ADR-0053/ADR-0030.
  *       editor-application may not depend on editor-bevy or editor-storage-web.
  *       editor-model may not depend on editor-bevy, editor-application, or
@@ -34,7 +37,7 @@
  * Exits with code 0 only when all assertions pass.
  */
 
-import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { execSync } from "node:child_process";
 
@@ -660,6 +663,64 @@ const ASSERTIONS: Assertion[] = [
               `forbidden edge: ${consumer} -> ${supplier} (unconditional dependency)`,
           );
         }
+      }
+    },
+  },
+  // ── SIZE gates: file-size hotspots ─────────────────────────────────────────────
+  // Initial thresholds: warn at > 30 KiB, CI-fail at > 50 KiB.
+  // Files exceeding 50 KiB must have a tracked ADR/task as exception.
+  // Natural split by capability boundary is preferred over allowlisting.
+  {
+    id: "SIZE-1",
+    description:
+      "No production .rs file in crates/*/src/ exceeds 50 KiB. " +
+      "Files > 30 KiB trigger a warning; > 50 KiB fail CI unless allowlisted with ADR.",
+    run() {
+      const THRESHOLD_WARN = 30 * 1024;   // 30 KiB
+      const THRESHOLD_FAIL = 50 * 1024;   // 50 KiB
+      // Allowlist: files with documented ADR/task exceptions (ARCH-050).
+      const allowlist = new Set<string>([
+        // lib.rs: primary barrel/API surface; ARCH-050 tracks split.
+        "crates/editor-bevy/src/lib.rs",
+        // logic_evaluator.rs: single coherent capability; ARCH-050 tracks split.
+        "crates/editor-bevy/src/logic_evaluator.rs",
+        // preview_runtime.rs / processor.rs: ARCH-050 tracks splits.
+        "crates/editor-bevy/src/preview_runtime.rs",
+        "crates/editor-bevy/src/processor.rs",
+      ]);
+
+      const srcDir = join(root, "crates");
+      const ciFailures: string[] = [];
+
+      function checkDir(dir: string): void {
+        const entries = readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          const full = join(dir, entry.name);
+          if (entry.isDirectory()) {
+            const srcSubdir = join(full, "src");
+            if (existsSync(srcSubdir)) checkDir(srcSubdir);
+          } else if (entry.isFile() && entry.name.endsWith(".rs")) {
+            const stat = statSync(full);
+            const size = Number(stat.size);
+            const relPath = full.replace(root + "/", "");
+            if (size > THRESHOLD_FAIL && !allowlist.has(relPath)) {
+              ciFailures.push(
+                `${relPath} is ${(size / 1024).toFixed(1)} KiB (limit: 50 KiB)`,
+              );
+            } else if (size > THRESHOLD_WARN) {
+              process.stderr.write(
+                `warning: ${relPath} is ${(size / 1024).toFixed(1)} KiB (> 30 KiB warn threshold)\n`,
+              );
+            }
+          }
+        }
+      }
+
+      checkDir(srcDir);
+      for (const f of ciFailures) {
+        failures.push(
+          `Assertion failed: ${this.description} — ${f}`,
+        );
       }
     },
   },

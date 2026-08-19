@@ -33,10 +33,18 @@ new domain/application statics with interior mutability forbidden
 Initial thresholds are warnings, then harden after decomposition:
 
 - Rust production file > 30 KiB: warning + architecture review.
-- Rust production file > 50 KiB: CI failure unless allowlisted with an ADR/task.
+- Rust production file > 50 KiB: CI failure unless allowlisted (ARCH-050).
 - React component > 600 LOC: warning.
 - `App.tsx` target: composition only, < 300 LOC.
 - backend bridge module target: no monolithic export table.
+
+Implemented as `SIZE-1` assertion in `tools/archcheck/check.ts`.
+
+Allowlisted hotspots (ARCH-050 tracking):
+- `crates/editor-bevy/src/lib.rs` — primary barrel/API surface
+- `crates/editor-bevy/src/logic_evaluator.rs` — single coherent capability
+- `crates/editor-bevy/src/preview_runtime.rs` — update/schedule systems
+- `crates/editor-bevy/src/processor.rs` — command processor
 
 These limits are heuristics, not quality metrics by themselves; exceptions require rationale.
 
