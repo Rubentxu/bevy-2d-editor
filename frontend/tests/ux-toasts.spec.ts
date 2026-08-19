@@ -32,10 +32,12 @@ test.describe("UX Toasts — Phase 5", { tag: ["@full"] }, () => {
       (window as any).__load_project_orig = original;
     });
 
-    // The Load button lives in the Edit toolbar group.
+    // The Load button lives in the Edit toolbar group. The legacy toolbar
+    // is positioned off-screen; dispatch the click directly (same pattern
+    // as engine.spec.ts).
     const loadBtn = page.locator('[data-testid="load-btn"]');
     await expect(loadBtn).toBeVisible();
-    await loadBtn.click();
+    await loadBtn.dispatchEvent("click");
 
     // Toast appears.
     const toast = page.locator('[data-testid="toast-error"]');

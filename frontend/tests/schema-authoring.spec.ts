@@ -1,3 +1,4 @@
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
 import { test, expect, Page } from "@playwright/test";
 
 const WASM_LOAD_TIMEOUT = 120_000;
@@ -28,6 +29,14 @@ async function selectEntity(page: Page, entityId: string) {
 
 // Helper to open New Schema panel
 async function openNewSchemaPanel(page: Page) {
+  // The "+ New Schema" button lives in the AI Actions zone, which is
+  // collapsed by default (Phase 2.3 zone 6). Expand it first.
+  const aiSection = page.locator('[data-testid="inspector-section-ai-actions"]');
+  if (await aiSection.count()) {
+    const header = aiSection.locator(".inspector-section-header");
+    const expanded = await header.getAttribute("aria-expanded");
+    if (expanded !== "true") await header.click();
+  }
   const newSchemaBtn = page.locator(".new-schema-btn");
   await expect(newSchemaBtn).toBeVisible({ timeout: 10000 });
   await newSchemaBtn.click();
@@ -83,7 +92,8 @@ async function saveSchema(page: Page) {
 test.describe("Schema Authoring", { tag: ["@domain"] }, () => {
   test("(a) create game.PlayerHealth with 3 fields, save, appears in dropdown", async ({ page }) => {
     // Setup: load page and wait for WASM
-    await page.goto("/");
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({ timeout: WASM_LOAD_TIMEOUT });
     await page.waitForFunction(
       () => typeof (window as any).load_scene_json === "function",
@@ -116,7 +126,8 @@ test.describe("Schema Authoring", { tag: ["@domain"] }, () => {
 
   test("(b) reject type_id without 'game.' prefix and 'editor.*' builtin", async ({ page }) => {
     // Setup: load page and wait for WASM
-    await page.goto("/");
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({ timeout: WASM_LOAD_TIMEOUT });
     await page.waitForFunction(
       () => typeof (window as any).load_scene_json === "function",
@@ -147,7 +158,8 @@ test.describe("Schema Authoring", { tag: ["@domain"] }, () => {
 
   test("(c) edit game.PlayerHealth - modify a field - save - assert changes persisted", async ({ page }) => {
     // Setup: load page and wait for WASM
-    await page.goto("/");
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({ timeout: WASM_LOAD_TIMEOUT });
     await page.waitForFunction(
       () => typeof (window as any).load_scene_json === "function",
@@ -215,7 +227,8 @@ test.describe("Schema Authoring", { tag: ["@domain"] }, () => {
 
   test("(d) create schema -> reload page -> load_project -> schema still in dropdown", async ({ page }) => {
     // Setup: load page and wait for WASM
-    await page.goto("/");
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
     await expect(page.locator('[data-testid="topbar"]')).toBeVisible({ timeout: WASM_LOAD_TIMEOUT });
     await page.waitForFunction(
       () => typeof (window as any).load_scene_json === "function",
@@ -247,8 +260,10 @@ test.describe("Schema Authoring", { tag: ["@domain"] }, () => {
     );
     await page.waitForTimeout(500);
 
-    // Restore project (schemas + scenes) via Load button
-    await page.click('[data-testid="load-btn"]');
+    // Restore project (schemas + scenes) via Load button. The legacy
+    // toolbar (which holds load-btn) is positioned off-screen; dispatch
+    // the click directly (same pattern as engine.spec.ts).
+    await page.locator('[data-testid="load-btn"]').dispatchEvent("click");
     await page.waitForTimeout(1000);
 
     // Load scene and select entity
