@@ -3855,18 +3855,18 @@ mod validation_center_tests {
     use super::*;
 
     /// Test helper: set with_logic_graph for testing.
+    ///
+    /// Writes to `LOGIC_GRAPH_DOC` (the canonical thread-local that
+    /// `get_validation_issues_wasm` reads via
+    /// `with_logic_graph_mut`). The previous implementation wrote to
+    /// `editor_model::ports::with_session_mut`, which is a separate
+    /// state container; the validation function never saw the test
+    /// graph, leaving `wasm_validation_cycle_in_active_graph` permanently
+    /// red. Aligned with the read path in v0.99.
     #[cfg(test)]
     pub(crate) fn set_logic_graph_for_test(asset: Option<LogicGraphAsset>) {
-        editor_model::ports::with_session_mut(|sess| {
-            sess.logic_state_mut(crate::logic_state::ACTIVE_LOGIC_GRAPH_PATH)
-                .graph_docs
-                .insert(
-                    "_active".to_string(),
-                    asset.unwrap_or_else(|| {
-                        // Empty graph fallback — tests should provide their own.
-                        LogicGraphAsset::default()
-                    }),
-                );
+        crate::logic_state::LOGIC_GRAPH_DOC.with(|cell| {
+            *cell.borrow_mut() = Some(asset.unwrap_or_else(LogicGraphAsset::default));
         });
     }
 
