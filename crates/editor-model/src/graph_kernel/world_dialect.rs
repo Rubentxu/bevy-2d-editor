@@ -315,7 +315,7 @@ mod tests {
 
 /// Mutable adapter that owns `&'a mut WorldDocument` and implements `GraphMut`.
 ///
-/// This dialect has `STRICTNESS = Free`: all topology mutations are allowed.
+/// This dialect has `strictness() == Free`: all topology mutations are allowed.
 /// Cycles, self-loops, and duplicate edges are permitted (and may be useful
 /// for debugging, visualization, or temporary states).
 pub struct WorldGraphDialectMut<'a> {
@@ -432,7 +432,9 @@ impl<'a> Graph for WorldGraphDialectMut<'a> {
 }
 
 impl<'a> GraphMut for WorldGraphDialectMut<'a> {
-    const STRICTNESS: GraphMutStrictness = GraphMutStrictness::Free;
+    fn strictness(&self) -> GraphMutStrictness {
+        GraphMutStrictness::Free
+    }
 
     fn add_node(&mut self, data: Self::NodeData) -> NodeIndex {
         let idx = NodeIndex(self.doc.levels.len() as u32);
@@ -660,9 +662,6 @@ mod world_dialect_mut_tests {
     fn strictness_is_free() {
         let mut doc = world(vec![], vec![]);
         let d = WorldGraphDialectMut::new(&mut doc);
-        assert_eq!(
-            <WorldGraphDialectMut as GraphMut>::STRICTNESS,
-            GraphMutStrictness::Free
-        );
+        assert_eq!(d.strictness(), GraphMutStrictness::Free);
     }
 }

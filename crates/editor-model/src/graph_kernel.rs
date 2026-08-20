@@ -124,9 +124,9 @@ pub trait Graph {
 
 /// Per-dialect topology strictness for mutation operations.
 ///
-/// Each dialect that implements `GraphMut` declares its `STRICTNESS` via the
-/// associated constant. This allows `add_edge` to validate topology once at
-/// compile time without runtime dispatch.
+/// Each dialect that implements `GraphMut` declares its `strictness` via the
+/// `strictness()` method. The method is `&self` so the trait remains
+/// object-safe. This allows `add_edge` to validate topology per dialect.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GraphMutStrictness {
     /// No cycles, no self-loops, no duplicate edges. (SceneAssetDialect)
@@ -140,17 +140,18 @@ pub enum GraphMutStrictness {
 /// Opt-in mutation trait for graph dialects.
 ///
 /// This trait is segregated from `Graph` to preserve read-only kernel operations.
-/// Dialects that want mutation implement `GraphMut` with a `STRICTNESS` constant
+/// Dialects that want mutation implement `GraphMut` with a `strictness` method
 /// that governs `add_edge` validation. The trait is object-safe: methods return
-/// `NodeIndex`/`EdgeIndex` (opaque newtypes) and never `Self`.
+/// `NodeIndex`/`EdgeIndex` (opaque newtypes) and never `Self` (only `&mut self`).
 pub trait GraphMut: Graph {
-    /// Per-dialect topology strictness. Resolved at compile time.
-    const STRICTNESS: GraphMutStrictness;
+    /// Per-dialect topology strictness. Resolved at compile time per dialect,
+    /// invoked as a method so the trait remains object-safe.
+    fn strictness(&self) -> GraphMutStrictness;
 
     /// Append a new node. Returns the new `NodeIndex`.
     fn add_node(&mut self, data: Self::NodeData) -> NodeIndex;
 
-    /// Connect `src` to `dst`. Validates per `STRICTNESS`.
+    /// Connect `src` to `dst`. Validates per `strictness()`.
     fn add_edge(
         &mut self,
         src: NodeIndex,
@@ -291,7 +292,7 @@ mod test_graphs {
 /// from `hypothetical_src` in the existing graph. This is O(V+E).
 ///
 /// This helper is used by `GraphMut::add_edge` implementations with
-/// `STRICTNESS = Dag` to detect whether adding an edge would create a cycle.
+/// `strictness() == Dag` to detect whether adding an edge would create a cycle.
 #[allow(dead_code)]
 pub(crate) fn would_create_cycle<G: Graph + ?Sized>(
     g: &G,
@@ -618,7 +619,9 @@ mod graph_mut_tests {
     }
 
     impl GraphMut for StubDialect {
-        const STRICTNESS: GraphMutStrictness = GraphMutStrictness::Free;
+        fn strictness(&self) -> GraphMutStrictness {
+            GraphMutStrictness::Free
+        }
 
         fn add_node(&mut self, data: Self::NodeData) -> NodeIndex {
             let idx = NodeIndex(self.nodes.len() as u32);
@@ -696,8 +699,8 @@ mod graph_mut_tests {
         let idx = dialect.add_node(42);
         assert_eq!(idx, NodeIndex(0));
         assert_eq!(dialect.node_count(), 1);
-        // Verify STRICTNESS const is accessible.
-        assert_eq!(<StubDialect as GraphMut>::STRICTNESS, GraphMutStrictness::Free);
+        // Verify strictness() method is accessible.
+        assert_eq!(dialect.strictness(), GraphMutStrictness::Free);
     }
 
     // --- GraphKernelError #[non_exhaustive] wildcard test ---
@@ -807,17 +810,67 @@ mod cross_dialect_integration_tests {
     use crate::world::{LayoutPolicy, LinkDirection, StreamingPolicy, WorldId, WorldLinkKind};
     use std::collections::BTreeMap;
 
+    fn empty_scene_asset() -> crate::scene_asset::SceneAssetDocument {
+        crate::scene_asset::SceneAssetDocument {
+            asset_id: "asset".to_string(),
+            logical_path: "test/asset".to_string(),
+            role: SceneAssetRole::Actor,
+            version: 1,
+            entities: vec![],
+            relationships: vec![],
+            exposed_properties: vec![],
+            metadata: SceneAssetMetadata::default(),
+            layers: vec![],
+            extension_data: BTreeMap::new(),
+        }
+    }
+
+    fn empty_world() -> crate::world::WorldDocument {
+        crate::world::WorldDocument {
+            id: WorldId::new("w"),
+            name: "Test".to_string(),
+            version: 1,
+            layout_policy: LayoutPolicy::Free,
+            levels: vec![],
+            links: vec![],
+            updated_at: 0,
+            extension_data: BTreeMap::new(),
+        }
+    }
+
     #[test]
-    fn strictness_const_values() {
-        // Verify const STRICTNESS is compile-time evaluable for all three dialects.
-        const _: () = {
-            let _ = <LogicGraphDialectMut as GraphMut>::STRICTNESS;
-            let _ = <SceneAssetDialectMut as GraphMut>::STRICTNESS;
-            let _ = <WorldGraphDialectMut as GraphMut>::STRICTNESS;
-        };
-        assert_eq!(<LogicGraphDialectMut as GraphMut>::STRICTNESS, GraphMutStrictness::CyclicNoSelfLoop);
-        assert_eq!(<SceneAssetDialectMut as GraphMut>::STRICTNESS, GraphMutStrictness::Dag);
-        assert_eq!(<WorldGraphDialectMut as GraphMut>::STRICTNESS, GraphMutStrictness::Free);
+    fn strictness_method_returns_correct_variant() {
+        // Verify strictness() method returns the per-dialect variant.
+        let mut asset = crate::logic_graph::LogicGraphAsset::default();
+        let mut sad = empty_scene_asset();
+        let mut world = empty_world();
+        let ld = LogicGraphDialectMut::new(&mut asset);
+        let sad_d = SceneAssetDialectMut::new(&mut sad);
+        let wd = WorldGraphDialectMut::new(&mut world);
+        assert_eq!(ld.strictness(), GraphMutStrictness::CyclicNoSelfLoop);
+        assert_eq!(sad_d.strictness(), GraphMutStrictness::Dag);
+        assert_eq!(wd.strictness(), GraphMutStrictness::Free);
+    }
+
+    #[test]
+    fn graph_mut_is_object_safe() {
+        // Spec requirement 9: GraphMut must be usable as `&mut dyn GraphMut`
+        // and `Box<dyn GraphMut>`. Associated consts would break object-safety;
+        // we use a method instead. This test verifies the trait is object-safe.
+        let mut asset = crate::logic_graph::LogicGraphAsset::default();
+        let boxed: Box<
+            dyn GraphMut<
+                NodeData = crate::logic_graph::LogicNode,
+                EdgeData = crate::logic_graph::LogicEdge,
+                Error = std::convert::Infallible,
+            >,
+        > = Box::new(LogicGraphDialectMut::new(&mut asset));
+        let _borrowed: &dyn GraphMut<
+            NodeData = crate::logic_graph::LogicNode,
+            EdgeData = crate::logic_graph::LogicEdge,
+            Error = std::convert::Infallible,
+        > = &*boxed;
+        // If this compiles, the trait is object-safe.
     }
 
     #[test]

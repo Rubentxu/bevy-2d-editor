@@ -423,7 +423,9 @@ impl<'a> Graph for SceneAssetDialectMut<'a> {
 }
 
 impl<'a> GraphMut for SceneAssetDialectMut<'a> {
-    const STRICTNESS: GraphMutStrictness = GraphMutStrictness::Dag;
+    fn strictness(&self) -> GraphMutStrictness {
+        GraphMutStrictness::Dag
+    }
 
     fn add_node(&mut self, data: Self::NodeData) -> NodeIndex {
         let idx = NodeIndex(self.doc.entities.len() as u32);
@@ -725,10 +727,7 @@ mod scene_asset_dialect_mut_tests {
     fn strictness_is_dag() {
         let mut doc = empty_doc();
         let d = SceneAssetDialectMut::new(&mut doc);
-        assert_eq!(
-            <SceneAssetDialectMut as GraphMut>::STRICTNESS,
-            GraphMutStrictness::Dag
-        );
+        assert_eq!(d.strictness(), GraphMutStrictness::Dag);
     }
 
     #[test]

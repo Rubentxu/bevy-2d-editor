@@ -201,7 +201,9 @@ impl<'a> Graph for LogicGraphDialectMut<'a> {
 }
 
 impl<'a> GraphMut for LogicGraphDialectMut<'a> {
-    const STRICTNESS: GraphMutStrictness = GraphMutStrictness::CyclicNoSelfLoop;
+    fn strictness(&self) -> GraphMutStrictness {
+        GraphMutStrictness::CyclicNoSelfLoop
+    }
 
     fn add_node(&mut self, data: Self::NodeData) -> NodeIndex {
         let idx = NodeIndex(self.asset.nodes.len() as u32);
@@ -606,7 +608,7 @@ mod tests {
     fn strictness_is_cyclic_no_self_loop() {
         let mut asset = LogicGraphAsset::default();
         let d = LogicGraphDialectMut::new(&mut asset);
-        assert_eq!(<LogicGraphDialectMut as GraphMut>::STRICTNESS, GraphMutStrictness::CyclicNoSelfLoop);
+        assert_eq!(d.strictness(), GraphMutStrictness::CyclicNoSelfLoop);
     }
 
     #[test]
