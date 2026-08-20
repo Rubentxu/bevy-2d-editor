@@ -361,8 +361,30 @@ impl<'a, D: Graph + ?Sized> Query<'a, D> {
             QueryState::InitialLeaves => Ok(leaves(dialect).into_iter().collect()),
             QueryState::Filtered { prev, pred_id } => {
                 let mut nodes = Self::eval(dialect, prev, predicates)?;
-                if let Some(PredicateEntry::Node(f)) = predicates.get(*pred_id) {
-                    nodes.retain(|idx| dialect.node(*idx).map(|n| f(n)).unwrap_or(false));
+                match predicates.get(*pred_id) {
+                    Some(PredicateEntry::Node(f)) => {
+                        nodes.retain(|idx| dialect.node(*idx).map(|n| f(n)).unwrap_or(false));
+                    }
+                    Some(PredicateEntry::Edge(f)) => {
+                        // Post-materialise edge filter: keep nodes that have at
+                        // least one incoming OR outgoing edge matching `f`.
+                        // Matches the spec §3 contract: "edge predicate
+                        // filters during traversal when both predicates are
+                        // set"; we apply post-materialise in the single-
+                        // predicate case for simplicity. Combinable with a
+                        // node predicate by chaining two `with_edge_kind`
+                        // /`with_node_data` calls.
+                        nodes.retain(|idx| {
+                            let in_match = dialect
+                                .incoming(*idx)
+                                .any(|e| dialect.edge(e).map(|d| f(d)).unwrap_or(false));
+                            let out_match = dialect
+                                .outgoing(*idx)
+                                .any(|e| dialect.edge(e).map(|d| f(d)).unwrap_or(false));
+                            in_match || out_match
+                        });
+                    }
+                    None => {}
                 }
                 Ok(nodes)
             }
@@ -944,5 +966,51 @@ mod tests {
         let result = q.collect();
         // topological sort on a cyclic graph returns Err
         assert!(result.is_err());
+    }
+
+    /// Regression test for the stub fix: `with_edge_kind` must actually
+    /// filter edges. A predicate that returns `false` for every edge must
+    /// produce an empty result; a predicate that returns `true` for every
+    /// edge must keep all reachable nodes.
+    #[test]
+    fn with_edge_kind_applies_predicate() {
+        let g = linear_graph();
+        let d = LogicGraphDialect::new(&g);
+        let a_idx = c_idx_val(&d, "a");
+
+        // All-true predicate: keep all reachable nodes.
+        let q_keep = Query::new(&d)
+            .reachable_from(a_idx)
+            .with_edge_kind(|_: &LogicEdge| true);
+        assert_eq!(q_keep.collect().unwrap().len(), 3);
+
+        // All-false predicate: drop every node because no edge matches.
+        let q_drop = Query::new(&d)
+            .reachable_from(a_idx)
+            .with_edge_kind(|_: &LogicEdge| false);
+        assert_eq!(q_drop.collect().unwrap().len(), 0);
+
+        // Selective predicate: only edges whose `to_node` is `b` match.
+        // That is the single edge `a -> b`. `b` has an incoming match (a->b
+        // matches), so it is kept. `c` has an incoming edge `b -> c` whose
+        // `to_node` is `c`, not `b`, so it is dropped. `a` has no incoming
+        // match and its outgoing edge `a -> b` matches the predicate, so it
+        // is kept.
+        let q_selective = Query::new(&d)
+            .reachable_from(a_idx)
+            .with_edge_kind(|e| e.to_node == crate::logic_graph::NodeId::new("b"));
+        let kept = q_selective.collect().unwrap();
+        assert!(
+            kept.contains(&c_idx_val(&d, "a")),
+            "a is kept (outgoing a->b matches)"
+        );
+        assert!(
+            kept.contains(&c_idx_val(&d, "b")),
+            "b is kept (incoming a->b matches)"
+        );
+        assert!(
+            !kept.contains(&c_idx_val(&d, "c")),
+            "c is dropped (incoming b->c does not match)"
+        );
     }
 }
