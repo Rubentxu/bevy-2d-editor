@@ -16,7 +16,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 // Dialects — one file per dialect. Each dialect adapts a domain-specific
 // graph shape to the `Graph` trait.
+pub mod changeset_dialect;
 pub mod scene_asset_dialect;
+pub use changeset_dialect::ChangeSetDialect;
 pub use scene_asset_dialect::SceneAssetDialect;
 
 /// Opaque kernel-owned node index. Stable for the lifetime of a `Graph` view.

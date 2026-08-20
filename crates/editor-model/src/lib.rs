@@ -108,8 +108,9 @@ pub use external_source::{
 };
 // Graph kernel (ADR-0053): pure-Rust dialect-agnostic substrate.
 pub use graph_kernel::{
-    EdgeIndex, Graph, GraphKernelError, LogicGraphDialect, NodeIndex, SceneAssetDialect,
-    ancestors, descendants, has_cycle, leaves, reachable_from, roots, topological_sort,
+    ChangeSetDialect, EdgeIndex, Graph, GraphKernelError, LogicGraphDialect, NodeIndex,
+    SceneAssetDialect, ancestors, descendants, has_cycle, leaves, reachable_from, roots,
+    topological_sort,
 };
 pub use importer::{
     BuildChangeSetOutput, Importer, ImporterDescriptor, ImporterError, ImporterHandle,

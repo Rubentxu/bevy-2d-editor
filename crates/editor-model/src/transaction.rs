@@ -211,6 +211,72 @@ pub struct ChangeSet<O> {
     pub ops: Vec<O>,
     /// Resources affected by this change.
     resources: Vec<ResourceRef>,
+    /// For each op at index `i`, the indices of earlier ops it depends on.
+    /// `op_dependencies[i]` is meaningful only when `i < ops.len()`.
+    /// `op_dependencies.len() <= ops.len()` always; `push_op` grows the
+    /// table lazily so its length equals `ops.len()`.
+    /// Used by `ChangeSetDialect<'a, O>` to expose the change-set as a DAG.
+    /// Maintained via `add_op_dependency` (with bounds + cycle checks).
+    op_dependencies: Vec<Vec<usize>>,
+}
+
+/// Errors reported by `ChangeSet::add_op_dependency`.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum ChangeSetError {
+    /// One of the op indices is out of range for the current change-set.
+    #[error("op index {op_idx} out of range (change-set has {ops_len} ops)")]
+    OutOfRange {
+        /// The offending index.
+        op_idx: usize,
+        /// Total ops in the change-set.
+        ops_len: usize,
+    },
+    /// An op cannot depend on itself.
+    #[error("op {op_idx} cannot depend on itself")]
+    SelfDependency {
+        /// The op index that was self-referenced.
+        op_idx: usize,
+    },
+    /// Adding the edge would create a cycle in the dependency graph.
+    #[error("adding dependency op {op_idx} -> op {depends_on} would create a cycle")]
+    WouldCreateCycle {
+        /// The op that would gain a new dependency.
+        op_idx: usize,
+        /// The op that would be reached transitively from `op_idx`, causing the cycle.
+        depends_on: usize,
+    },
+}
+
+impl<O> ChangeSet<O> {
+    /// Read the dependency table.
+    pub fn op_dependencies(&self) -> &[Vec<usize>] {
+        &self.op_dependencies
+    }
+
+    /// Walk the dependency graph from `from` via `op_dependencies` and return
+    /// every node reached (excluding `from` itself). Used internally by
+    /// `add_op_dependency` for cycle detection.
+    fn reachable_via_deps(&self, from: usize) -> Vec<usize> {
+        let mut out = Vec::new();
+        let mut visited: std::collections::BTreeSet<usize> = std::collections::BTreeSet::new();
+        let mut stack = vec![from];
+        while let Some(node) = stack.pop() {
+            if !visited.insert(node) {
+                continue;
+            }
+            if node != from {
+                out.push(node);
+            }
+            if let Some(deps) = self.op_dependencies.get(node) {
+                for &d in deps {
+                    if !visited.contains(&d) {
+                        stack.push(d);
+                    }
+                }
+            }
+        }
+        out
+    }
 }
 
 impl<O: Debug + Clone> ChangeSet<O> {
@@ -225,6 +291,7 @@ impl<O: Debug + Clone> ChangeSet<O> {
             approved_indices: None,
             ops: Vec::new(),
             resources: Vec::new(),
+            op_dependencies: Vec::new(),
         }
     }
 
@@ -311,7 +378,54 @@ impl<O: Debug + Clone> ChangeSet<O> {
 
     /// Push an operation onto the list.
     pub fn push_op(&mut self, op: O) {
+        let new_idx = self.ops.len();
         self.ops.push(op);
+        // Keep `op_dependencies` aligned with `ops.len()` so every op has a slot.
+        if self.op_dependencies.len() <= new_idx {
+            self.op_dependencies.push(Vec::new());
+        }
+    }
+
+    /// Add a dependency edge: `op_idx` depends on `depends_on`.
+    ///
+    /// Returns `Err` if either index is out of range, the edge is a self-loop,
+    /// or adding the edge would create a cycle in the dependency graph.
+    /// Cycle detection walks the existing graph from `op_idx` via `op_dependencies`;
+    /// if `depends_on` is reachable, the new edge would close a cycle.
+    pub fn add_op_dependency(
+        &mut self,
+        op_idx: usize,
+        depends_on: usize,
+    ) -> Result<(), ChangeSetError> {
+        if op_idx >= self.ops.len() {
+            return Err(ChangeSetError::OutOfRange {
+                op_idx,
+                ops_len: self.ops.len(),
+            });
+        }
+        if depends_on >= self.ops.len() {
+            return Err(ChangeSetError::OutOfRange {
+                op_idx: depends_on,
+                ops_len: self.ops.len(),
+            });
+        }
+        if op_idx == depends_on {
+            return Err(ChangeSetError::SelfDependency { op_idx });
+        }
+        // Cycle check: `op_idx` depends on `depends_on`. The edge forms a cycle
+        // iff `depends_on` transitively depends on `op_idx` (so we'd close the
+        // loop `op_idx -> depends_on -> ... -> op_idx`).
+        if self.reachable_via_deps(depends_on).contains(&op_idx) {
+            return Err(ChangeSetError::WouldCreateCycle {
+                op_idx,
+                depends_on,
+            });
+        }
+        let entry = &mut self.op_dependencies[op_idx];
+        if !entry.contains(&depends_on) {
+            entry.push(depends_on);
+        }
+        Ok(())
     }
 
     /// Returns a new ChangeSet containing only the ops at the given indices.
