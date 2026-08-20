@@ -37,33 +37,12 @@ pub struct PreviewEntity {
 ///
 /// Vec of LocalId representing root entities
 pub fn root_local_ids(asset: &SceneAssetDocument) -> Vec<LocalId> {
-    if asset.entities.is_empty() {
-        return Vec::new();
-    }
+    use editor_model::graph_kernel::{roots, Graph, SceneAssetDialect};
 
-    // Build a set of all entities that have an incoming Child relationship
-    let mut has_incoming_child: BTreeMap<LocalId, bool> = BTreeMap::new();
-    for entity in &asset.entities {
-        has_incoming_child.insert(entity.local_id.clone(), false);
-    }
-
-    for rel in &asset.relationships {
-        if matches!(rel.kind, RelationshipKind::Child) {
-            has_incoming_child.insert(rel.to_local_id.clone(), true);
-        }
-    }
-
-    // Roots are entities with no incoming Child relationships
-    asset
-        .entities
-        .iter()
-        .filter(|e| {
-            !has_incoming_child
-                .get(&e.local_id)
-                .copied()
-                .unwrap_or(false)
-        })
-        .map(|e| e.local_id.clone())
+    let dialect = SceneAssetDialect::new(asset);
+    roots(&dialect)
+        .into_iter()
+        .filter_map(|idx| dialect.node(idx).map(|e| e.local_id.clone()))
         .collect()
 }
 
