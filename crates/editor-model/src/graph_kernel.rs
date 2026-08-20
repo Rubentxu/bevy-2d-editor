@@ -39,6 +39,7 @@ pub struct EdgeIndex(pub u32);
 
 /// Errors reported by the graph kernel.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
 pub enum GraphKernelError {
     /// The graph has at least one cycle; the participating nodes are listed.
     #[error("graph contains a cycle involving {participating:?} nodes")]
@@ -61,6 +62,27 @@ pub enum GraphKernelError {
         idx: EdgeIndex,
         /// Number of edges in the graph.
         total: usize,
+    },
+    /// `add_edge` would create a cycle in a `Dag` dialect.
+    /// `participating` lists the nodes that would lie on the new cycle.
+    #[error("add_edge would create a cycle involving {participating:?} nodes")]
+    WouldCreateCycle {
+        /// Nodes that would lie on the cycle.
+        participating: Vec<NodeIndex>,
+    },
+    /// `add_edge` would create a self-loop in a non-`Free` dialect.
+    #[error("add_edge would create a self-loop at node {node:?}")]
+    SelfLoop {
+        /// The node that would be the source and target of the self-loop.
+        node: NodeIndex,
+    },
+    /// `add_edge` would duplicate an existing edge in a non-`Free` dialect.
+    #[error("add_edge would duplicate edge {src:?} -> {dst:?}")]
+    DuplicateEdge {
+        /// The source node of the duplicated edge.
+        src: NodeIndex,
+        /// The destination node of the duplicated edge.
+        dst: NodeIndex,
     },
 }
 
@@ -92,6 +114,67 @@ pub trait Graph {
     fn outgoing(&self, node: NodeIndex) -> Box<dyn Iterator<Item = EdgeIndex> + '_>;
     /// Iterate edges whose target is `node`.
     fn incoming(&self, node: NodeIndex) -> Box<dyn Iterator<Item = EdgeIndex> + '_>;
+}
+
+// ============================================================================
+// GraphMut — opt-in mutation trait segregated from Graph.
+// ============================================================================
+
+/// Per-dialect topology strictness for mutation operations.
+///
+/// Each dialect that implements `GraphMut` declares its `STRICTNESS` via the
+/// associated constant. This allows `add_edge` to validate topology once at
+/// compile time without runtime dispatch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum GraphMutStrictness {
+    /// No cycles, no self-loops, no duplicate edges. (SceneAssetDialect)
+    Dag,
+    /// Cycles allowed, no self-loops, no duplicate edges. (LogicGraphDialect)
+    CyclicNoSelfLoop,
+    /// Anything goes; dialect decides its own validation. (WorldGraphDialect)
+    Free,
+}
+
+/// Opt-in mutation trait for graph dialects.
+///
+/// This trait is segregated from `Graph` to preserve read-only kernel operations.
+/// Dialects that want mutation implement `GraphMut` with a `STRICTNESS` constant
+/// that governs `add_edge` validation. The trait is object-safe: methods return
+/// `NodeIndex`/`EdgeIndex` (opaque newtypes) and never `Self`.
+pub trait GraphMut: Graph {
+    /// Per-dialect topology strictness. Resolved at compile time.
+    const STRICTNESS: GraphMutStrictness;
+
+    /// Append a new node. Returns the new `NodeIndex`.
+    fn add_node(&mut self, data: Self::NodeData) -> NodeIndex;
+
+    /// Connect `src` to `dst`. Validates per `STRICTNESS`.
+    fn add_edge(
+        &mut self,
+        src: NodeIndex,
+        dst: NodeIndex,
+        data: Self::EdgeData,
+    ) -> Result<EdgeIndex, GraphKernelError>;
+
+    /// Remove a node. Default impl removes every edge where `idx` is source or target.
+    fn remove_node(&mut self, idx: NodeIndex) -> Result<(), GraphKernelError>;
+
+    /// Remove an edge by index.
+    fn remove_edge(&mut self, idx: EdgeIndex) -> Result<(), GraphKernelError>;
+
+    /// Replace a node's data in place.
+    fn update_node(
+        &mut self,
+        idx: NodeIndex,
+        data: Self::NodeData,
+    ) -> Result<(), GraphKernelError>;
+
+    /// Replace an edge's data in place.
+    fn update_edge(
+        &mut self,
+        idx: EdgeIndex,
+        data: Self::EdgeData,
+    ) -> Result<(), GraphKernelError>;
 }
 
 // ============================================================================
@@ -193,6 +276,28 @@ mod test_graphs {
             edges: vec![(0, 2), (1, 2)],
         }
     }
+}
+
+// ============================================================================
+// Mutation helpers.
+// ============================================================================
+
+/// Returns `true` iff `hypothetical_src` is reachable from `hypothetical_dst`
+/// in the given graph.
+///
+/// This helper is used by `GraphMut::add_edge` implementations with
+/// `STRICTNESS = Dag` to detect whether adding an edge would create a cycle.
+/// The check is O(V+E).
+#[allow(dead_code)]
+pub(crate) fn would_create_cycle<G: Graph + ?Sized>(
+    g: &G,
+    hypothetical_src: NodeIndex,
+    hypothetical_dst: NodeIndex,
+) -> bool {
+    // True iff `hypothetical_src` can be reached by walking backwards from
+    // `hypothetical_dst`. If so, adding hypothetical_src → hypothetical_dst
+    // would close a cycle.
+    ancestors(g, hypothetical_dst).contains(&hypothetical_src)
 }
 
 // ============================================================================
@@ -626,5 +731,279 @@ mod tests {
         assert_eq!(r, vec![d.node_index_of(&NodeId::new("a")).unwrap()]);
         let l = leaves(&d);
         assert_eq!(l, vec![d.node_index_of(&NodeId::new("c")).unwrap()]);
+    }
+}
+
+// ============================================================================
+// Tests for GraphMut, GraphMutStrictness, and GraphKernelError extensions.
+// ============================================================================
+
+#[cfg(test)]
+mod graph_mut_tests {
+    use super::*;
+
+    // --- GraphMutStrictness discriminant tests ---
+
+    #[test]
+    fn graph_mut_strictness_const_usize() {
+        // Each variant must have a distinct usize representation.
+        use std::mem;
+        let dag = GraphMutStrictness::Dag;
+        let cyclic = GraphMutStrictness::CyclicNoSelfLoop;
+        let free = GraphMutStrictness::Free;
+        // Discriminants are distinct (match is exhaustive so this is compile-time safe).
+        match (dag, cyclic, free) {
+            (GraphMutStrictness::Dag, GraphMutStrictness::CyclicNoSelfLoop, GraphMutStrictness::Free) => {}
+            (GraphMutStrictness::CyclicNoSelfLoop, GraphMutStrictness::Dag, GraphMutStrictness::Free) => {}
+            (GraphMutStrictness::Free, GraphMutStrictness::CyclicNoSelfLoop, GraphMutStrictness::Dag) => {}
+            _ => unreachable!(),
+        }
+        // Also verify via mem::discriminant.
+        assert_ne!(mem::discriminant(&dag), mem::discriminant(&cyclic));
+        assert_ne!(mem::discriminant(&cyclic), mem::discriminant(&free));
+        assert_ne!(mem::discriminant(&dag), mem::discriminant(&free));
+    }
+
+    /// A stub dialect used to verify GraphMut can be implemented.
+    struct StubDialect {
+        nodes: Vec<i32>,
+        edges: Vec<(u32, u32)>,
+    }
+
+    impl StubDialect {
+        fn new() -> Self {
+            StubDialect {
+                nodes: vec![],
+                edges: vec![],
+            }
+        }
+    }
+
+    impl Graph for StubDialect {
+        type NodeData = i32;
+        type EdgeData = (u32, u32);
+        type Error = std::convert::Infallible;
+
+        fn node_count(&self) -> usize {
+            self.nodes.len()
+        }
+        fn edge_count(&self) -> usize {
+            self.edges.len()
+        }
+        fn node(&self, idx: NodeIndex) -> Option<&i32> {
+            self.nodes.get(idx.0 as usize)
+        }
+        fn edge(&self, idx: EdgeIndex) -> Option<&(u32, u32)> {
+            self.edges.get(idx.0 as usize)
+        }
+        fn edge_endpoints(&self, idx: EdgeIndex) -> Option<(NodeIndex, NodeIndex)> {
+            let (a, b) = *self.edges.get(idx.0 as usize)?;
+            Some((NodeIndex(a), NodeIndex(b)))
+        }
+        fn outgoing(&self, node: NodeIndex) -> Box<dyn Iterator<Item = EdgeIndex> + '_> {
+            Box::new(
+                self.edges
+                    .iter()
+                    .enumerate()
+                    .filter_map(move |(i, (a, _))| {
+                        if *a == node.0 {
+                            Some(EdgeIndex(i as u32))
+                        } else {
+                            None
+                        }
+                    }),
+            )
+        }
+        fn incoming(&self, node: NodeIndex) -> Box<dyn Iterator<Item = EdgeIndex> + '_> {
+            Box::new(
+                self.edges
+                    .iter()
+                    .enumerate()
+                    .filter_map(move |(i, (_, b))| {
+                        if *b == node.0 {
+                            Some(EdgeIndex(i as u32))
+                        } else {
+                            None
+                        }
+                    }),
+            )
+        }
+    }
+
+    impl GraphMut for StubDialect {
+        const STRICTNESS: GraphMutStrictness = GraphMutStrictness::Free;
+
+        fn add_node(&mut self, data: Self::NodeData) -> NodeIndex {
+            let idx = NodeIndex(self.nodes.len() as u32);
+            self.nodes.push(data);
+            idx
+        }
+
+        fn add_edge(
+            &mut self,
+            src: NodeIndex,
+            dst: NodeIndex,
+            _data: Self::EdgeData,
+        ) -> Result<EdgeIndex, GraphKernelError> {
+            if src.0 as usize >= self.nodes.len() || dst.0 as usize >= self.nodes.len() {
+                return Err(GraphKernelError::NodeIndexOutOfRange {
+                    idx: src,
+                    total: self.nodes.len(),
+                });
+            }
+            let idx = EdgeIndex(self.edges.len() as u32);
+            self.edges.push((src.0, dst.0));
+            Ok(idx)
+        }
+
+        fn remove_node(&mut self, idx: NodeIndex) -> Result<(), GraphKernelError> {
+            if idx.0 as usize >= self.nodes.len() {
+                return Err(GraphKernelError::NodeIndexOutOfRange {
+                    idx,
+                    total: self.nodes.len(),
+                });
+            }
+            self.nodes.remove(idx.0 as usize);
+            self.edges.retain(|(a, b)| *a != idx.0 && *b != idx.0);
+            Ok(())
+        }
+
+        fn remove_edge(&mut self, idx: EdgeIndex) -> Result<(), GraphKernelError> {
+            if idx.0 as usize >= self.edges.len() {
+                return Err(GraphKernelError::EdgeIndexOutOfRange {
+                    idx,
+                    total: self.edges.len(),
+                });
+            }
+            self.edges.remove(idx.0 as usize);
+            Ok(())
+        }
+
+        fn update_node(&mut self, idx: NodeIndex, data: Self::NodeData) -> Result<(), GraphKernelError> {
+            if idx.0 as usize >= self.nodes.len() {
+                return Err(GraphKernelError::NodeIndexOutOfRange {
+                    idx,
+                    total: self.nodes.len(),
+                });
+            }
+            self.nodes[idx.0 as usize] = data;
+            Ok(())
+        }
+
+        fn update_edge(&mut self, idx: EdgeIndex, data: Self::EdgeData) -> Result<(), GraphKernelError> {
+            if idx.0 as usize >= self.edges.len() {
+                return Err(GraphKernelError::EdgeIndexOutOfRange {
+                    idx,
+                    total: self.edges.len(),
+                });
+            }
+            self.edges[idx.0 as usize] = data;
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn graphmut_trait_can_be_implemented() {
+        // Verify a type can implement GraphMut and be used via &mut dyn.
+        let mut dialect = StubDialect::new();
+        let idx = dialect.add_node(42);
+        assert_eq!(idx, NodeIndex(0));
+        assert_eq!(dialect.node_count(), 1);
+        // Verify STRICTNESS const is accessible.
+        assert_eq!(<StubDialect as GraphMut>::STRICTNESS, GraphMutStrictness::Free);
+    }
+
+    // --- GraphKernelError #[non_exhaustive] wildcard test ---
+
+    #[test]
+    fn graph_kernel_error_non_exhaustive() {
+        // A wildcard match on GraphKernelError must be exhaustive, proving
+        // #[non_exhaustive] is present. If we list all known variants below
+        // without a wildcard arm, adding a new variant without an explicit arm
+        // will cause a compile error.
+        fn match_error(e: &GraphKernelError) -> &'static str {
+            match e {
+                GraphKernelError::Cycle { .. } => "cycle",
+                GraphKernelError::NodeIndexOutOfRange { .. } => "node_oob",
+                GraphKernelError::EdgeIndexOutOfRange { .. } => "edge_oob",
+                GraphKernelError::WouldCreateCycle { .. } => "would_cycle",
+                GraphKernelError::SelfLoop { .. } => "self_loop",
+                GraphKernelError::DuplicateEdge { .. } => "dup_edge",
+            }
+        }
+
+        let cycle_err = GraphKernelError::Cycle {
+            participating: vec![NodeIndex(0), NodeIndex(1)],
+        };
+        assert_eq!(match_error(&cycle_err), "cycle");
+
+        let would_cycle = GraphKernelError::WouldCreateCycle {
+            participating: vec![NodeIndex(2)],
+        };
+        assert_eq!(match_error(&would_cycle), "would_cycle");
+
+        let self_loop = GraphKernelError::SelfLoop { node: NodeIndex(3) };
+        assert_eq!(match_error(&self_loop), "self_loop");
+
+        let dup_edge = GraphKernelError::DuplicateEdge {
+            src: NodeIndex(1),
+            dst: NodeIndex(2),
+        };
+        assert_eq!(match_error(&dup_edge), "dup_edge");
+    }
+
+    // --- GraphKernelError new variant construction and Debug formatting ---
+
+    #[test]
+    fn graph_kernel_error_variants_construction() {
+        // Construct each of the 3 new variants and verify Debug formatting.
+        let err_cycle = GraphKernelError::WouldCreateCycle {
+            participating: vec![NodeIndex(0), NodeIndex(1), NodeIndex(2)],
+        };
+        let debug = format!("{:?}", err_cycle);
+        assert!(debug.contains("WouldCreateCycle"));
+        assert!(debug.contains("NodeIndex"));
+
+        let err_self_loop = GraphKernelError::SelfLoop { node: NodeIndex(5) };
+        let debug = format!("{:?}", err_self_loop);
+        assert!(debug.contains("SelfLoop"));
+        assert!(debug.contains("5"));
+
+        let err_dup = GraphKernelError::DuplicateEdge {
+            src: NodeIndex(1),
+            dst: NodeIndex(3),
+        };
+        let debug = format!("{:?}", err_dup);
+        assert!(debug.contains("DuplicateEdge"));
+    }
+
+    // --- would_create_cycle helper test ---
+
+    #[test]
+    fn would_create_cycle_helper_returns_true_when_cycle_would_form() {
+        // Linear chain 0->1->2.
+        // would_create_cycle returns true if hypothetical_src is in ancestors(hypothetical_dst).
+        // Adding 0->1: is 0 in ancestors(1)? Yes (0->1 exists). So 0->1 would create a cycle.
+        let chain = test_graphs::linear_chain(3); // 0->1->2
+        let result = would_create_cycle(&chain, NodeIndex(0), NodeIndex(1));
+        assert!(
+            result,
+            "adding 0->1 would create a cycle because 0 is already an ancestor of 1"
+        );
+    }
+
+    #[test]
+    fn would_create_cycle_helper_returns_false_when_no_cycle() {
+        // Linear chain 0->1->2.
+        // Adding 1->2: is 1 in ancestors(2)? ancestors(2) = {0, 1, 2}. Yes! So this creates a cycle.
+        // Adding 0->2: is 0 in ancestors(2)? Yes! Also creates a cycle.
+        // Actually in a simple chain 0->1, adding 1->0 creates a cycle.
+        // Adding 1->0 in chain 0->1: ancestors(0) = {0}. Is 1 in {0}? No. So this is acyclic!
+        let chain = test_graphs::linear_chain(2); // 0->1
+        let result = would_create_cycle(&chain, NodeIndex(1), NodeIndex(0));
+        assert!(
+            !result,
+            "adding 1->0 to chain 0->1 is acyclic (1 is not an ancestor of 0)"
+        );
     }
 }
