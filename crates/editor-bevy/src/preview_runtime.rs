@@ -174,6 +174,8 @@ pub fn start_engine(canvas_id: &str) {
             ..default()
         }))
         .add_systems(Startup, setup)
+        // Init SensorStateCache resource for edge-detection in sensor evaluation
+        .init_resource::<crate::sensor_state_cache::SensorStateCache>()
         // BUG-2 (Bevy 0.19 B0001) fix: every system pair that could alias on
         // `Transform` / `Sprite` is connected by an explicit `.before()` /
         // `.after()` chain OR by a `Without<SceneEntity>` disjoint filter on
@@ -223,12 +225,20 @@ pub fn start_engine(canvas_id: &str) {
             Update,
             logic_evaluator::update_keyboard_state
                 .run_if(in_play_mode)
-                .before(logic_dispatch::logic_evaluation_system),
+                .before(logic_dispatch::dispatch_dirty_bindings),
         )
-        // Logic dispatch runs only in play mode
+        // Dirty-tracking dispatch: mark_bindings_dirty (reacts to sensor events)
+        // then dispatch_dirty_bindings (evaluates only dirty bindings).
+        // dispatch_dirty_bindings also pushes LogicActivationEvent (R7 first producer).
         .add_systems(
             Update,
-            logic_dispatch::logic_evaluation_system
+            logic_dispatch::mark_bindings_dirty
+                .run_if(in_play_mode)
+                .before(logic_dispatch::dispatch_dirty_bindings),
+        )
+        .add_systems(
+            Update,
+            logic_dispatch::dispatch_dirty_bindings
                 .run_if(in_play_mode)
                 .after(sync_log_state),
         )
