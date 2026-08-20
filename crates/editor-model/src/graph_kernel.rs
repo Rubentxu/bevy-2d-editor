@@ -284,22 +284,118 @@ mod test_graphs {
 // Mutation helpers.
 // ============================================================================
 
-/// Returns `true` iff `hypothetical_src` is reachable from `hypothetical_dst`
-/// in the given graph.
+/// Returns `true` iff adding an edge `hypothetical_src → hypothetical_dst`
+/// would create a cycle in the given graph.
+///
+/// Adding src→dst creates a cycle iff `hypothetical_dst` is already reachable
+/// from `hypothetical_src` in the existing graph. This is O(V+E).
 ///
 /// This helper is used by `GraphMut::add_edge` implementations with
 /// `STRICTNESS = Dag` to detect whether adding an edge would create a cycle.
-/// The check is O(V+E).
 #[allow(dead_code)]
 pub(crate) fn would_create_cycle<G: Graph + ?Sized>(
     g: &G,
     hypothetical_src: NodeIndex,
     hypothetical_dst: NodeIndex,
 ) -> bool {
-    // True iff `hypothetical_src` can be reached by walking backwards from
-    // `hypothetical_dst`. If so, adding hypothetical_src → hypothetical_dst
-    // would close a cycle.
-    ancestors(g, hypothetical_dst).contains(&hypothetical_src)
+    // Adding src→dst creates a cycle iff dst is reachable from src.
+    // In a chain a→b→c, adding c→a: dst=a is reachable from src=c? No.
+    // But wait - we need to check if dst can reach src (reverse direction).
+    // If dst can reach src, then src→dst closes a cycle.
+    // In chain a→b→c, can a reach c? Yes (a→b→c). So adding c→a creates a cycle.
+    // ancestors(src) contains dst? ancestors(c) = {c}. a is not in {c}. No.
+    // descendants(src) contains dst? descendants(c) = {c}. a is not in {c}. No.
+    // Let me re-think...
+    //
+    // In a chain a→b→c (indices 0,1,2):
+    // - a has no incoming, b has incoming from a, c has incoming from b
+    // - ancestors(a) = {a} (root)
+    // - descendants(a) = {a, b, c}
+    // - ancestors(c) = {a, b, c} (all can reach c)
+    // - descendants(c) = {c} (c has no outgoing)
+    //
+    // Adding c→a (src=c, dst=a):
+    // - Is a reachable from c? No (c has no outgoing). But adding c→a creates an edge.
+    // - Is c reachable from a? Yes (a→b→c). So a→b→c→a is a cycle.
+    //
+    // The condition is: is hypothetical_dst in descendants(hypothetical_src)?
+    // In our example: is a in descendants(c)? No. So we return false.
+    // But we should return true (adding c→a creates a cycle).
+    //
+    // Let me re-check the helper's current logic:
+    // ancestors(hypothetical_dst).contains(&hypothetical_src)
+    // For src=c, dst=a: ancestors(a) = {a}. Is c in {a}? No.
+    //
+    // Hmm. ancestors(a) gives {a} because a is a root (no incoming edges).
+    // But adding c→a would give a an incoming edge, making the cycle a→b→c→a.
+    //
+    // I think the correct condition is:
+    // is hypothetical_src in ancestors(hypothetical_dst)?
+    // For src=c, dst=a: is c in ancestors(a)? ancestors(a) = {a}. No.
+    //
+    // Wait, maybe I'm confused about which direction the cycle forms.
+    // In a→b→c, we have edges a→b and b→c.
+    // If we add c→a, we get a→b→c→a.
+    // Is this a cycle? Yes.
+    // What is the cycle? a→b→c→a.
+    // Which node is "repeated"? a.
+    //
+    // So the cycle is: a is reachable from c, and then we add c→a.
+    // If a is reachable from c, then adding c→a closes the loop.
+    // Can a reach c in the original graph? Yes! a→b→c.
+    //
+    // So the condition should be:
+    // is hypothetical_dst reachable from hypothetical_src?
+    // I.e., is hypothetical_dst in descendants(hypothetical_src)?
+    // For src=c, dst=a: is a in descendants(c)? No (descendants(c) = {c}).
+    //
+    // I'm making a mistake somewhere. Let me re-examine...
+    //
+    // In the original graph with a→b→c:
+    // - Can a reach c? Yes (a→b→c).
+    // - Can c reach a? No (c has no outgoing).
+    //
+    // After adding c→a:
+    // - Can a reach c? Yes (a→b→c).
+    // - Can c reach a? Yes (c→a).
+    // - Is it a cycle? a→b→c→a is a cycle because a appears twice.
+    //
+    // So the question is: when does adding src→dst create a cycle?
+    // It creates a cycle if there already exists a path from dst to src.
+    // In our example: is there a path from a to c? Yes (a→b→c).
+    // So adding c→a creates a cycle.
+    //
+    // The condition is: is hypothetical_dst an ancestor of hypothetical_src?
+    // (i.e., can we reach hypothetical_dst from hypothetical_src going backwards?)
+    //
+    // ancestors(g, src) = all nodes that can reach src
+    // If hypothetical_dst is in ancestors(hypothetical_src), then dst can reach src.
+    // And adding src→dst closes a cycle.
+    //
+    // For src=c, dst=a: ancestors(g, c) = {a, b, c} (all nodes can reach c because
+    // a→b→c means c is a leaf; but wait, going INCOMING: c has no incoming, so
+    // ancestors(c) = {c} only.
+    //
+    // ancestors walks INCOMING edges. In a→b→c:
+    // - incoming(a) = empty → ancestors(a) = {a}
+    // - incoming(b) = {a} → ancestors(b) = {a, b}
+    // - incoming(c) = {b} → ancestors(c) = {a, b, c}
+    //
+    // Wait, let me re-read ancestors():
+    // ancestors(g, leaf) = leaf + every node that can reach leaf via incoming edges.
+    // For c (leaf in a→b→c): ancestors(c) = {c} ∪ ancestors(b) ∪ ... via incoming(b)={a}
+    // = {c} ∪ {a,b} ∪ {a} = {a,b,c}. Yes.
+    //
+    // So for src=c, dst=a: is a in ancestors(c)? Yes. So we would create a cycle.
+    //
+    // But the current helper says: is hypothetical_src in ancestors(hypothetical_dst)?
+    // For src=c, dst=a: is c in ancestors(a)? ancestors(a) = {a}. No.
+    // This is WRONG. We should check is hypothetical_dst in ancestors(hypothetical_src).
+    // For src=c, dst=a: is a in ancestors(c)? Yes → return true (cycle).
+    //
+    // CURRENT (wrong): ancestors(dst).contains(src)
+    // FIXED (correct): ancestors(src).contains(dst)
+    ancestors(g, hypothetical_src).contains(&hypothetical_dst)
 }
 
 // ============================================================================
@@ -672,29 +768,25 @@ mod graph_mut_tests {
 
     #[test]
     fn would_create_cycle_helper_returns_true_when_cycle_would_form() {
-        // Linear chain 0->1->2.
-        // would_create_cycle returns true if hypothetical_src is in ancestors(hypothetical_dst).
-        // Adding 0->1: is 0 in ancestors(1)? Yes (0->1 exists). So 0->1 would create a cycle.
+        // Chain 0->1->2. Adding 1->0: is 0 an ancestor of 1?
+        // ancestors(1) = {0, 1}. Yes. So adding 1->0 closes a cycle.
         let chain = test_graphs::linear_chain(3); // 0->1->2
-        let result = would_create_cycle(&chain, NodeIndex(0), NodeIndex(1));
+        let result = would_create_cycle(&chain, NodeIndex(1), NodeIndex(0));
         assert!(
             result,
-            "adding 0->1 would create a cycle because 0 is already an ancestor of 1"
+            "adding 1->0 would create a cycle because 0 is already an ancestor of 1"
         );
     }
 
     #[test]
     fn would_create_cycle_helper_returns_false_when_no_cycle() {
-        // Linear chain 0->1->2.
-        // Adding 1->2: is 1 in ancestors(2)? ancestors(2) = {0, 1, 2}. Yes! So this creates a cycle.
-        // Adding 0->2: is 0 in ancestors(2)? Yes! Also creates a cycle.
-        // Actually in a simple chain 0->1, adding 1->0 creates a cycle.
-        // Adding 1->0 in chain 0->1: ancestors(0) = {0}. Is 1 in {0}? No. So this is acyclic!
-        let chain = test_graphs::linear_chain(2); // 0->1
-        let result = would_create_cycle(&chain, NodeIndex(1), NodeIndex(0));
+        // Chain 0->1->2. Adding 0->1: is 1 an ancestor of 0?
+        // ancestors(0) = {0}. Is 1 in {0}? No. So no cycle.
+        let chain = test_graphs::linear_chain(3); // 0->1->2
+        let result = would_create_cycle(&chain, NodeIndex(0), NodeIndex(1));
         assert!(
             !result,
-            "adding 1->0 to chain 0->1 is acyclic (1 is not an ancestor of 0)"
+            "adding 0->1 to chain 0->1->2 is acyclic (1 is not an ancestor of 0)"
         );
     }
 }
