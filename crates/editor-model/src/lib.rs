@@ -12,6 +12,7 @@ pub mod component;
 pub mod document;
 pub mod extension;
 pub mod external_source;
+pub mod graph_kernel;
 pub mod ids;
 pub mod importer;
 pub mod int_grid;
@@ -104,6 +105,11 @@ pub use project_metadata::ProjectMetadata;
 pub use external_source::{
     ConflictPolicy, ExternalSource, ExternalSourceKind, OwnershipRule, ProvenanceDiff,
     SourceMapping,
+};
+// Graph kernel (ADR-0053): pure-Rust dialect-agnostic substrate.
+pub use graph_kernel::{
+    EdgeIndex, Graph, GraphKernelError, LogicGraphDialect, NodeIndex, ancestors, descendants,
+    has_cycle, leaves, reachable_from, roots, topological_sort,
 };
 pub use importer::{
     BuildChangeSetOutput, Importer, ImporterDescriptor, ImporterError, ImporterHandle,

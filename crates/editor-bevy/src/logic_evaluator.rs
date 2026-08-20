@@ -11,6 +11,9 @@ use crate::logic_graph::{
     LogicEdge, LogicGraphAsset, LogicNode, LogicNodeRole, NodeId, NodeTypeId, PortId,
 };
 use bevy::prelude::*;
+use editor_model::graph_kernel::{
+    Graph, LogicGraphDialect, topological_sort as kernel_topological_sort,
+};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -306,53 +309,29 @@ pub fn evaluate_logic_binding(
 }
 
 /// Kahn's algorithm topological sort. Returns None if a cycle exists.
+///
+/// Migrated to `editor_model::graph_kernel::topological_sort` (ADR-0053). The
+/// kernel is the canonical owner of the algorithm; this wrapper adapts to the
+/// `(nodes, edges) -> Option<Vec<NodeId>>` signature the rest of the evaluator
+/// uses.
 fn topological_sort(nodes: &[LogicNode], edges: &[LogicEdge]) -> Option<Vec<NodeId>> {
-    // Build adjacency and in-degree maps
-    let mut in_degree: HashMap<NodeId, usize> = HashMap::new();
-    let mut adjacency: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
-
-    for node in nodes {
-        in_degree.insert(node.node_id.clone(), 0);
-        adjacency.entry(node.node_id.clone()).or_default();
+    let asset = LogicGraphAsset {
+        asset_id: String::new(),
+        logical_path: String::new(),
+        version: 0,
+        builtin: false,
+        nodes: nodes.to_vec(),
+        edges: edges.to_vec(),
+        extension_data: std::collections::BTreeMap::new(),
+    };
+    let dialect = LogicGraphDialect::new(&asset);
+    let order_indexes = kernel_topological_sort(&dialect).ok()?;
+    let mut out: Vec<NodeId> = Vec::with_capacity(order_indexes.len());
+    for idx in order_indexes {
+        let node = dialect.node(idx)?;
+        out.push(node.node_id.clone());
     }
-
-    for edge in edges {
-        *in_degree.entry(edge.to_node.clone()).or_insert(0) += 1;
-        adjacency
-            .entry(edge.from_node.clone())
-            .or_default()
-            .push(edge.to_node.clone());
-    }
-
-    // Start with nodes that have no incoming edges
-    let mut queue: Vec<NodeId> = in_degree
-        .iter()
-        .filter(|(_, deg)| **deg == 0)
-        .map(|(id, _)| id.clone())
-        .collect();
-
-    let mut result: Vec<NodeId> = Vec::new();
-
-    while let Some(node_id) = queue.pop() {
-        result.push(node_id.clone());
-        if let Some(neighbors) = adjacency.get(&node_id) {
-            for neighbor in neighbors {
-                if let Some(deg) = in_degree.get_mut(neighbor) {
-                    *deg = deg.saturating_sub(1);
-                    if *deg == 0 {
-                        queue.push(neighbor.clone());
-                    }
-                }
-            }
-        }
-    }
-
-    // If we processed all nodes, return the order; otherwise there's a cycle
-    if result.len() == nodes.len() {
-        Some(result)
-    } else {
-        None
-    }
+    Some(out)
 }
 
 /// Evaluate all nodes in the given order (result of topological sort).
