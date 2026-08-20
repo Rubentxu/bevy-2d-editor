@@ -51,6 +51,8 @@ pub mod scene_session;
 pub mod scene_state;
 mod scenes;
 pub mod schema;
+pub mod sensor_event;
+pub mod sensor_state_cache;
 pub mod source_files;
 mod state;
 pub mod tile_layer;
