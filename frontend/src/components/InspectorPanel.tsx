@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SceneDocument } from "../hooks/useSceneState";
 import { useMultiSelectSummary } from "../hooks/useMultiSelectSummary";
 import {
@@ -22,6 +22,9 @@ import ComponentEditor from "./ComponentEditor";
 import SchemaAuthoringPanel from "./SchemaAuthoringPanel";
 import RuntimePreviewInspector from "./RuntimePreviewInspector";
 import InspectorSection from "./InspectorSection";
+import LogicBindingSection from "./Inspector/LogicBindingSection";
+import { useLogicGraph } from "../hooks/useLogicGraph";
+import type { LogicBindingEntry } from "./Inspector/LogicBindingSection";
 
 interface Props {
   scene: SceneDocument | null;
@@ -459,6 +462,21 @@ export default function InspectorPanel({
   const [resolvedEntity, setResolvedEntity] = useState<ResolvedEntity | null>(
     null,
   );
+
+  // Logic Bricks bindings (LogicInstance → Scene Instance). Tracked locally
+  // because the useLogicGraph hook does not currently expose a per-instance
+  // query; the bind/unbind callbacks return the binding ID and update the
+  // local mirror so the UI stays consistent.
+  const logicGraph = useLogicGraph();
+  const [logicBindingMap, setLogicBindingMap] = useState<
+    Record<string, LogicBindingEntry>
+  >({});
+  const logicBindings = useMemo(() => {
+    if (!entity) return [] as LogicBindingEntry[];
+    return Object.values(logicBindingMap).filter(
+      (b) => typeof b.bindingId === "string" && b.bindingId.length > 0,
+    );
+  }, [logicBindingMap, entity]);
   const [fieldOverrideIndex, setFieldOverrideIndex] = useState<
     FieldOverrideEntry[]
   >([]);
@@ -962,6 +980,55 @@ export default function InspectorPanel({
               </div>
             )}
           </InspectorSection>
+
+          {/* Zone 5.5 — Logic Bindings (LogicInstance on Scene Instance) */}
+          {isInstanceEntity && entity && (
+            <LogicBindingSection
+              instanceId={entity.id}
+              bindings={logicBindings}
+              onBind={async (instanceId, recipeId, fieldOverrides) => {
+                const bindingId = await logicGraph.bind(
+                  instanceId,
+                  recipeId,
+                  fieldOverrides,
+                );
+                setLogicBindingMap((prev) => ({
+                  ...prev,
+                  [bindingId]: {
+                    bindingId,
+                    graphAssetId: recipeId,
+                    graphPath: recipeId,
+                    fieldOverrides: fieldOverrides ?? {},
+                  },
+                }));
+                return bindingId;
+              }}
+              onUnbind={async (instanceId, bindingId) => {
+                await logicGraph.unbind(instanceId, bindingId);
+                setLogicBindingMap((prev) => {
+                  const { [bindingId]: _removed, ...rest } = prev;
+                  return rest;
+                });
+              }}
+              onFieldOverride={async (bindingId, fieldPath, value) => {
+                await logicGraph.setFieldOverride(bindingId, fieldPath, value);
+                setLogicBindingMap((prev) => {
+                  const entry = prev[bindingId];
+                  if (!entry) return prev;
+                  return {
+                    ...prev,
+                    [bindingId]: {
+                      ...entry,
+                      fieldOverrides: {
+                        ...entry.fieldOverrides,
+                        [fieldPath]: value,
+                      },
+                    },
+                  };
+                });
+              }}
+            />
+          )}
 
           {/* Zone 6 — AI Actions (zone 5 = Runtime Preview rendered separately below) */}
           <InspectorSection

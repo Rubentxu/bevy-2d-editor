@@ -249,7 +249,7 @@ test.describe("LogicBindingSection (Commit 3)", { tag: ["@domain"] }, () => {
               name: "Logic Player",
               parent: null,
               components: [
-                { type_id: "LogicBridgeNode", values: {} },
+                { type_id: "editor.LogicBinding", values: {} },
               ],
             },
           ],
@@ -286,7 +286,7 @@ test.describe("LogicBindingSection (Commit 3)", { tag: ["@domain"] }, () => {
               name: "Logic Player 2",
               parent: null,
               components: [
-                { type_id: "LogicBridgeNode", values: {} },
+                { type_id: "editor.LogicBinding", values: {} },
               ],
             },
           ],

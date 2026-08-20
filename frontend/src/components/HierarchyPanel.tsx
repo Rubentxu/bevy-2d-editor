@@ -463,15 +463,16 @@ export default function HierarchyPanel({
                     I
                   </InstanceBadge>
                 )}
-                {/* LogicBadge: entity is logic-bound via a LogicInstance.
-                    Detection: entity carries a component whose type_id starts
-                    with "LogicBridge" or contains "LogicNode". The definitive
-                    marker is the presence of a logic-related component; this
-                    is a present/future extension point. */}
+                {/* LogicBadge: entity is logic-bound via editor.LogicBinding.
+                    Detection: entity carries the editor.LogicBinding component
+                    (per ADR-0011 D5 / schema.rs:365). The badge marks the
+                    entity in the hierarchy so the user can spot bound actors
+                    at a glance. */}
                 {entity.components.some(
                   (c) =>
-                    c.type_id.startsWith("LogicBridge") ||
-                    c.type_id.startsWith("LogicNode"),
+                    c.type_id === "editor.LogicBinding" ||
+                    c.type_id.startsWith("LogicBinding") ||
+                    c.type_id.startsWith("editor.LogicBinding"),
                 ) && (
                   <>
                     <LogicBadge testId={`logic-badge-${entity.id}`}>
