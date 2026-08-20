@@ -18,8 +18,10 @@ use std::collections::{BTreeMap, BTreeSet};
 // graph shape to the `Graph` trait.
 pub mod changeset_dialect;
 pub mod scene_asset_dialect;
+pub mod world_dialect;
 pub use changeset_dialect::ChangeSetDialect;
 pub use scene_asset_dialect::SceneAssetDialect;
+pub use world_dialect::WorldGraphDialect;
 
 /// Opaque kernel-owned node index. Stable for the lifetime of a `Graph` view.
 ///

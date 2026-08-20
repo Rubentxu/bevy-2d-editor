@@ -316,6 +316,8 @@ pub enum TopologyIssueCode {
     MissingNeighbour,
     /// WorldLevelRef.asset_ref does not resolve in SceneAssetCatalog.
     MissingLevelRef,
+    /// Cycle detected in the world's link graph (new in GRAPH-005).
+    Cycle,
 }
 
 /// Severity level for topology issues.

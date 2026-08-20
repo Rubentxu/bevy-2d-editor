@@ -15,6 +15,7 @@
 //! - Missing neighbours → Warning
 //! - Missing `asset_ref` → Error
 
+use editor_model::graph_kernel::{reachable_from, Graph, WorldGraphDialect};
 use editor_model::scene_asset_catalog::SceneAssetCatalog;
 use editor_model::world::{WorldDocument, WorldLevelRef, WorldLink};
 use editor_protocol::capabilities::{TopologyIssue, TopologyIssueCode, TopologySeverity};
@@ -52,8 +53,11 @@ pub fn validate_topology(world: &WorldDocument, catalog: &SceneAssetCatalog) -> 
     // 3. Check for invalid reciprocals (A→B but B has no link to A)
     issues.extend(validate_reciprocals(world));
 
-    // 4. Check for unreachable levels (BFS from entry)
+    // 4. Check for unreachable levels (BFS from entry, via GRAPH-005 kernel)
     issues.extend(validate_reachability(world));
+
+    // 5. Detect cycles in the link graph (new in GRAPH-005)
+    issues.extend(validate_cycles(world));
 
     issues
 }
@@ -184,33 +188,22 @@ fn validate_reachability(world: &WorldDocument) -> Vec<TopologyIssue> {
         return issues;
     };
 
-    // Build adjacency list from links
-    let mut adjacency: HashMap<&str, Vec<&str>> = HashMap::new();
-    for link in &world.links {
-        adjacency
-            .entry(link.from.as_str())
-            .or_default()
-            .push(link.to.as_str());
-    }
+    // GRAPH-005: build the dialect and run kernel reachability.
+    let dialect = WorldGraphDialect::new(world);
+    let entry_idx = match dialect.node_index_of(entry_id) {
+        Some(idx) => idx,
+        None => return issues, // unreachable; entry not in levels
+    };
 
-    // BFS from entry
-    let mut visited: HashSet<&str> = HashSet::new();
-    let mut queue = vec![entry_id];
-    visited.insert(entry_id);
-
-    while let Some(current) = queue.pop() {
-        if let Some(neighbours) = adjacency.get(current) {
-            for &neighbour in neighbours {
-                if visited.insert(neighbour) {
-                    queue.push(neighbour);
-                }
-            }
-        }
-    }
+    let reachable = reachable_from(&dialect, entry_idx);
+    let reachable_ids: HashSet<&str> = reachable
+        .iter()
+        .filter_map(|i| dialect.node(*i).map(|l| l.level_id.as_str()))
+        .collect();
 
     // Check all levels are reachable
     for level in &world.levels {
-        if !visited.contains(level.level_id.as_str()) {
+        if !reachable_ids.contains(level.level_id.as_str()) {
             issues.push(TopologyIssue {
                 code: TopologyIssueCode::Unreachable,
                 world_id: world.id.as_str().to_string(),
@@ -225,6 +218,33 @@ fn validate_reachability(world: &WorldDocument) -> Vec<TopologyIssue> {
         }
     }
 
+    issues
+}
+
+/// Detect cycles in the link graph (A→B→C→A et al.).
+///
+/// New in GRAPH-005: the previous topology rules did not detect cycles
+/// (LDtk also flags them as a structural issue). Cycles are emitted as a
+/// single Warning per cycle-bearing world (not per link), with no level_id
+/// or link_id attached.
+fn validate_cycles(world: &WorldDocument) -> Vec<TopologyIssue> {
+    let mut issues = Vec::new();
+    if world.levels.is_empty() {
+        return issues;
+    }
+
+    let dialect = WorldGraphDialect::new(world);
+    let cycle = editor_model::graph_kernel::has_cycle(&dialect);
+    if cycle {
+        issues.push(TopologyIssue {
+            code: TopologyIssueCode::Cycle,
+            world_id: world.id.as_str().to_string(),
+            level_id: None,
+            link_id: None,
+            severity: TopologySeverity::Warning,
+            message: "world's link graph contains a cycle".to_string(),
+        });
+    }
     issues
 }
 
@@ -445,8 +465,11 @@ mod tests {
     }
 
     #[test]
-    fn test_self_loop_no_issue() {
-        // A link from a level to itself should not cause issues
+    fn test_self_loop_emits_cycle_warning() {
+        // A link from a level to itself is a 1-cycle.
+        // GRAPH-005 introduced cycle detection via `has_cycle`. The previous
+        // rules (Unreachable, MissingNeighbour, InvalidReciprocal,
+        // MissingLevelRef) did not flag self-loops; the new `Cycle` rule does.
         let world = WorldDocument {
             id: WorldId::new("test-world"),
             name: "Test".to_string(),
@@ -476,11 +499,156 @@ mod tests {
 
         let issues = validate_topology(&world, &catalog);
 
-        // Should have no topology issues (self-loop is valid)
-        let topo_issues: Vec<_> = issues
-            .into_iter()
-            .filter(|i| !matches!(i.code, TopologyIssueCode::MissingLevelRef))
+        // Exactly one Cycle issue, no legacy rules fire.
+        let cycles: Vec<_> = issues
+            .iter()
+            .filter(|i| matches!(i.code, TopologyIssueCode::Cycle))
             .collect();
-        assert!(topo_issues.is_empty(), "self-loop should not cause issues");
+        assert_eq!(cycles.len(), 1, "self-loop should emit exactly one Cycle issue");
+        assert!(matches!(cycles[0].severity, TopologySeverity::Warning));
+
+        let legacy: Vec<_> = issues
+            .iter()
+            .filter(|i| !matches!(i.code, TopologyIssueCode::Cycle | TopologyIssueCode::MissingLevelRef))
+            .collect();
+        assert!(legacy.is_empty(), "no other rules should fire");
+    }
+
+    #[test]
+    fn test_three_node_cycle_emits_cycle_warning() {
+        // A→B→C→A is a 3-node cycle.
+        let world = WorldDocument {
+            id: WorldId::new("test-world"),
+            name: "Test".to_string(),
+            version: 1,
+            layout_policy: LayoutPolicy::Free,
+            levels: vec![
+                WorldLevelRef {
+                    level_id: "lvl-a".to_string(),
+                    asset_ref: "levels/a".to_string(),
+                    position: [0.0, 0.0],
+                    dimensions: None,
+                    tags: Vec::new(),
+                    streaming: editor_model::world::StreamingPolicy::AlwaysResident,
+                },
+                WorldLevelRef {
+                    level_id: "lvl-b".to_string(),
+                    asset_ref: "levels/b".to_string(),
+                    position: [100.0, 0.0],
+                    dimensions: None,
+                    tags: Vec::new(),
+                    streaming: editor_model::world::StreamingPolicy::AlwaysResident,
+                },
+                WorldLevelRef {
+                    level_id: "lvl-c".to_string(),
+                    asset_ref: "levels/c".to_string(),
+                    position: [200.0, 0.0],
+                    dimensions: None,
+                    tags: Vec::new(),
+                    streaming: editor_model::world::StreamingPolicy::AlwaysResident,
+                },
+            ],
+            links: vec![
+                WorldLink {
+                    id: "l-ab".to_string(),
+                    from: "lvl-a".to_string(),
+                    to: "lvl-b".to_string(),
+                    direction: LinkDirection::East,
+                    kind: WorldLinkKind::OneWay,
+                    entrance: None,
+                    exit: None,
+                },
+                WorldLink {
+                    id: "l-bc".to_string(),
+                    from: "lvl-b".to_string(),
+                    to: "lvl-c".to_string(),
+                    direction: LinkDirection::East,
+                    kind: WorldLinkKind::OneWay,
+                    entrance: None,
+                    exit: None,
+                },
+                WorldLink {
+                    id: "l-ca".to_string(),
+                    from: "lvl-c".to_string(),
+                    to: "lvl-a".to_string(),
+                    direction: LinkDirection::East,
+                    kind: WorldLinkKind::OneWay,
+                    entrance: None,
+                    exit: None,
+                },
+            ],
+            updated_at: 0,
+            extension_data: BTreeMap::new(),
+        };
+        let catalog = empty_catalog();
+
+        let issues = validate_topology(&world, &catalog);
+
+        let cycles: Vec<_> = issues
+            .iter()
+            .filter(|i| matches!(i.code, TopologyIssueCode::Cycle))
+            .collect();
+        assert_eq!(cycles.len(), 1, "3-node cycle should emit one Cycle issue");
+    }
+
+    #[test]
+    fn test_dag_no_cycle_warning() {
+        // A→B, A→C, B→D, C→D is a DAG (no cycle).
+        let world = WorldDocument {
+            id: WorldId::new("test-world"),
+            name: "Test".to_string(),
+            version: 1,
+            layout_policy: LayoutPolicy::Free,
+            levels: vec![
+                lvl("lvl-a", "levels/a"),
+                lvl("lvl-b", "levels/b"),
+                lvl("lvl-c", "levels/c"),
+                lvl("lvl-d", "levels/d"),
+            ],
+            links: vec![
+                lnk("l-ab", "lvl-a", "lvl-b"),
+                lnk("l-ac", "lvl-a", "lvl-c"),
+                lnk("l-bd", "lvl-b", "lvl-d"),
+                lnk("l-cd", "lvl-c", "lvl-d"),
+            ],
+            updated_at: 0,
+            extension_data: BTreeMap::new(),
+        };
+        let catalog = empty_catalog();
+
+        let issues = validate_topology(&world, &catalog);
+        let cycles: Vec<_> = issues
+            .iter()
+            .filter(|i| matches!(i.code, TopologyIssueCode::Cycle))
+            .collect();
+        assert!(cycles.is_empty(), "DAG should not emit a Cycle issue");
+        let unreach: Vec<_> = issues
+            .iter()
+            .filter(|i| matches!(i.code, TopologyIssueCode::Unreachable))
+            .collect();
+        assert!(unreach.is_empty(), "all levels reachable from lvl-a");
+    }
+
+    fn lvl(id: &str, asset: &str) -> WorldLevelRef {
+        WorldLevelRef {
+            level_id: id.to_string(),
+            asset_ref: asset.to_string(),
+            position: [0.0, 0.0],
+            dimensions: None,
+            tags: Vec::new(),
+            streaming: editor_model::world::StreamingPolicy::AlwaysResident,
+        }
+    }
+
+    fn lnk(id: &str, from: &str, to: &str) -> WorldLink {
+        WorldLink {
+            id: id.to_string(),
+            from: from.to_string(),
+            to: to.to_string(),
+            direction: LinkDirection::East,
+            kind: WorldLinkKind::OneWay,
+            entrance: None,
+            exit: None,
+        }
     }
 }
