@@ -275,6 +275,12 @@ pub struct BindingRecord {
     pub version: u32,
     /// Field overrides applied to the binding.
     pub field_overrides: BTreeMap<String, serde_json::Value>,
+    /// Whether this binding needs re-evaluation (R3/R5).
+    /// Set to `true` by apply_* operations; cleared after dispatch.
+    pub dirty: bool,
+    /// Monotonically increasing version counter (R3).
+    /// Incremented by every apply_* operation.
+    pub binding_version: u64,
 }
 
 thread_local! {
@@ -362,11 +368,15 @@ pub fn apply_bind_logic_graph_to_instance(
     .unwrap_or(1);
 
     // Record the binding
+    // R1: binding_version starts at 1 (non-zero = will be evaluated)
+    // dirty = true so the first dispatch pass evaluates this binding
     let record = BindingRecord {
         binding_id: binding_id.clone(),
         recipe_id: recipe_id.to_string(),
         version,
         field_overrides: field_overrides.clone(),
+        dirty: true,
+        binding_version: 1,
     };
 
     with_binding_registry_mut(|reg| {
@@ -443,9 +453,16 @@ pub fn apply_set_binding_field_override(
     record
         .field_overrides
         .insert(field_path.clone(), value.clone());
+
+    // R3: bump binding_version and set dirty=true so dispatcher re-evaluates
+    record.dirty = true;
+    record.binding_version += 1;
+
     with_binding_registry_mut(|reg| {
         if let Some(r) = reg.get_mut(&scene_instance_id) {
             r.field_overrides = record.field_overrides;
+            r.dirty = record.dirty;
+            r.binding_version = record.binding_version;
         }
     });
 

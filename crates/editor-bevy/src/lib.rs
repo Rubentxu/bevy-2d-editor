@@ -8,6 +8,9 @@ use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_futures::JsFuture;
 
+// Re-export BindingRecord for integration tests (StableId is already re-exported from document)
+use crate::state::BindingRecord;
+
 pub mod actuator_bus;
 pub mod adapter_impls;
 pub mod asset_command;
@@ -33,7 +36,7 @@ pub mod logic_dispatch;
 pub mod logic_evaluator;
 pub mod logic_graph;
 pub mod logic_recipes;
-mod logic_state;
+pub mod logic_state;
 pub mod logic_validation;
 pub mod operation_log;
 mod persistence;
@@ -54,7 +57,7 @@ pub mod schema;
 pub mod sensor_event;
 pub mod sensor_state_cache;
 pub mod source_files;
-mod state;
+pub mod state;
 pub mod tile_layer;
 pub mod tileset;
 pub mod time;
@@ -322,6 +325,8 @@ use crate::state::{
     with_logic_graph_catalog_mut, with_logic_graph_mut, with_logic_log, with_logic_log_mut,
     with_registry, with_registry_mut,
 };
+// Also import binding registry helpers for tests
+use crate::state::{with_binding_registry, with_binding_registry_mut};
 
 /// Mutably access the asset body cache from integration tests.
 pub fn with_asset_body_cache_mut_for_tests<F, R>(f: F) -> R
@@ -339,6 +344,22 @@ pub fn clear_dirty_for_tests() {
 /// Read the cross-system dirty flag from integration tests.
 pub fn is_dirty_for_tests() -> bool {
     DIRTY_FLAG.with(|dirty| *dirty.borrow())
+}
+
+/// Access the binding registry from integration tests.
+pub fn with_binding_registry_for_tests<F, R>(f: F) -> R
+where
+    F: FnOnce(&BTreeMap<StableId, BindingRecord>) -> R,
+{
+    with_binding_registry(f)
+}
+
+/// Mutably access the binding registry from integration tests.
+pub fn with_binding_registry_mut_for_tests<F, R>(f: F) -> R
+where
+    F: FnOnce(&mut BTreeMap<StableId, BindingRecord>) -> R,
+{
+    with_binding_registry_mut(f)
 }
 
 const CMD_MOVE_SPRITE: u16 = 1;
