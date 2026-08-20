@@ -1168,9 +1168,7 @@ pub struct Velocity {
 
 impl Default for Velocity {
     fn default() -> Self {
-        Self {
-            linvel: Vec2::ZERO,
-        }
+        Self { linvel: Vec2::ZERO }
     }
 }
 
@@ -1196,7 +1194,10 @@ pub enum PreviewActuatorOutput {
 /// `ACTUATOR_OUTPUT_BUS`, this system directly evaluates logic graphs and
 /// mutates `Velocity.linvel` based on `ApplyImpulse` outputs.
 pub fn apply_actuator_outputs_in_preview(
-    mut bindings: Query<(bevy::prelude::Entity, &LogicBinding, &mut Velocity), (Without<PlayMode>, With<LogicBinding>)>,
+    mut bindings: Query<
+        (bevy::prelude::Entity, &LogicBinding, &mut Velocity),
+        (Without<PlayMode>, With<LogicBinding>),
+    >,
 ) {
     use crate::logic_evaluator::PortValue;
 

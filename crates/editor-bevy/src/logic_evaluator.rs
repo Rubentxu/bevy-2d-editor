@@ -1147,9 +1147,6 @@ pub fn evaluate_logic_binding_wasm(
 // WASM exports for LogicBinding lifecycle
 // ─────────────────────────────────────────────────────────────────────────────
 
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::JsValue;
-
 /// Bind a recipe to a scene instance from WASM.
 ///
 /// # Arguments

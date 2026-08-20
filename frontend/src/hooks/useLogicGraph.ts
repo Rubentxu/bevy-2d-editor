@@ -2,6 +2,9 @@ import { useEffect, useState, useCallback } from "react";
 import {
   openLogicGraphAsset,
   listLogicGraphAssets,
+  bindLogicInstance,
+  unbindLogicInstance,
+  setLogicFieldOverride,
 } from "../services/logic-graphs";
 import { waitForEditorReady } from "../utils/waitForEditorReady";
 import { callBridge, callBridgeSync } from "../services/bridge-call";
@@ -272,6 +275,76 @@ export function useLogicGraph() {
     await refresh();
   }, [refresh]);
 
+  /**
+   * Bind a LogicGraphAsset (recipe) to a Scene Instance.
+   *
+   * @param sceneInstanceId - Stable ID of the Scene Instance
+   * @param recipeId        - Asset ID of the LogicGraphAsset recipe
+   * @param fieldOverrides  - Optional field overrides
+   * @returns binding_id string
+   */
+  const bind = useCallback(
+    async (
+      sceneInstanceId: string,
+      recipeId: string,
+      fieldOverrides: Record<string, unknown> = {},
+    ): Promise<string> => {
+      try {
+        const bindingId = await bindLogicInstance(
+          sceneInstanceId,
+          recipeId,
+          fieldOverrides,
+        );
+        return bindingId;
+      } catch (e) {
+        console.error("useLogicGraph: bind failed:", e);
+        throw e;
+      }
+    },
+    [],
+  );
+
+  /**
+   * Unbind a logic binding from a Scene Instance.
+   *
+   * @param sceneInstanceId - Stable ID of the Scene Instance
+   * @param bindingId      - Binding ID to remove
+   */
+  const unbind = useCallback(
+    async (sceneInstanceId: string, bindingId: string): Promise<void> => {
+      try {
+        await unbindLogicInstance(sceneInstanceId, bindingId);
+      } catch (e) {
+        console.error("useLogicGraph: unbind failed:", e);
+        throw e;
+      }
+    },
+    [],
+  );
+
+  /**
+   * Set (or update) a field override on an existing logic binding.
+   *
+   * @param bindingId - Binding ID to update
+   * @param fieldPath - Field path within the bound graph
+   * @param value     - New override value
+   */
+  const setFieldOverride = useCallback(
+    async (
+      bindingId: string,
+      fieldPath: string,
+      value: unknown,
+    ): Promise<void> => {
+      try {
+        await setLogicFieldOverride(bindingId, fieldPath, value);
+      } catch (e) {
+        console.error("useLogicGraph: setFieldOverride failed:", e);
+        throw e;
+      }
+    },
+    [],
+  );
+
   return {
     // State
     graph,
@@ -289,5 +362,8 @@ export function useLogicGraph() {
     dispatch,
     undo,
     redo,
+    bind,
+    unbind,
+    setFieldOverride,
   };
 }

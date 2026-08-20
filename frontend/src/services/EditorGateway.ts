@@ -435,6 +435,21 @@ export interface WindowWithBridge {
   undo_logic?: () => Promise<string> | string;
   redo_logic?: () => Promise<string> | string;
   get_node_descriptors?: () => Promise<string> | string;
+  // ── Logic binding (PR1) ───────────────────────────────────────────────────
+  bind_logic_graph_to_instance_wasm?: (
+    sceneInstanceId: string,
+    recipeId: string,
+    fieldOverridesJs: unknown,
+  ) => Promise<string> | string;
+  unbind_logic_graph_from_instance_wasm?: (
+    sceneInstanceId: string,
+    bindingId: string,
+  ) => Promise<string> | string;
+  set_binding_field_override_wasm?: (
+    bindingId: string,
+    fieldPath: string,
+    valueJs: unknown,
+  ) => Promise<string> | string;
   // ── Source files (code-aware AI) ─────────────────────────────────────────
   list_source_files?: () => Promise<string> | string;
   read_source_file?: (id: string) => Promise<string> | string;
