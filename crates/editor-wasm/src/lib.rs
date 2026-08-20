@@ -434,10 +434,7 @@ pub fn create_apply_back_change_set_wasm(rationale: &str) -> Result<String, JsVa
         })
         .collect();
 
-    let change_id = format!(
-        "apply-back:{}",
-        editor_model::time::now_millis()
-    );
+    let change_id = format!("apply-back:{}", editor_model::time::now_millis());
 
     let cs = PendingChangeSet {
         id: change_id.clone(),
@@ -748,11 +745,7 @@ pub fn reimport_external_source_wasm(source_uri: &str) -> Result<String, JsValue
             store.as_ref(),
             &importer_registry,
             pending_change_sets,
-            || {
-                editor_model::time::Timestamp(
-                    editor_model::time::now_millis(),
-                )
-            },
+            || editor_model::time::Timestamp(editor_model::time::now_millis()),
         )
     })
     .map_err(|e| e)?;

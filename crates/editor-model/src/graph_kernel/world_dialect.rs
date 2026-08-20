@@ -15,8 +15,8 @@
 
 use std::collections::BTreeMap;
 
-use crate::world::{WorldDocument, WorldLevelRef, WorldLink};
 use super::{EdgeIndex, Graph, GraphKernelError, GraphMut, GraphMutStrictness, NodeIndex};
+use crate::world::{WorldDocument, WorldLevelRef, WorldLink};
 
 /// Direction-aware adapter that exposes a `WorldDocument` as a directed graph.
 ///
@@ -129,9 +129,7 @@ impl<'a> Graph for WorldGraphDialect<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::world::{
-        LayoutPolicy, LinkDirection, StreamingPolicy, WorldId, WorldLinkKind,
-    };
+    use crate::world::{LayoutPolicy, LinkDirection, StreamingPolicy, WorldId, WorldLinkKind};
     use std::collections::BTreeMap;
 
     fn level(id: &str) -> WorldLevelRef {
@@ -233,7 +231,11 @@ mod tests {
     fn has_cycle_detects_three_node_loop() {
         let w = world(
             vec![level("a"), level("b"), level("c")],
-            vec![link("ab", "a", "b"), link("bc", "b", "c"), link("ca", "c", "a")],
+            vec![
+                link("ab", "a", "b"),
+                link("bc", "b", "c"),
+                link("ca", "c", "a"),
+            ],
         );
         let d = WorldGraphDialect::new(&w);
         assert!(super::super::has_cycle(&d));
@@ -262,10 +264,7 @@ mod tests {
 
     #[test]
     fn edge_endpoints_round_trip() {
-        let w = world(
-            vec![level("a"), level("b")],
-            vec![link("ab", "a", "b")],
-        );
+        let w = world(vec![level("a"), level("b")], vec![link("ab", "a", "b")]);
         let d = WorldGraphDialect::new(&w);
         let a = d.node_index_of("a").unwrap();
         let b = d.node_index_of("b").unwrap();
@@ -359,7 +358,10 @@ impl<'a> WorldGraphDialectMut<'a> {
 
     /// Rebuild the level index from the current doc.levels vec.
     fn rebuild_level_index(&mut self) {
-        self.level_index = self.doc.levels.iter()
+        self.level_index = self
+            .doc
+            .levels
+            .iter()
             .enumerate()
             .map(|(i, l)| (l.level_id.clone(), NodeIndex(i as u32)))
             .collect();
@@ -367,7 +369,10 @@ impl<'a> WorldGraphDialectMut<'a> {
 
     /// Rebuild the link index from the current doc.links vec.
     fn rebuild_link_index(&mut self) {
-        self.link_index = self.doc.links.iter()
+        self.link_index = self
+            .doc
+            .links
+            .iter()
             .enumerate()
             .map(|(i, l)| ((l.from.clone(), l.to.clone()), EdgeIndex(i as u32)))
             .collect();
@@ -409,7 +414,9 @@ impl<'a> Graph for WorldGraphDialectMut<'a> {
             None => return Box::new(std::iter::empty()),
         };
         Box::new(
-            self.doc.links.iter()
+            self.doc
+                .links
+                .iter()
                 .enumerate()
                 .filter(move |(_, l)| l.from == level)
                 .map(|(i, _)| EdgeIndex(i as u32)),
@@ -423,7 +430,9 @@ impl<'a> Graph for WorldGraphDialectMut<'a> {
             None => return Box::new(std::iter::empty()),
         };
         Box::new(
-            self.doc.links.iter()
+            self.doc
+                .links
+                .iter()
                 .enumerate()
                 .filter(move |(_, l)| l.to == level)
                 .map(|(i, _)| EdgeIndex(i as u32)),
@@ -449,11 +458,13 @@ impl<'a> GraphMut for WorldGraphDialectMut<'a> {
         dst: NodeIndex,
         data: Self::EdgeData,
     ) -> Result<EdgeIndex, GraphKernelError> {
-        if src.0 as usize >= self.doc.levels.len()
-            || dst.0 as usize >= self.doc.levels.len()
-        {
+        if src.0 as usize >= self.doc.levels.len() || dst.0 as usize >= self.doc.levels.len() {
             return Err(GraphKernelError::NodeIndexOutOfRange {
-                idx: if src.0 as usize >= self.doc.levels.len() { src } else { dst },
+                idx: if src.0 as usize >= self.doc.levels.len() {
+                    src
+                } else {
+                    dst
+                },
                 total: self.doc.levels.len(),
             });
         }
@@ -473,7 +484,9 @@ impl<'a> GraphMut for WorldGraphDialectMut<'a> {
         }
         let removed_id = self.doc.levels[idx.0 as usize].level_id.clone();
         // Cascade: remove all links where this level is from or to.
-        self.doc.links.retain(|l| l.from != removed_id && l.to != removed_id);
+        self.doc
+            .links
+            .retain(|l| l.from != removed_id && l.to != removed_id);
         self.doc.levels.remove(idx.0 as usize);
         self.rebuild_level_index();
         self.rebuild_link_index();
@@ -492,7 +505,11 @@ impl<'a> GraphMut for WorldGraphDialectMut<'a> {
         Ok(())
     }
 
-    fn update_node(&mut self, idx: NodeIndex, data: Self::NodeData) -> Result<(), GraphKernelError> {
+    fn update_node(
+        &mut self,
+        idx: NodeIndex,
+        data: Self::NodeData,
+    ) -> Result<(), GraphKernelError> {
         if idx.0 as usize >= self.doc.levels.len() {
             return Err(GraphKernelError::NodeIndexOutOfRange {
                 idx,
@@ -504,7 +521,11 @@ impl<'a> GraphMut for WorldGraphDialectMut<'a> {
         Ok(())
     }
 
-    fn update_edge(&mut self, idx: EdgeIndex, data: Self::EdgeData) -> Result<(), GraphKernelError> {
+    fn update_edge(
+        &mut self,
+        idx: EdgeIndex,
+        data: Self::EdgeData,
+    ) -> Result<(), GraphKernelError> {
         if idx.0 as usize >= self.doc.links.len() {
             return Err(GraphKernelError::EdgeIndexOutOfRange {
                 idx,

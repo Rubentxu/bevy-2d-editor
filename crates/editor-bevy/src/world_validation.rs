@@ -15,7 +15,7 @@
 //! - Missing neighbours → Warning
 //! - Missing `asset_ref` → Error
 
-use editor_model::graph_kernel::{reachable_from, Graph, WorldGraphDialect};
+use editor_model::graph_kernel::{Graph, WorldGraphDialect, reachable_from};
 use editor_model::scene_asset_catalog::SceneAssetCatalog;
 use editor_model::world::{WorldDocument, WorldLevelRef, WorldLink};
 use editor_protocol::capabilities::{TopologyIssue, TopologyIssueCode, TopologySeverity};
@@ -504,12 +504,21 @@ mod tests {
             .iter()
             .filter(|i| matches!(i.code, TopologyIssueCode::Cycle))
             .collect();
-        assert_eq!(cycles.len(), 1, "self-loop should emit exactly one Cycle issue");
+        assert_eq!(
+            cycles.len(),
+            1,
+            "self-loop should emit exactly one Cycle issue"
+        );
         assert!(matches!(cycles[0].severity, TopologySeverity::Warning));
 
         let legacy: Vec<_> = issues
             .iter()
-            .filter(|i| !matches!(i.code, TopologyIssueCode::Cycle | TopologyIssueCode::MissingLevelRef))
+            .filter(|i| {
+                !matches!(
+                    i.code,
+                    TopologyIssueCode::Cycle | TopologyIssueCode::MissingLevelRef
+                )
+            })
             .collect();
         assert!(legacy.is_empty(), "no other rules should fire");
     }

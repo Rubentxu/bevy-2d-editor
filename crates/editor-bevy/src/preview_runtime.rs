@@ -293,7 +293,9 @@ fn setup(mut commands: Commands) {
     // Initialize the World catalog to an empty catalog so world_*_wasm
     // calls do not panic before load_project() rebuilds it from OPFS
     // (ADR-0037). create_world_wasm can then register into it.
-    crate::world_state::set_world_catalog(editor_model::scene_asset_catalog::SceneAssetCatalog::new());
+    crate::world_state::set_world_catalog(
+        editor_model::scene_asset_catalog::SceneAssetCatalog::new(),
+    );
 
     mark_dirty();
 }

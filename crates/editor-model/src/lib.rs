@@ -111,7 +111,10 @@ pub use graph_kernel::{
     ChangeSetDialect, EdgeIndex, Graph, GraphKernelError, GraphMut, GraphMutStrictness,
     LogicGraphDialect, LogicGraphDialectMut, NodeIndex, SceneAssetDialect, WorldGraphDialect,
     ancestors, descendants, has_cycle, leaves, reachable_from, roots, topological_sort,
+    topological_sort_subset,
 };
+// Query builder (GRAPH-010).
+pub use graph_kernel::query::{PredicateId, PredicateTable, Query, QueryState, SetOpKind};
 pub use importer::{
     BuildChangeSetOutput, Importer, ImporterDescriptor, ImporterError, ImporterHandle,
     ImporterInput, ImporterVersion, ImporterVersionRange, ParseOutput, ResourceDraft,

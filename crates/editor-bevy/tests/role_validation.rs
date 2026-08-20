@@ -131,12 +131,16 @@ fn s9_hierarchy_via_relationships_only() {
     assert_eq!(result.entities.len(), 1, "entity preserved");
     let root_entity = &result.entities[0];
     assert!(
-        root_entity.extension_data.contains_key("children_local_ids"),
+        root_entity
+            .extension_data
+            .contains_key("children_local_ids"),
         "Post-S4: children_local_ids must land in extension_data, got: {:?}",
         root_entity.extension_data
     );
     let preserved = &root_entity.extension_data["children_local_ids"];
-    let arr = preserved.as_array().expect("children_local_ids must be an array");
+    let arr = preserved
+        .as_array()
+        .expect("children_local_ids must be an array");
     assert_eq!(arr.len(), 1);
     assert_eq!(arr[0], serde_json::json!("child1"));
 }

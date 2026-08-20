@@ -37,7 +37,7 @@ pub struct PreviewEntity {
 ///
 /// Vec of LocalId representing root entities
 pub fn root_local_ids(asset: &SceneAssetDocument) -> Vec<LocalId> {
-    use editor_model::graph_kernel::{roots, Graph, SceneAssetDialect};
+    use editor_model::graph_kernel::{Graph, SceneAssetDialect, roots};
 
     let dialect = SceneAssetDialect::new(asset);
     roots(&dialect)

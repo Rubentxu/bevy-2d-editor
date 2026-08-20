@@ -12,12 +12,13 @@
 //! See ADR-0053 for the canonical design.
 
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 // Dialects — one file per dialect. Each dialect adapts a domain-specific
 // graph shape to the `Graph` trait.
 pub mod changeset_dialect;
 pub mod logic_dialect;
+pub mod query;
 pub mod scene_asset_dialect;
 pub mod world_dialect;
 pub use changeset_dialect::ChangeSetDialect;
@@ -166,18 +167,12 @@ pub trait GraphMut: Graph {
     fn remove_edge(&mut self, idx: EdgeIndex) -> Result<(), GraphKernelError>;
 
     /// Replace a node's data in place.
-    fn update_node(
-        &mut self,
-        idx: NodeIndex,
-        data: Self::NodeData,
-    ) -> Result<(), GraphKernelError>;
+    fn update_node(&mut self, idx: NodeIndex, data: Self::NodeData)
+    -> Result<(), GraphKernelError>;
 
     /// Replace an edge's data in place.
-    fn update_edge(
-        &mut self,
-        idx: EdgeIndex,
-        data: Self::EdgeData,
-    ) -> Result<(), GraphKernelError>;
+    fn update_edge(&mut self, idx: EdgeIndex, data: Self::EdgeData)
+    -> Result<(), GraphKernelError>;
 }
 
 // ============================================================================
@@ -520,7 +515,27 @@ pub fn has_cycle<G: Graph + ?Sized>(g: &G) -> bool {
     topological_sort(g).is_err()
 }
 
-
+/// Return `nodes` restricted to the topological order of `dialect`.
+///
+/// If `subset` is empty, returns an empty vector. Otherwise, computes the full
+/// topological sort of `dialect` and filters it to only include nodes that
+/// appear in `subset`. The relative order of nodes in `subset` is preserved.
+///
+/// This is the kernel helper that `Query::topological` uses internally to
+/// restrict a node set to a valid topological ordering.
+pub fn topological_sort_subset<D: Graph + ?Sized>(
+    dialect: &D,
+    subset: &BTreeSet<NodeIndex>,
+) -> Result<Vec<NodeIndex>, GraphKernelError> {
+    if subset.is_empty() {
+        return Ok(Vec::new());
+    }
+    let full = topological_sort(dialect)?;
+    Ok(full
+        .into_iter()
+        .filter(|idx| subset.contains(idx))
+        .collect())
+}
 
 // ============================================================================
 // Tests for GraphMut, GraphMutStrictness, and GraphKernelError extensions.
@@ -541,9 +556,21 @@ mod graph_mut_tests {
         let free = GraphMutStrictness::Free;
         // Discriminants are distinct (match is exhaustive so this is compile-time safe).
         match (dag, cyclic, free) {
-            (GraphMutStrictness::Dag, GraphMutStrictness::CyclicNoSelfLoop, GraphMutStrictness::Free) => {}
-            (GraphMutStrictness::CyclicNoSelfLoop, GraphMutStrictness::Dag, GraphMutStrictness::Free) => {}
-            (GraphMutStrictness::Free, GraphMutStrictness::CyclicNoSelfLoop, GraphMutStrictness::Dag) => {}
+            (
+                GraphMutStrictness::Dag,
+                GraphMutStrictness::CyclicNoSelfLoop,
+                GraphMutStrictness::Free,
+            ) => {}
+            (
+                GraphMutStrictness::CyclicNoSelfLoop,
+                GraphMutStrictness::Dag,
+                GraphMutStrictness::Free,
+            ) => {}
+            (
+                GraphMutStrictness::Free,
+                GraphMutStrictness::CyclicNoSelfLoop,
+                GraphMutStrictness::Dag,
+            ) => {}
             _ => unreachable!(),
         }
         // Also verify via mem::discriminant.
@@ -669,7 +696,11 @@ mod graph_mut_tests {
             Ok(())
         }
 
-        fn update_node(&mut self, idx: NodeIndex, data: Self::NodeData) -> Result<(), GraphKernelError> {
+        fn update_node(
+            &mut self,
+            idx: NodeIndex,
+            data: Self::NodeData,
+        ) -> Result<(), GraphKernelError> {
             if idx.0 as usize >= self.nodes.len() {
                 return Err(GraphKernelError::NodeIndexOutOfRange {
                     idx,
@@ -680,7 +711,11 @@ mod graph_mut_tests {
             Ok(())
         }
 
-        fn update_edge(&mut self, idx: EdgeIndex, data: Self::EdgeData) -> Result<(), GraphKernelError> {
+        fn update_edge(
+            &mut self,
+            idx: EdgeIndex,
+            data: Self::EdgeData,
+        ) -> Result<(), GraphKernelError> {
             if idx.0 as usize >= self.edges.len() {
                 return Err(GraphKernelError::EdgeIndexOutOfRange {
                     idx,
@@ -801,11 +836,11 @@ mod graph_mut_tests {
 #[cfg(test)]
 mod cross_dialect_integration_tests {
     use super::*;
+    use crate::graph_kernel::logic_dialect::LogicGraphDialectMut;
     use crate::graph_kernel::scene_asset_dialect::SceneAssetDialectMut;
     use crate::graph_kernel::world_dialect::WorldGraphDialectMut;
-    use crate::graph_kernel::logic_dialect::LogicGraphDialectMut;
     use crate::ids::SceneAssetLocalId;
-    use crate::logic_graph::{LogicNodeRole, NodeTypeId, NodeId};
+    use crate::logic_graph::{LogicNodeRole, NodeId, NodeTypeId};
     use crate::scene_asset::{RelationshipKind, SceneAssetMetadata, SceneAssetRole};
     use crate::world::{LayoutPolicy, LinkDirection, StreamingPolicy, WorldId, WorldLinkKind};
     use std::collections::BTreeMap;
@@ -860,10 +895,10 @@ mod cross_dialect_integration_tests {
         let mut asset = crate::logic_graph::LogicGraphAsset::default();
         let boxed: Box<
             dyn GraphMut<
-                NodeData = crate::logic_graph::LogicNode,
-                EdgeData = crate::logic_graph::LogicEdge,
-                Error = std::convert::Infallible,
-            >,
+                    NodeData = crate::logic_graph::LogicNode,
+                    EdgeData = crate::logic_graph::LogicEdge,
+                    Error = std::convert::Infallible,
+                >,
         > = Box::new(LogicGraphDialectMut::new(&mut asset));
         let _borrowed: &dyn GraphMut<
             NodeData = crate::logic_graph::LogicNode,
@@ -897,10 +932,10 @@ mod cross_dialect_integration_tests {
 
     #[test]
     fn existing_callers_unchanged() {
-        use crate::graph_kernel::{has_cycle, topological_sort};
+        use crate::graph_kernel::logic_dialect::LogicGraphDialect;
         use crate::graph_kernel::scene_asset_dialect::SceneAssetDialect;
         use crate::graph_kernel::world_dialect::WorldGraphDialect;
-        use crate::graph_kernel::logic_dialect::LogicGraphDialect;
+        use crate::graph_kernel::{has_cycle, topological_sort};
 
         // LogicGraphDialect
         let mut asset = crate::logic_graph::LogicGraphAsset::default();

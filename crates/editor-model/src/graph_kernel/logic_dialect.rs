@@ -7,7 +7,9 @@
 use std::collections::BTreeMap;
 use std::convert::Infallible;
 
-use crate::graph_kernel::{EdgeIndex, Graph, GraphKernelError, GraphMut, GraphMutStrictness, NodeIndex};
+use crate::graph_kernel::{
+    EdgeIndex, Graph, GraphKernelError, GraphMut, GraphMutStrictness, NodeIndex,
+};
 use crate::logic_graph::{LogicEdge, LogicGraphAsset, LogicNode, NodeId};
 
 /// Adapter that lets `LogicGraphAsset` be read as a `Graph`.
@@ -64,23 +66,35 @@ impl<'a> Graph for LogicGraphDialect<'a> {
     }
     fn outgoing(&self, node: NodeIndex) -> Box<dyn Iterator<Item = EdgeIndex> + '_> {
         let source_id = self.node(node).map(|n| n.node_id.clone());
-        Box::new(self.asset.edges.iter().enumerate().filter_map(move |(i, e)| {
-            if Some(&e.from_node) == source_id.as_ref() {
-                Some(EdgeIndex(i as u32))
-            } else {
-                None
-            }
-        }))
+        Box::new(
+            self.asset
+                .edges
+                .iter()
+                .enumerate()
+                .filter_map(move |(i, e)| {
+                    if Some(&e.from_node) == source_id.as_ref() {
+                        Some(EdgeIndex(i as u32))
+                    } else {
+                        None
+                    }
+                }),
+        )
     }
     fn incoming(&self, node: NodeIndex) -> Box<dyn Iterator<Item = EdgeIndex> + '_> {
         let target_id = self.node(node).map(|n| n.node_id.clone());
-        Box::new(self.asset.edges.iter().enumerate().filter_map(move |(i, e)| {
-            if Some(&e.to_node) == target_id.as_ref() {
-                Some(EdgeIndex(i as u32))
-            } else {
-                None
-            }
-        }))
+        Box::new(
+            self.asset
+                .edges
+                .iter()
+                .enumerate()
+                .filter_map(move |(i, e)| {
+                    if Some(&e.to_node) == target_id.as_ref() {
+                        Some(EdgeIndex(i as u32))
+                    } else {
+                        None
+                    }
+                }),
+        )
     }
 }
 
@@ -117,7 +131,12 @@ impl<'a> LogicGraphDialectMut<'a> {
             .edges
             .iter()
             .enumerate()
-            .filter_map(|(i, e)| Some(((e.from_node.clone(), e.to_node.clone()), EdgeIndex(i as u32))))
+            .filter_map(|(i, e)| {
+                Some((
+                    (e.from_node.clone(), e.to_node.clone()),
+                    EdgeIndex(i as u32),
+                ))
+            })
             .collect();
         Self {
             asset,
@@ -133,7 +152,10 @@ impl<'a> LogicGraphDialectMut<'a> {
 
     /// Rebuild the node index from the current asset.nodes vec.
     fn rebuild_node_index(&mut self) {
-        self.node_index = self.asset.nodes.iter()
+        self.node_index = self
+            .asset
+            .nodes
+            .iter()
             .enumerate()
             .map(|(i, n)| (n.node_id.clone(), NodeIndex(i as u32)))
             .collect();
@@ -141,9 +163,17 @@ impl<'a> LogicGraphDialectMut<'a> {
 
     /// Rebuild the edge index from the current asset.edges vec.
     fn rebuild_edge_index(&mut self) {
-        self.edge_index = self.asset.edges.iter()
+        self.edge_index = self
+            .asset
+            .edges
+            .iter()
             .enumerate()
-            .filter_map(|(i, e)| Some(((e.from_node.clone(), e.to_node.clone()), EdgeIndex(i as u32))))
+            .filter_map(|(i, e)| {
+                Some((
+                    (e.from_node.clone(), e.to_node.clone()),
+                    EdgeIndex(i as u32),
+                ))
+            })
             .collect();
     }
 }
@@ -179,24 +209,36 @@ impl<'a> Graph for LogicGraphDialectMut<'a> {
 
     fn outgoing(&self, node: NodeIndex) -> Box<dyn Iterator<Item = EdgeIndex> + '_> {
         let source_id = self.node(node).map(|n| n.node_id.clone());
-        Box::new(self.asset.edges.iter().enumerate().filter_map(move |(i, e)| {
-            if Some(&e.from_node) == source_id.as_ref() {
-                Some(EdgeIndex(i as u32))
-            } else {
-                None
-            }
-        }))
+        Box::new(
+            self.asset
+                .edges
+                .iter()
+                .enumerate()
+                .filter_map(move |(i, e)| {
+                    if Some(&e.from_node) == source_id.as_ref() {
+                        Some(EdgeIndex(i as u32))
+                    } else {
+                        None
+                    }
+                }),
+        )
     }
 
     fn incoming(&self, node: NodeIndex) -> Box<dyn Iterator<Item = EdgeIndex> + '_> {
         let target_id = self.node(node).map(|n| n.node_id.clone());
-        Box::new(self.asset.edges.iter().enumerate().filter_map(move |(i, e)| {
-            if Some(&e.to_node) == target_id.as_ref() {
-                Some(EdgeIndex(i as u32))
-            } else {
-                None
-            }
-        }))
+        Box::new(
+            self.asset
+                .edges
+                .iter()
+                .enumerate()
+                .filter_map(move |(i, e)| {
+                    if Some(&e.to_node) == target_id.as_ref() {
+                        Some(EdgeIndex(i as u32))
+                    } else {
+                        None
+                    }
+                }),
+        )
     }
 }
 
@@ -218,11 +260,13 @@ impl<'a> GraphMut for LogicGraphDialectMut<'a> {
         dst: NodeIndex,
         data: Self::EdgeData,
     ) -> Result<EdgeIndex, GraphKernelError> {
-        if src.0 as usize >= self.asset.nodes.len()
-            || dst.0 as usize >= self.asset.nodes.len()
-        {
+        if src.0 as usize >= self.asset.nodes.len() || dst.0 as usize >= self.asset.nodes.len() {
             return Err(GraphKernelError::NodeIndexOutOfRange {
-                idx: if src.0 as usize >= self.asset.nodes.len() { src } else { dst },
+                idx: if src.0 as usize >= self.asset.nodes.len() {
+                    src
+                } else {
+                    dst
+                },
                 total: self.asset.nodes.len(),
             });
         }
@@ -233,8 +277,16 @@ impl<'a> GraphMut for LogicGraphDialectMut<'a> {
         }
 
         // CyclicNoSelfLoop: reject duplicate edges.
-        let from_id = self.asset.nodes.get(src.0 as usize).map(|n| n.node_id.clone());
-        let to_id = self.asset.nodes.get(dst.0 as usize).map(|n| n.node_id.clone());
+        let from_id = self
+            .asset
+            .nodes
+            .get(src.0 as usize)
+            .map(|n| n.node_id.clone());
+        let to_id = self
+            .asset
+            .nodes
+            .get(dst.0 as usize)
+            .map(|n| n.node_id.clone());
         if let (Some(fid), Some(tid)) = (&from_id, &to_id) {
             if self.edge_index.contains_key(&(fid.clone(), tid.clone())) {
                 return Err(GraphKernelError::DuplicateEdge { src, dst });
@@ -255,7 +307,9 @@ impl<'a> GraphMut for LogicGraphDialectMut<'a> {
             });
         }
         let removed_id = self.asset.nodes[idx.0 as usize].node_id.clone();
-        self.asset.edges.retain(|e| e.from_node != removed_id && e.to_node != removed_id);
+        self.asset
+            .edges
+            .retain(|e| e.from_node != removed_id && e.to_node != removed_id);
         self.asset.nodes.remove(idx.0 as usize);
         self.rebuild_node_index();
         self.rebuild_edge_index();
@@ -274,7 +328,11 @@ impl<'a> GraphMut for LogicGraphDialectMut<'a> {
         Ok(())
     }
 
-    fn update_node(&mut self, idx: NodeIndex, data: Self::NodeData) -> Result<(), GraphKernelError> {
+    fn update_node(
+        &mut self,
+        idx: NodeIndex,
+        data: Self::NodeData,
+    ) -> Result<(), GraphKernelError> {
         if idx.0 as usize >= self.asset.nodes.len() {
             return Err(GraphKernelError::NodeIndexOutOfRange {
                 idx,
@@ -286,7 +344,11 @@ impl<'a> GraphMut for LogicGraphDialectMut<'a> {
         Ok(())
     }
 
-    fn update_edge(&mut self, idx: EdgeIndex, data: Self::EdgeData) -> Result<(), GraphKernelError> {
+    fn update_edge(
+        &mut self,
+        idx: EdgeIndex,
+        data: Self::EdgeData,
+    ) -> Result<(), GraphKernelError> {
         if idx.0 as usize >= self.asset.edges.len() {
             return Err(GraphKernelError::EdgeIndexOutOfRange {
                 idx,
@@ -382,10 +444,8 @@ mod tests {
         ];
         g.edges = vec![sample_edge("a", "b")];
         let d = LogicGraphDialect::new(&g);
-        let desc = crate::graph_kernel::descendants(
-            &d,
-            d.node_index_of(&NodeId::new("a")).unwrap(),
-        );
+        let desc =
+            crate::graph_kernel::descendants(&d, d.node_index_of(&NodeId::new("a")).unwrap());
         assert_eq!(desc.len(), 2);
         assert_eq!(desc[0], d.node_index_of(&NodeId::new("a")).unwrap());
     }
@@ -461,7 +521,10 @@ mod tests {
         let a_idx = d.node_index_of(&NodeId::new("a")).unwrap();
         let result = d.add_edge(a_idx, a_idx, sample_edge("a", "a"));
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), GraphKernelError::SelfLoop { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            GraphKernelError::SelfLoop { .. }
+        ));
     }
 
     #[test]
@@ -471,7 +534,9 @@ mod tests {
         let mut d = LogicGraphDialectMut::new(&mut asset);
         let a_idx = d.node_index_of(&NodeId::new("a")).unwrap();
         let result = d.add_edge(a_idx, a_idx, sample_edge("a", "a"));
-        assert!(matches!(result.unwrap_err(), GraphKernelError::SelfLoop { node } if node == a_idx));
+        assert!(
+            matches!(result.unwrap_err(), GraphKernelError::SelfLoop { node } if node == a_idx)
+        );
     }
 
     #[test]
@@ -490,8 +555,10 @@ mod tests {
         assert!(first.is_ok());
         // Second add of same edge should fail with DuplicateEdge.
         let second = d.add_edge(a_idx, b_idx, sample_edge("a", "b"));
-        assert!(matches!(second.unwrap_err(), GraphKernelError::DuplicateEdge { src, dst }
-            if src == a_idx && dst == b_idx));
+        assert!(
+            matches!(second.unwrap_err(), GraphKernelError::DuplicateEdge { src, dst }
+            if src == a_idx && dst == b_idx)
+        );
     }
 
     #[test]

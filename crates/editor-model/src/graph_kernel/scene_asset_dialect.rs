@@ -84,29 +84,41 @@ impl<'a> Graph for SceneAssetDialect<'a> {
     }
     fn outgoing(&self, node: NodeIndex) -> Box<dyn Iterator<Item = EdgeIndex> + '_> {
         let source_id = self.node(node).map(|e| e.local_id.clone());
-        Box::new(self.asset.relationships.iter().enumerate().filter_map(move |(i, r)| {
-            if !matches!(r.kind, RelationshipKind::Child) {
-                return None;
-            }
-            if Some(&r.from_local_id) == source_id.as_ref() {
-                Some(EdgeIndex(i as u32))
-            } else {
-                None
-            }
-        }))
+        Box::new(
+            self.asset
+                .relationships
+                .iter()
+                .enumerate()
+                .filter_map(move |(i, r)| {
+                    if !matches!(r.kind, RelationshipKind::Child) {
+                        return None;
+                    }
+                    if Some(&r.from_local_id) == source_id.as_ref() {
+                        Some(EdgeIndex(i as u32))
+                    } else {
+                        None
+                    }
+                }),
+        )
     }
     fn incoming(&self, node: NodeIndex) -> Box<dyn Iterator<Item = EdgeIndex> + '_> {
         let target_id = self.node(node).map(|e| e.local_id.clone());
-        Box::new(self.asset.relationships.iter().enumerate().filter_map(move |(i, r)| {
-            if !matches!(r.kind, RelationshipKind::Child) {
-                return None;
-            }
-            if Some(&r.to_local_id) == target_id.as_ref() {
-                Some(EdgeIndex(i as u32))
-            } else {
-                None
-            }
-        }))
+        Box::new(
+            self.asset
+                .relationships
+                .iter()
+                .enumerate()
+                .filter_map(move |(i, r)| {
+                    if !matches!(r.kind, RelationshipKind::Child) {
+                        return None;
+                    }
+                    if Some(&r.to_local_id) == target_id.as_ref() {
+                        Some(EdgeIndex(i as u32))
+                    } else {
+                        None
+                    }
+                }),
+        )
     }
 }
 
@@ -210,7 +222,10 @@ mod dialect_tests {
             child_edge("child", "grandchild"),
         ];
         let d = SceneAssetDialect::new(&asset);
-        let desc = descendants(&d, d.node_index_of(&SceneAssetLocalId::new("root")).unwrap());
+        let desc = descendants(
+            &d,
+            d.node_index_of(&SceneAssetLocalId::new("root")).unwrap(),
+        );
         assert_eq!(desc.len(), 3);
     }
 
@@ -231,10 +246,7 @@ mod dialect_tests {
     fn dialect_kernel_topological_sort_orders_parents_before_children() {
         let mut asset = empty_asset();
         asset.entities = vec![entity("a"), entity("b"), entity("c")];
-        asset.relationships = vec![
-            child_edge("a", "b"),
-            child_edge("b", "c"),
-        ];
+        asset.relationships = vec![child_edge("a", "b"), child_edge("b", "c")];
         let d = SceneAssetDialect::new(&asset);
         let sorted = topological_sort(&d).unwrap();
         assert_eq!(sorted.len(), 3);
@@ -308,7 +320,10 @@ impl<'a> SceneAssetDialectMut<'a> {
             .enumerate()
             .filter_map(|(i, r)| {
                 if matches!(r.kind, RelationshipKind::Child) {
-                    Some(((r.from_local_id.clone(), r.to_local_id.clone()), EdgeIndex(i as u32)))
+                    Some((
+                        (r.from_local_id.clone(), r.to_local_id.clone()),
+                        EdgeIndex(i as u32),
+                    ))
                 } else {
                     None
                 }
@@ -329,7 +344,10 @@ impl<'a> SceneAssetDialectMut<'a> {
 
     /// Rebuild the entity index from the current doc.entities vec.
     fn rebuild_entity_index(&mut self) {
-        self.entity_index = self.doc.entities.iter()
+        self.entity_index = self
+            .doc
+            .entities
+            .iter()
             .enumerate()
             .map(|(i, e)| (e.local_id.clone(), NodeIndex(i as u32)))
             .collect();
@@ -337,11 +355,17 @@ impl<'a> SceneAssetDialectMut<'a> {
 
     /// Rebuild the relationship index from the current doc.relationships vec (Child only).
     fn rebuild_rel_index(&mut self) {
-        self.rel_index = self.doc.relationships.iter()
+        self.rel_index = self
+            .doc
+            .relationships
+            .iter()
             .enumerate()
             .filter_map(|(i, r)| {
                 if matches!(r.kind, RelationshipKind::Child) {
-                    Some(((r.from_local_id.clone(), r.to_local_id.clone()), EdgeIndex(i as u32)))
+                    Some((
+                        (r.from_local_id.clone(), r.to_local_id.clone()),
+                        EdgeIndex(i as u32),
+                    ))
                 } else {
                     None
                 }
@@ -361,7 +385,9 @@ impl<'a> Graph for SceneAssetDialectMut<'a> {
 
     fn edge_count(&self) -> usize {
         // Only Child relationships count as edges.
-        self.doc.relationships.iter()
+        self.doc
+            .relationships
+            .iter()
             .filter(|r| matches!(r.kind, RelationshipKind::Child))
             .count()
     }
@@ -388,7 +414,9 @@ impl<'a> Graph for SceneAssetDialectMut<'a> {
     fn outgoing(&self, node: NodeIndex) -> Box<dyn Iterator<Item = EdgeIndex> + '_> {
         let source_id = self.node(node).map(|e| e.local_id.clone());
         Box::new(
-            self.doc.relationships.iter()
+            self.doc
+                .relationships
+                .iter()
                 .enumerate()
                 .filter_map(move |(i, r)| {
                     if !matches!(r.kind, RelationshipKind::Child) {
@@ -406,7 +434,9 @@ impl<'a> Graph for SceneAssetDialectMut<'a> {
     fn incoming(&self, node: NodeIndex) -> Box<dyn Iterator<Item = EdgeIndex> + '_> {
         let target_id = self.node(node).map(|e| e.local_id.clone());
         Box::new(
-            self.doc.relationships.iter()
+            self.doc
+                .relationships
+                .iter()
                 .enumerate()
                 .filter_map(move |(i, r)| {
                     if !matches!(r.kind, RelationshipKind::Child) {
@@ -440,11 +470,13 @@ impl<'a> GraphMut for SceneAssetDialectMut<'a> {
         dst: NodeIndex,
         data: Self::EdgeData,
     ) -> Result<EdgeIndex, GraphKernelError> {
-        if src.0 as usize >= self.doc.entities.len()
-            || dst.0 as usize >= self.doc.entities.len()
-        {
+        if src.0 as usize >= self.doc.entities.len() || dst.0 as usize >= self.doc.entities.len() {
             return Err(GraphKernelError::NodeIndexOutOfRange {
-                idx: if src.0 as usize >= self.doc.entities.len() { src } else { dst },
+                idx: if src.0 as usize >= self.doc.entities.len() {
+                    src
+                } else {
+                    dst
+                },
                 total: self.doc.entities.len(),
             });
         }
@@ -454,8 +486,16 @@ impl<'a> GraphMut for SceneAssetDialectMut<'a> {
             return Err(GraphKernelError::SelfLoop { node: src });
         }
 
-        let from_id = self.doc.entities.get(src.0 as usize).map(|e| e.local_id.clone());
-        let to_id = self.doc.entities.get(dst.0 as usize).map(|e| e.local_id.clone());
+        let from_id = self
+            .doc
+            .entities
+            .get(src.0 as usize)
+            .map(|e| e.local_id.clone());
+        let to_id = self
+            .doc
+            .entities
+            .get(dst.0 as usize)
+            .map(|e| e.local_id.clone());
 
         // Dag strictness: reject duplicate Child edges.
         if let (Some(fid), Some(tid)) = (&from_id, &to_id) {
@@ -511,7 +551,11 @@ impl<'a> GraphMut for SceneAssetDialectMut<'a> {
         Ok(())
     }
 
-    fn update_node(&mut self, _idx: NodeIndex, _data: Self::NodeData) -> Result<(), GraphKernelError> {
+    fn update_node(
+        &mut self,
+        _idx: NodeIndex,
+        _data: Self::NodeData,
+    ) -> Result<(), GraphKernelError> {
         // SceneAssetEntity is immutable by stable_id; update_node is unsupported.
         // Use AssetCommand::UpdateEntityComponents instead.
         Err(GraphKernelError::NodeIndexOutOfRange {
@@ -520,7 +564,11 @@ impl<'a> GraphMut for SceneAssetDialectMut<'a> {
         })
     }
 
-    fn update_edge(&mut self, idx: EdgeIndex, data: Self::EdgeData) -> Result<(), GraphKernelError> {
+    fn update_edge(
+        &mut self,
+        idx: EdgeIndex,
+        data: Self::EdgeData,
+    ) -> Result<(), GraphKernelError> {
         if idx.0 as usize >= self.doc.relationships.len() {
             return Err(GraphKernelError::EdgeIndexOutOfRange {
                 idx,
@@ -599,7 +647,10 @@ mod scene_asset_dialect_mut_tests {
         // This tests the positive case: valid child edge.
         let result = d.add_edge(a_idx, a_idx, child_edge("a", "a"));
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), GraphKernelError::SelfLoop { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            GraphKernelError::SelfLoop { .. }
+        ));
     }
 
     #[test]
@@ -609,7 +660,9 @@ mod scene_asset_dialect_mut_tests {
         let mut d = SceneAssetDialectMut::new(&mut doc);
         let a_idx = d.node_index_of(&SceneAssetLocalId::new("a")).unwrap();
         let result = d.add_edge(a_idx, a_idx, child_edge("a", "a"));
-        assert!(matches!(result.unwrap_err(), GraphKernelError::SelfLoop { node } if node == a_idx));
+        assert!(
+            matches!(result.unwrap_err(), GraphKernelError::SelfLoop { node } if node == a_idx)
+        );
     }
 
     #[test]
@@ -624,8 +677,10 @@ mod scene_asset_dialect_mut_tests {
         assert!(first.is_ok());
         // Second add of same edge fails.
         let second = d.add_edge(a_idx, b_idx, child_edge("a", "b"));
-        assert!(matches!(second.unwrap_err(), GraphKernelError::DuplicateEdge { src, dst }
-            if src == a_idx && dst == b_idx));
+        assert!(
+            matches!(second.unwrap_err(), GraphKernelError::DuplicateEdge { src, dst }
+            if src == a_idx && dst == b_idx)
+        );
     }
 
     #[test]
@@ -639,7 +694,10 @@ mod scene_asset_dialect_mut_tests {
         let c_idx = d.node_index_of(&SceneAssetLocalId::new("c")).unwrap();
         // Adding c->a would close the cycle.
         let result = d.add_edge(c_idx, a_idx, child_edge("c", "a"));
-        assert!(matches!(result.unwrap_err(), GraphKernelError::WouldCreateCycle { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            GraphKernelError::WouldCreateCycle { .. }
+        ));
     }
 
     #[test]

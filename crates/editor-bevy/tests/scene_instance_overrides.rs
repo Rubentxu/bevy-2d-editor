@@ -391,7 +391,7 @@ fn effective_values_with_no_overrides_returns_asset_unchanged() {
                     values: serde_json::json!({"asset": "a.png"}),
                 }],
                 extension_data: Default::default(),
-        },
+            },
             SceneAssetEntity {
                 local_id: LocalId::new("b"),
                 local_path: "b".to_string(),

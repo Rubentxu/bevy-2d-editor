@@ -18,10 +18,10 @@
 //! - [`KernelError`] — kernel-level errors
 //! - [`AppliedChangeMeta`] — metadata after successful apply (canonical: `editor_model::session`)
 
+use crate::graph_kernel::changeset_dialect::ChangeSetDialect;
+use crate::graph_kernel::{GraphKernelError, topological_sort};
 use crate::session::HistoryScope;
 use crate::time::Timestamp;
-use crate::graph_kernel::{topological_sort, GraphKernelError};
-use crate::graph_kernel::changeset_dialect::ChangeSetDialect;
 use std::fmt::Debug;
 
 /// Where a ChangeSet originated (ADR-0032 §Decision).
@@ -435,10 +435,7 @@ impl<O: Debug + Clone> ChangeSet<O> {
         // iff `depends_on` transitively depends on `op_idx` (so we'd close the
         // loop `op_idx -> depends_on -> ... -> op_idx`).
         if self.reachable_via_deps(depends_on).contains(&op_idx) {
-            return Err(ChangeSetError::WouldCreateCycle {
-                op_idx,
-                depends_on,
-            });
+            return Err(ChangeSetError::WouldCreateCycle { op_idx, depends_on });
         }
         let entry = &mut self.op_dependencies[op_idx];
         if !entry.contains(&depends_on) {
@@ -706,9 +703,9 @@ impl<A: Applier> TransactionKernel<A> {
         // Step 1.5: GRAPH-008 — compute apply order from the dependency graph.
         // When no deps are declared, this returns insertion order, so existing
         // callers are unaffected.
-        let order = cs.apply_order().map_err(|e| {
-            KernelError::Preflight(format!("op dependency cycle: {e:?}"))
-        })?;
+        let order = cs
+            .apply_order()
+            .map_err(|e| KernelError::Preflight(format!("op dependency cycle: {e:?}")))?;
 
         // Step 2: Preflight all ops in dependency order
         let mut simulated_doc = doc.clone();
@@ -825,10 +822,11 @@ impl<A: Applier> TransactionKernel<A> {
 
         // GRAPH-008: compute apply order and filter to selected indices.
         // The selected set is applied in topological order restricted to it.
-        let order = cs.apply_order().map_err(|e| {
-            KernelError::Preflight(format!("op dependency cycle: {e:?}"))
-        })?;
-        let selected_set: std::collections::BTreeSet<usize> = sorted_selected.iter().copied().collect();
+        let order = cs
+            .apply_order()
+            .map_err(|e| KernelError::Preflight(format!("op dependency cycle: {e:?}")))?;
+        let selected_set: std::collections::BTreeSet<usize> =
+            sorted_selected.iter().copied().collect();
         let selected_in_order: Vec<usize> = order
             .into_iter()
             .filter(|i| selected_set.contains(i))
@@ -1328,11 +1326,7 @@ mod tests {
             Ok(inverse)
         }
 
-        fn summarize(
-            &self,
-            _doc: &Doc,
-            _ops: &[Self::Operation],
-        ) -> (EffectsSummary, DiffSummary) {
+        fn summarize(&self, _doc: &Doc, _ops: &[Self::Operation]) -> (EffectsSummary, DiffSummary) {
             (EffectsSummary::empty(), DiffSummary::empty())
         }
     }
@@ -1436,8 +1430,10 @@ mod tests {
         let recorded = applier.record.lock().unwrap().clone();
         assert_eq!(recorded.len(), 6, "3 preflight + 3 real apply calls");
         let real = &recorded[3..];
-        assert!(real.windows(2).all(|w| w[0] < w[1]),
-            "real apply calls happen in order: positions should grow");
+        assert!(
+            real.windows(2).all(|w| w[0] < w[1]),
+            "real apply calls happen in order: positions should grow"
+        );
         assert_eq!(receipt.change_id, "cs-3");
     }
 
@@ -1458,11 +1454,7 @@ mod tests {
             self.0.apply(doc, op)
         }
 
-        fn summarize(
-            &self,
-            _doc: &Doc,
-            _ops: &[Self::Operation],
-        ) -> (EffectsSummary, DiffSummary) {
+        fn summarize(&self, _doc: &Doc, _ops: &[Self::Operation]) -> (EffectsSummary, DiffSummary) {
             (EffectsSummary::empty(), DiffSummary::empty())
         }
     }
@@ -1491,7 +1483,10 @@ mod tests {
         assert_eq!(recorded.len(), 4, "2 selected + 2 revalidation trials");
         // The first 2 are the real apply in topological order; later 2 are
         // trial applies (also monotonic since doc grows monotonically).
-        assert!(recorded[0] < recorded[1], "first apply before second (topo order)");
+        assert!(
+            recorded[0] < recorded[1],
+            "first apply before second (topo order)"
+        );
         let _ = receipt;
     }
 }
