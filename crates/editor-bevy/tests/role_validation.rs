@@ -115,9 +115,28 @@ fn s9_hierarchy_via_relationships_only() {
     })
     .to_string();
 
-    let result: Result<SceneAssetDocument, _> = serde_json::from_str(&json_with_children_ids);
+    // Post-S4 contract (SDD-0046 S4, commit a24c523, v0.99.0):
+    // `SceneAssetEntity` uses `#[serde(default, flatten)] extension_data`
+    // (ADR-0046 rule 2 / SEM-3). Unknown fields are preserved in
+    // `extension_data` rather than rejected. So a doc with the legacy
+    // `children_local_ids` field now deserializes successfully, with
+    // `children_local_ids` landing in the entity's `extension_data`.
+    //
+    // Hierarchy is still relationships-only — the assertion above
+    // (`!json.contains("children_local_ids")`) covers the serialised
+    // form. Here we verify the deserialise-preserves-foreign-fields
+    // contract.
+    let result: SceneAssetDocument = serde_json::from_str(&json_with_children_ids)
+        .expect("Post-S4: deserialization must succeed (extension_data preserves unknown fields)");
+    assert_eq!(result.entities.len(), 1, "entity preserved");
+    let root_entity = &result.entities[0];
     assert!(
-        result.is_err(),
-        "Deserializing a doc with children_local_ids should fail"
+        root_entity.extension_data.contains_key("children_local_ids"),
+        "Post-S4: children_local_ids must land in extension_data, got: {:?}",
+        root_entity.extension_data
     );
+    let preserved = &root_entity.extension_data["children_local_ids"];
+    let arr = preserved.as_array().expect("children_local_ids must be an array");
+    assert_eq!(arr.len(), 1);
+    assert_eq!(arr[0], serde_json::json!("child1"));
 }
