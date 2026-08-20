@@ -696,6 +696,262 @@ mod tests {
         assert!(second.is_err());
         assert!(matches!(second, Err(BindError::AlreadyBound { .. })));
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Additional integration tests (Commit 5)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn bind_then_unbind_then_bind_returns_new_binding() {
+        use crate::document::StableId;
+
+        clear_binding_state();
+
+        let sid = StableId::new("inst_int_001");
+
+        // First bind
+        let first_result =
+            apply_bind_logic_graph_to_instance(sid.clone(), "lga_recipe_jump", BTreeMap::new());
+        assert!(
+            first_result.is_ok(),
+            "first bind should succeed: {:?}",
+            first_result
+        );
+
+        // Verify binding exists in registry
+        assert!(
+            with_binding_registry(|reg| reg.get(&sid).is_some()),
+            "binding should exist after first bind"
+        );
+
+        // Unbind
+        let first_binding_id = first_result.unwrap().binding_id;
+        let unbind_result =
+            apply_unbind_logic_graph_from_instance(sid.clone(), first_binding_id.clone());
+        assert!(
+            unbind_result.is_ok(),
+            "unbind should succeed: {:?}",
+            unbind_result
+        );
+
+        // After unbind, registry should be empty
+        assert!(
+            with_binding_registry(|reg| reg.get(&sid).is_none()),
+            "registry should be empty after unbind"
+        );
+
+        // Bind again — should succeed and create a new binding in the registry
+        let second_result =
+            apply_bind_logic_graph_to_instance(sid.clone(), "lga_recipe_jump", BTreeMap::new());
+        assert!(
+            second_result.is_ok(),
+            "second bind should succeed: {:?}",
+            second_result
+        );
+
+        // Verify new binding exists in registry
+        assert!(
+            with_binding_registry(|reg| reg.get(&sid).is_some()),
+            "binding should exist after re-bind"
+        );
+    }
+
+    #[test]
+    fn multiple_scene_instances_can_have_own_bindings() {
+        use crate::document::StableId;
+
+        clear_binding_state();
+
+        let sid_a = StableId::new("inst_multi_a");
+        let sid_b = StableId::new("inst_multi_b");
+        let sid_c = StableId::new("inst_multi_c");
+
+        // Bind different recipes to different instances (use available seeded recipes)
+        let result_a =
+            apply_bind_logic_graph_to_instance(sid_a.clone(), "lga_recipe_jump", BTreeMap::new());
+        let result_b =
+            apply_bind_logic_graph_to_instance(sid_b.clone(), "lga_recipe_health", BTreeMap::new());
+        let result_c = apply_bind_logic_graph_to_instance(
+            sid_c.clone(),
+            "lga_recipe_proximity",
+            BTreeMap::new(),
+        );
+
+        assert!(result_a.is_ok(), "bind A should succeed");
+        assert!(result_b.is_ok(), "bind B should succeed");
+        assert!(result_c.is_ok(), "bind C should succeed");
+
+        let bind_a = result_a.unwrap();
+        let bind_b = result_b.unwrap();
+        let bind_c = result_c.unwrap();
+
+        // All binding IDs should be distinct
+        assert_ne!(bind_a.binding_id.as_str(), bind_b.binding_id.as_str());
+        assert_ne!(bind_b.binding_id.as_str(), bind_c.binding_id.as_str());
+        assert_ne!(bind_a.binding_id.as_str(), bind_c.binding_id.as_str());
+    }
+
+    #[test]
+    fn bind_fails_when_instance_already_bound() {
+        use crate::document::StableId;
+
+        clear_binding_state();
+
+        let sid = StableId::new("inst_int_already_bound");
+
+        // First bind should succeed
+        let first =
+            apply_bind_logic_graph_to_instance(sid.clone(), "lga_recipe_jump", BTreeMap::new());
+        assert!(first.is_ok(), "first bind should succeed");
+
+        // Second bind should fail with AlreadyBound
+        let second =
+            apply_bind_logic_graph_to_instance(sid.clone(), "lga_recipe_jump", BTreeMap::new());
+        assert!(second.is_err(), "second bind should fail");
+        let err = second.unwrap_err();
+        assert!(
+            matches!(err, BindError::AlreadyBound { .. }),
+            "expected AlreadyBound error, got: {:?}",
+            err
+        );
+    }
+
+    #[test]
+    fn bind_fails_when_recipe_not_found() {
+        use crate::document::StableId;
+
+        clear_binding_state();
+
+        let sid = StableId::new("inst_int_recipe_missing");
+
+        // Bind with non-existent recipe should fail
+        let result = apply_bind_logic_graph_to_instance(
+            sid.clone(),
+            "nonexistent_recipe_id_xyz",
+            BTreeMap::new(),
+        );
+        assert!(result.is_err(), "bind with missing recipe should fail");
+        let err = result.unwrap_err();
+        assert!(
+            matches!(err, BindError::RecipeNotFound { .. }),
+            "expected RecipeNotFound error, got: {:?}",
+            err
+        );
+    }
+
+    #[test]
+    fn set_field_override_updates_binding() {
+        use crate::document::StableId;
+
+        clear_binding_state();
+
+        let sid = StableId::new("inst_int_field_override");
+
+        // Bind
+        let bind_result =
+            apply_bind_logic_graph_to_instance(sid.clone(), "lga_recipe_jump", BTreeMap::new());
+        assert!(bind_result.is_ok(), "bind should succeed");
+        let binding_id = bind_result.unwrap().binding_id;
+
+        // Set a field override — should succeed
+        let override_result = apply_set_binding_field_override(
+            binding_id.clone(),
+            "jump_force".to_string(),
+            serde_json::json!(500.0),
+        );
+        assert!(
+            override_result.is_ok(),
+            "set override should succeed: {:?}",
+            override_result
+        );
+
+        // Verify override is in registry
+        let has_override = with_binding_registry(|reg| {
+            reg.get(&sid)
+                .map(|r| r.field_overrides.get("jump_force") == Some(&serde_json::json!(500.0)))
+                .unwrap_or(false)
+        });
+        assert!(has_override, "field override should be set in registry");
+    }
+
+    #[test]
+    fn undo_restores_pre_binding_state() {
+        use crate::document::StableId;
+
+        clear_binding_state();
+
+        let sid = StableId::new("inst_int_undo");
+
+        // Initially no binding
+        assert!(
+            with_binding_registry(|reg| reg.get(&sid).is_none()),
+            "should have no binding initially"
+        );
+
+        // Bind
+        let bind_result =
+            apply_bind_logic_graph_to_instance(sid.clone(), "lga_recipe_jump", BTreeMap::new());
+        assert!(bind_result.is_ok(), "bind should succeed");
+        let binding_id = bind_result.unwrap().binding_id;
+
+        // Verify binding exists
+        assert!(
+            with_binding_registry(|reg| reg.get(&sid).is_some()),
+            "binding should exist after bind"
+        );
+
+        // Unbind
+        let unbind_result = apply_unbind_logic_graph_from_instance(sid.clone(), binding_id.clone());
+        assert!(unbind_result.is_ok(), "unbind should succeed");
+
+        // After unbind, no binding should exist
+        assert!(
+            with_binding_registry(|reg| reg.get(&sid).is_none()),
+            "should have no binding after unbind"
+        );
+    }
+
+    #[test]
+    fn redo_restores_post_binding_state() {
+        use crate::document::StableId;
+
+        clear_binding_state();
+
+        let sid = StableId::new("inst_int_redo");
+
+        // Bind
+        let bind_result =
+            apply_bind_logic_graph_to_instance(sid.clone(), "lga_recipe_jump", BTreeMap::new());
+        assert!(bind_result.is_ok(), "bind should succeed");
+        let binding_id = bind_result.unwrap().binding_id;
+
+        // Verify binding exists
+        assert!(
+            with_binding_registry(|reg| reg.get(&sid).is_some()),
+            "binding should exist after bind"
+        );
+
+        // Unbind
+        let unbind_result = apply_unbind_logic_graph_from_instance(sid.clone(), binding_id.clone());
+        assert!(unbind_result.is_ok(), "unbind should succeed");
+
+        // After unbind, no binding
+        assert!(
+            with_binding_registry(|reg| reg.get(&sid).is_none()),
+            "should have no binding after unbind"
+        );
+
+        // Re-bind with same recipe should get us back to a bound state
+        let rebind_result =
+            apply_bind_logic_graph_to_instance(sid.clone(), "lga_recipe_jump", BTreeMap::new());
+        assert!(rebind_result.is_ok(), "re-bind should succeed");
+
+        // Binding should exist again
+        assert!(
+            with_binding_registry(|reg| reg.get(&sid).is_some()),
+            "binding should exist after re-bind"
+        );
+    }
 }
 
 // v0.91 PR2 NOTE: LOGIC_GRAPH_DOC migration is deferred to PR3 (causality

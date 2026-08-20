@@ -490,4 +490,92 @@ mod tests {
         assert!(text.contains("#root"));
         assert!(text.contains("Name(\"Root\")"));
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Regression tests: BsnExporter role rejection (ADR-0011 §D5)
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn bsn_exporter_rejects_logic_role_scene_assets() {
+        // Logic role assets must be rejected at export time (ADR-0011 §D5)
+        let entities = vec![SceneAssetEntity {
+            local_id: LocalId::new("root"),
+            local_path: "root".to_string(),
+            name: "Root".to_string(),
+            components: vec![ComponentInstance {
+                type_id: "editor.Name".to_string(),
+                values: serde_json::json!({"name": "Root"}),
+            }],
+            extension_data: BTreeMap::new(),
+        }];
+        let mut doc = make_doc(entities);
+        doc.role = crate::scene_asset::SceneAssetRole::Logic;
+        let result = export_to_bsn_text(&doc);
+        assert!(matches!(
+            result,
+            Err(BsnExportError::UnsupportedShape(ref s)) if s.contains("logic")
+        ));
+    }
+
+    #[test]
+    fn bsn_exporter_accepts_actor_role() {
+        // Actor role assets export successfully
+        let entities = vec![SceneAssetEntity {
+            local_id: LocalId::new("player"),
+            local_path: "player".to_string(),
+            name: "Player".to_string(),
+            components: vec![ComponentInstance {
+                type_id: "editor.Name".to_string(),
+                values: serde_json::json!({"name": "Player"}),
+            }],
+            extension_data: BTreeMap::new(),
+        }];
+        let doc = make_doc(entities);
+        let text = export_to_bsn_text(&doc).unwrap();
+        assert!(text.contains("bsn!{"));
+        assert!(text.contains("#player"));
+        assert!(text.contains("Name(\"Player\")"));
+    }
+
+    #[test]
+    fn bsn_exporter_accepts_fragment_role() {
+        // Fragment role assets export successfully
+        let entities = vec![SceneAssetEntity {
+            local_id: LocalId::new("wall"),
+            local_path: "wall".to_string(),
+            name: "Wall".to_string(),
+            components: vec![ComponentInstance {
+                type_id: "editor.Name".to_string(),
+                values: serde_json::json!({"name": "Wall"}),
+            }],
+            extension_data: BTreeMap::new(),
+        }];
+        let mut doc = make_doc(entities);
+        doc.role = crate::scene_asset::SceneAssetRole::Fragment;
+        let text = export_to_bsn_text(&doc).unwrap();
+        assert!(text.contains("bsn!{"));
+        assert!(text.contains("#wall"));
+        assert!(text.contains("Name(\"Wall\")"));
+    }
+
+    #[test]
+    fn bsn_exporter_accepts_ui_role() {
+        // UI role assets export successfully
+        let entities = vec![SceneAssetEntity {
+            local_id: LocalId::new("menu"),
+            local_path: "menu".to_string(),
+            name: "Menu".to_string(),
+            components: vec![ComponentInstance {
+                type_id: "editor.Name".to_string(),
+                values: serde_json::json!({"name": "Menu"}),
+            }],
+            extension_data: BTreeMap::new(),
+        }];
+        let mut doc = make_doc(entities);
+        doc.role = crate::scene_asset::SceneAssetRole::Ui;
+        let text = export_to_bsn_text(&doc).unwrap();
+        assert!(text.contains("bsn!{"));
+        assert!(text.contains("#menu"));
+        assert!(text.contains("Name(\"Menu\")"));
+    }
 }

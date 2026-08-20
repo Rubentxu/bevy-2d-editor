@@ -176,6 +176,8 @@ Rust-native extension seam.
 - **`spawn_preview_entity` skip-arm** (`lib.rs:1666`) is a hard blocker: logic
   bindings attached to projected entities are currently invisible to the Bevy
   world. Implementation must explicitly handle logic projection.
+
+  **Status (2026-08-20)**: RESOLVED at `preview_runtime.rs:979`. The `spawn_preview_entity` skip-arm now correctly handles `editor.LogicBinding` — the projection is inserted into the preview entity alongside the existing component set. No logic bindings are silently dropped.
 - **Stateless preview** (v1) means timers and flip-flops reset on every dirty
   rebuild — acceptable for preview, but limits testing of time-based behaviors.
 - **Third parallel command surface** (`LogicCommand` alongside `Command` and
