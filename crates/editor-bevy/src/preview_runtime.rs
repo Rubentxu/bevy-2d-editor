@@ -1210,15 +1210,22 @@ pub enum PreviewActuatorOutput {
 /// Unlike `apply_actuator_outputs` which runs in play mode and drains the
 /// `ACTUATOR_OUTPUT_BUS`, this system directly evaluates logic graphs and
 /// mutates `Velocity.linvel` based on `ApplyImpulse` outputs.
+///
+/// R8: only dispatches bindings with `dirty == true`. Skips idle bindings.
 pub fn apply_actuator_outputs_in_preview(
     mut bindings: Query<
-        (bevy::prelude::Entity, &LogicBinding, &mut Velocity),
+        (bevy::prelude::Entity, &mut LogicBinding, &mut Velocity),
         (Without<PlayMode>, With<LogicBinding>),
     >,
 ) {
     use crate::logic_evaluator::PortValue;
 
-    for (entity, binding, mut velocity) in bindings.iter_mut() {
+    for (entity, mut binding, mut velocity) in bindings.iter_mut() {
+        // R8: skip bindings with dirty == false (idle skip)
+        if !binding.dirty {
+            continue;
+        }
+
         // Evaluate the logic graph — this populates the ACTUATOR_OUTPUT_BUS
         // with actuator outputs. We drain it and apply to Velocity.
         let entity_bits = entity.to_bits();
@@ -1249,6 +1256,9 @@ pub fn apply_actuator_outputs_in_preview(
                 }
             }
         }
+
+        // R8: clear dirty after dispatch
+        binding.dirty = false;
     }
 }
 
