@@ -16,6 +16,8 @@ use crate::logic_graph::{
     LogicEdge, LogicGraphAsset, LogicNode, NodeId, NodeTypeId, find_dangling_edge_nodes,
     find_duplicate_node_id,
 };
+use editor_model::graph_kernel::logic_dialect::LogicGraphDialect;
+use editor_model::graph_kernel::query::Query;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -224,75 +226,26 @@ fn port_type_name(t: &PortValueType) -> &'static str {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Cycle detection (DFS)
+// Cycle detection (Query API)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Detect cycles in the directed graph using DFS with visited set + recursion stack.
-/// Emits one `Cycle` issue per back-edge discovered.
+/// Detect cycles in the directed graph using the graph kernel Query API.
+///
+/// Emits one `Cycle` issue if the graph contains any cycle.
+/// Uses `LogicGraphDialect` + `Query::has_cycle()` internally.
 fn detect_cycles(asset: &LogicGraphAsset) -> Vec<LogicValidationIssue> {
-    let mut issues = Vec::new();
-
-    // Build adjacency list: node_id -> list of target node_ids
-    let mut adj: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
-    for node in &asset.nodes {
-        adj.entry(node.node_id.clone()).or_default();
+    let d = LogicGraphDialect::new(asset);
+    let has_cyc = Query::new(&d).has_cycle().unwrap_or(false);
+    if has_cyc {
+        vec![LogicValidationIssue {
+            code: LogicValidationIssueCode::Cycle,
+            asset_id: asset.asset_id.clone(),
+            message: "cycle detected in logic graph".to_string(),
+            affected_node_ids: vec![],
+        }]
+    } else {
+        Vec::new()
     }
-    for edge in &asset.edges {
-        adj.entry(edge.from_node.clone())
-            .or_default()
-            .push(edge.to_node.clone());
-    }
-
-    let mut visited: HashSet<NodeId> = HashSet::new();
-    let mut rec_stack: HashSet<NodeId> = HashSet::new();
-
-    // DFS from each unvisited node
-    for node_id in asset.nodes.iter().map(|n| n.node_id.clone()) {
-        if !visited.contains(&node_id) {
-            detect_cycles_dfs(
-                &adj,
-                &node_id,
-                &mut visited,
-                &mut rec_stack,
-                &mut issues,
-                &asset.asset_id,
-            );
-        }
-    }
-
-    issues
-}
-
-fn detect_cycles_dfs(
-    adj: &HashMap<NodeId, Vec<NodeId>>,
-    node_id: &NodeId,
-    visited: &mut HashSet<NodeId>,
-    rec_stack: &mut HashSet<NodeId>,
-    issues: &mut Vec<LogicValidationIssue>,
-    asset_id: &str,
-) {
-    visited.insert(node_id.clone());
-    rec_stack.insert(node_id.clone());
-
-    for neighbor in adj.get(node_id).into_iter().flatten() {
-        if !visited.contains(neighbor) {
-            detect_cycles_dfs(adj, neighbor, visited, rec_stack, issues, asset_id);
-        } else if rec_stack.contains(neighbor) {
-            // Back-edge found — cycle detected
-            issues.push(LogicValidationIssue {
-                code: LogicValidationIssueCode::Cycle,
-                asset_id: asset_id.to_string(),
-                message: format!(
-                    "cycle detected: '{}' -> '{}' closes a directed loop",
-                    node_id.as_str(),
-                    neighbor.as_str()
-                ),
-                affected_node_ids: vec![node_id.clone(), neighbor.clone()],
-            });
-        }
-    }
-
-    rec_stack.remove(node_id);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -667,6 +620,137 @@ mod tests {
                 .any(|i| matches!(i.code, LogicValidationIssueCode::Cycle)),
             "A→B→A cycle should be detected"
         );
+    }
+
+    // ── detect_cycles migration tests (GRAPH-010) ─────────────────────────────
+
+    #[test]
+    fn detect_cycles_no_cycle() {
+        // Linear chain: no cycle
+        let node_a = LogicNode {
+            node_id: NodeId::new("node_a"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.and"),
+            field_values: serde_json::json!({}),
+            controller_id: None,
+        };
+        let node_b = LogicNode {
+            node_id: NodeId::new("node_b"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.and"),
+            field_values: serde_json::json!({}),
+            controller_id: None,
+        };
+        let edge_ab = LogicEdge {
+            from_node: NodeId::new("node_a"),
+            from_port: PortId::new("out"),
+            to_node: NodeId::new("node_b"),
+            to_port: PortId::new("a"),
+        };
+        let asset = make_asset(vec![node_a, node_b], vec![edge_ab]);
+        let issues = detect_cycles(&asset);
+        assert!(issues.is_empty(), "linear chain has no cycle");
+    }
+
+    #[test]
+    fn detect_cycles_simple_cycle() {
+        // A → B → A: simple 2-node cycle
+        let node_a = LogicNode {
+            node_id: NodeId::new("node_a"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.and"),
+            field_values: serde_json::json!({}),
+            controller_id: None,
+        };
+        let node_b = LogicNode {
+            node_id: NodeId::new("node_b"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.and"),
+            field_values: serde_json::json!({}),
+            controller_id: None,
+        };
+        let edge_ab = LogicEdge {
+            from_node: NodeId::new("node_a"),
+            from_port: PortId::new("out"),
+            to_node: NodeId::new("node_b"),
+            to_port: PortId::new("a"),
+        };
+        let edge_ba = LogicEdge {
+            from_node: NodeId::new("node_b"),
+            from_port: PortId::new("done"),
+            to_node: NodeId::new("node_a"),
+            to_port: PortId::new("a"),
+        };
+        let asset = make_asset(vec![node_a, node_b], vec![edge_ab, edge_ba]);
+        let issues = detect_cycles(&asset);
+        assert_eq!(issues.len(), 1, "simple cycle emits one Cycle issue");
+        assert!(matches!(issues[0].code, LogicValidationIssueCode::Cycle));
+    }
+
+    #[test]
+    fn detect_cycles_diamond() {
+        // Diamond with cycle: 0→1, 0→2, 1→3, 2→3, 3→0 (closes cycle)
+        let n0 = LogicNode {
+            node_id: NodeId::new("n0"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.and"),
+            field_values: serde_json::json!({}),
+            controller_id: None,
+        };
+        let n1 = LogicNode {
+            node_id: NodeId::new("n1"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.and"),
+            field_values: serde_json::json!({}),
+            controller_id: None,
+        };
+        let n2 = LogicNode {
+            node_id: NodeId::new("n2"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.and"),
+            field_values: serde_json::json!({}),
+            controller_id: None,
+        };
+        let n3 = LogicNode {
+            node_id: NodeId::new("n3"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.and"),
+            field_values: serde_json::json!({}),
+            controller_id: None,
+        };
+        let e01 = LogicEdge {
+            from_node: NodeId::new("n0"),
+            from_port: PortId::new("out"),
+            to_node: NodeId::new("n1"),
+            to_port: PortId::new("a"),
+        };
+        let e02 = LogicEdge {
+            from_node: NodeId::new("n0"),
+            from_port: PortId::new("out"),
+            to_node: NodeId::new("n2"),
+            to_port: PortId::new("a"),
+        };
+        let e13 = LogicEdge {
+            from_node: NodeId::new("n1"),
+            from_port: PortId::new("out"),
+            to_node: NodeId::new("n3"),
+            to_port: PortId::new("a"),
+        };
+        let e23 = LogicEdge {
+            from_node: NodeId::new("n2"),
+            from_port: PortId::new("out"),
+            to_node: NodeId::new("n3"),
+            to_port: PortId::new("a"),
+        };
+        let e30 = LogicEdge {
+            from_node: NodeId::new("n3"),
+            from_port: PortId::new("done"),
+            to_node: NodeId::new("n0"),
+            to_port: PortId::new("a"),
+        };
+        let asset = make_asset(vec![n0, n1, n2, n3], vec![e01, e02, e13, e23, e30]);
+        let issues = detect_cycles(&asset);
+        assert_eq!(issues.len(), 1, "diamond with cycle emits one Cycle issue");
     }
 
     #[test]
