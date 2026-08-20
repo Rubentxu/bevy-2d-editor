@@ -119,7 +119,7 @@ The kernel never panics. When a dialect returns `None` for a node or edge that a
 ### 7. Out of scope for this ADR
 
 - **Persistent graph storage** (BSN / RON / JSON). The kernel is in-memory; dialects get their data from the existing `AssetDocument` types.
-- **Graph mutation**. The kernel is read-only. Mutation is the dialect's responsibility; the canonical pattern is "dialect rebuilds the index map when the underlying doc changes".
+- **Graph mutation** (v1). The kernel is read-only via the `Graph` trait. Mutation is opt-in via the `GraphMut` trait (ADR-0053 + GRAPH-009). Each dialect implements `GraphMut` against its backing doc and rebuilds its index map after every mutation. Per-dialect topology strictness is expressed as the `STRICTNESS` associated constant. `ChangeSetDialect` does NOT implement `GraphMut` — its mutation path is `ChangeSet::add_op_dependency` (unchanged).
 - **GraphQL/SPARQL/Cypher queries**. The kernel is the substrate those queries would compile to; the query language itself is out of scope (handled by GRAPH-010 or later).
 - **Performance optimisation** (e.g. CSR/CSC adjacency storage). The kernel uses `BTreeMap` lookups today; if a profiler flags a hot path, swap in a pre-indexed adjacency list.
 

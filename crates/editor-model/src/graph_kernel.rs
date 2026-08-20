@@ -790,3 +790,358 @@ mod graph_mut_tests {
         );
     }
 }
+
+// ============================================================================
+// Cross-dialect integration tests (Phase 5).
+// ============================================================================
+
+#[cfg(test)]
+mod cross_dialect_integration_tests {
+    use super::*;
+    use crate::graph_kernel::scene_asset_dialect::SceneAssetDialectMut;
+    use crate::graph_kernel::world_dialect::WorldGraphDialectMut;
+    use crate::graph_kernel::logic_dialect::LogicGraphDialectMut;
+    use crate::ids::SceneAssetLocalId;
+    use crate::logic_graph::{LogicNodeRole, NodeTypeId, NodeId};
+    use crate::scene_asset::{RelationshipKind, SceneAssetMetadata, SceneAssetRole};
+    use crate::world::{LayoutPolicy, LinkDirection, StreamingPolicy, WorldId, WorldLinkKind};
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn strictness_const_values() {
+        // Verify const STRICTNESS is compile-time evaluable for all three dialects.
+        const _: () = {
+            let _ = <LogicGraphDialectMut as GraphMut>::STRICTNESS;
+            let _ = <SceneAssetDialectMut as GraphMut>::STRICTNESS;
+            let _ = <WorldGraphDialectMut as GraphMut>::STRICTNESS;
+        };
+        assert_eq!(<LogicGraphDialectMut as GraphMut>::STRICTNESS, GraphMutStrictness::CyclicNoSelfLoop);
+        assert_eq!(<SceneAssetDialectMut as GraphMut>::STRICTNESS, GraphMutStrictness::Dag);
+        assert_eq!(<WorldGraphDialectMut as GraphMut>::STRICTNESS, GraphMutStrictness::Free);
+    }
+
+    #[test]
+    fn graph_mut_methods_return_node_index_u32_newtype() {
+        let mut asset = crate::logic_graph::LogicGraphAsset::default();
+        let mut d = LogicGraphDialectMut::new(&mut asset);
+        let idx = d.add_node(crate::logic_graph::LogicNode {
+            node_id: NodeId::new("test"),
+            role: LogicNodeRole::Sensor,
+            node_type_id: NodeTypeId::new("sensor.generic"),
+            field_values: serde_json::Value::Null,
+            controller_id: None,
+        });
+        assert_eq!(idx.0, 0u32);
+        let idx2 = d.add_node(crate::logic_graph::LogicNode {
+            node_id: NodeId::new("test2"),
+            role: LogicNodeRole::Controller,
+            node_type_id: NodeTypeId::new("controller.generic"),
+            field_values: serde_json::Value::Null,
+            controller_id: None,
+        });
+        assert_eq!(idx2.0, 1u32);
+    }
+
+    #[test]
+    fn existing_callers_unchanged() {
+        use crate::graph_kernel::{has_cycle, topological_sort};
+        use crate::graph_kernel::scene_asset_dialect::SceneAssetDialect;
+        use crate::graph_kernel::world_dialect::WorldGraphDialect;
+        use crate::graph_kernel::logic_dialect::LogicGraphDialect;
+
+        // LogicGraphDialect
+        let mut asset = crate::logic_graph::LogicGraphAsset::default();
+        asset.nodes = vec![
+            crate::logic_graph::LogicNode {
+                node_id: NodeId::new("a"),
+                role: LogicNodeRole::Sensor,
+                node_type_id: NodeTypeId::new("sensor.generic"),
+                field_values: serde_json::Value::Null,
+                controller_id: None,
+            },
+            crate::logic_graph::LogicNode {
+                node_id: NodeId::new("b"),
+                role: LogicNodeRole::Actuator,
+                node_type_id: NodeTypeId::new("actuator.generic"),
+                field_values: serde_json::Value::Null,
+                controller_id: None,
+            },
+        ];
+        asset.edges = vec![crate::logic_graph::LogicEdge {
+            from_node: NodeId::new("a"),
+            from_port: crate::logic_graph::PortId::new("out"),
+            to_node: NodeId::new("b"),
+            to_port: crate::logic_graph::PortId::new("in"),
+        }];
+        let d = LogicGraphDialect::new(&asset);
+        assert!(!has_cycle(&d));
+        assert!(topological_sort(&d).is_ok());
+
+        // SceneAssetDialect
+        let doc = crate::scene_asset::SceneAssetDocument {
+            asset_id: "test".to_string(),
+            logical_path: "test/asset".to_string(),
+            role: SceneAssetRole::Actor,
+            version: 1,
+            entities: vec![
+                crate::scene_asset::SceneAssetEntity {
+                    local_id: SceneAssetLocalId::new("root"),
+                    local_path: "root".to_string(),
+                    name: "root".to_string(),
+                    components: vec![],
+                    extension_data: BTreeMap::new(),
+                },
+                crate::scene_asset::SceneAssetEntity {
+                    local_id: SceneAssetLocalId::new("child"),
+                    local_path: "child".to_string(),
+                    name: "child".to_string(),
+                    components: vec![],
+                    extension_data: BTreeMap::new(),
+                },
+            ],
+            relationships: vec![crate::scene_asset::SceneAssetRelationship {
+                from_local_id: SceneAssetLocalId::new("root"),
+                to_local_id: SceneAssetLocalId::new("child"),
+                kind: RelationshipKind::Child,
+                field_path: None,
+            }],
+            exposed_properties: vec![],
+            metadata: SceneAssetMetadata::default(),
+            layers: vec![],
+            extension_data: BTreeMap::new(),
+        };
+        let sd = SceneAssetDialect::new(&doc);
+        assert!(!has_cycle(&sd));
+        assert!(topological_sort(&sd).is_ok());
+
+        // WorldGraphDialect
+        let wd = crate::world::WorldDocument {
+            id: WorldId::new("world"),
+            name: "World".to_string(),
+            version: 1,
+            layout_policy: LayoutPolicy::Free,
+            levels: vec![
+                crate::world::WorldLevelRef {
+                    level_id: "a".to_string(),
+                    asset_ref: "levels/a".to_string(),
+                    position: [0.0, 0.0],
+                    dimensions: None,
+                    tags: vec![],
+                    streaming: StreamingPolicy::AlwaysResident,
+                },
+                crate::world::WorldLevelRef {
+                    level_id: "b".to_string(),
+                    asset_ref: "levels/b".to_string(),
+                    position: [100.0, 0.0],
+                    dimensions: None,
+                    tags: vec![],
+                    streaming: StreamingPolicy::AlwaysResident,
+                },
+            ],
+            links: vec![crate::world::WorldLink {
+                id: "ab".to_string(),
+                from: "a".to_string(),
+                to: "b".to_string(),
+                direction: LinkDirection::East,
+                kind: WorldLinkKind::OneWay,
+                entrance: None,
+                exit: None,
+            }],
+            updated_at: 0,
+            extension_data: BTreeMap::new(),
+        };
+        let wd_d = WorldGraphDialect::new(&wd);
+        assert!(!has_cycle(&wd_d));
+        assert!(topological_sort(&wd_d).is_ok());
+    }
+
+    #[test]
+    fn index_stability_after_mutation_across_dialects() {
+        // --- Logic ---
+        {
+            let mut asset = crate::logic_graph::LogicGraphAsset::default();
+            asset.nodes = vec![
+                crate::logic_graph::LogicNode {
+                    node_id: NodeId::new("a"),
+                    role: LogicNodeRole::Sensor,
+                    node_type_id: NodeTypeId::new("sensor.generic"),
+                    field_values: serde_json::Value::Null,
+                    controller_id: None,
+                },
+                crate::logic_graph::LogicNode {
+                    node_id: NodeId::new("b"),
+                    role: LogicNodeRole::Controller,
+                    node_type_id: NodeTypeId::new("controller.generic"),
+                    field_values: serde_json::Value::Null,
+                    controller_id: None,
+                },
+            ];
+            let mut d = LogicGraphDialectMut::new(&mut asset);
+            let a_idx = d.node_index_of(&NodeId::new("a")).unwrap();
+            let b_idx = d.node_index_of(&NodeId::new("b")).unwrap();
+            d.add_node(crate::logic_graph::LogicNode {
+                node_id: NodeId::new("c"),
+                role: LogicNodeRole::Actuator,
+                node_type_id: NodeTypeId::new("actuator.generic"),
+                field_values: serde_json::Value::Null,
+                controller_id: None,
+            });
+            assert_eq!(d.node_index_of(&NodeId::new("a")), Some(a_idx));
+            assert_eq!(d.node_index_of(&NodeId::new("b")), Some(b_idx));
+        }
+
+        // --- SceneAsset ---
+        {
+            let mut doc = crate::scene_asset::SceneAssetDocument {
+                asset_id: "test".to_string(),
+                logical_path: "test/asset".to_string(),
+                role: SceneAssetRole::Actor,
+                version: 1,
+                entities: vec![
+                    crate::scene_asset::SceneAssetEntity {
+                        local_id: SceneAssetLocalId::new("x"),
+                        local_path: "x".to_string(),
+                        name: "x".to_string(),
+                        components: vec![],
+                        extension_data: BTreeMap::new(),
+                    },
+                    crate::scene_asset::SceneAssetEntity {
+                        local_id: SceneAssetLocalId::new("y"),
+                        local_path: "y".to_string(),
+                        name: "y".to_string(),
+                        components: vec![],
+                        extension_data: BTreeMap::new(),
+                    },
+                ],
+                relationships: vec![],
+                exposed_properties: vec![],
+                metadata: SceneAssetMetadata::default(),
+                layers: vec![],
+                extension_data: BTreeMap::new(),
+            };
+            let mut d = SceneAssetDialectMut::new(&mut doc);
+            let x_idx = d.node_index_of(&SceneAssetLocalId::new("x")).unwrap();
+            let y_idx = d.node_index_of(&SceneAssetLocalId::new("y")).unwrap();
+            d.add_node(crate::scene_asset::SceneAssetEntity {
+                local_id: SceneAssetLocalId::new("z"),
+                local_path: "z".to_string(),
+                name: "z".to_string(),
+                components: vec![],
+                extension_data: BTreeMap::new(),
+            });
+            assert_eq!(d.node_index_of(&SceneAssetLocalId::new("x")), Some(x_idx));
+            assert_eq!(d.node_index_of(&SceneAssetLocalId::new("y")), Some(y_idx));
+        }
+
+        // --- World ---
+        {
+            let mut doc = crate::world::WorldDocument {
+                id: WorldId::new("world"),
+                name: "World".to_string(),
+                version: 1,
+                layout_policy: LayoutPolicy::Free,
+                levels: vec![
+                    crate::world::WorldLevelRef {
+                        level_id: "l1".to_string(),
+                        asset_ref: "levels/l1".to_string(),
+                        position: [0.0, 0.0],
+                        dimensions: None,
+                        tags: vec![],
+                        streaming: StreamingPolicy::AlwaysResident,
+                    },
+                    crate::world::WorldLevelRef {
+                        level_id: "l2".to_string(),
+                        asset_ref: "levels/l2".to_string(),
+                        position: [100.0, 0.0],
+                        dimensions: None,
+                        tags: vec![],
+                        streaming: StreamingPolicy::AlwaysResident,
+                    },
+                ],
+                links: vec![],
+                updated_at: 0,
+                extension_data: BTreeMap::new(),
+            };
+            let mut d = WorldGraphDialectMut::new(&mut doc);
+            let l1_idx = d.node_index_of("l1").unwrap();
+            let l2_idx = d.node_index_of("l2").unwrap();
+            d.add_node(crate::world::WorldLevelRef {
+                level_id: "l3".to_string(),
+                asset_ref: "levels/l3".to_string(),
+                position: [200.0, 0.0],
+                dimensions: None,
+                tags: vec![],
+                streaming: StreamingPolicy::AlwaysResident,
+            });
+            assert_eq!(d.node_index_of("l1"), Some(l1_idx));
+            assert_eq!(d.node_index_of("l2"), Some(l2_idx));
+        }
+    }
+
+    #[test]
+    fn graphmut_trait_implemented_across_all_dialects() {
+        // Verify all three dialects implement GraphMut and mutations persist.
+        let mut asset = crate::logic_graph::LogicGraphAsset::default();
+        {
+            let mut d = LogicGraphDialectMut::new(&mut asset);
+            let idx = d.add_node(crate::logic_graph::LogicNode {
+                node_id: NodeId::new("x"),
+                role: LogicNodeRole::Sensor,
+                node_type_id: NodeTypeId::new("sensor.generic"),
+                field_values: serde_json::Value::Null,
+                controller_id: None,
+            });
+            assert_eq!(idx, NodeIndex(0));
+        }
+        assert_eq!(asset.nodes.len(), 1);
+
+        let mut doc = crate::scene_asset::SceneAssetDocument {
+            asset_id: "test".to_string(),
+            logical_path: "test/asset".to_string(),
+            role: SceneAssetRole::Actor,
+            version: 1,
+            entities: vec![],
+            relationships: vec![],
+            exposed_properties: vec![],
+            metadata: SceneAssetMetadata::default(),
+            layers: vec![],
+            extension_data: BTreeMap::new(),
+        };
+        {
+            let mut d = SceneAssetDialectMut::new(&mut doc);
+            let idx = d.add_node(crate::scene_asset::SceneAssetEntity {
+                local_id: SceneAssetLocalId::new("e"),
+                local_path: "e".to_string(),
+                name: "e".to_string(),
+                components: vec![],
+                extension_data: BTreeMap::new(),
+            });
+            assert_eq!(idx, NodeIndex(0));
+        }
+        assert_eq!(doc.entities.len(), 1);
+
+        let mut wdoc = crate::world::WorldDocument {
+            id: WorldId::new("world"),
+            name: "World".to_string(),
+            version: 1,
+            layout_policy: LayoutPolicy::Free,
+            levels: vec![],
+            links: vec![],
+            updated_at: 0,
+            extension_data: BTreeMap::new(),
+        };
+        {
+            let mut d = WorldGraphDialectMut::new(&mut wdoc);
+            let idx = d.add_node(crate::world::WorldLevelRef {
+                level_id: "l".to_string(),
+                asset_ref: "levels/l".to_string(),
+                position: [0.0, 0.0],
+                dimensions: None,
+                tags: vec![],
+                streaming: StreamingPolicy::AlwaysResident,
+            });
+            assert_eq!(idx, NodeIndex(0));
+        }
+        assert_eq!(wdoc.levels.len(), 1);
+    }
+}
