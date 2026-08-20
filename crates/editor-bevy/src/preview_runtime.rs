@@ -997,7 +997,14 @@ fn spawn_preview_entity(commands: &mut Commands, preview: &PreviewEntity) {
                     .get("version")
                     .and_then(|v| v.as_u64())
                     .unwrap_or(0) as u32;
-                logic_binding = Some(LogicBinding { asset_id, version });
+                // R1: binding_version starts at 1 (non-zero = evaluated at least once)
+                // dirty = true so the first dispatch pass evaluates this binding
+                logic_binding = Some(LogicBinding {
+                    asset_id,
+                    version,
+                    dirty: true,
+                    binding_version: 1,
+                });
             }
             // Skip editorial-only components
             _ => {}
