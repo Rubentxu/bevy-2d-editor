@@ -19,9 +19,12 @@ pub use crate::hot_reload_state::{
     HOT_RELOAD_BUS, HotReloadRequest, PLAY_MODE_REQUEST, PlayModeRequest,
 };
 pub use crate::logic_state::{
-    with_logic_graph, with_logic_graph_catalog, with_logic_graph_catalog_mut, with_logic_graph_mut,
-    with_logic_log, with_logic_log_mut,
+    with_binding_registry, with_binding_registry_mut, with_logic_graph, with_logic_graph_catalog,
+    with_logic_graph_catalog_mut, with_logic_graph_mut, with_logic_log, with_logic_log_mut,
 };
+// BindingRecord is needed by tests
+pub use crate::logic_state::BindingRecord;
+pub use crate::logic_state::LOGIC_BINDING_REGISTRY;
 pub use crate::scene_state::{
     DIRTY_FLAG, SCENE_REGISTRY, mark_dirty, with_registry, with_registry_mut,
 };

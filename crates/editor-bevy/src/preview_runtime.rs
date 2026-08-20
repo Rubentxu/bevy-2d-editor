@@ -174,6 +174,8 @@ pub fn start_engine(canvas_id: &str) {
             ..default()
         }))
         .add_systems(Startup, setup)
+        // Init SensorStateCache resource for edge-detection in sensor evaluation
+        .init_resource::<crate::sensor_state_cache::SensorStateCache>()
         // BUG-2 (Bevy 0.19 B0001) fix: every system pair that could alias on
         // `Transform` / `Sprite` is connected by an explicit `.before()` /
         // `.after()` chain OR by a `Without<SceneEntity>` disjoint filter on
@@ -223,12 +225,16 @@ pub fn start_engine(canvas_id: &str) {
             Update,
             logic_evaluator::update_keyboard_state
                 .run_if(in_play_mode)
-                .before(logic_dispatch::logic_evaluation_system),
+                .before(logic_dispatch::dispatch_dirty_bindings),
         )
-        // Logic dispatch runs only in play mode
+        // Dirty-tracking dispatch: mark_bindings_dirty is an Observer (Bevy 0.19
+        // fires observers synchronously when the event is triggered — no schedule
+        // order required). dispatch_dirty_bindings is a regular Update system
+        // that runs the evaluator over dirty bindings.
+        .add_observer(logic_dispatch::mark_bindings_dirty)
         .add_systems(
             Update,
-            logic_dispatch::logic_evaluation_system
+            logic_dispatch::dispatch_dirty_bindings
                 .run_if(in_play_mode)
                 .after(sync_log_state),
         )
@@ -997,7 +1003,14 @@ fn spawn_preview_entity(commands: &mut Commands, preview: &PreviewEntity) {
                     .get("version")
                     .and_then(|v| v.as_u64())
                     .unwrap_or(0) as u32;
-                logic_binding = Some(LogicBinding { asset_id, version });
+                // R1: binding_version starts at 1 (non-zero = evaluated at least once)
+                // dirty = true so the first dispatch pass evaluates this binding
+                logic_binding = Some(LogicBinding {
+                    asset_id,
+                    version,
+                    dirty: true,
+                    binding_version: 1,
+                });
             }
             // Skip editorial-only components
             _ => {}
@@ -1193,15 +1206,22 @@ pub enum PreviewActuatorOutput {
 /// Unlike `apply_actuator_outputs` which runs in play mode and drains the
 /// `ACTUATOR_OUTPUT_BUS`, this system directly evaluates logic graphs and
 /// mutates `Velocity.linvel` based on `ApplyImpulse` outputs.
+///
+/// R8: only dispatches bindings with `dirty == true`. Skips idle bindings.
 pub fn apply_actuator_outputs_in_preview(
     mut bindings: Query<
-        (bevy::prelude::Entity, &LogicBinding, &mut Velocity),
+        (bevy::prelude::Entity, &mut LogicBinding, &mut Velocity),
         (Without<PlayMode>, With<LogicBinding>),
     >,
 ) {
     use crate::logic_evaluator::PortValue;
 
-    for (entity, binding, mut velocity) in bindings.iter_mut() {
+    for (entity, mut binding, mut velocity) in bindings.iter_mut() {
+        // R8: skip bindings with dirty == false (idle skip)
+        if !binding.dirty {
+            continue;
+        }
+
         // Evaluate the logic graph — this populates the ACTUATOR_OUTPUT_BUS
         // with actuator outputs. We drain it and apply to Velocity.
         let entity_bits = entity.to_bits();
@@ -1232,6 +1252,9 @@ pub fn apply_actuator_outputs_in_preview(
                 }
             }
         }
+
+        // R8: clear dirty after dispatch
+        binding.dirty = false;
     }
 }
 
