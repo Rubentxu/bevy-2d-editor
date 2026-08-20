@@ -5,9 +5,9 @@
 //!
 //! Tests the `SensorStateCache` helpers and the edge-detection logic.
 
-use editor_model::logic_graph::NodeId;
-use editor_bevy::sensor_state_cache::SensorStateCache;
 use editor_bevy::sensor_event::SensorEvent;
+use editor_bevy::sensor_state_cache::SensorStateCache;
+use editor_model::logic_graph::NodeId;
 
 /// Helper: create a NodeId from a string.
 fn node(s: &str) -> NodeId {

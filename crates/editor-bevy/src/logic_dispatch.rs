@@ -21,7 +21,7 @@
 
 use bevy::prelude::*;
 
-use editor_model::logic_activation::{ring_push, LogicActivationEvent};
+use editor_model::logic_activation::{LogicActivationEvent, ring_push};
 
 use crate::bevy_logic_binding::LogicBinding;
 use crate::sensor_event::SensorEvent;
@@ -29,11 +29,13 @@ use crate::sensor_state_cache::SensorStateCache;
 
 /// Observer: mark bindings dirty when their sensors fire (edge transition 0→1).
 ///
-/// R2: sensors emit on edge transitions only. When `SensorEvent::DidFire` is
-/// received, this observer sets `dirty = true`, bumps `binding_version`, and
-/// pushes a `LogicActivationEvent` to the session ring.
+/// R2: bumps `binding_version` and sets `dirty = true` per binding on edge transition.
+/// R7: pushes a `LogicActivationEvent` to the activation ring (first producer).
 ///
-/// In Bevy 0.19, events are handled via the Observer system using `On<Event>`.
+/// Pattern: Bevy 0.19 Observer (`On<Event>` parameter). Registered via
+/// `app.add_observer(mark_bindings_dirty)`. Observers in Bevy 0.19 fire
+/// synchronously when the event is triggered; they are not chained with
+/// `.before()` because they are not part of the schedule system set.
 pub fn mark_bindings_dirty(
     trigger: On<SensorEvent>,
     mut bindings: Query<(Entity, &mut LogicBinding)>,
@@ -206,7 +208,10 @@ mod tests {
         let should_dispatch = binding.dirty && binding.binding_version > 0;
 
         // THEN: it SHOULD be dispatched
-        assert!(should_dispatch, "dirty and initialized binding must be dispatched");
+        assert!(
+            should_dispatch,
+            "dirty and initialized binding must be dispatched"
+        );
     }
 
     #[test]

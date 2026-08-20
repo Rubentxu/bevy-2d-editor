@@ -144,8 +144,5 @@ fn dirty_cleared_after_dispatch() {
         }
     });
 
-    assert!(
-        !is_dirty,
-        "dirty flag must be cleared after dispatch"
-    );
+    assert!(!is_dirty, "dirty flag must be cleared after dispatch");
 }

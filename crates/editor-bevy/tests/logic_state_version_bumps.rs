@@ -3,8 +3,8 @@
 //! R3: when apply_set_field_override commits, binding_version increments and dirty=true.
 //! This verifies the registry-level state is updated correctly.
 
-use editor_bevy::with_binding_registry_for_tests;
 use editor_bevy::logic_command::BindingId;
+use editor_bevy::with_binding_registry_for_tests;
 use editor_model::ids::StableId;
 use std::collections::BTreeMap;
 
@@ -35,8 +35,11 @@ fn apply_set_field_override_bumps_version_and_sets_dirty() {
     // Apply a field override
     let field_path = "jump_impulse".to_string();
     let value = serde_json::json!(10.0);
-    let result =
-        editor_bevy::logic_state::apply_set_binding_field_override(binding_id.clone(), field_path, value);
+    let result = editor_bevy::logic_state::apply_set_binding_field_override(
+        binding_id.clone(),
+        field_path,
+        value,
+    );
 
     // Verify the operation succeeded
     assert!(

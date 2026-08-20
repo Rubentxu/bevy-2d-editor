@@ -227,15 +227,11 @@ pub fn start_engine(canvas_id: &str) {
                 .run_if(in_play_mode)
                 .before(logic_dispatch::dispatch_dirty_bindings),
         )
-        // Dirty-tracking dispatch: mark_bindings_dirty (reacts to sensor events)
-        // then dispatch_dirty_bindings (evaluates only dirty bindings).
-        // dispatch_dirty_bindings also pushes LogicActivationEvent (R7 first producer).
-        .add_systems(
-            Update,
-            logic_dispatch::mark_bindings_dirty
-                .run_if(in_play_mode)
-                .before(logic_dispatch::dispatch_dirty_bindings),
-        )
+        // Dirty-tracking dispatch: mark_bindings_dirty is an Observer (Bevy 0.19
+        // fires observers synchronously when the event is triggered — no schedule
+        // order required). dispatch_dirty_bindings is a regular Update system
+        // that runs the evaluator over dirty bindings.
+        .add_observer(logic_dispatch::mark_bindings_dirty)
         .add_systems(
             Update,
             logic_dispatch::dispatch_dirty_bindings
