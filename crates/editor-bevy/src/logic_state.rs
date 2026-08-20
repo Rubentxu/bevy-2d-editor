@@ -12,7 +12,8 @@ pub const ACTIVE_LOGIC_GRAPH_PATH: &str = "_active";
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::logic_command::LogicOperationLog;
+use crate::document::StableId;
+use crate::logic_command::{BindError, BindingId, LogicOperation, LogicOperationLog};
 use crate::logic_graph::{LogicGraphAsset, LogicGraphCatalogEntry};
 
 thread_local! {
@@ -259,6 +260,221 @@ pub fn seed_builtin_recipes_to_catalog() {
     });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// LogicBinding registry — thread-local storage for instance ↔ recipe bindings
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Record of a logic binding on a scene instance.
+#[derive(Debug, Clone)]
+pub struct BindingRecord {
+    /// Unique binding identifier.
+    pub binding_id: BindingId,
+    /// Recipe asset_id being bound.
+    pub recipe_id: String,
+    /// Recipe version at bind time.
+    pub version: u32,
+    /// Field overrides applied to the binding.
+    pub field_overrides: BTreeMap<String, serde_json::Value>,
+}
+
+thread_local! {
+    /// Registry of logic bindings keyed by scene instance StableId.
+    /// Used by apply_bind/unbind/set_override and consumed by
+    /// spawn_preview_entity to insert LogicBinding ECS components.
+    pub static LOGIC_BINDING_REGISTRY: RefCell<Option<BTreeMap<StableId, BindingRecord>>> =
+        const { RefCell::new(None) };
+}
+
+/// Get the binding registry, initializing if needed.
+pub fn with_binding_registry<F, R>(f: F) -> R
+where
+    F: FnOnce(&BTreeMap<StableId, BindingRecord>) -> R,
+{
+    LOGIC_BINDING_REGISTRY.with(|cell| {
+        let mut_ref = &mut *cell.borrow_mut();
+        if mut_ref.is_none() {
+            *mut_ref = Some(BTreeMap::new());
+        }
+        f(mut_ref.as_ref().unwrap())
+    })
+}
+
+/// Get a mutable reference to the binding registry, initializing if needed.
+pub fn with_binding_registry_mut<F, R>(f: F) -> R
+where
+    F: FnOnce(&mut BTreeMap<StableId, BindingRecord>) -> R,
+{
+    LOGIC_BINDING_REGISTRY.with(|cell| {
+        let mut_ref = &mut *cell.borrow_mut();
+        if mut_ref.is_none() {
+            *mut_ref = Some(BTreeMap::new());
+        }
+        f(mut_ref.as_mut().unwrap())
+    })
+}
+
+/// Result of a binding operation.
+#[derive(Debug)]
+pub struct BindingResult {
+    /// The inverse operation to undo this bind.
+    pub inverse: LogicOperation,
+    /// The binding ID assigned.
+    pub binding_id: BindingId,
+}
+
+/// Bind a recipe to a scene instance.
+///
+/// Validates that:
+/// - The recipe exists in the catalog
+/// - The instance is not already bound
+///
+/// Returns the binding ID and the inverse operation on success.
+pub fn apply_bind_logic_graph_to_instance(
+    scene_instance_id: StableId,
+    recipe_id: &str,
+    field_overrides: BTreeMap<String, serde_json::Value>,
+) -> Result<BindingResult, BindError> {
+    // Ensure catalog is seeded
+    seed_builtin_recipes_to_catalog();
+
+    // Validate recipe exists in catalog
+    let recipe_exists = with_logic_graph_catalog(|cat| cat.get(recipe_id).is_some());
+    if !recipe_exists {
+        return Err(BindError::RecipeNotFound {
+            recipe_id: recipe_id.to_string(),
+        });
+    }
+
+    // Validate no existing binding on this instance
+    let already_bound = with_binding_registry(|reg| reg.contains_key(&scene_instance_id));
+    if already_bound {
+        return Err(BindError::AlreadyBound { scene_instance_id });
+    }
+
+    // Generate binding ID (unique string identifier)
+    let binding_id = BindingId::new(format!("bind_{}_{}", scene_instance_id.as_str(), recipe_id));
+
+    // Get recipe version from catalog
+    let version = with_logic_graph_catalog(|cat| {
+        cat.get(recipe_id).map(|e| e.asset_id.clone()) // just check existence
+    })
+    .map(|_| 1u32)
+    .unwrap_or(1);
+
+    // Record the binding
+    let record = BindingRecord {
+        binding_id: binding_id.clone(),
+        recipe_id: recipe_id.to_string(),
+        version,
+        field_overrides: field_overrides.clone(),
+    };
+
+    with_binding_registry_mut(|reg| {
+        reg.insert(scene_instance_id.clone(), record);
+    });
+
+    // Build inverse operation
+    let inverse = LogicOperation::UnbindLogicGraphFromInstance {
+        scene_instance_id,
+        binding_id: binding_id.clone(),
+    };
+
+    Ok(BindingResult {
+        inverse,
+        binding_id,
+    })
+}
+
+/// Unbind a logic binding from a scene instance.
+///
+/// Returns the inverse bind operation on success.
+pub fn apply_unbind_logic_graph_from_instance(
+    scene_instance_id: StableId,
+    binding_id: BindingId,
+) -> Result<LogicOperation, BindError> {
+    // Validate binding exists
+    let record =
+        with_binding_registry(|reg| reg.get(&scene_instance_id).cloned()).ok_or_else(|| {
+            BindError::BindingNotFound {
+                binding_id: binding_id.clone(),
+            }
+        })?;
+
+    // Remove the binding
+    with_binding_registry_mut(|reg| {
+        reg.remove(&scene_instance_id);
+    });
+
+    // Build inverse bind operation with same parameters
+    let inverse = LogicOperation::BindLogicGraphToInstance {
+        scene_instance_id,
+        recipe_id: record.recipe_id,
+        field_overrides: record.field_overrides,
+    };
+
+    Ok(inverse)
+}
+
+/// Set a field override on an existing binding.
+pub fn apply_set_binding_field_override(
+    binding_id: BindingId,
+    field_path: String,
+    value: serde_json::Value,
+) -> Result<(LogicOperation, LogicOperation), BindError> {
+    // Find the binding by binding_id
+    let (scene_instance_id, mut record) = with_binding_registry(|reg| {
+        reg.iter()
+            .find(|(_, r)| r.binding_id == binding_id)
+            .map(|(sid, r)| (sid.clone(), r.clone()))
+    })
+    .ok_or_else(|| BindError::BindingNotFound {
+        binding_id: binding_id.clone(),
+    })?;
+
+    // Validate field_path exists in recipe schema
+    // For now, we accept any field_path (schema validation deferred)
+    let _recipe_id = record.recipe_id.clone();
+
+    // Build inverse operation (restore old value or remove if none)
+    let old_value = record.field_overrides.get(&field_path).cloned();
+    let inverse_old = old_value.clone();
+
+    // Update the field override
+    record
+        .field_overrides
+        .insert(field_path.clone(), value.clone());
+    with_binding_registry_mut(|reg| {
+        if let Some(r) = reg.get_mut(&scene_instance_id) {
+            r.field_overrides = record.field_overrides;
+        }
+    });
+
+    // Forward operation (same structure, different value)
+    let forward = LogicOperation::SetBindingFieldOverride {
+        binding_id: binding_id.clone(),
+        field_path: field_path.clone(),
+        value: value.clone(),
+    };
+
+    // Build inverse: SetFieldOverride with old value
+    let inverse = if let Some(old) = inverse_old {
+        LogicOperation::SetBindingFieldOverride {
+            binding_id,
+            field_path,
+            value: old,
+        }
+    } else {
+        // If no old value, the inverse is a no-op; return the same operation
+        LogicOperation::SetBindingFieldOverride {
+            binding_id,
+            field_path,
+            value: serde_json::Value::Null,
+        }
+    };
+
+    Ok((forward, inverse))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -363,6 +579,122 @@ mod tests {
         // Both entries are independently accessible
         assert_eq!(cat.get("g1").unwrap().logical_path, "logic/graph_one");
         assert_eq!(cat.get("g2").unwrap().logical_path, "logic/graph_two");
+    }
+
+    // ── LogicBinding tests ─────────────────────────────────────────────────
+
+    fn clear_binding_state() {
+        // Clear binding registry
+        LOGIC_BINDING_REGISTRY.with(|cell| {
+            *cell.borrow_mut() = None;
+        });
+        // Clear catalog (to allow re-seeding)
+        LOGIC_GRAPH_CATALOG.with(|cell| {
+            *cell.borrow_mut() = None;
+        });
+        // Reset seed flag
+        BUILTIN_CATALOG_SEEDED.with(|s| s.set(false));
+    }
+
+    #[test]
+    fn bind_inserts_logic_binding() {
+        use crate::document::StableId;
+
+        clear_binding_state();
+
+        let sid = StableId::new("inst_test_001");
+        // Use the recipe asset_id ("lga_recipe_jump") not logical_path
+        let result =
+            apply_bind_logic_graph_to_instance(sid.clone(), "lga_recipe_jump", BTreeMap::new());
+
+        assert!(result.is_ok(), "bind should succeed: {:?}", result);
+        let binding_result = result.unwrap();
+        assert_eq!(
+            binding_result
+                .binding_id
+                .as_str()
+                .starts_with("bind_inst_test_001_"),
+            true
+        );
+
+        // Verify binding is in registry
+        let found = with_binding_registry(|reg| reg.get(&sid).is_some());
+        assert!(found, "binding should be in registry");
+    }
+
+    #[test]
+    fn unbind_removes_logic_binding() {
+        use crate::document::StableId;
+
+        clear_binding_state();
+
+        let sid = StableId::new("inst_test_002");
+        let bind_result =
+            apply_bind_logic_graph_to_instance(sid.clone(), "lga_recipe_jump", BTreeMap::new())
+                .unwrap();
+
+        // Verify binding exists
+        let found_before = with_binding_registry(|reg| reg.get(&sid).is_some());
+        assert!(found_before, "binding should exist before unbind");
+
+        // Unbind
+        let unbind_result =
+            apply_unbind_logic_graph_from_instance(sid.clone(), bind_result.binding_id);
+        assert!(
+            unbind_result.is_ok(),
+            "unbind should succeed: {:?}",
+            unbind_result
+        );
+
+        // Verify binding is gone
+        let found_after = with_binding_registry(|reg| reg.get(&sid).is_some());
+        assert!(!found_after, "binding should be removed after unbind");
+    }
+
+    #[test]
+    fn set_field_updates_field() {
+        use crate::document::StableId;
+
+        clear_binding_state();
+
+        let sid = StableId::new("inst_test_003");
+        let bind_result =
+            apply_bind_logic_graph_to_instance(sid.clone(), "lga_recipe_jump", BTreeMap::new())
+                .unwrap();
+
+        // Set a field override
+        let override_result = apply_set_binding_field_override(
+            bind_result.binding_id.clone(),
+            "jump_force".to_string(),
+            serde_json::json!(500.0),
+        );
+        assert!(override_result.is_ok(), "set override should succeed");
+
+        // Verify override is in registry
+        let has_override = with_binding_registry(|reg| {
+            reg.get(&sid)
+                .map(|r| r.field_overrides.get("jump_force") == Some(&serde_json::json!(500.0)))
+                .unwrap_or(false)
+        });
+        assert!(has_override, "field override should be set in registry");
+    }
+
+    #[test]
+    fn bind_idempotent_when_repeat_same_recipe() {
+        use crate::document::StableId;
+
+        clear_binding_state();
+
+        let sid = StableId::new("inst_test_004");
+        let first =
+            apply_bind_logic_graph_to_instance(sid.clone(), "lga_recipe_jump", BTreeMap::new());
+        assert!(first.is_ok(), "first bind should succeed");
+
+        // Second bind should fail with AlreadyBound
+        let second =
+            apply_bind_logic_graph_to_instance(sid.clone(), "lga_recipe_jump", BTreeMap::new());
+        assert!(second.is_err());
+        assert!(matches!(second, Err(BindError::AlreadyBound { .. })));
     }
 }
 

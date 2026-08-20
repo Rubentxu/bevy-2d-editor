@@ -1144,6 +1144,95 @@ pub fn evaluate_logic_binding_wasm(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// WASM exports for LogicBinding lifecycle
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::JsValue;
+
+/// Bind a recipe to a scene instance from WASM.
+///
+/// # Arguments
+/// * `scene_instance_id` - Stable ID of the scene instance
+/// * `recipe_id` - Recipe ID to bind (e.g., "recipes/platformer_jump")
+/// * `field_overrides_js` - JavaScript object with field overrides
+///
+/// # Returns
+/// * `binding_id` as String on success
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn bind_logic_graph_to_instance_wasm(
+    scene_instance_id: String,
+    recipe_id: String,
+    field_overrides_js: JsValue,
+) -> Result<String, JsValue> {
+    use crate::document::StableId;
+    use crate::logic_state::apply_bind_logic_graph_to_instance;
+    use std::collections::BTreeMap;
+
+    let field_overrides: BTreeMap<String, serde_json::Value> = if field_overrides_js.is_null()
+        || field_overrides_js.is_undefined()
+    {
+        BTreeMap::new()
+    } else {
+        serde_wasm_bindgen::from_value(field_overrides_js)
+            .map_err(|e| JsValue::from_str(&format!("failed to parse field overrides: {}", e)))?
+    };
+
+    let sid = StableId::new(scene_instance_id);
+    apply_bind_logic_graph_to_instance(sid, &recipe_id, field_overrides)
+        .map(|result| result.binding_id.0)
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Unbind a logic binding from a scene instance from WASM.
+///
+/// # Arguments
+/// * `scene_instance_id` - Stable ID of the scene instance
+/// * `binding_id` - Binding ID to remove
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn unbind_logic_graph_from_instance_wasm(
+    scene_instance_id: String,
+    binding_id: String,
+) -> Result<(), JsValue> {
+    use crate::document::StableId;
+    use crate::logic_command::BindingId;
+    use crate::logic_state::apply_unbind_logic_graph_from_instance;
+
+    let sid = StableId::new(scene_instance_id);
+    let bid = BindingId::new(binding_id);
+    apply_unbind_logic_graph_from_instance(sid, bid)
+        .map(|_| ())
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Set a field override on an existing binding from WASM.
+///
+/// # Arguments
+/// * `binding_id` - Binding ID to update
+/// * `field_path` - Field path to override
+/// * `value_js` - New value as JavaScript value
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn set_binding_field_override_wasm(
+    binding_id: String,
+    field_path: String,
+    value_js: JsValue,
+) -> Result<(), JsValue> {
+    use crate::logic_command::BindingId;
+    use crate::logic_state::apply_set_binding_field_override;
+
+    let bid = BindingId::new(binding_id);
+    let value: serde_json::Value = serde_wasm_bindgen::from_value(value_js)
+        .map_err(|e| JsValue::from_str(&format!("failed to parse value: {}", e)))?;
+
+    apply_set_binding_field_override(bid, field_path, value)
+        .map(|_| ())
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Phase 1 RED tests — trait + enum existence
 // ─────────────────────────────────────────────────────────────────────────────
 

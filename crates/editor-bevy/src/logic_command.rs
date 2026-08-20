@@ -18,10 +18,12 @@
 //! | `SetNodeField`   | `SetNodeField { old value at field_path }` |
 //! | `Batch`          | `Batch { reversed inverses }`         |
 
+use crate::document::StableId;
 use crate::logic_graph::{
     LogicEdge, LogicGraphAsset, LogicNode, LogicNodeRole, NodeId, NodeTypeId, PortId,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use thiserror::Error;
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -108,6 +110,91 @@ impl From<serde_json::Error> for LogicCommandError {
     fn from(e: serde_json::Error) -> Self {
         LogicCommandError::JsonError(e.to_string())
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// BindingId and BindError — for LogicOperation (binding lifecycle)
+// ─────────────────────────────────────────────────────────────────────────
+
+/// Opaque identifier for a logic binding on a Scene Instance.
+/// Uses String to match the existing ID pattern in editor-model.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct BindingId(pub String);
+
+impl BindingId {
+    /// Construct a new BindingId from a string.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self(id.into())
+    }
+
+    /// Borrow the inner string.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for BindingId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// Errors that can occur when binding, unbinding, or updating a logic binding.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum BindError {
+    #[error("recipe not found in catalog: {recipe_id}")]
+    RecipeNotFound { recipe_id: String },
+
+    #[error("scene instance already has a binding: {scene_instance_id}")]
+    AlreadyBound { scene_instance_id: StableId },
+
+    #[error("unknown field override: {field_path} (recipe schema: {recipe_id})")]
+    FieldMismatch {
+        field_path: String,
+        recipe_id: String,
+    },
+
+    #[error("binding not found: {binding_id}")]
+    BindingNotFound { binding_id: BindingId },
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// LogicOperation — commands for binding lifecycle (separate from graph mutations)
+// ─────────────────────────────────────────────────────────────────────────
+
+/// Typed command enum for Logic Binding lifecycle operations.
+///
+/// These operate on the binding between a Scene Instance and a LogicGraphAsset,
+/// separate from the `LogicCommand` which mutates the graph document itself.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "PascalCase")]
+pub enum LogicOperation {
+    /// Bind a recipe to a Scene Instance.
+    BindLogicGraphToInstance {
+        /// Stable ID of the Scene Instance.
+        scene_instance_id: StableId,
+        /// Recipe ID (e.g., "recipes/platformer_jump").
+        recipe_id: String,
+        /// Field overrides (e.g., { "jump_force": 1000.0 }).
+        #[serde(default)]
+        field_overrides: BTreeMap<String, serde_json::Value>,
+    },
+    /// Inverse of `BindLogicGraphToInstance`. Removes the `LogicBinding` ECS component.
+    UnbindLogicGraphFromInstance {
+        /// Stable ID of the Scene Instance.
+        scene_instance_id: StableId,
+        /// Binding ID to remove.
+        binding_id: BindingId,
+    },
+    /// Set a field override on an existing binding.
+    SetBindingFieldOverride {
+        /// Binding ID.
+        binding_id: BindingId,
+        /// Field path (e.g., "jump_force").
+        field_path: String,
+        /// New value.
+        value: serde_json::Value,
+    },
 }
 
 // ─────────────────────────────────────────────────────────────────────────
