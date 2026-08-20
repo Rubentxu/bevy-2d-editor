@@ -19,6 +19,7 @@
 //! `rebuild_preview_world`.
 
 use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 use crate::actuator_bus;
@@ -28,7 +29,7 @@ use crate::document::{Entity, SceneDocument, StableId};
 use crate::dynamic_scene::is_known_anchor_str;
 use crate::instance_projection::{PreviewEntity, project_instances};
 use crate::logic_dispatch;
-use crate::logic_evaluator;
+use crate::logic_evaluator::{self, PortValue};
 use crate::state::{
     DIRTY_FLAG, HOT_RELOAD_BUS, HotReloadRequest, PLAY_MODE_REQUEST, PlayModeRequest, mark_dirty,
     with_asset_body_cache_mut, with_logic_graph_mut,
@@ -243,6 +244,14 @@ pub fn start_engine(canvas_id: &str) {
                 .after(logic_dispatch::logic_evaluation_system)
                 .after(process_play_mode_request)
                 .before(emit_events),
+        )
+        // apply_actuator_outputs_in_preview: logic evaluation in edit mode
+        // Runs alongside rebuild_preview_world so velocity updates appear immediately
+        .add_systems(
+            Update,
+            apply_actuator_outputs_in_preview
+                .run_if(in_edit_mode)
+                .after(rebuild_preview_world),
         )
         .add_systems(Last, emit_events)
         .run();
@@ -1034,6 +1043,8 @@ fn spawn_preview_entity(commands: &mut Commands, preview: &PreviewEntity) {
     }
     if let Some(lb) = logic_binding {
         cmd.insert(lb);
+        // Add Velocity component for logic binding preview physics
+        cmd.insert(Velocity::default());
     }
 }
 
@@ -1136,6 +1147,91 @@ fn sync_log_state(mut log_state: ResMut<OperationLogState>) {
         log_state.can_undo = log.can_undo();
         log_state.can_redo = log.can_redo();
     });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Velocity — simple 2D velocity for logic binding preview physics
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Simple 2D velocity component for logic binding preview.
+///
+/// Attached to entities with `LogicBinding` in edit mode so that
+/// `apply_actuator_outputs_in_preview` can mutate velocity directly
+/// from logic graph actuator outputs.
+///
+/// This is a local component, not from a physics crate. It is separate
+/// from Bevy's physics integration which would be used in play mode.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Velocity {
+    pub linvel: Vec2,
+}
+
+impl Default for Velocity {
+    fn default() -> Self {
+        Self {
+            linvel: Vec2::ZERO,
+        }
+    }
+}
+
+/// Actuator output enum for preview-mode logic evaluation.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PreviewActuatorOutput {
+    /// Apply an impulse vector to velocity.
+    ApplyImpulse { vector: Vec2 },
+    /// Trigger an animation by name.
+    SetAnimation { name: String },
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// apply_actuator_outputs_in_preview — logic evaluation in edit mode
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Preview-mode system: evaluates logic bindings and applies actuator outputs.
+///
+/// This system runs in edit mode (Without<PlayMode>) and applies logic graph
+/// actuator outputs to the `Velocity` component on entities with `LogicBinding`.
+///
+/// Unlike `apply_actuator_outputs` which runs in play mode and drains the
+/// `ACTUATOR_OUTPUT_BUS`, this system directly evaluates logic graphs and
+/// mutates `Velocity.linvel` based on `ApplyImpulse` outputs.
+pub fn apply_actuator_outputs_in_preview(
+    mut bindings: Query<(bevy::prelude::Entity, &LogicBinding, &mut Velocity), (Without<PlayMode>, With<LogicBinding>)>,
+) {
+    use crate::logic_evaluator::PortValue;
+
+    for (entity, binding, mut velocity) in bindings.iter_mut() {
+        // Evaluate the logic graph — this populates the ACTUATOR_OUTPUT_BUS
+        // with actuator outputs. We drain it and apply to Velocity.
+        let entity_bits = entity.to_bits();
+        if let Err(_) = crate::logic_evaluator::evaluate_logic_binding(
+            &binding.asset_id,
+            binding.version,
+            entity_bits,
+        ) {
+            // AssetNotFound or other error — continue silently
+            continue;
+        }
+
+        // Drain actuator outputs and apply to Velocity
+        let outputs = crate::actuator_bus::drain_actuator_outputs();
+        for output in outputs {
+            match output.value {
+                PortValue::Vec2 { x, y } => {
+                    // Apply impulse to velocity
+                    velocity.linvel.x += x;
+                    velocity.linvel.y += y;
+                }
+                PortValue::Float(v) => {
+                    // Float impulse — apply in Y direction (vertical)
+                    velocity.linvel.y += v;
+                }
+                _ => {
+                    // Other port values not applicable to velocity
+                }
+            }
+        }
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
