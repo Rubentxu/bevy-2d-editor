@@ -26,7 +26,7 @@ use std::collections::BTreeSet;
 
 use crate::graph_kernel::{
     Graph, GraphKernelError, NodeIndex, ancestors, descendants, has_cycle, leaves, reachable_from,
-    roots, topological_sort,
+    roots, topological_sort, topological_sort_subset,
 };
 
 /// The mutable builder state — tracks which kernel operation is active and
@@ -859,5 +859,90 @@ mod tests {
         let non_roots = all.difference(roots_only);
         let nodes = non_roots.collect().unwrap();
         assert_eq!(nodes.len(), 2);
+    }
+
+    // --- topological_sort_subset integration tests (Commit 5) ---
+
+    #[test]
+    fn topological_sort_subset_linear_chain() {
+        let g = linear_graph();
+        let d = LogicGraphDialect::new(&g);
+        let a_idx = c_idx_val(&d, "a");
+        let b_idx = c_idx_val(&d, "b");
+        let c_idx = c_idx_val(&d, "c");
+        let subset: BTreeSet<NodeIndex> = [a_idx, b_idx, c_idx].into();
+        let sorted = topological_sort_subset(&d, &subset).unwrap();
+        // Linear chain: must respect a→b→c
+        assert_eq!(sorted.len(), 3);
+        let pos = |idx: NodeIndex| sorted.iter().position(|&x| x == idx).unwrap();
+        assert!(pos(a_idx) < pos(b_idx), "a before b");
+        assert!(pos(b_idx) < pos(c_idx), "b before c");
+    }
+
+    #[test]
+    fn topological_sort_subset_partial_subset() {
+        let g = linear_graph();
+        let d = LogicGraphDialect::new(&g);
+        let a_idx = c_idx_val(&d, "a");
+        let c_idx = c_idx_val(&d, "c");
+        // Only a and c in subset: verify subset sort respects existing edges
+        let subset: BTreeSet<NodeIndex> = [a_idx, c_idx].into();
+        let sorted = topological_sort_subset(&d, &subset);
+        assert!(sorted.is_ok());
+        let pos = |idx: NodeIndex| {
+            sorted
+                .as_ref()
+                .unwrap()
+                .iter()
+                .position(|&x| x == idx)
+                .unwrap()
+        };
+        assert!(pos(a_idx) < pos(c_idx), "a before c in partial subset");
+    }
+
+    #[test]
+    fn topological_sort_subset_empty() {
+        let g = linear_graph();
+        let d = LogicGraphDialect::new(&g);
+        let subset = BTreeSet::new();
+        let sorted = topological_sort_subset(&d, &subset);
+        assert!(sorted.is_ok());
+        assert!(sorted.unwrap().is_empty());
+    }
+
+    // --- topological() terminal integration tests (Commit 5) ---
+
+    #[test]
+    fn topological_returns_valid_order() {
+        let g = linear_graph();
+        let d = LogicGraphDialect::new(&g);
+        let q = Query::new(&d).topological();
+        let nodes = q.collect().unwrap();
+        assert_eq!(nodes.len(), 3);
+        let a_idx = c_idx_val(&d, "a");
+        let b_idx = c_idx_val(&d, "b");
+        let c_idx = c_idx_val(&d, "c");
+        let pos = |idx: NodeIndex| nodes.iter().position(|&x| x == idx).unwrap();
+        assert!(pos(a_idx) < pos(b_idx), "a before b");
+        assert!(pos(b_idx) < pos(c_idx), "b before c");
+    }
+
+    #[test]
+    fn topological_empty_graph() {
+        let g = empty_graph();
+        let d = LogicGraphDialect::new(&g);
+        let q = Query::new(&d).topological();
+        let nodes = q.collect().unwrap();
+        assert!(nodes.is_empty());
+    }
+
+    #[test]
+    fn topological_on_cycle_returns_cycle_error() {
+        let g = cyclic_graph();
+        let d = LogicGraphDialect::new(&g);
+        let q = Query::new(&d).topological();
+        let result = q.collect();
+        // topological sort on a cyclic graph returns Err
+        assert!(result.is_err());
     }
 }

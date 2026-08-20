@@ -116,7 +116,11 @@ Each dialect ships with a `#[cfg(test)] module` of pure-Rust tests that build a 
 
 The kernel never panics. When a dialect returns `None` for a node or edge that an algorithm is asking about, the algorithm treats it as "not present" and stops walking that branch. This is forgiving but explicit: dialect implementations are responsible for the `Option` translation; the kernel trusts the dialect.
 
-### 7. Out of scope for this ADR
+### 7. Query layer (closed in GRAPH-010, v0.103.0)
+
+The query language is exposed via the typed builder `Query<'a, D: Graph>` in `crates/editor-model/src/graph_kernel/query.rs`. The kernel remains the substrate; the builder is a thin composition layer that compiles to existing kernel ops. The kernel has gained one additive helper, `topological_sort_subset`, with the same semantics as `topological_sort` restricted to a node subset. The query language covers: terminals (`collect`, `first`, `count`, `has_cycle`), non-terminals (`reachable_from`, `descendants_of`, `ancestors_of`, `roots`, `leaves`, `with_node_data`, `with_edge_kind`, `union`, `intersect`, `difference`, `topological`), and set operations with predicate-based filtering. Cycle detection in `editor-bevy/logic_validation` has been migrated to use `Query::has_cycle()`.
+
+### 8. Out of scope for this ADR
 
 - **Persistent graph storage** (BSN / RON / JSON). The kernel is in-memory; dialects get their data from the existing `AssetDocument` types.
 - **Graph mutation** (v1). The kernel is read-only via the `Graph` trait. Mutation is opt-in via the `GraphMut` trait (ADR-0053 + GRAPH-009). Each dialect implements `GraphMut` against its backing doc and rebuilds its index map after every mutation. Per-dialect topology strictness is expressed as the `STRICTNESS` associated constant. `ChangeSetDialect` does NOT implement `GraphMut` — its mutation path is `ChangeSet::add_op_dependency` (unchanged).
