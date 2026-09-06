@@ -19,7 +19,7 @@ Patch rollup closing the application-stabilization-and-roadmap-convergence cycle
   documented; production WASM (~7 MB gzip) is unaffected (ADR-0029 D3 amendment).
 - **Cycle-introduced lint/format regressions fixed** (`prefer-const` on `_listeners`
   and `_operationLog`).
-- **8 cycle commits since v0.108.0** (cycle SHA 50012b9): see `git log v0.108.0..v0.108.1`.
+- **24 cycle commits since v0.108.0** (cycle SHA 50012b9): see `git log v0.108.0..v0.108.1`.
 
 Documentation: CHANGELOG/ROADMAP backfilled to v0.108.0 (commit 558de79);
 ADR-0053 (Graph Kernel — Pure Rust Dialects) ratified to Accepted + Implemented;
