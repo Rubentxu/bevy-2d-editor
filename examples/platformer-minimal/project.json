@@ -1,0 +1,47 @@
+{
+  "version": "0.1",
+  "name": "platformer-minimal",
+  "scenes": ["main"],
+  "schemas": ["game.PlayerController", "game.EnemyPatrol"],
+  "active_scene": "main",
+  "scene_assets": [
+    {
+      "asset_id": "asset_player",
+      "logical_path": "characters/player",
+      "role": "actor",
+      "current_version": 1,
+      "tags": ["character", "player"],
+      "created_at": 0,
+      "updated_at": 0
+    },
+    {
+      "asset_id": "asset_enemy",
+      "logical_path": "characters/enemy",
+      "role": "actor",
+      "current_version": 1,
+      "tags": ["character", "enemy"],
+      "created_at": 0,
+      "updated_at": 0
+    },
+    {
+      "asset_id": "asset_ground",
+      "logical_path": "environment/ground",
+      "role": "fragment",
+      "current_version": 1,
+      "tags": ["environment", "ground"],
+      "created_at": 0,
+      "updated_at": 0
+    },
+    {
+      "asset_id": "asset_pickup",
+      "logical_path": "effects/pickup",
+      "role": "actor",
+      "current_version": 1,
+      "tags": ["pickup", "effect"],
+      "created_at": 0,
+      "updated_at": 0
+    }
+  ],
+  "worlds": [],
+  "active_world": null
+}

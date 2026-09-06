@@ -4,6 +4,78 @@ All notable changes to Bevy 2D Editor are documented here. The project follows s
 
 ## Unreleased
 
+### v1.0-stabilization — P1 canonical sample game (closes G1)
+
+Closes v1.0 product gate **G1** ("no canonical playable game"): a committed,
+end-to-end authored sample game (`examples/platformer-minimal/`) the editor
+can ingest, render, and export to `.bsn`. This is the **evidence** that the
+IDE works in all its documented functionalities before AI/Rig features are
+considered.
+
+- **Authored sample** (committed as ground truth for v1.0 readiness):
+  - `project.json` — version 0.1, name `platformer-minimal`, scene
+    `main`, 2 custom schemas, 4 scene assets in the project catalog.
+  - `schemas/game.PlayerController.schema.json` — typed schema with
+    `speed` (`F32`) and `jump_force` (`F32`).
+  - `schemas/game.EnemyPatrol.schema.json` — typed schema with `speed`
+    (`F32`) and `patrol_range` (`F32`) constrained `Min: 0`.
+  - `scene-assets/characters/player.actor.json` — `actor` role; entity
+    Player carrying `editor.Name + editor.Sprite2D + editor.Transform2D
+    + editor.Visible + game.PlayerController`.
+  - `scene-assets/characters/enemy.actor.json` — `actor` role; entity
+    Enemy carrying `editor.Name + editor.Sprite2D + editor.Transform2D +
+    game.EnemyPatrol`.
+  - `scene-assets/environment/ground.fragment.json` — `fragment` role;
+    entity Ground carrying `editor.Name + editor.Sprite2D +
+    editor.Transform2D` (with BottomCenter Anchor for floor placement).
+  - `scene-assets/effects/pickup.actor.json` — `actor` role; entity
+    Pickup carrying `editor.Name + editor.Sprite2D +
+    editor.Transform2D`.
+  - `logic-graphs/contact-death.logic.json` — `LogicGraphAsset` with 3
+    nodes (sensor.contact_enter → controller.branch →
+    actuator.destroy_entity) and 2 typed edges; `SceneAssetRole::Logic`
+    is **not** exported to .bsn (per `BsnExporter::export_to_bsn_text`).
+  - `scenes/main.scene.json` — `SceneDocument` placing 4 Scene Instances
+    (player / enemy / ground / pickup) with `instance_components` and a
+    per-instance Component Override patching the enemy's patrol speed.
+- **Round-trip evidence (Rust integration tests)** in
+  `crates/editor-bevy/tests/bsn_codegen_canonical_sample.rs`:
+  - `bsn_round_trip_<player|enemy|ground|pickup>` deserialize each
+    `.actor.json` / `.fragment.json` via `serde_json`, emit BSN via
+    `emit_bsn_source_from_document`, and assert byte-equality against the
+    committed `export/<name>.bsn` reference (`include_str!`). 4/4 PASS.
+  - `regenerate_<name>_bsn` (ignored by default) overwrites the
+    references for intentional updates.
+- **Live editor evidence (Playwright @full)** in
+  `frontend/tests/e2e-game-creation.spec.ts`:
+  - Test 1 mounts the committed sample into OPFS via the JS
+    `opfs_save_file` bridges, reloads the page so `init_project_store`
+    re-hydrates from OPFS, calls `load_project`, then asserts the
+    editor surfaces all 4 scene assets in the catalog, both custom
+    schemas in the registry, and all 4 Scene Instances in the main
+    scene's instance map (each referencing its `logical_path`).
+  - Test 2 re-loads the project, then calls `export_asset_to_bsn_wasm`
+    for each scene asset's catalog `asset_id` and asserts the emitted
+    `.bsn` text opens with `bsn!{` and references the asset's
+    `#ent_<name>_root` identifier (plus per-asset component checks:
+    `PlayerController` for player, `Anchor` for ground).
+  - Pattern: mount → reload → load_project → assert. Bypasses the
+    `window.*` test bridges to write raw JSON so the test exercises
+    the same persistence path that the editor uses.
+- **Documentation** in `examples/platformer-minimal/README.md`: design
+  rationale, the 12-feature evidence matrix mapping the sample to
+  editor surfaces, the manual authoring recipe the editor UI itself
+  would walk through, and the Playwright e2e pattern.
+
+Coverage update: G1 moves from 🔴 to 🟢. The 9 v1.0 product gates
+re-score to **4 ✅ / 3 🟡 / 2 🔴** (G1 added, G6/G8 still red —
+pending P3 and P8 next).
+
+Cycle context: this is `v1.0-stabilization` P1. The companion
+`rig-agent-runtime-foundation` cycle remains **paused per user
+directive 2026-09-06** until the v1.0 gates pass — Cursor-like AI
+authoring is not built on top of unproven editor core.
+
 ### Recovery-3 — Playwright OPFS persistence race fix
 
 Closes C-2 (deterministic Playwright smoke flake on `engine.spec.ts` `:526` and `:744`).

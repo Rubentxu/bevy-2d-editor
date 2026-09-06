@@ -1,0 +1,42 @@
+{
+  "asset_id": "asset_pickup",
+  "logical_path": "effects/pickup",
+  "role": "actor",
+  "version": 1,
+  "metadata": {
+    "author": "v1.0-stabilization sample",
+    "notes": "Reusable pickup — yellow square. Killing-on-touch for minimal game logic."
+  },
+  "entities": [
+    {
+      "local_id": "ent_pickup_root",
+      "local_path": "root/Pickup",
+      "name": "Pickup",
+      "components": [
+        {
+          "type_id": "editor.Name",
+          "values": { "name": "Pickup" }
+        },
+        {
+          "type_id": "editor.Transform2D",
+          "values": {
+            "translation": { "x": 0.0, "y": 0.0 },
+            "rotation": 0.0,
+            "scale": { "x": 1.0, "y": 1.0 }
+          }
+        },
+        {
+          "type_id": "editor.Sprite2D",
+          "values": {
+            "asset": "",
+            "color": { "r": 0.95, "g": 0.85, "b": 0.2, "a": 1.0 },
+            "anchor": "Center"
+          }
+        }
+      ]
+    }
+  ],
+  "relationships": [],
+  "exposed_properties": [],
+  "extension_data": {}
+}

@@ -1,0 +1,50 @@
+{
+  "asset_id": "asset_player",
+  "logical_path": "characters/player",
+  "role": "actor",
+  "version": 1,
+  "metadata": {
+    "author": "v1.0-stabilization sample",
+    "notes": "Reusable player entity. Placed as a Scene Instance in scenes/main.scene.json."
+  },
+  "entities": [
+    {
+      "local_id": "ent_player_root",
+      "local_path": "root/Player",
+      "name": "Player",
+      "components": [
+        {
+          "type_id": "editor.Name",
+          "values": { "name": "Player" }
+        },
+        {
+          "type_id": "editor.Transform2D",
+          "values": {
+            "translation": { "x": 0.0, "y": 0.0 },
+            "rotation": 0.0,
+            "scale": { "x": 1.0, "y": 1.0 }
+          }
+        },
+        {
+          "type_id": "editor.Sprite2D",
+          "values": {
+            "asset": "",
+            "color": { "r": 0.2, "g": 0.4, "b": 0.9, "a": 1.0 },
+            "anchor": "Center"
+          }
+        },
+        {
+          "type_id": "editor.Visible",
+          "values": { "visible": true }
+        },
+        {
+          "type_id": "game.PlayerController",
+          "values": { "speed": 200.0, "jump_force": 400.0 }
+        }
+      ]
+    }
+  ],
+  "relationships": [],
+  "exposed_properties": [],
+  "extension_data": {}
+}

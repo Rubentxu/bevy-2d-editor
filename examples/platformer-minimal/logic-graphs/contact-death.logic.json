@@ -1,0 +1,49 @@
+{
+  "asset_id": "logic_contact_death",
+  "logical_path": "recipes/contact-death",
+  "version": 1,
+  "builtin": false,
+  "metadata": {
+    "author": "v1.0-stabilization sample",
+    "notes": "Sensor → Controller → Actuator graph. On contact enter, branch if other has EnemyTag, destroy self."
+  },
+  "nodes": [
+    {
+      "node_id": "n_sensor_contact",
+      "role": "sensor",
+      "node_type_id": "sensor.contact_enter",
+      "field_values": {},
+      "controller_id": null
+    },
+    {
+      "node_id": "n_controller_branch",
+      "role": "controller",
+      "node_type_id": "controller.branch",
+      "field_values": {
+        "condition": "other.tag == Enemy"
+      },
+      "controller_id": null
+    },
+    {
+      "node_id": "n_actuator_destroy",
+      "role": "actuator",
+      "node_type_id": "actuator.destroy_entity",
+      "field_values": {},
+      "controller_id": null
+    }
+  ],
+  "edges": [
+    {
+      "from_node": "n_sensor_contact",
+      "from_port": "out",
+      "to_node": "n_controller_branch",
+      "to_port": "in"
+    },
+    {
+      "from_node": "n_controller_branch",
+      "from_port": "true",
+      "to_node": "n_actuator_destroy",
+      "to_port": "in"
+    }
+  ]
+}

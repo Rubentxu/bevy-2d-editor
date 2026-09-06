@@ -1,0 +1,21 @@
+{
+  "type_id": "game.PlayerController",
+  "display_name": "Player Controller",
+  "kind": "simple",
+  "auto_spawn": true,
+  "exports_to_bevy": true,
+  "fields": [
+    {
+      "name": "speed",
+      "field_type": "F32",
+      "default": 200.0,
+      "constraints": []
+    },
+    {
+      "name": "jump_force",
+      "field_type": "F32",
+      "default": 400.0,
+      "constraints": []
+    }
+  ]
+}

@@ -1,0 +1,96 @@
+{
+  "version": "0.1",
+  "scene_id": "main",
+  "name": "Main",
+  "entities": [],
+  "instances": {
+    "inst_player_main": {
+      "instance_id": "inst_player_main",
+      "asset_ref": "characters/player",
+      "asset_version_seen": 1,
+      "id_map": {
+        "ent_player_root": "ent_player_main"
+      },
+      "instance_components": [
+        {
+          "type_id": "editor.Transform2D",
+          "values": {
+            "translation": { "x": 0.0, "y": -200.0 },
+            "rotation": 0.0,
+            "scale": { "x": 1.0, "y": 1.0 }
+          }
+        }
+      ],
+      "component_overrides": [],
+      "orphaned_component_overrides": []
+    },
+    "inst_enemy_main": {
+      "instance_id": "inst_enemy_main",
+      "asset_ref": "characters/enemy",
+      "asset_version_seen": 1,
+      "id_map": {
+        "ent_enemy_root": "ent_enemy_main"
+      },
+      "instance_components": [
+        {
+          "type_id": "editor.Transform2D",
+          "values": {
+            "translation": { "x": 150.0, "y": -150.0 },
+            "rotation": 0.0,
+            "scale": { "x": 1.0, "y": 1.0 }
+          }
+        }
+      ],
+      "component_overrides": [
+        {
+          "target_local_id": "ent_enemy_root",
+          "component_type_id": "game.EnemyPatrol",
+          "field_path": ["speed"],
+          "value": 80.0,
+          "status": "active"
+        }
+      ],
+      "orphaned_component_overrides": []
+    },
+    "inst_ground_main": {
+      "instance_id": "inst_ground_main",
+      "asset_ref": "environment/ground",
+      "asset_version_seen": 1,
+      "id_map": {
+        "ent_ground_root": "ent_ground_main"
+      },
+      "instance_components": [
+        {
+          "type_id": "editor.Transform2D",
+          "values": {
+            "translation": { "x": 0.0, "y": -280.0 },
+            "rotation": 0.0,
+            "scale": { "x": 800.0, "y": 40.0 }
+          }
+        }
+      ],
+      "component_overrides": [],
+      "orphaned_component_overrides": []
+    },
+    "inst_pickup_main": {
+      "instance_id": "inst_pickup_main",
+      "asset_ref": "effects/pickup",
+      "asset_version_seen": 1,
+      "id_map": {
+        "ent_pickup_root": "ent_pickup_main"
+      },
+      "instance_components": [
+        {
+          "type_id": "editor.Transform2D",
+          "values": {
+            "translation": { "x": -200.0, "y": -150.0 },
+            "rotation": 0.0,
+            "scale": { "x": 1.0, "y": 1.0 }
+          }
+        }
+      ],
+      "component_overrides": [],
+      "orphaned_component_overrides": []
+    }
+  }
+}

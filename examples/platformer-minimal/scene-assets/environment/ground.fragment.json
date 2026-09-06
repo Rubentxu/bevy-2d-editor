@@ -1,0 +1,46 @@
+{
+  "asset_id": "asset_ground",
+  "logical_path": "environment/ground",
+  "role": "fragment",
+  "version": 1,
+  "metadata": {
+    "author": "v1.0-stabilization sample",
+    "notes": "Reusable ground fragment — a long green rectangle. Spawned at scene bottom."
+  },
+  "entities": [
+    {
+      "local_id": "ent_ground_root",
+      "local_path": "root/Ground",
+      "name": "Ground",
+      "components": [
+        {
+          "type_id": "editor.Name",
+          "values": { "name": "Ground" }
+        },
+        {
+          "type_id": "editor.Transform2D",
+          "values": {
+            "translation": { "x": 0.0, "y": 0.0 },
+            "rotation": 0.0,
+            "scale": { "x": 1.0, "y": 1.0 }
+          }
+        },
+        {
+          "type_id": "editor.Sprite2D",
+          "values": {
+            "asset": "",
+            "color": { "r": 0.3, "g": 0.6, "b": 0.3, "a": 1.0 },
+            "anchor": "BottomCenter"
+          }
+        },
+        {
+          "type_id": "editor.Visible",
+          "values": { "visible": true }
+        }
+      ]
+    }
+  ],
+  "relationships": [],
+  "exposed_properties": [],
+  "extension_data": {}
+}

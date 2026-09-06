@@ -1,0 +1,21 @@
+{
+  "type_id": "game.EnemyPatrol",
+  "display_name": "Enemy Patrol",
+  "kind": "simple",
+  "auto_spawn": true,
+  "exports_to_bevy": true,
+  "fields": [
+    {
+      "name": "speed",
+      "field_type": "F32",
+      "default": 60.0,
+      "constraints": [{ "Min": 0.0 }]
+    },
+    {
+      "name": "patrol_range",
+      "field_type": "F32",
+      "default": 150.0,
+      "constraints": [{ "Min": 0.0 }]
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "asset_id": "asset_enemy",
+  "logical_path": "characters/enemy",
+  "role": "actor",
+  "version": 1,
+  "metadata": {
+    "author": "v1.0-stabilization sample",
+    "notes": "Reusable enemy entity with back-and-forth patrol."
+  },
+  "entities": [
+    {
+      "local_id": "ent_enemy_root",
+      "local_path": "root/Enemy",
+      "name": "Enemy",
+      "components": [
+        {
+          "type_id": "editor.Name",
+          "values": { "name": "Enemy" }
+        },
+        {
+          "type_id": "editor.Transform2D",
+          "values": {
+            "translation": { "x": 0.0, "y": 0.0 },
+            "rotation": 0.0,
+            "scale": { "x": 1.0, "y": 1.0 }
+          }
+        },
+        {
+          "type_id": "editor.Sprite2D",
+          "values": {
+            "asset": "",
+            "color": { "r": 0.9, "g": 0.2, "b": 0.2, "a": 1.0 },
+            "anchor": "Center"
+          }
+        },
+        {
+          "type_id": "game.EnemyPatrol",
+          "values": { "speed": 60.0, "patrol_range": 150.0 }
+        }
+      ]
+    }
+  ],
+  "relationships": [],
+  "exposed_properties": [],
+  "extension_data": {}
+}
