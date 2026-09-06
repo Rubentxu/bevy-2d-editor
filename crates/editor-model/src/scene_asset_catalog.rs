@@ -198,7 +198,12 @@ impl SceneAssetCatalog {
         Ok(entry)
     }
 
-    pub fn update_version(&mut self, asset_id: &str, new_version: u32) -> Result<(), CatalogError> {
+    pub fn update_version(
+        &mut self,
+        asset_id: &str,
+        new_version: u32,
+        clock: &dyn Clock,
+    ) -> Result<(), CatalogError> {
         let created_at = {
             let entry = self
                 .entries
@@ -219,7 +224,7 @@ impl SceneAssetCatalog {
 
         // Use at least created_at + 1 to guarantee updated_at > created_at,
         // even when register and update happen in the same millisecond.
-        let updated_at = current_unix_millis().max(created_at + 1);
+        let updated_at = current_unix_millis(clock).max(created_at + 1);
 
         let entry = self.entries.get_mut(asset_id).unwrap();
         entry.current_version = new_version;
@@ -373,16 +378,21 @@ fn dedupe_tags(tags: Vec<String>) -> Vec<String> {
         .collect()
 }
 
-fn current_unix_millis() -> u64 {
-    crate::time::now_millis()
+fn current_unix_millis(clock: &dyn Clock) -> u64 {
+    clock.now().into_u64()
 }
 
-pub fn random_hex_8() -> String {
-    // wasm-safe: SystemTime::now() traps on wasm32-unknown-unknown with
-    // rustc >= 1.96 (see editor_model::time::now_nanos).
-    let nanos = crate::time::now_nanos();
+pub fn random_hex_8(clock: &dyn Clock) -> String {
+    // Production callers inject a [`Clock`] impl — `editor-model` is pure and
+    // cannot depend on WASM date helpers directly (archcheck B8, ADR-0030).
+    // Tests inject [`FakeClock`]. The canonical production impl is the
+    // `JsSysClock` in the `editor-bevy` crate.
+    let nanos_ms = clock.now().into_u64();
     let counter = static_counter();
-    format!("{:016x}", nanos.wrapping_add(counter) & 0xFFFFFFFF)
+    format!(
+        "{:016x}",
+        nanos_ms.wrapping_mul(1_000_000).wrapping_add(counter) & 0xFFFFFFFF
+    )
 }
 
 fn static_counter() -> u64 {
