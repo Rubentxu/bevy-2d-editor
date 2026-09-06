@@ -9,7 +9,8 @@
 //!
 //! Pattern mirrors the pre-existing wasm/native split on
 //! `scene_asset_catalog::random_hex_8` (see
-//! `crates/editor-core/src/scene_asset_catalog.rs:365`).
+//! `crates/editor-model/src/scene_asset_catalog.rs` — the helper now takes a
+//! `&dyn Clock` so editor-model stays pure per archcheck B8 / ADR-0030).
 //!
 //! Refs: `sddk/active/systemtime-wasm-panic/spec/time-helpers/spec.md`.
 

@@ -2774,7 +2774,7 @@ pub async fn create_scene_asset(name: &str, role: &str) -> Result<String, JsValu
     let normalized_path = editor_model::scene_asset_catalog::normalize_logical_path(name);
     let asset_id = editor_model::scene_asset_catalog::mint_asset_id(
         &crate::time::JsSysClock::new(),
-        &editor_model::scene_asset_catalog::random_hex_8(),
+        &editor_model::scene_asset_catalog::random_hex_8(&crate::time::JsSysClock::new()),
     );
 
     // Check for duplicate path
@@ -2978,7 +2978,7 @@ pub async fn duplicate_scene_asset(asset_id: &str) -> Result<String, JsValue> {
     // Mint new id
     let new_id = editor_model::scene_asset_catalog::mint_asset_id(
         &crate::time::JsSysClock::new(),
-        &editor_model::scene_asset_catalog::random_hex_8(),
+        &editor_model::scene_asset_catalog::random_hex_8(&crate::time::JsSysClock::new()),
     );
     let new_path = derive_duplicate_path(&source_entry.logical_path);
 
@@ -3160,7 +3160,7 @@ pub async fn save_scene_asset() -> Result<String, JsValue> {
             .ok_or_else(|| JsValue::from_str(&format!("Asset not found: {}", asset_id)))?
             .current_version;
         let new_ver = current + 1;
-        cat.update_version(&asset_id, new_ver)
+        cat.update_version(&asset_id, new_ver, &crate::time::JsSysClock::new())
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         Ok::<_, JsValue>(new_ver)
     })?;
@@ -3329,7 +3329,7 @@ pub async fn save_world_wasm() -> Result<String, JsValue> {
             .ok_or_else(|| JsValue::from_str(&format!("World not found: {}", world_id.as_str())))?
             .current_version;
         let new_ver = current + 1;
-        cat.update_version(world_id.as_str(), new_ver)
+        cat.update_version(world_id.as_str(), new_ver, &crate::time::JsSysClock::new())
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         Ok::<_, JsValue>(new_ver)
     })?;
