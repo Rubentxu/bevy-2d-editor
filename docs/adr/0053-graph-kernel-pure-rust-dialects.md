@@ -2,7 +2,40 @@
 
 ## Status
 
-Proposed — 2026-08-20 — v0.87+ (M1 backlog: GRAPH-001)
+Accepted + Implemented — 2026-08-21 (proposed 2026-08-20; shipped 2026-08-20)
+
+## Implementation
+
+- **Versions**: v0.101.0, v0.102.0, v0.103.0
+- **Implementation date**: 2026-08-20 (proposed and shipped the same day, alongside the code)
+- **Ratification date**: 2026-08-21 (status promoted from Proposed → Accepted+Implemented by the project owner after reviewing the shipped code)
+- **Original target window in ADR**: "v0.87+ (M1 backlog: GRAPH-001)". Implementation actually landed at v0.101–v0.103 because the v0.87+ Architecture Foundation track restructured the order; the graph kernel shipped as part of the editor-model stabilisation line that preceded the Hito 8 / rig-agent track.
+- **Branches**: merged directly to `main` via stacked PRs (no feat-branch left open)
+
+### Slice Structure
+
+| Slice | Name | Commits |
+|-------|------|---------|
+| 1 | GRAPH-001 Pure-Rust dialect-agnostic substrate (`graph_kernel.rs`, +630 LOC) | `ca47e35` |
+| 2 | GRAPH-002 `SceneAssetDialect` | `9f8b572` |
+| 3 | GRAPH-003 `ChangeSetDialect` | `5a5e65f` |
+| 4 | GRAPH-005 `WorldGraphDialect` | `76d59ec` |
+| 5 | GRAPH-008 Wire `ChangeSetDialect` into `TransactionKernel` | `d637715` |
+| 6 | GRAPH-009 `GraphMut` trait + `GraphMutStrictness` + per-dialect mutators + cross-dialect invariants | `43a3d7a`, `0c584c2`, `9fe687a`, `0af704c`, `90533d4`, `995d6db` |
+| 7 | GRAPH-010 `Query<'a, D>` builder + `with_edge_kind` predicate fix | `be7d040`, `f3910a1`, `2a91831`, `eb228ea` |
+| — | Test alignment follow-ups (no semantic change) | `b7ed981`, `7d8d260` |
+
+### Verification Evidence
+
+- 16 commits total, ~5,200 LOC additions across `crates/editor-model/src/graph_kernel*` and related dialect files
+- 52+ new unit/integration tests across dialects, invariants, and Query terminals
+- `editor-model` remains bevy-free and wasm-free per ADR-0030 (compile-time hexagonal crate boundaries)
+- All graph operations are sync, deterministic, and BTreeMap-backed per ADR-0045 (deterministic ordering)
+
+### Reconciliation Notes
+
+- The original ADR listed `ComponentInstance overrides` as a candidate graph dialect. The decision was **deferred** during v0.101 implementation: OverrideGraph was held back because the `SceneAssetDialect` already covers the `ComponentOverride` shape via the `SceneAssetRelationship` edges, and adding an Override dialect would have duplicated that surface. Future consideration tracked in `sddk/active/ext-importers/` discussions; no active plan to add an Override dialect today.
+- The original ADR listed `ExternalSourceGraph` (per ADR-0041) as a candidate. **Decision**: not implemented in this slice. `ext-importers` cycle uses Bevy-native composition for source provenance (sidecar `.meta.json`), not graph projection. If a future source-import path needs graph queries (e.g. cross-asset reference tracking), the substrate is ready and only the dialect needs to be added.
 
 ## Context
 

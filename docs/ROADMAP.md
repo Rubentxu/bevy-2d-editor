@@ -658,7 +658,7 @@ All Hito 1 items completed in v0.12-v0.20. Deferred items:
 | ADR-0051 | ChangeWorkbenchPanel Lives in Bottom-Dock as an Internal Tab (ADR-0039/0024) | Draft (2026-08-16) — v0.89 PR2b |
 | ADR-0052 | Runtime Causality — RebuildCause + LogicActivationRing + CausalityEdge (v0.89 PR3) | Draft (2026-08-16) — v0.89 PR3 |
 | ADR-0050 | Apply-Back Policy — Mirror-Pair in editor-core/editor-application, Not in editor-model (v0.89 PR4) | Draft (2026-08-16) — v0.89 PR4 |
-| ADR-0053 | Graph Kernel — Pure-Rust Dialect-Agnostic Substrate (GRAPH-001 substrate; GRAPH-002/003/005/008 dialects; GRAPH-009 cross-dialect invariants; GRAPH-010 Query) | Proposed (2026-08-20) — v0.101–v0.103 implementation shipped but status ratification pending |
+| ADR-0053 | Graph Kernel — Pure-Rust Dialect-Agnostic Substrate (GRAPH-001 substrate; GRAPH-002/003/005/008 dialects; GRAPH-009 cross-dialect invariants; GRAPH-010 Query) | Accepted + Implemented (v0.101–v0.103, 2026-08-21) |
 
 ---
 
