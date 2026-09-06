@@ -75,6 +75,37 @@ export async function initEngine(
 
   frameCallback = onEvent;
 
+  // Expose OPFS bridge functions for wasm_bindgen externs.
+  // (These MUST stay ahead of init_project_store — that function calls
+  //  list_tree_op/read_op through this bridge to hydrate the in-memory
+  //  mirror from OPFS. The other window.* test bridges are deferred to
+  //  AFTER init_project_store to avoid racing the thread_local
+  //  PROJECT_STORE. See the comment block below.)
+  (window as any).opfs_save_file = opfsSaveFile;
+  (window as any).opfs_load_file = opfsLoadFile;
+  (window as any).opfs_list_files = opfsListFiles;
+  (window as any).opfs_list_tree = opfsListTree;
+  (window as any).opfs_exists = opfsExists;
+  (window as any).opfs_delete_file = opfsDeleteFile;
+  (window as any).opfs_save_binary = opfsSaveBinary;
+  (window as any).opfs_load_binary = opfsLoadBinary;
+
+  // Initialize the Rust-side project store: eagerly hydrates the OPFS mirror
+  // through the window.opfs_* bridge installed above (ADR-0031 composition
+  // root, single hydrate). Must run before any scene/persistence call.
+  await wasm.init_project_store();
+  console.log("[bridge] Project store hydrated");
+
+  // ── Test bridge: expose WASM exports on window AFTER init_project_store.
+  // These bridges are intentionally deferred until the project store is
+  // hydrated. Otherwise concurrent callers (Playwright tests waiting on
+  // `typeof window.load_scene === "function"`) can race the thread_local
+  // PROJECT_STORE registration (crates/editor-model/src/ports.rs) and hit
+  // "project store not initialized" when calling load_scene / load_project
+  // before the OPFS hydrate completes. The topbar visibility signal is
+  // unreliable as a readiness check because React renders AppHeader
+  // unconditionally; the only safe contract is: after initEngine resolves,
+  // every window.* bridge is callable. (Recovery-3, 2026-09-06.)
   (window as any).onFrameEnd = () => {
     refreshViews();
     pollEvents();
@@ -332,21 +363,6 @@ export async function initEngine(
 
   // Expose sendMoveSprite (LinearBus raw command, used by legacy tests)
   (window as any).sendMoveSprite = sendMoveSprite;
-  // Expose OPFS bridge functions for wasm_bindgen externs
-  (window as any).opfs_save_file = opfsSaveFile;
-  (window as any).opfs_load_file = opfsLoadFile;
-  (window as any).opfs_list_files = opfsListFiles;
-  (window as any).opfs_list_tree = opfsListTree;
-  (window as any).opfs_exists = opfsExists;
-  (window as any).opfs_delete_file = opfsDeleteFile;
-  (window as any).opfs_save_binary = opfsSaveBinary;
-  (window as any).opfs_load_binary = opfsLoadBinary;
-
-  // Initialize the Rust-side project store: eagerly hydrates the OPFS mirror
-  // through the window.opfs_* bridge installed above (ADR-0031 composition
-  // root, single hydrate). Must run before any scene/persistence call.
-  await wasm.init_project_store();
-  console.log("[bridge] Project store hydrated");
 
   // Step 1: Create buses BEFORE starting engine
   wasm.create_buses();
@@ -446,7 +462,13 @@ export async function initEngine(
     sourceUri: string,
     bytesB64: string,
     targetResourceRef: string,
-  ) => wasm.import_external_source_wasm(kind, sourceUri, bytesB64, targetResourceRef);
+  ) =>
+    wasm.import_external_source_wasm(
+      kind,
+      sourceUri,
+      bytesB64,
+      targetResourceRef,
+    );
   (window as any).reimport_external_source_wasm = (assetId: string) =>
     wasm.reimport_external_source_wasm(assetId);
   (window as any).get_external_source_wasm = (assetId: string) =>
