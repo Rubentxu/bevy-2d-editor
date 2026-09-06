@@ -2,6 +2,27 @@
 
 All notable changes to Bevy 2D Editor are documented here. The project follows semantic version tags; detailed milestone history is available in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## Unreleased
+
+### Recovery-1 — Archcheck B8 closure (Clock trait dep injection)
+
+Closes C-1 (the only cycle-introduced release-gate failure from `application-stabilization-and-roadmap-convergence`).
+
+- Removed `now_millis()` / `now_nanos()` free functions from `crates/editor-model/src/time.rs`. Both called `js_sys::Date::now()` inside the pure `editor-model` crate, violating archcheck rule B8 (ADR-0030).
+- Threaded `&dyn Clock` through `SceneAssetCatalog::update_version`, `current_unix_millis`, `random_hex_8`, plus `build_change_set_from_diff` and `build_new_sidecar` in `editor-application/src/reimport.rs`.
+- Replaced production callsites in `editor-bevy` and `editor-wasm` with explicit `JsSysClock::new()` / `SysClock::new()` injection.
+- Updated test callsites to pass `&FakeClock::new()`.
+- 6 commits, all atomic per logical change.
+
+### Recovery-2 — Work-unit discipline + D3.2 / D4.2 close-out
+
+Closes M-4 (bundled commit `8813556`), D3.2, D4.2 via [ADR-0055](docs/adr/0055-work-unit-commit-discipline-trunk-based-split-policy.md):
+
+- **M-4 closed as accepted debt.** Cycle commit `8813556` bundles 5 distinct work units (B1.1+B1.2, D2.2, D3.3, E.1, ADR-0054+ROADMAP). Trunk-based workflow forbids rebase of `main`; revert+reapply would break GitHub links and add 14 commits for zero functional value.
+- **D3.2 closed as evidence-based no-op.** The verify-report claim of "9 direct mutation sites" is contradicted by `grep -rn "SCENE_DOC\|OPERATION_LOG\|DIRTY" frontend/src/`: only the WASM type declarations in `editor_application.d.ts` match. All scene state lives behind `frontend/src/scene-session/index.ts` (commit `2ce4a1d`).
+- **D4.2 closed as superseded by D4.3.** D4.2 assumed `scene_facade.rs` lives in `editor-bevy/lib.rs`; it actually lives in `editor-wasm/src/scene_facade.rs` (commit `4b3e14d`). D4.3 (commit `50012b9`) accomplished the same goal with the correct crate.
+- **Work-unit discipline becomes a cycle gate.** Future `sddk-apply` invocations require explicit commit-list; bundling >2 sub-tasks into one commit is a verifier BLOCKER.
+
 ## v0.108.1 — 2026-09-06 — Application stabilization and roadmap convergence
 
 Patch rollup closing the application-stabilization-and-roadmap-convergence cycle
@@ -25,12 +46,10 @@ Documentation: CHANGELOG/ROADMAP backfilled to v0.108.0 (commit 558de79);
 ADR-0053 (Graph Kernel — Pure Rust Dialects) ratified to Accepted + Implemented;
 ADR-0054 (rig-agent-runtime-foundation transport-neutrality addendum) published.
 
-Release-health aggregator: 8 of 9 gates PASS at HEAD (`cargo fmt`,
-`cargo test --locked`, `cargo check --target wasm32`, `tools/docs-check`,
-`npm run format:check`, `npm run lint`, `npx tsc --noEmit`,
-`npm run build:check`). One known pre-existing failure carried forward:
-`tools/archcheck` B8 (`wasm_bindgen`/`js_sys` import in
-`crates/editor-model/src/time.rs`) — see verify-report C-1. Recovery cycles planned.
+Release-health aggregator: 8 of 9 release-cycle gates PASS at HEAD `50012b9`. One known
+pre-existing failure carried forward: `tools/archcheck` B8 (`wasm_bindgen`/`js_sys`
+import in `crates/editor-model/src/time.rs`). **Closed by recovery-1** (commit `0cb2605`)
+— see Unreleased section above. All 9 cycle gates green after recovery-1.
 
 Verification artifact: `release-receipt.md` (sha256 1d98637e9…).
 
