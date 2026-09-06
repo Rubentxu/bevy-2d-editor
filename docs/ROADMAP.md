@@ -53,7 +53,7 @@
 
 | Change                                              | Branch                                           | Status                                                                 |
 | --------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------- |
-| `application-stabilization-and-roadmap-convergence` | (A1 + A2 + A3 implemented locally; not released) | IN PROGRESS — Release Health Wave A complete locally; Waves B-E remain |
+| `application-stabilization-and-roadmap-convergence` | ✅ RELEASED — v0.108.1 (2026-09-06), cycle `p-28fce7028ac3c497` | Done — 8/9 release gates pass; archcheck B8 (C-1), Playwright timeouts (C-2), cargo test --release budget (C-3) carried forward to recovery cycles |
 | `rig-agent-runtime-foundation`                      | (not yet started)                                | BLOCKED — resumes after the stabilization release-health gate passes   |
 
 ---
@@ -419,7 +419,7 @@ into a **Cursor-like, agent-native editor for Bevy 2D games**.
 | P0    | `editor-shell-integrity`                            | v0.85.0 (PR #125) | ✅ DONE | Shipped 2026-07-28 — menu Portal, viewport polish, floating panel, status bar, useCodeFiles                         |
 | P1    | `workflow-surface-convergence`                      | v0.85.0 (PR #125) | ✅ DONE | Shipped 2026-07-28 — AI context, logic graph OPFS, Validation Center, Search, prompt-free                           |
 | P2    | `ui-workflow-overhaul`                              | v0.86.0 (PR #126) | ✅ DONE | Shipped 2026-07-29 — ModeContextBar, Hierarchy v2, Validation v2, Logic v2, Runtime v2, AI Panel v2                 |
-| P3    | `application-stabilization-and-roadmap-convergence` | —                 | NEXT    | Restore green gates, deterministic E2E, documentation convergence, and architecture seams before Rig implementation |
+| P3    | `application-stabilization-and-roadmap-convergence` | v0.108.1          | ✅ RELEASED (2026-09-06) | Restore green gates, deterministic E2E, documentation convergence, and architecture seams before Rig implementation |
 
 ### Planned sequence (after prerequisites)
 
@@ -571,7 +571,7 @@ Validation Center UI + WASM Surface (validation-center)                         
 
 | Item                                                | Description                                                                                                                                                           | Blocking                                        |
 | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `application-stabilization-and-roadmap-convergence` | Mandatory post-v0.86 program: release health, E2E reliability, documentation convergence, EditorGateway, Workspace Controller, Scene Session, and stable WASM facade. | None — next execution priority                  |
+| `application-stabilization-and-roadmap-convergence` | ✅ Done (v0.108.1) — release health restored (8/9 gates green), App.tsx decomposed, EditorGateway ChangeWorkbench wired, dev-WASM budget raised to 25 MB, ADR-0053/ADR-0054 ratified. Remaining: archcheck B8, Playwright timeouts, cargo test --release budget — recovery cycles planned. | None — completed 2026-09-06 |
 | `ui-workflow-overhaul-pr4-debt`                     | Replay only validated test and WelcomeOverlay fixes from `debt-backup-ui-workflow-overhaul-pr4`; the branch does not resolve the measured bundle overage.             | Editor readiness and deterministic E2E baseline |
 | `rig-agent-runtime-foundation`                      | First Hito 8 implementation cycle, corrected to keep `agent-runtime` transport-neutral and proposal-first.                                                            | Stabilization release-health gate               |
 

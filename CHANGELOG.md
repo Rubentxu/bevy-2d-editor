@@ -2,6 +2,38 @@
 
 All notable changes to Bevy 2D Editor are documented here. The project follows semantic version tags; detailed milestone history is available in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## v0.108.1 — 2026-09-06 — Application stabilization and roadmap convergence
+
+Patch rollup closing the application-stabilization-and-roadmap-convergence cycle
+(`p-28fce7028ac3c497`). Headline changes:
+
+- **App.tsx decomposed** from a 1972-line monolith into a 603-line composition root
+  plus 6 headless hooks (`useSceneHandlers`, `useAppModeController`,
+  `useAppCommandPalette`, `useAppShortcuts`, `useSearchBridges`, `useFullscreenBody`)
+  and the `AppShell` presentation component (D2.3).
+- **EditorGateway ChangeWorkbench routing** — all ChangeWorkbench calls now route
+  through the `scene_*` WASM facade exported by `crates/editor-wasm/src/scene_facade.rs`
+  (D4.3). Original `submit_*`/`get_*`/`approve_*`/`reject_*` exports remain for
+  backward compat.
+- **Dev-WASM bundle budget raised to 25 MB** with explicit release-vs-dev policy
+  documented; production WASM (~7 MB gzip) is unaffected (ADR-0029 D3 amendment).
+- **Cycle-introduced lint/format regressions fixed** (`prefer-const` on `_listeners`
+  and `_operationLog`).
+- **8 cycle commits since v0.108.0** (cycle SHA 50012b9): see `git log v0.108.0..v0.108.1`.
+
+Documentation: CHANGELOG/ROADMAP backfilled to v0.108.0 (commit 558de79);
+ADR-0053 (Graph Kernel — Pure Rust Dialects) ratified to Accepted + Implemented;
+ADR-0054 (rig-agent-runtime-foundation transport-neutrality addendum) published.
+
+Release-health aggregator: 8 of 9 gates PASS at HEAD (`cargo fmt`,
+`cargo test --locked`, `cargo check --target wasm32`, `tools/docs-check`,
+`npm run format:check`, `npm run lint`, `npx tsc --noEmit`,
+`npm run build:check`). One known pre-existing failure carried forward:
+`tools/archcheck` B8 (`wasm_bindgen`/`js_sys` import in
+`crates/editor-model/src/time.rs`) — see verify-report C-1. Recovery cycles planned.
+
+Verification artifact: `release-receipt.md` (sha256 1d98637e9…).
+
 ## v0.108.0 — Logic Bricks cycle 2: event-driven scheduler (2026-08-20)
 
 Delivers the second slice of Logic Bricks M2: converts the per-frame dispatcher into an event-driven scheduler gated by per-binding `dirty` + `binding_version` and edge-only `SensorEvent::DidFire`. Sensors fire once on transition; actuators run only when their inputs changed.

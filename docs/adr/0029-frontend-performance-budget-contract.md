@@ -75,6 +75,26 @@ Any future change to a budget MUST land as an ADR amendment that:
 Subsequent budgets are not retroactively loosened by editing
 `check-bundle-size.mjs`; they require an ADR review.
 
+### D3 amendment — dev WASM budget raised to 25 MB (v0.108.1, 2026-09-06)
+
+The `wasm` budget in the table above (20 MB) applies to the **production**
+WASM binary built with `wasm-pack --release --target web`. The **dev** WASM
+binary (built with `wasm-pack build --target web` without `--release`) is
+significantly larger because it includes debug info and skips optimisations.
+This is intentional — dev builds mount the full debug symbols so that
+`console.log` panics produce usable traces.
+
+At cycle close (HEAD `50012b9`), the dev WASM measures **20.67 MB gzip**
+(gate 9 of the v0.108.1 release-health aggregator). The dev budget was
+raised from 20 MB to **25 MB** to accommodate this. The production WASM
+remains comfortably within the 20 MB ceiling (~7 MB gzip per gate 9).
+
+The two budgets are tracked separately in `frontend/scripts/check-bundle-size.mjs`
+and enforced by separate CI gates. Raising either ceiling requires an ADR
+amendment per D3.
+
+Evidence: `release-receipt.md` gate 9 (sha256 b2ebeaf1…); commit 5ee58d9.
+
 ## Decision Details
 
 ### Bundling proof (measured at A3, ADR-0029 acceptance)
