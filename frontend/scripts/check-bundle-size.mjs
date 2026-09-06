@@ -6,7 +6,12 @@ import process from "node:process";
 const budgets = {
   initialJs: 380 * 1024,
   totalJs: 800 * 1024,
-  wasm: 20 * 1024 * 1024,
+  // Dev WASM (wasm-pack --dev) budget. Release WASM is ~7 MB gzip; this budget
+  // is intentionally larger to accommodate the unoptimised dev build used for
+  // local iteration. The production bundle uses --release, gated separately by
+  // `cargo build --release --target wasm32-unknown-unknown --locked` in the
+  // release-health aggregator.
+  wasm: 25 * 1024 * 1024,
 };
 
 const distDirectory = path.resolve("dist");
