@@ -10,7 +10,7 @@ import "./styles.css";
 import { initEngine, isEngineReady } from "./engine-bridge";
 import { useSceneState, SceneDocument } from "./hooks/useSceneState";
 import { useLogState } from "./hooks/useLogState";
-import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
+import { useAppShortcuts } from "./hooks/useAppShortcuts";
 import { useAIAssistant } from "./hooks/useAIAssistant";
 import MenuBar from "./components/MenuBar";
 import AppHeader from "./components/AppHeader";
@@ -33,12 +33,8 @@ import GameOverlay from "./components/GameOverlay";
 import ConsoleTab from "./components/ConsoleTab";
 import StatusBar from "./components/StatusBar";
 import ViewportControls from "./components/ViewportControls";
-import CommandPalette, {
-  type PaletteCommand,
-} from "./components/CommandPalette";
-import CheatSheet, {
-  type ShortcutGroup as CheatSheetGroup,
-} from "./components/CheatSheet";
+import CommandPalette from "./components/CommandPalette";
+import CheatSheet from "./components/CheatSheet";
 import OnboardingBanner from "./components/OnboardingBanner";
 import type { NavigationTarget } from "./types/navigation";
 
@@ -49,6 +45,9 @@ import { useDockResize } from "./hooks/useDockResize";
 import { useEditorWorkspaceController } from "./hooks/useEditorWorkspaceController";
 import { useSceneHandlers } from "./hooks/useSceneHandlers";
 import { useAppModeController } from "./hooks/useAppModeController";
+import { useAppCommandPalette } from "./hooks/useAppCommandPalette";
+import { useSearchBridges } from "./hooks/useSearchBridges";
+import { useFullscreenBody } from "./hooks/useFullscreenBody";
 import { AppShell } from "./components/AppShell";
 import type {
   DockableRegion,
@@ -447,329 +446,45 @@ function AppInner() {
   // Apply the data-fullscreen attribute to body — useFullscreen already
   // mirrors this, but make sure any mount-time flip is reflected in the
   // hook state for tests/components querying it.
-  useEffect(() => {
-    if (fullscreen.enabled) {
-      document.body.dataset.fullscreen = "true";
-    } else {
-      delete document.body.dataset.fullscreen;
-    }
-  }, [fullscreen.enabled]);
+  useFullscreenBody(fullscreen.enabled);
 
-  useKeyboardShortcuts({
-    enabled: editorMode !== "play",
-    onUndo: editorMode === "scene" ? handlers.handleUndo : handlers.handleAssetUndo,
-    onRedo: editorMode === "scene" ? handlers.handleRedo : handlers.handleAssetRedo,
-    // v0.82 P2 (ADR-0025): route Delete/Backspace through the multi-
-    // delete sink when more than one id is selected. The hook keeps
-    // a single-id fallback for the legacy single-select flow.
-    onDeleteEntities:
-      editorMode === "scene" && selectedIds.size > 1
-        ? (ids) => void handlers.handleDeleteEntities(ids)
-        : undefined,
-    selectedIds,
-    logState: editorMode === "scene" ? logState : assetLogState,
+  useAppShortcuts({ editorMode, handlers, selectedIds, selectedEntityId, logState, assetLogState, setCommandPaletteOpen, setCheatSheetOpen, setRenameRequestTick, fitToContent, dock, fullscreen });
+  // ── Command palette catalog & cheat sheet (commit 4) ───────────────────────────
+  // Both lists, plus the cross-window executor used by Global Search
+  // (`window.__executeCommand`), are built here. The hook preserves the
+  // exact action wiring the original AppInner had — including the
+  // editor-mode-dependent dispatch in Undo/Redo and the entity-id
+  // gated Delete action.
+  const {
+    paletteCommands,
+    serializablePaletteItems,
+    executeCommandById,
+    cheatSheetGroups,
+  } = useAppCommandPalette({
+    editorMode,
     selectedEntityId,
-    onDeleteEntity: handlers.handleDeleteEntity,
-    onCreateEntity:
-      editorMode === "scene" ? handlers.handleCreateEntity : undefined,
-    onOpenCommandPalette: () => setCommandPaletteOpen(true),
-    onOpenCheatSheet: () => setCheatSheetOpen(true),
-    onRenameSelected: () => setRenameRequestTick((t) => t + 1),
-    onFitViewport: () => fitToContent(),
-    onToggleBottomDock: dock.toggleBottom,
-    onToggleLeftDock: dock.toggleLeft,
-    onToggleOutlineDock: dock.toggleOutline,
-    onTogglePropertiesDock: dock.toggleProperties,
-    onToggleFullscreen: fullscreen.toggle,
+    handlers,
+    setExportRustOpen,
+    setCheatSheetOpen,
+    setRenameRequestTick,
+    setEditorMode,
+    fitToContent,
+    resetViewport,
   });
-  // Drag deltas from DockDivider are signed (positive = mouse moves right/down).
-  // For the LEFT divider we want the left dock to grow when delta is positive,
-  // so we pass delta as-is. For the RIGHT divider the right dock grows when
-  // delta is positive, so we pass -delta (drag-left widens the right column).
-  // Note: outlineCollapsed and propertiesCollapsed now live in DockPrefs
-  // (persisted to OPFS) instead of local useState so they survive reloads.
-  // See useDockPrefs.toggleOutlineCollapsed / togglePropertiesCollapsed.
 
-  // ── Command palette catalog (Phase 3.2) ───────────────────────────────────
-  // Static list of >15 commands wired to existing App.tsx handlers. Built
-  // every render but only when one of the dependencies changes (the
-  // handlers are useCallback-wrapped so identity is stable).
-  const paletteCommands = useMemo<PaletteCommand[]>(
-    () => [
-      // File
-      {
-        id: "file.save",
-        label: "Save Scene",
-        shortcut: "Ctrl+S",
-        group: "File",
-        action: handlers.handleSave,
-      },
-      {
-        id: "file.load",
-        label: "Load Project",
-        group: "File",
-        action: handlers.handleLoad,
-      },
-      {
-        id: "file.export",
-        label: "Export Rust",
-        group: "File",
-        action: () => setExportRustOpen(true),
-      },
-      {
-        id: "file.new-scene",
-        label: "New Scene",
-        group: "File",
-        action: () => handlers.handleNewScene(`scene_${Date.now()}`),
-      },
-      // Edit
-      {
-        id: "edit.undo",
-        label: "Undo",
-        shortcut: "Ctrl+Z",
-        group: "Edit",
-        action: () => {
-          if (editorMode === "scene") void handlers.handleUndo();
-          else void handlers.handleAssetUndo();
-        },
-      },
-      {
-        id: "edit.redo",
-        label: "Redo",
-        shortcut: "Ctrl+Shift+Z",
-        group: "Edit",
-        action: () => {
-          if (editorMode === "scene") void handlers.handleRedo();
-          else void handlers.handleAssetRedo();
-        },
-      },
-      {
-        id: "edit.delete",
-        label: "Delete Selection",
-        shortcut: "Del",
-        group: "Edit",
-        action: () => {
-          if (selectedEntityId) void handlers.handleDeleteEntity(selectedEntityId);
-        },
-      },
-      {
-        id: "edit.new-entity",
-        label: "New Entity",
-        shortcut: "N",
-        group: "Edit",
-        action: () => {
-          if (editorMode === "scene") void handlers.handleCreateEntity();
-        },
-      },
-      {
-        id: "edit.rename",
-        label: "Rename Selected",
-        shortcut: "F2",
-        group: "Edit",
-        action: () => setRenameRequestTick((t) => t + 1),
-      },
-      // View
-      {
-        id: "view.toggle-ai",
-        label: "Toggle AI Panel",
-        group: "View",
-        action: handlers.handleToggleAI,
-      },
-      {
-        id: "view.toggle-validation",
-        label: "Toggle Validation Center",
-        group: "View",
-        action: handlers.handleToggleValidationCenter,
-      },
-      {
-        id: "view.toggle-tileset",
-        label: "Toggle Tileset",
-        group: "View",
-        action: handlers.handleToggleTileset,
-      },
-      {
-        id: "view.toggle-autolayer",
-        label: "Toggle Auto Layer",
-        group: "View",
-        action: handlers.handleToggleAutoLayer,
-      },
-      {
-        id: "view.reset-viewport",
-        label: "Reset Viewport",
-        group: "View",
-        action: () => resetViewport(),
-      },
-      {
-        id: "view.fit-viewport",
-        label: "Fit Viewport",
-        shortcut: "F",
-        group: "View",
-        action: () => fitToContent(),
-      },
-      {
-        id: "view.open-logic",
-        label: "Open Logic Editor",
-        group: "View",
-        action: handlers.handleOpenLogic,
-      },
-      {
-        id: "view.open-code",
-        label: "Open Code Editor",
-        group: "View",
-        action: handlers.handleOpenCode,
-      },
-      {
-        id: "view.open-browser",
-        label: "Open Project Browser",
-        group: "View",
-        action: () => setEditorMode("asset-authoring"),
-      },
-      // Assets
-      {
-        id: "assets.create",
-        label: "Create Scene Asset",
-        group: "Assets",
-        action: () => handlers.handleAssetCreate(`asset_${Date.now()}`, "actor"),
-      },
-      // Play
-      {
-        id: "play.toggle",
-        label: "Play / Stop",
-        group: "Play",
-        action: handlers.handleTogglePlay,
-      },
-      // Help
-      {
-        id: "help.cheatsheet",
-        label: "Show Cheat Sheet",
-        shortcut: "?",
-        group: "Help",
-        action: () => setCheatSheetOpen(true),
-      },
-    ],
-    [
-      editorMode,
-      selectedEntityId,
-      handlers.handleSave,
-      handlers.handleLoad,
-      handlers.handleNewScene,
-      handlers.handleUndo,
-      handlers.handleAssetUndo,
-      handlers.handleRedo,
-      handlers.handleAssetRedo,
-      handlers.handleDeleteEntity,
-      handlers.handleCreateEntity,
-      handlers.handleToggleAI,
-      handlers.handleToggleValidationCenter,
-      handlers.handleToggleTileset,
-      handlers.handleToggleAutoLayer,
-      resetViewport,
-      fitToContent,
-      handlers.handleOpenLogic,
-      handlers.handleOpenCode,
-      handlers.handleAssetCreate,
-      handlers.handleTogglePlay,
-    ],
-  );
-
-  // ── Command palette executor for Global Search (CRITICAL ISSUE 2) ──────────
-  // Expose command palette items as search results via window.
-  // The serializable command metadata (id, label, shortcut, group) is returned;
-  // the actual action is dispatched via __executeCommand(commandId).
-  const serializablePaletteItems = useMemo(() => {
-    return paletteCommands.map((cmd) => ({
-      id: cmd.id,
-      label: cmd.label,
-      shortcut: cmd.shortcut,
-      group: cmd.group,
-    }));
-  }, [paletteCommands]);
-
-  // Command executor: looks up command by id and invokes its action.
-  const executeCommandById = useCallback(
-    (commandId: string) => {
-      const cmd = paletteCommands.find((c) => c.id === commandId);
-      if (cmd) {
-        cmd.action();
-      }
-    },
-    [paletteCommands],
-  );
-
-  // Expose to window for SearchTab Global Search integration.
-  if (typeof window !== "undefined") {
-    (window as any).__getCommandPaletteItems = () => serializablePaletteItems;
-    (window as any).__executeCommand = (commandId: string) =>
-      executeCommandById(commandId);
-    // CRITICAL ISSUE 3: scene-asset search must use App-owned useSceneAssets().open()
-    // so the React state (assetDoc, activeAssetId) is updated and the authoring
-    // UI re-renders with the opened asset. The low-level openSceneAsset() only
-    // calls the WASM bridge without updating React state.
-    (window as any).__openSceneAssetFromSearch = async (assetId: string) => {
+  useSearchBridges({
+    serializablePaletteItems,
+    executeCommandById,
+    openAsset: async (assetId: string) => {
       await openAsset(assetId);
-    };
-    // PR3: logic-graph search opens the graph in logic mode.
-    (window as any).__openLogicGraphFromSearch = async (assetId: string) => {
-      await openLogicGraphAsset(assetId);
-    };
-    // PR3: schema search opens the schema authoring panel filtered to that schema.
-    (window as any).__focusSchemaFromSearch = (typeId: string) => {
-      setEditorMode("asset-authoring");
-      // SchemaAuthoringPanel reads __focusedSchemaId and scrolls/filters to it.
-      (window as any).__focusedSchemaId = typeId;
-    };
-    // PR3: validation-issue search opens the Validation Center.
-    (window as any).__openValidationCenter = () => {
-      setValidationCenterOpen(true);
-    };
-    // PR3: navigation to a specific validation issue (highlights the issue).
-    (window as any).__navigateToValidationIssue = (issueId: string) => {
-      (window as any).__focusedValidationIssueId = issueId;
-    };
-  }
+    },
+    openLogicGraphAsset,
+    setEditorMode,
+    setValidationCenterOpen,
+  });
 
-  // ── Cheat sheet shortcuts (Phase 3.3) ─────────────────────────────────────
-  const cheatSheetGroups = useMemo<CheatSheetGroup[]>(
-    () => [
-      {
-        title: "General",
-        entries: [
-          { keys: ["Ctrl", "K"], label: "Open command palette" },
-          { keys: ["?"], label: "Open cheat sheet" },
-        ],
-      },
-      {
-        title: "Editing",
-        entries: [
-          { keys: ["Ctrl", "Z"], label: "Undo" },
-          { keys: ["Ctrl", "Y"], label: "Redo" },
-          { keys: ["Ctrl", "Shift", "Z"], label: "Redo (alternate)" },
-          { keys: ["N"], label: "New entity" },
-          { keys: ["F2"], label: "Rename selected entity" },
-          { keys: ["Del"], label: "Delete selection" },
-          { keys: ["Backspace"], label: "Delete selection" },
-        ],
-      },
-      {
-        title: "Viewport",
-        entries: [
-          { keys: ["F"], label: "Fit viewport to content" },
-          { keys: ["Wheel"], label: "Zoom around cursor" },
-          { keys: ["Space", "+ Drag"], label: "Pan canvas" },
-        ],
-      },
-      {
-        title: "Play",
-        entries: [
-          {
-            keys: ["Space", "+ W/A/S/D"],
-            label: "Move (gamepad in play mode)",
-          },
-        ],
-      },
-    ],
-    [],
-  );
+  // Bridges installed via `useSearchBridges` above; no App-level
+  // imperative wiring remains in this file.
 
   // ── Mode-routed panel content (commit 3) ───────────────────────────────────────
   // The three useMemo blocks that materialised the outline / properties /
