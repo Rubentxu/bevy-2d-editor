@@ -15,7 +15,7 @@ use editor_bevy::hot_reload_state::{PLAY_MODE_REQUEST, PlayModeRequest};
 use editor_model::PendingChangeSet;
 use editor_model::PendingChangeSetSummary;
 use editor_model::ports::register_project_store;
-use editor_model::time::Clock;
+use editor_model::time::{Clock, Timestamp};
 
 use editor_bevy::Command;
 use editor_bevy::CommandEnvelope;
@@ -217,7 +217,7 @@ fn approve_selected_ops_impl(change_id: &str, indices: &[usize]) -> Result<Strin
         let envelope = CommandEnvelope {
             command,
             metadata: CommandMetadata {
-                timestamp: editor_model::time::now_millis(),
+                timestamp: SysClock::new().now().into_u64(),
                 authorship: cs.actor.clone(),
                 rationale: Some(format!("[ChangeWorkbench] {}", cs.rationale)),
             },
@@ -435,7 +435,7 @@ pub fn create_apply_back_change_set_wasm(rationale: &str) -> Result<String, JsVa
         })
         .collect();
 
-    let change_id = format!("apply-back:{}", editor_model::time::now_millis());
+    let change_id = format!("apply-back:{}", SysClock::new().now().into_u64());
 
     let cs = PendingChangeSet {
         id: change_id.clone(),
@@ -443,7 +443,7 @@ pub fn create_apply_back_change_set_wasm(rationale: &str) -> Result<String, JsVa
         actor: "runtime:apply-back".to_string(),
         rationale: rationale.to_string(),
         ops,
-        submitted_at_ms: editor_model::time::now_millis() as u64,
+        submitted_at_ms: SysClock::new().now().into_u64(),
     };
 
     with_pending_change_sets_mut(|map| {
@@ -695,7 +695,7 @@ pub fn import_external_source_wasm(
         "rationale": format!("Import from {}", source_uri),
         "ops": [],
         "resources": [],
-        "submitted_at_ms": editor_model::time::now_millis() as u64,
+        "submitted_at_ms": SysClock::new().now().into_u64(),
     });
 
     let change_id = serde_json::from_value::<editor_model::PendingChangeSet>(pending_cs.clone())
@@ -746,7 +746,7 @@ pub fn reimport_external_source_wasm(source_uri: &str) -> Result<String, JsValue
             store.as_ref(),
             &importer_registry,
             pending_change_sets,
-            || editor_model::time::Timestamp(editor_model::time::now_millis()),
+            || SysClock::new().now(),
         )
     })
     .map_err(|e| e)?;
