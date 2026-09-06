@@ -92,7 +92,7 @@ The source-of-truth hierarchy is:
 | D1  | Introduce a typed, injectable `EditorGateway`                                | Frontend no longer has three competing WASM access paths        |
 | D2  | Extract `useEditorWorkspaceController` and command catalog                   | `App.tsx` returns to composition-root responsibilities          |
 | D3  | Encapsulate active document, Operation Log, dirty state, and scene switching | One Scene Session invariant boundary                            |
-| D4  | Move cohesive scene-facing WASM adapters behind a stable facade              | `editor-core/lib.rs` stops owning scene workflow implementation |
+| D4  | Move cohesive scene-facing WASM adapters behind a stable facade              | `crates/editor-bevy/src/lib.rs` stops owning scene workflow implementation |
 
 Wave D constraints:
 
@@ -138,7 +138,7 @@ Hito 8 becomes executable only when all mandatory checks pass on the same commit
 ```bash
 cargo fmt --all -- --check
 cargo test --workspace --all-targets --release --locked
-cargo check -p editor-core --target wasm32-unknown-unknown
+cargo check -p editor-wasm --target wasm32-unknown-unknown
 cd frontend && npm run format:check
 cd frontend && npm run lint
 cd frontend && npx tsc --noEmit
