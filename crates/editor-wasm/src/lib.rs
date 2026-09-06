@@ -3,6 +3,7 @@
 #![cfg(target_arch = "wasm32")]
 
 mod clock;
+mod scene_facade;
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, OnceLock};
