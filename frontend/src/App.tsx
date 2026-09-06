@@ -48,6 +48,7 @@ import { useCanvasViewport } from "./hooks/useCanvasViewport";
 import { useDockResize } from "./hooks/useDockResize";
 import { useEditorWorkspaceController } from "./hooks/useEditorWorkspaceController";
 import { useSceneHandlers } from "./hooks/useSceneHandlers";
+import { useAppModeController } from "./hooks/useAppModeController";
 import { AppShell } from "./components/AppShell";
 import type {
   DockableRegion,
@@ -770,257 +771,52 @@ function AppInner() {
     [],
   );
 
-  // ── Panel content (shared between dock layout and floating portals) ──────────
-  // Phase B T2.1: floating panels render real dock content instead of placeholders.
-  // Extracted as useMemo so the same JSX instance is shared between docked and
-  // floating renders — avoids creating two separate React trees for the same UI.
-
-  const outlinePanelContent = useMemo(
-    () => (
-      <div className="dock-content dock-content-outline">
-        {editorMode === "scene" && (
-          <>
-            {aiPanelOpen && (
-              <AIAssistantPanel
-                aiState={{
-                  prompt,
-                  loading: aiLoading,
-                  proposals,
-                  error: aiError,
-                  contextStats,
-                  contextUsedChars,
-                }}
-                onToggle={handlers.handleToggleAI}
-                onPromptChange={setPrompt}
-                onSubmit={handlers.handleSubmitAI}
-                onApply={handlers.handleApplyProposal}
-                onDiscard={discardProposal}
-                applyingIds={applyingIds}
-                contextStats={contextStats}
-                contextUsedChars={contextUsedChars}
-                taskMode={taskMode}
-                onTaskModeChange={setTaskMode}
-                enabledSources={enabledSources}
-                onContextToggle={handlers.handleContextToggle}
-              />
-            )}
-            {validationCenterOpen && (
-              <ValidationCenter
-                onClose={handlers.handleToggleValidationCenter}
-                onNavigate={handlers.handleValidationCenterNavigate}
-              />
-            )}
-            {tilesetPanelOpen && (
-              <TilesetPanel
-                selectedTilesetId={selectedTilesetId}
-                onSelectTileset={handlers.handleSelectTileset}
-                assetDoc={assetDoc}
-                activeAssetLogicalPath={activeAssetLogicalPath}
-              />
-            )}
-            <HierarchyPanel
-              scene={scene}
-              selectedId={selectedEntityId}
-              onSelect={setSelectedEntityId}
-              onRename={handlers.handleRename}
-              instances={instances}
-              onCreateEntity={
-                editorMode === "scene" ? handlers.handleCreateEntity : undefined
-              }
-              renameRequest={renameRequestTick}
-              onSelectModifier={
-                editorMode === "scene"
-                  ? (id, mod) => selectEntity(id, mod)
-                  : undefined
-              }
-              selectedIds={selectedIds}
-              onAttachLogic={handlers.handleAttachLogic}
-              onOpenBoundLogic={handlers.handleOpenBoundLogic}
-              onCreateFromRecipe={handlers.handleCreateFromRecipe}
-              onInspectRuntimeLogic={handlers.handleInspectRuntimeLogic}
-            />
-          </>
-        )}
-        {editorMode === "asset-authoring" && (
-          <ProjectAssetBrowser
-            entries={assetEntries}
-            logicGraphEntries={logicGraphEntries}
-            onCreate={handlers.handleAssetCreate}
-            onRename={handlers.handleAssetRename}
-            onDuplicate={handlers.handleAssetDuplicate}
-            onDelete={handlers.handleAssetDelete}
-            onOpen={handlers.handleOpenAsset}
-            onOpenLogicGraph={async (assetId) => {
-              await openLogicGraphAsset(assetId);
-            }}
-            onPlaceInstance={placeInstance}
-          />
-        )}
-        {editorMode === "logic" && (
-          <Suspense
-            fallback={
-              <div className="surface-loading">Loading logic graph...</div>
-            }
-          >
-            <LogicGraphEditor editorMode={editorMode} />
-          </Suspense>
-        )}
-        {editorMode === "code" && (
-          <Suspense
-            fallback={
-              <div className="surface-loading">Loading source editor...</div>
-            }
-          >
-            <CodeEditor
-              navigationTarget={pendingNavigation}
-              onEditorReady={() => setPendingNavigation(null)}
-            />
-          </Suspense>
-        )}
-      </div>
-    ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [
-      editorMode,
-      scene,
-      selectedEntityId,
-      selectedIds,
-      instances,
-      aiPanelOpen,
-      validationCenterOpen,
-      tilesetPanelOpen,
-      assetDoc,
-      activeAssetLogicalPath,
-      assetEntries,
-      pendingNavigation,
-      prompt,
-      aiLoading,
-      proposals,
-      aiError,
-      handlers.handleToggleAI,
-      setPrompt,
-      handlers.handleSubmitAI,
-      handlers.handleApplyProposal,
-      discardProposal,
-      applyingIds,
-      contextStats,
-      contextUsedChars,
-      handlers.handleToggleValidationCenter,
-      handlers.handleSelectTileset,
-      setSelectedEntityId,
-      handlers.handleRename,
-      handlers.handleCreateEntity,
-      renameRequestTick,
-      selectEntity,
-      handlers.handleAssetCreate,
-      handlers.handleAssetRename,
-      handlers.handleAssetDuplicate,
-      handlers.handleAssetDelete,
-      handlers.handleOpenAsset,
-      placeInstance,
-    ],
-  );
-
-  const propertiesPanelContent = useMemo(
-    () => (
-      <div className="dock-content dock-content-properties">
-        {editorMode === "scene" && (
-          <InspectorPanel
-            scene={scene}
-            selectedId={selectedEntityId}
-            selectedIds={selectedIds}
-            onRename={handlers.handleRename}
-            onSetField={handlers.handleSetField}
-            onSetFieldOnMultiple={handlers.handleSetFieldOnMultiple}
-            onRemoveComponent={handlers.handleRemoveComponent}
-            onAddComponent={handlers.handleAddComponent}
-            instances={instances}
-            onRemoveInstance={removeInstance}
-            onReplaceInstanceAsset={replaceInstanceAsset}
-            assetEntries={assetEntries}
-            onJumpToSource={handlers.handleJumpToSource}
-            onAttachLogic={handlers.handleAttachLogic}
-            onOpenBoundLogic={handlers.handleOpenBoundLogic}
-            onCreateFromRecipe={handlers.handleCreateFromRecipe}
-            onInspectRuntimeLogic={handlers.handleInspectRuntimeLogic}
-            onSwitchToLogicMode={handlers.handleSwitchToLogicMode}
-          />
-        )}
-        {editorMode === "asset-authoring" && assetDoc && (
-          <AssetAuthoringView
-            document={assetDoc}
-            activeEntityId={null}
-            onSelectEntity={() => {}}
-            onCommit={handlers.handleAssetCommit}
-            onAddComponent={handlers.handleAssetAddComponent}
-            onRemoveComponent={handlers.handleAssetRemoveComponent}
-            onUndo={handlers.handleAssetUndo}
-            onRedo={handlers.handleAssetRedo}
-            onSave={handlers.handleAssetSave}
-            onBackToScene={handlers.handleBackToScene}
-            canUndo={assetLogState.can_undo}
-            canRedo={assetLogState.can_redo}
-            dirty={assetDirty}
-          />
-        )}
-        {editorMode === "asset-authoring" &&
-          autoLayerPanelOpen &&
-          (selectedAutoLayer ? (
-            <AutoLayerPanel
-              layer={selectedAutoLayer}
-              assetRef={activeAssetLogicalPath ?? ""}
-              onRegenerate={refresh}
-            />
-          ) : (
-            <div className="tileset-panel">
-              <h3>Auto Layer</h3>
-              <p style={{ fontSize: 12, color: "#666" }}>
-                No auto layers in this asset. Open a level scene asset to edit
-                auto layers.
-              </p>
-            </div>
-          ))}
-      </div>
-    ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [
-      editorMode,
-      scene,
-      selectedEntityId,
-      selectedIds,
-      instances,
-      assetDoc,
-      assetEntries,
-      assetLogState,
-      assetDirty,
-      autoLayerPanelOpen,
-      selectedAutoLayer,
-      activeAssetLogicalPath,
-      handlers.handleRename,
-      handlers.handleSetField,
-      handlers.handleSetFieldOnMultiple,
-      handlers.handleRemoveComponent,
-      handlers.handleAddComponent,
-      removeInstance,
-      replaceInstanceAsset,
-      handlers.handleJumpToSource,
-      handlers.handleAssetCommit,
-      handlers.handleAssetAddComponent,
-      handlers.handleAssetRemoveComponent,
-      handlers.handleAssetUndo,
-      handlers.handleAssetRedo,
-      handlers.handleAssetSave,
-      handlers.handleBackToScene,
-      refresh,
-    ],
-  );
-
-  const bottomPanelContent = useMemo(
-    () => <ConsoleTab />,
-    // ConsoleTab has no props — safe to omit from deps
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
+  // ── Mode-routed panel content (commit 3) ───────────────────────────────────────
+  // The three useMemo blocks that materialised the outline / properties /
+  // bottom panel bodies were lifted into `useAppModeController`. The
+  // hook reads the same state and returns ReactNodes that AppShell
+  // shares between docked and floating portals.
+  const { outlineContent, propertiesContent, bottomContent } = useAppModeController({
+    editorMode,
+    selectedEntityId,
+    selectedIds,
+    selectEntity,
+    setSelectedEntityId,
+    setPendingNavigation,
+    pendingNavigation,
+    scene,
+    instances,
+    prompt,
+    setPrompt,
+    aiLoading,
+    proposals,
+    aiError,
+    contextStats,
+    contextUsedChars,
+    discardProposal,
+    taskMode,
+    setTaskMode,
+    enabledSources,
+    applyingIds,
+    aiPanelOpen,
+    validationCenterOpen,
+    tilesetPanelOpen,
+    autoLayerPanelOpen,
+    selectedTilesetId,
+    selectedAutoLayerId,
+    assetDoc,
+    assetEntries,
+    assetDirty,
+    assetLogState,
+    activeAssetLogicalPath,
+    removeInstance,
+    replaceInstanceAsset,
+    placeInstance,
+    refresh,
+    renameRequestTick,
+    logicGraphEntries,
+    handlers,
+  });
 
   return (
     <AppShell
@@ -1068,9 +864,9 @@ function AppInner() {
       pan={pan}
       zoom={zoom}
       isDragOverCanvas={isDragOverCanvas}
-      outlinePanelContent={outlinePanelContent}
-      propertiesPanelContent={propertiesPanelContent}
-      bottomPanelContent={bottomPanelContent}
+      outlinePanelContent={outlineContent}
+      propertiesPanelContent={propertiesContent}
+      bottomPanelContent={bottomContent}
       paletteCommands={paletteCommands}
       cheatSheetGroups={cheatSheetGroups}
     />
