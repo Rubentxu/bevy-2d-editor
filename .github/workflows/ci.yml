@@ -180,3 +180,35 @@ jobs:
       - name: Run archcheck
         working-directory: tools/archcheck
         run: npm run check
+
+  playwright-smoke:
+    name: Playwright smoke cohort
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build WASM
+        run: npm run build:wasm
+
+      - name: Run smoke cohort
+        run: npx playwright test --config=playwright.smoke.config.ts
