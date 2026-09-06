@@ -54,7 +54,8 @@
 | Change                                              | Branch                                           | Status                                                                 |
 | --------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------- |
 | `application-stabilization-and-roadmap-convergence` | ✅ RELEASED — v0.108.1 (2026-09-06), cycle `p-28fce7028ac3c497` | Done — 9/9 release-cycle gates green. Recovery-1 closed archcheck B8 (C-1). Recovery-2 closed D3.2 (no-op by evidence) + D4.2 (superseded by D4.3) + M-4 (8813556 bundling) as accepted debt via ADR-0055. Recovery-3 closed C-2 (Playwright OPFS race) by deferring `window.*` test bridges in `engine-bridge.ts` until after `init_project_store()`. Remaining: `cargo test --release` budget (C-3), M-2 (AUDIT.md misplaced), M-3 (B9 regex narrow), M-5 (B3.1 cherry-pick blocked), docs-check rule-7 markers. |
-| `rig-agent-runtime-foundation`                      | (not yet started)                                | BLOCKED — resumes after the stabilization release-health gate passes   |
+| `rig-agent-runtime-foundation`                      | (not yet started)                                | **PAUSED** (user directive 2026-09-06) — agentic work is parked to last. Resume only after v1.0-stabilization gates pass. See [`docs/v1.0-stabilization-evidence-map.md`](v1.0-stabilization-evidence-map.md). |
+| `v1.0-stabilization`                                | (cycle entry)                                    | **IN PROGRESS** (P1: canonical playable sample game) — baseline evidence map committed 2026-09-06, coverage score 3 ✅ / 3 🟡 / 3 🔴 across the 9 v1.0 product gates. |
 
 ---
 
