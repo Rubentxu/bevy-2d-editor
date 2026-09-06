@@ -1,5 +1,18 @@
-//! Pure time abstraction. The production clock is provided by `editor_core::time::JsSysClock`;
-//! tests use `editor_model::time::FakeClock`.
+//! Pure time abstraction shared by the editor model.
+//!
+//! This crate is **pure** — it has zero WASM / Bevy dependencies (enforced by
+//! `tools/archcheck` rule B8, ADR-0030). Callers that need a production clock
+//! must inject a [`Clock`] trait object from a crate that is allowed to use
+//! the WASM bindings. The canonical production impl lives in the
+//! `editor-bevy` crate (`time::JsSysClock`); tests use [`FakeClock`].
+//!
+//! ```ignore
+//! // In editor-bevy (wasm-allowed crate):
+//! use editor_bevy as eb;
+//! use editor_model::time::Clock;
+//! let clock: Box<dyn Clock> = Box::new(eb::time::JsSysClock::new());
+//! clock.now(); // date now() on wasm32, SystemTime::now() on native
+//! ```
 
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -82,44 +95,9 @@ impl Clock for FakeClock {
     }
 }
 
-/// Returns the current Unix time in milliseconds (v0.91 PR2: moved from
-/// editor-core for use by the new scene_asset_catalog module).
-///
-/// On `wasm32-unknown-unknown` with rustc >= 1.96, `std::time::SystemTime::now()`
-/// traps ("time not implemented on this platform"). Route through
-/// `js_sys::Date::now()` instead (editor-model already depends on js-sys for
-/// wasm32 targets). Mirrors `editor-bevy/src/time.rs`.
-pub fn now_millis() -> u64 {
-    #[cfg(target_arch = "wasm32")]
-    {
-        js_sys::Date::now() as u64
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_millis() as u64)
-            .unwrap_or(0)
-    }
-}
-
-/// Returns the current Unix time in nanoseconds.
-///
-/// On wasm32 the value is `Date::now() * 1e6` and has <= 1 ms precision. All
-/// current callers use this for opaque unique-string formatting, so the
-/// precision loss is semantically inert.
-pub fn now_nanos() -> u64 {
-    #[cfg(target_arch = "wasm32")]
-    {
-        (js_sys::Date::now() * 1e6) as u64
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_nanos() as u64)
-            .unwrap_or(0)
-    }
-}
+// Note: `now_millis` / `now_nanos` free functions were removed in recovery-1
+// to satisfy archcheck rule B8 (ADR-0030). Production callers must inject a
+// [`Clock`] impl — typically the `JsSysClock` from the `editor-bevy` crate.
+// Tests use [`FakeClock`]. The pre-removal wasm branch called the WASM date
+// helper directly inside this pure crate; that violated the editor-model
+// purity contract and is now correctly delegated to a wasm-allowed crate.
