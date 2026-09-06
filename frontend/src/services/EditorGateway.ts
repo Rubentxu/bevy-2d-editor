@@ -480,16 +480,16 @@ export interface WindowWithBridge {
   force_reload_wasm?: () => Promise<string> | string;
   // ── AI ───────────────────────────────────────────────────────────────────
   propose?: (json: string) => Promise<string> | string;
-  // ── ChangeWorkbench (ADR-0039) ───────────────────────────────────────────
-  submit_pending_change_set?: (json: string) => Promise<string> | string;
-  get_pending_change_sets?: () => Promise<string> | string;
-  approve_change_set?: (id: string) => Promise<string> | string;
-  approve_selected_ops?: (
+  // ── ChangeWorkbench (ADR-0039) — scene_* facade (editor-wasm scene_facade.rs) ─
+  scene_submit_change_set?: (json: string) => Promise<string> | string;
+  scene_get_pending?: () => Promise<string> | string;
+  scene_approve?: (id: string) => Promise<string> | string;
+  scene_approve_ops?: (
     id: string,
     indicesJson: string,
   ) => Promise<string> | string;
-  reject_change_set?: (id: string) => Promise<string> | string;
-  get_change_set_summaries?: () => Promise<string> | string;
+  scene_reject?: (id: string) => Promise<string> | string;
+  scene_change_set_summaries?: () => Promise<string> | string;
   // ── Runtime causality (ADR-0052) / Apply-Back (ADR-0050) ─────────────────
   get_rebuild_cause_wasm?: () => Promise<string> | string | null;
   get_logic_activation_events_wasm?: () => Promise<string> | string | null;
@@ -709,18 +709,18 @@ export function createEditorGateway(bridge?: WindowWithBridge): EditorGateway {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
       }
     },
-    // ─── Change Workbench (ADR-0039) ─────────────────────────────────────────
+    // ─── Change Workbench (ADR-0039) — via scene_* facade (D4.3) ────────────
     submitPendingChangeSet: async (cs) => {
       await ensureReady();
       const w = bridgeRef();
-      if (!w?.submit_pending_change_set) {
+      if (!w?.scene_submit_change_set) {
         return {
           ok: false,
-          error: "submit_pending_change_set export not available",
+          error: "scene_submit_change_set export not available",
         };
       }
       try {
-        const result = await w.submit_pending_change_set(JSON.stringify(cs));
+        const result = await w.scene_submit_change_set(JSON.stringify(cs));
         return { ok: true, value: result };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -729,16 +729,16 @@ export function createEditorGateway(bridge?: WindowWithBridge): EditorGateway {
     getPendingChangeSets: async () => {
       await ensureReady();
       const w = bridgeRef();
-      return callNoArg<PendingChangeSetSummary[]>(w?.get_pending_change_sets);
+      return callNoArg<PendingChangeSetSummary[]>(w?.scene_get_pending);
     },
     approveChangeSet: async (id) => {
       await ensureReady();
       const w = bridgeRef();
-      if (!w?.approve_change_set) {
-        return { ok: false, error: "approve_change_set export not available" };
+      if (!w?.scene_approve) {
+        return { ok: false, error: "scene_approve export not available" };
       }
       try {
-        await w.approve_change_set(id);
+        await w.scene_approve(id);
         return { ok: true, value: undefined };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -747,17 +747,14 @@ export function createEditorGateway(bridge?: WindowWithBridge): EditorGateway {
     approveSelectedOps: async (id, indices) => {
       await ensureReady();
       const w = bridgeRef();
-      if (!w?.approve_selected_ops) {
+      if (!w?.scene_approve_ops) {
         return {
           ok: false,
-          error: "approve_selected_ops export not available",
+          error: "scene_approve_ops export not available",
         };
       }
       try {
-        const result = await w.approve_selected_ops(
-          id,
-          JSON.stringify(indices),
-        );
+        const result = await w.scene_approve_ops(id, JSON.stringify(indices));
         try {
           return {
             ok: true,
@@ -776,11 +773,11 @@ export function createEditorGateway(bridge?: WindowWithBridge): EditorGateway {
     rejectChangeSet: async (id) => {
       await ensureReady();
       const w = bridgeRef();
-      if (!w?.reject_change_set) {
-        return { ok: false, error: "reject_change_set export not available" };
+      if (!w?.scene_reject) {
+        return { ok: false, error: "scene_reject export not available" };
       }
       try {
-        await w.reject_change_set(id);
+        await w.scene_reject(id);
         return { ok: true, value: undefined };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -789,7 +786,7 @@ export function createEditorGateway(bridge?: WindowWithBridge): EditorGateway {
     getChangeSetSummaries: async () => {
       await ensureReady();
       const w = bridgeRef();
-      return callNoArg<ChangeSetSummary[]>(w?.get_change_set_summaries);
+      return callNoArg<ChangeSetSummary[]>(w?.scene_change_set_summaries);
     },
     // ─── World Workspace (ADR-0037) ─────────────────────────────────────────
     world: {

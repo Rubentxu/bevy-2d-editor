@@ -90,13 +90,13 @@ async function submitToWorkbench(
   changeSetJson: string,
 ): Promise<string | null> {
   const w = window as unknown as {
-    submit_pending_change_set?: (json: string) => Promise<unknown> | unknown;
+    scene_submit_change_set?: (json: string) => Promise<unknown> | unknown;
   };
-  if (typeof w.submit_pending_change_set !== "function") {
+  if (typeof w.scene_submit_change_set !== "function") {
     return null;
   }
   try {
-    const raw = await w.submit_pending_change_set(changeSetJson);
+    const raw = await w.scene_submit_change_set(changeSetJson);
     return raw == null ? null : String(raw);
   } catch {
     return null;
