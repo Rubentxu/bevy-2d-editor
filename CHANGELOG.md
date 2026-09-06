@@ -2,6 +2,174 @@
 
 All notable changes to Bevy 2D Editor are documented here. The project follows semantic version tags; detailed milestone history is available in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## v0.108.0 — Logic Bricks cycle 2: event-driven scheduler (2026-08-20)
+
+Delivers the second slice of Logic Bricks M2: converts the per-frame dispatcher into an event-driven scheduler gated by per-binding `dirty` + `binding_version` and edge-only `SensorEvent::DidFire`. Sensors fire once on transition; actuators run only when their inputs changed.
+
+### New features
+
+- **Per-binding `dirty: bool` + `binding_version: u64`** on `LogicBinding` (`crates/editor-bevy/src/logic_state.rs`) — gates recomputation; starts at version 1 on first apply
+- **`SensorEvent` + `SensorStateCache`** for edge transitions (`crates/editor-bevy/src/logic_state.rs`): `SensorEvent::DidFire { sensor_id, ... }` emitted on rising/falling edge; `SensorStateCache` persists last value per sensor
+- **Two-pass scheduler** (`crates/editor-bevy/src/logic_evaluator.rs`): `mark_bindings_dirty` (topological walk, bumps dirty when inputs changed) + `dispatch_dirty_bindings` (only evaluates dirty bindings)
+- **`apply_*` functions bump `binding_version` + `dirty`** on every state mutation (e.g. `apply_actuator_outputs`, `apply_set_field`, `apply_bind`)
+- **`apply_actuator_outputs_in_preview` gates on dirty** — no work when nothing changed since last frame
+
+### Fixes
+
+- **WASM32 observer API** — replaced `before()` chain with `add_observer` (`crates/editor-bevy/src/lib.rs`); rustfmt cleanups for the new system boundaries
+
+### Stats
+
+- 7 feature commits + 1 fix commit
+- 8/8 spec requirements verified, 23/23 cycle-2 tests pass, 1213/1213 total workspace tests pass
+
+### Architecture
+
+- ADR-0011 (Logic Bricks) preserved: Sensor → Controller → Actuator flow, compiled Rust evaluators, no scripting VM, BSN isolation
+- Per-binding versioning is the canonical invalidation key across the Bevy `Update` loop
+
+## v0.107.0 — Logic Bricks cycle 1: Inspector binding UX + preview actuator application (2026-08-20)
+
+Delivers the first end-to-end user-facing slice of Logic Bricks: bind a recipe to a Scene Instance from the Inspector and watch its actuators apply in preview. Closes the "press Space → player jumps" gap.
+
+### New features
+
+- **`BindLogicGraphToInstance` / `UnbindLogicGraphFromInstance` / `SetBindingFieldOverride` commands** (`crates/editor-bevy/src/logic_command.rs`) — full apply/inverse mirroring `LogicOperation` lifecycle
+- **`apply_actuator_outputs_in_preview` system + `Velocity` component** (`crates/editor-bevy/src/preview_runtime.rs`) — applies compiled actuator outputs to Bevy entities during preview
+- **`LogicBindingSection`** (`frontend/src/components/Inspector/LogicBindingSection.tsx`, 276 LOC): inspector UI for bind/unbind + field overrides
+- **`LogicBadge`** on `HierarchyPanel` — visual indicator that an entity carries a `LogicBinding`
+- **`useLogicGraph` hook** (`frontend/src/hooks/useLogicGraph.ts`, 76 LOC) + **`logic-graphs.ts` service** (92 LOC) for binding lifecycle
+- **WASM bridge** wired through `EditorGateway.logic` namespace
+
+### Fixes
+
+- **`LogicBindingSection` was never imported in `InspectorPanel`** — wiring gap closed; `LogicBadge` now detects `editor.LogicBinding` entities
+- **BsnExporter rejects `LogicRole` assets** — added 8 integration tests to lock the BSN isolation guard
+
+### Stats
+
+- 5 commits, 1536 insertions / 10 deletions across 12 files
+- 4 new Rust tests + 5 new Playwright tests
+- All previous tests pass unchanged
+
+### Architecture
+
+- `LogicOperation` enum added additively alongside existing `LogicCommand` — parallel processor / log, no shared surface with the document Command path (mirrors ADR-0007's split for Scene Assets)
+- `editor.LogicBinding` ComponentInstance convention from ADR-0011 / `logic-graph-data-model` slice is now user-visible
+
+## v0.103.0 — Graph Kernel M1: Query builder + GRAPH-010 (2026-08-20)
+
+Delivers the GRAPH-010 Query Language for the Graph Kernel: a fluent, terminal-driven `Query<'a, D>` builder that replaces the per-cycle `detect_cycles` / `reachable_via_deps` helpers with a uniform predicate+terminal surface across all graph dialects.
+
+### New features
+
+- **`Query<'a, D> + QueryState + PredicateTable`** (`crates/editor-model/src/graph_kernel/query.rs`, 1016 LOC) — fluent builder with 4 terminals (find any, find all, count, exists)
+- **Topological terminal** (`topological_sort_subset`) — kernel helper for partial topological sorts used by cycle-aware workflows
+- **`with_edge_kind` predicate** — typed edge-kind filtering (now actually filters, see fix below)
+
+### Fixes
+
+- **`with_edge_kind` predicate was a stub** — accepted the predicate but never applied it to the edge set. Now filters edges by kind before traversal. Behavioural fix; tests added.
+
+### Refactors
+
+- `detect_cycles` + `reachable_via_deps` migrated to the Query builder (callers unchanged; logic moved to kernel primitives)
+
+### Stats
+
+- 4 commits, 1540 insertions / 249 deletions across 15 files
+- 8 new Query builder tests
+
+## v0.102.0 — Graph Kernel M1: GraphMut + per-dialect mutators + cross-dialect invariants (2026-08-20)
+
+Delivers the mutable surface for the Graph Kernel: a `GraphMut` trait with explicit `GraphMutStrictness` and three per-dialect mutator implementations, plus the GRAPH-009 cross-dialect invariants mandated by ADR-0053.
+
+### New features
+
+- **`GraphMut` trait + `GraphMutStrictness` + 3 error variants** (`crates/editor-model/src/graph_kernel.rs`) — object-safe trait; strictness is a method, not a const (see fix below)
+- **`LogicGraphDialectMut` — `CyclicNoSelfLoop` strictness** + 20 tests
+- **`SceneAssetDialectMut` — `Dag` strictness + cycle check** + 12 tests
+- **`WorldGraphDialectMut` — `Free` strictness** + 9 tests
+- **GRAPH-009 ADR-0053 addendum + cross-dialect invariants** + 5 tests (e.g. `SelfLoop` rejected by all dialects; node-id uniqueness)
+
+### Fixes
+
+- **`GraphMut` object-safety** — `GraphMutStrictness` was originally a `const`, which broke `dyn GraphMut`. Moved to a method so the trait stays object-safe.
+
+### Stats
+
+- 6 commits, 2317 insertions / 257 deletions across 6 files
+- 52 new tests across dialects and invariants
+
+## v0.101.0 — Graph Kernel M1: pure-Rust substrate + ChangeSet wiring (2026-08-20)
+
+Delivers the Graph Kernel M1 base (GRAPH-001 through GRAPH-008): a pure-Rust, dialect-agnostic substrate in `editor-model` (no Bevy / no WASM dependencies) plus three concrete dialect implementations and the `ChangeSetDialect` integration into the Transaction Kernel.
+
+### New features
+
+- **Graph kernel substrate** (`crates/editor-model/src/graph_kernel.rs`, 630 LOC) — pure-Rust, dialect-agnostic: nodes, edges, traversal, terminal walkers; ADR-0053 §Substrate
+- **`SceneAssetDialect`** for `SceneAssetDocument` (GRAPH-002) — reads/writes a graph view over scene entities and `ComponentInstance` relationships
+- **`ChangeSetDialect`** for `ChangeSet<O>` (GRAPH-003) — same substrate over the typed ChangeSet type
+- **`WorldGraphDialect`** for `WorldDocument` (GRAPH-005) — world-level topology (levels, links, entrances) projected to a graph
+- **`ChangeSetDialect` wired into `TransactionKernel`** (GRAPH-008) — ChangeSet graph now queryable through the kernel
+- **ADR-0053** `Graph Kernel Pure-Rust Dialects` (`docs/adr/0053-graph-kernel-pure-rust-dialects.md`, 161 LOC)
+
+### Test fixes
+
+- `s9_hierarchy_via_relationships_only` aligned with post-S4 contract
+- `set_logic_graph_for_test` aligned with `LOGIC_GRAPH_DOC`
+
+### Stats
+
+- 7 commits, 2341 insertions / 127 deletions across 13 files
+- All existing tests pass unchanged
+
+### Architecture
+
+- `editor-model` remains bevy-free, wasm-free per ADR-0030 (compile-time hexagonal crate boundaries)
+- Graph operations are sync, deterministic, and BTreeMap-backed (ADR-0045 deterministic ordering)
+
+## v0.100.0 — Wave D1: EditorGateway seam + stability fixes (2026-08-19)
+
+Delivers the Wave D1 unification of the frontend WASM access path: exposes the 22 bindings that were typed in the gateway but never actually exposed on `window` (World, ChangeWorkbench, Importers), introduces an injectable `createEditorGateway(bridge?)` for testing, and migrates 13 services + 11 components/hooks off direct `window.*` access onto the single gateway surface. Includes P3 Wave B stabilization fixes and the v0.99 S4 test-fixture follow-ups.
+
+### New features
+
+- **`createEditorGateway(bridge?)` injectable factory** + mock bridge for unit tests (`frontend/src/services/EditorGateway.ts`)
+- **`getSceneAssetCatalog` shape normalization** — backend returns flat array; gateway normalizes to `{entries, warnings}`
+- **22 WASM bindings re-exposed on `window`** (ChangeWorkbench 6, World 11, Importers 5) — fixes the "World Workspace broken in production" regression that started in v0.95
+- **`WindowWithBridge` regenerated** — 128 bindings, real signatures, no false positives
+- **WORLD_CATALOG initialization** in engine setup + rebuild from `project.worlds` on load (root cause of the v0.95 regression: `world_state.rs:96` panic)
+
+### Refactors
+
+- **13 services + 11 components/hooks migrated** from `window.*` to `EditorGateway` (`useSceneAssets`, `useLogicGraph`, HierarchyPanel, InspectorPanel, …)
+- **Domain-by-domain migration**: world, change-workbench, importers, scene, schema, logic — each reversible independently
+
+### Fixes
+
+- **Asset cache sync** + scene-component list + scene swap current (`crates/editor-core`)
+- **Recursive OPFS hydrate** via `opfsListTree` (`crates/editor-storage-web`)
+- **WASM-safe time reads** — all `std::time::SystemTime` reads routed through wasm-safe helpers (no more `SystemTime::now` panic on wasm32 from issue #19)
+- **Dropdown toggle + legacy toolbar inert + dirty-switch payload** (`crates/editor-frontend`)
+- **Defensive override + catalog shapes** (P3 Wave B)
+- **Unify duplicated `SCENE_DOC` / `OPERATION_LOG` thread-locals** (P3 Wave B)
+- **B2 cohort tags** + B1 migration regression fixes (P3 Wave B)
+- **extension_data field on all test fixtures** (v0.99 SDD-0046 S4 follow-up)
+
+### Stats
+
+- 14 commits, 2280 insertions / 1517 deletions across 130 files
+- `world-workspace.spec.ts`: 9/9 pass (was 3/9)
+- New `gateway-contract.spec.ts`: 9 unit tests with mock bridge
+- Gate: `(window as any)` occurrences in `src/services` + `src/components` → 0 (outside `engine-bridge.ts` / `EditorGateway.ts`)
+- Smoke cohort: 25/25 deterministic (3 runs)
+
+### Architecture
+
+- ADR-0034 (Typed EditorBackend Contract Replaces Global Window Bridge) partially satisfied: the gateway is now the single frontend entry point
+- ADR-0027 (Rig-Based Agent Runtime) prerequisites advanced: `EditorGateway` is the seam any future agent tool will call through
+
 ## v0.99.0 — Semantic Editor Model Extension Bags (ADR-0046 S4) (2026-08-18)
 
 Delivers SDD-0046 Slice 4: unknown JSON fields are now PRESERVED in a per-type extension bag instead of silently dropped (ADR-0046 rule 2 / SEM-3 satisfied).
