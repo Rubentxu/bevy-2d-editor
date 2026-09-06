@@ -37,8 +37,7 @@ export function useSearchBridges({
     if (typeof window === "undefined") return;
     const w = window as unknown as Record<string, unknown>;
     w.__getCommandPaletteItems = () => serializablePaletteItems;
-    w.__executeCommand = (commandId: string) =>
-      executeCommandById(commandId);
+    w.__executeCommand = (commandId: string) => executeCommandById(commandId);
     // CRITICAL ISSUE 3: scene-asset search must use App-owned useSceneAssets().open()
     // so the React state (assetDoc, activeAssetId) is updated and the authoring
     // UI re-renders with the opened asset. The low-level openSceneAsset() only

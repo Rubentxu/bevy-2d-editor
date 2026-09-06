@@ -52,7 +52,7 @@ export interface AppModeControllerContext {
   selectedIds: Set<string>;
   selectEntity: (id: string, modifier: "plain" | "range" | "toggle") => void;
   setSelectedEntityId: (id: string | null) => void;
-    setPendingNavigation: (target: NavigationTarget | null) => void;
+  setPendingNavigation: (target: NavigationTarget | null) => void;
   pendingNavigation: NavigationTarget | null;
 
   // Scene document + instances
@@ -92,7 +92,10 @@ export interface AppModeControllerContext {
     instanceId: string,
     newAssetId: string,
   ) => Promise<void>;
-  placeInstance: (assetId: string, translation?: { x: number; y: number }) => Promise<void>;
+  placeInstance: (
+    assetId: string,
+    translation?: { x: number; y: number },
+  ) => Promise<void>;
   refresh: () => Promise<void>;
   renameRequestTick: number;
 
@@ -169,9 +172,10 @@ export function useAppModeController(
 
   // Auto-layer derived state — kept here so the panel mount route and
   // the regeneration callback see the same fallback path.
-  const autoLayers: AutoLayerPayload[] = (assetDoc?.layers?.filter(
-    (l: LevelLayerPayload) => l.kind === "auto",
-  ) as AutoLayerPayload[]) ?? [];
+  const autoLayers: AutoLayerPayload[] =
+    (assetDoc?.layers?.filter(
+      (l: LevelLayerPayload) => l.kind === "auto",
+    ) as AutoLayerPayload[]) ?? [];
   const selectedAutoLayer: AutoLayerPayload | null = selectedAutoLayerId
     ? (autoLayers.find((l) => l.id === selectedAutoLayerId) ?? null)
     : (autoLayers[0] ?? null);
@@ -226,9 +230,7 @@ export function useAppModeController(
               onRename={handlers.handleRename}
               instances={instances}
               onCreateEntity={
-                editorMode === "scene"
-                  ? handlers.handleCreateEntity
-                  : undefined
+                editorMode === "scene" ? handlers.handleCreateEntity : undefined
               }
               renameRequest={renameRequestTick}
               onSelectModifier={

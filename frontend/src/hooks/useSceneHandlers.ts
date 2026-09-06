@@ -18,7 +18,11 @@ import { useCallback } from "react";
 import type { EditorMode } from "../components/MenuBar";
 import type { DispatchResult } from "./useSceneState";
 import type { TilesetMetadata } from "../services/tilesets";
-import type { PanelId, DockableRegion, FloatingPanelState } from "./useDockPrefs";
+import type {
+  PanelId,
+  DockableRegion,
+  FloatingPanelState,
+} from "./useDockPrefs";
 import {
   sceneCreate,
   sceneSwitch,
@@ -82,10 +86,7 @@ export interface WorkspaceApi {
   selectedIds: Set<string>;
   selectedEntityId: string | null;
   setSelectedEntityId: (id: string | null) => void;
-  selectEntity: (
-    id: string,
-    modifier: "plain" | "range" | "toggle",
-  ) => void;
+  selectEntity: (id: string, modifier: "plain" | "range" | "toggle") => void;
   clearSelection: () => void;
   setSelectedIds: (ids: Set<string>) => void;
   setPendingNavigation: (target: NavigationTarget | null) => void;
@@ -102,13 +103,15 @@ export interface WorkspaceApi {
 export interface DialogFlagsApi {
   setExportRustOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   setSaveModalOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
-  setSaveWorkspacePresetOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
+  setSaveWorkspacePresetOpen: (
+    open: boolean | ((prev: boolean) => boolean),
+  ) => void;
   setAboutOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   setAiPanelOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
-  setEnabledSources: (
-    updater: (prev: Set<string>) => Set<string>,
+  setEnabledSources: (updater: (prev: Set<string>) => Set<string>) => void;
+  setValidationCenterOpen: (
+    open: boolean | ((prev: boolean) => boolean),
   ) => void;
-  setValidationCenterOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   setTilesetPanelOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   setSelectedTilesetId: (id: string | null) => void;
   setAutoLayerPanelOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
@@ -121,9 +124,7 @@ export interface DialogFlagsApi {
   setPendingSwitchSource: (source: string | null) => void;
   setLeftCollapsed: (collapsed: boolean | ((prev: boolean) => boolean)) => void;
   setFocusedFloatingPanel: (id: PanelId | null) => void;
-  setApplyingIds: (
-    updater: (prev: Set<string>) => Set<string>,
-  ) => void;
+  setApplyingIds: (updater: (prev: Set<string>) => Set<string>) => void;
 }
 
 /**
@@ -180,7 +181,9 @@ export interface AssetCatalogEntry {
  * closures through this context so the handlers can call them.
  */
 export interface AiApi {
-  submit: (dispatch: (envelope: object) => Promise<DispatchResult>) => Promise<void>;
+  submit: (
+    dispatch: (envelope: object) => Promise<DispatchResult>,
+  ) => Promise<void>;
   applyProposal: (
     proposalId: string,
     dispatch: (envelope: object) => Promise<DispatchResult>,
@@ -293,7 +296,10 @@ export interface SceneHandlers {
     value: unknown,
   ) => Promise<void>;
   handleAssetAddComponent: (localId: string, typeId: string) => Promise<void>;
-  handleAssetRemoveComponent: (localId: string, typeId: string) => Promise<void>;
+  handleAssetRemoveComponent: (
+    localId: string,
+    typeId: string,
+  ) => Promise<void>;
   handleAssetUndo: () => Promise<void>;
   handleAssetRedo: () => Promise<void>;
   handleAssetSave: () => Promise<void>;
@@ -437,7 +443,11 @@ export function useSceneHandlers(
   const handleRename = useCallback(
     async (entityId: string, newName: string) => {
       const result = await scene.dispatch({
-        command: { type: "RenameEntity", entity_id: entityId, new_name: newName },
+        command: {
+          type: "RenameEntity",
+          entity_id: entityId,
+          new_name: newName,
+        },
         metadata: { authorship: "user", timestamp: Date.now() },
       });
       if (result.error) addToast(`Rename failed: ${result.error}`, "error");
@@ -446,12 +456,7 @@ export function useSceneHandlers(
   );
 
   const handleSetField = useCallback(
-    async (
-      entityId: string,
-      typeId: string,
-      fieldPath: string,
-      value: any,
-    ) => {
+    async (entityId: string, typeId: string, fieldPath: string, value: any) => {
       const result = await scene.dispatch({
         command: {
           type: "SetComponentField",
@@ -934,7 +939,8 @@ export function useSceneHandlers(
   );
 
   const handleMovePanel = useCallback(
-    (panelId: PanelId, target: DockableRegion) => dock.movePanel(panelId, target),
+    (panelId: PanelId, target: DockableRegion) =>
+      dock.movePanel(panelId, target),
     [dock],
   );
 
@@ -955,14 +961,14 @@ export function useSceneHandlers(
   );
 
   const handleResizeStatusBar = useCallback(
-    (delta: number) => dock.setStatusBarHeight(dock.prefs.statusBar.height - delta),
+    (delta: number) =>
+      dock.setStatusBarHeight(dock.prefs.statusBar.height - delta),
     [dock],
   );
 
   const handleResizeRightSplit = useCallback(
     (deltaPx: number) => {
-      const pctDelta =
-        (deltaPx / Math.max(dock.prefs.right.width, 200)) * 50;
+      const pctDelta = (deltaPx / Math.max(dock.prefs.right.width, 200)) * 50;
       dock.setRightTopHeight(dock.prefs.right.topHeight + pctDelta);
     },
     [dock],
@@ -993,9 +999,7 @@ export function useSceneHandlers(
   }, [dialogs]);
 
   const handleValidationCenterNavigate = useCallback(
-    async (
-      issue: import("../services/validation-center").ValidationIssue,
-    ) => {
+    async (issue: import("../services/validation-center").ValidationIssue) => {
       if (issue.affected_entity_id) {
         workspace.setSelectedEntityId(issue.affected_entity_id);
       } else if (issue.affected_asset_id) {

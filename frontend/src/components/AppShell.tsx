@@ -250,9 +250,7 @@ export function AppShell(props: AppShellProps) {
               onSaveAs={() => setSaveModalOpen(true)}
               onLoad={handlers.handleLoad}
               onExportRust={() => setExportRustOpen(true)}
-              onNewScene={() =>
-                handlers.handleNewScene(`scene_${Date.now()}`)
-              }
+              onNewScene={() => handlers.handleNewScene(`scene_${Date.now()}`)}
               onDeleteEntity={() => {
                 if (selectedEntityId)
                   void handlers.handleDeleteEntity(selectedEntityId);

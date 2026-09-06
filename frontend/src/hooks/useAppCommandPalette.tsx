@@ -111,7 +111,8 @@ export function useAppCommandPalette({
         shortcut: "Del",
         group: "Edit",
         action: () => {
-          if (selectedEntityId) void handlers.handleDeleteEntity(selectedEntityId);
+          if (selectedEntityId)
+            void handlers.handleDeleteEntity(selectedEntityId);
         },
       },
       {
@@ -191,7 +192,8 @@ export function useAppCommandPalette({
         id: "assets.create",
         label: "Create Scene Asset",
         group: "Assets",
-        action: () => handlers.handleAssetCreate(`asset_${Date.now()}`, "actor"),
+        action: () =>
+          handlers.handleAssetCreate(`asset_${Date.now()}`, "actor"),
       },
       // Play
       {

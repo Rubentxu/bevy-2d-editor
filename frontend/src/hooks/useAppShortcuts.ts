@@ -61,13 +61,9 @@ export function useAppShortcuts({
   useKeyboardShortcuts({
     enabled: editorMode !== "play",
     onUndo:
-      editorMode === "scene"
-        ? handlers.handleUndo
-        : handlers.handleAssetUndo,
+      editorMode === "scene" ? handlers.handleUndo : handlers.handleAssetUndo,
     onRedo:
-      editorMode === "scene"
-        ? handlers.handleRedo
-        : handlers.handleAssetRedo,
+      editorMode === "scene" ? handlers.handleRedo : handlers.handleAssetRedo,
     // v0.82 P2 (ADR-0025): route Delete/Backspace through the multi-
     // delete sink when more than one id is selected. The hook keeps
     // a single-id fallback for the legacy single-select flow.

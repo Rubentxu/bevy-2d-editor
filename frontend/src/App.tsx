@@ -90,7 +90,8 @@ import {
 import { findSourceLocation } from "./services/code-files";
 import WorldWorkspace from "./components/WorldWorkspace";
 
-type EditorMode = "scene" | "asset-authoring" | "logic" | "code" | "play" | "world";
+type EditorMode =
+  "scene" | "asset-authoring" | "logic" | "code" | "play" | "world";
 
 export default function App() {
   return (
@@ -442,13 +443,25 @@ function AppInner() {
 
   // Handlers are now provided by `handlers` (useSceneHandlers) below.
 
-
   // Apply the data-fullscreen attribute to body — useFullscreen already
   // mirrors this, but make sure any mount-time flip is reflected in the
   // hook state for tests/components querying it.
   useFullscreenBody(fullscreen.enabled);
 
-  useAppShortcuts({ editorMode, handlers, selectedIds, selectedEntityId, logState, assetLogState, setCommandPaletteOpen, setCheatSheetOpen, setRenameRequestTick, fitToContent, dock, fullscreen });
+  useAppShortcuts({
+    editorMode,
+    handlers,
+    selectedIds,
+    selectedEntityId,
+    logState,
+    assetLogState,
+    setCommandPaletteOpen,
+    setCheatSheetOpen,
+    setRenameRequestTick,
+    fitToContent,
+    dock,
+    fullscreen,
+  });
   // ── Command palette catalog & cheat sheet (commit 4) ───────────────────────────
   // Both lists, plus the cross-window executor used by Global Search
   // (`window.__executeCommand`), are built here. The hook preserves the
@@ -491,47 +504,48 @@ function AppInner() {
   // bottom panel bodies were lifted into `useAppModeController`. The
   // hook reads the same state and returns ReactNodes that AppShell
   // shares between docked and floating portals.
-  const { outlineContent, propertiesContent, bottomContent } = useAppModeController({
-    editorMode,
-    selectedEntityId,
-    selectedIds,
-    selectEntity,
-    setSelectedEntityId,
-    setPendingNavigation,
-    pendingNavigation,
-    scene,
-    instances,
-    prompt,
-    setPrompt,
-    aiLoading,
-    proposals,
-    aiError,
-    contextStats,
-    contextUsedChars,
-    discardProposal,
-    taskMode,
-    setTaskMode,
-    enabledSources,
-    applyingIds,
-    aiPanelOpen,
-    validationCenterOpen,
-    tilesetPanelOpen,
-    autoLayerPanelOpen,
-    selectedTilesetId,
-    selectedAutoLayerId,
-    assetDoc,
-    assetEntries,
-    assetDirty,
-    assetLogState,
-    activeAssetLogicalPath,
-    removeInstance,
-    replaceInstanceAsset,
-    placeInstance,
-    refresh,
-    renameRequestTick,
-    logicGraphEntries,
-    handlers,
-  });
+  const { outlineContent, propertiesContent, bottomContent } =
+    useAppModeController({
+      editorMode,
+      selectedEntityId,
+      selectedIds,
+      selectEntity,
+      setSelectedEntityId,
+      setPendingNavigation,
+      pendingNavigation,
+      scene,
+      instances,
+      prompt,
+      setPrompt,
+      aiLoading,
+      proposals,
+      aiError,
+      contextStats,
+      contextUsedChars,
+      discardProposal,
+      taskMode,
+      setTaskMode,
+      enabledSources,
+      applyingIds,
+      aiPanelOpen,
+      validationCenterOpen,
+      tilesetPanelOpen,
+      autoLayerPanelOpen,
+      selectedTilesetId,
+      selectedAutoLayerId,
+      assetDoc,
+      assetEntries,
+      assetDirty,
+      assetLogState,
+      activeAssetLogicalPath,
+      removeInstance,
+      replaceInstanceAsset,
+      placeInstance,
+      refresh,
+      renameRequestTick,
+      logicGraphEntries,
+      handlers,
+    });
 
   return (
     <AppShell
