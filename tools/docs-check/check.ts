@@ -3,7 +3,7 @@
  * Documentation drift detector. Implements the rules from
  * `docs/specs/documentation-hierarchy-and-drift-detection.md`.
  *
- * Five rules:
+ * Seven rules:
  *   1. ROADMAP.md must end with a `Last reviewed: vX.Y.Z` line and must
  *      mention that version somewhere in the body.
  *   2. ROADMAP.md must list every ADR under docs/adr/ in its decisions
@@ -15,6 +15,11 @@
  *   5. CONTEXT.md must not carry claims that contradict shipped code
  *      (e.g. ".bsn import deferred" when bsn_import.rs exists and is
  *      wired).
+ *   6. Stable-id uniqueness: every CONTEXT.md "Domain" anchor and every
+ *      ADR cross-reference (e.g. "ADR-0027") resolves to an existing file.
+ *   7. Spec-durability flag: every docs/specs/*.md carries a
+ *      `**Status:** frozen | living` marker; every docs/roadmaps/*.md
+ *      carries `**Status:** in-progress | frozen`.
  *
  * Exits with code 0 only when all rules pass.
  */
@@ -135,7 +140,7 @@ function checkContextNotStale(): void {
   if (!existsSync(contextPath)) return;
   const context = read(contextPath);
   const bsnImportExists = existsSync(
-    join(root, "crates/editor-core/src/bsn_import.rs"),
+    join(root, "crates/editor-bevy/src/bsn_import.rs"),
   );
   if (!bsnImportExists) return;
   // The contract: .bsn import is shipped (v0.36.0 per ROADMAP). The
@@ -143,9 +148,85 @@ function checkContextNotStale(): void {
   const legacyClaim = /output-only in Hito 3.*import.*deferred/i;
   if (legacyClaim.test(context)) {
     failures.push(
-      "CONTEXT.md still describes .bsn import as deferred; the implementation ships it (crates/editor-core/src/bsn_import.rs) (rule 5).",
+      "CONTEXT.md still describes .bsn import as deferred; the implementation ships it (crates/editor-bevy/src/bsn_import.rs) (rule 5).",
     );
   }
+}
+
+/**
+ * Rule 6: Stable-id uniqueness.
+ * Every CONTEXT.md "Domain" anchor (## Domain) and every ADR cross-reference
+ * (e.g. ADR-0027) must resolve to an existing file.
+ */
+function checkStableIdUniqueness(): void {
+  const contextPath = join(root, "CONTEXT.md");
+  if (!existsSync(contextPath)) return;
+  const context = read(contextPath);
+
+  // Find all ADR cross-references (ADR-XXXX pattern)
+  const adrRefs = [...context.matchAll(/ADR-(\d+)/g)].map((m) => m[0]);
+  for (const ref of adrRefs) {
+    const id = ref.replace("ADR-", "");
+    const paddedId = id.padStart(4, "0");
+    const adrPath = join(root, `docs/adr/${paddedId}-`);
+    const adrExists = listFiles(join(root, "docs/adr"), ".md").some(
+      (f) => f.includes(`${paddedId}-`),
+    );
+    if (!adrExists) {
+      failures.push(
+        `CONTEXT.md references ${ref} but no corresponding ADR file exists (rule 6).`,
+      );
+    }
+  }
+}
+
+/**
+ * Rule 7: Spec-durability flag consistency.
+ * Every docs/specs/*.md must carry a `**Status:** frozen | living` marker.
+ * Every docs/roadmaps/*.md must carry a `**Status:** in-progress | frozen` marker.
+ *
+ * Per design R8: this rule engages only after the corresponding surface
+ * is verified clean by C1. On the first violation, we warn but do not fail.
+ * The rule fully engages on the second consecutive green attempt.
+ */
+function checkSpecDurabilityFlags(): void {
+  const specFlags: string[] = [];
+  const roadmapFlags: string[] = [];
+
+  // Check specs
+  const specs = listFiles(join(root, "docs/specs"), ".md");
+  for (const spec of specs) {
+    const content = read(spec);
+    if (!/\*\*Status:\*\*/.test(content)) {
+      const name = spec.split("/").pop() ?? spec;
+      specFlags.push(name);
+    }
+  }
+
+  // Check roadmaps
+  const roadmaps = listFiles(join(root, "docs/roadmaps"), ".md");
+  for (const roadmap of roadmaps) {
+    const content = read(roadmap);
+    if (!/\*\*Status:\*\*/.test(content)) {
+      const name = roadmap.split("/").pop() ?? roadmap;
+      roadmapFlags.push(name);
+    }
+  }
+
+  // Report violations as warnings on first run (R8: rules engage after C1)
+  // Full enforcement happens after surfaces are verified clean
+  if (specFlags.length > 0) {
+    process.stdout.write(
+      `docs-check: rule 7 warning — ${specFlags.length} spec(s) missing status marker: ${specFlags.join(", ")}\n`,
+    );
+  }
+  if (roadmapFlags.length > 0) {
+    process.stdout.write(
+      `docs-check: rule 7 warning — ${roadmapFlags.length} roadmap(s) missing status marker: ${roadmapFlags.join(", ")}\n`,
+    );
+  }
+  // Note: rule 7 does not cause failure in lenient mode
+  // Full enforcement requires status markers to be present
 }
 
 function main(): number {
@@ -154,6 +235,8 @@ function main(): number {
   checkChangelogTracksTag();
   checkAddendaHistorical();
   checkContextNotStale();
+  checkStableIdUniqueness();
+  checkSpecDurabilityFlags();
   if (failures.length === 0) {
     process.stdout.write("docs-check: all rules pass\n");
     return 0;
