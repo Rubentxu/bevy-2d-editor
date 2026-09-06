@@ -35,6 +35,7 @@ import type {
   WorldCatalogEntry,
   TopologyIssue,
 } from "../services/EditorGateway";
+import { workspaceCommands } from "../commands/catalog";
 
 export interface WorkspaceController {
   // Mode
@@ -57,6 +58,8 @@ export interface WorkspaceController {
   worldDoc: WorldSummary | null;
   worldCatalog: WorldCatalogEntry[];
   topologyIssues: TopologyIssue[];
+  // Command catalog (frozen, per spec §6.3)
+  commands: typeof workspaceCommands;
   // Test bridge
   bindTestHooks: () => void;
 }
@@ -209,6 +212,8 @@ export function useEditorWorkspaceController(
     worldDoc,
     worldCatalog,
     topologyIssues,
+    // Command catalog (frozen, per spec §6.3)
+    commands: workspaceCommands,
     bindTestHooks,
   };
 }

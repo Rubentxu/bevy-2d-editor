@@ -20,7 +20,7 @@ import {
 import type { SourceFileRef } from "../types/ai";
 import { listSourceFiles, readSourceFile } from "../services/code-files";
 import { subscribe } from "../services/hot-reload";
-import { waitForEditorReady } from "../utils/waitForEditorReady";
+import { waitForEditorReady } from "../editor-ready/wait";
 import { callBridge, callBridgeSync } from "../services/bridge-call";
 
 /** A batch of proposed commands with associated metadata */

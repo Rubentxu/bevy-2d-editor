@@ -6,7 +6,7 @@ import {
   unbindLogicInstance,
   setLogicFieldOverride,
 } from "../services/logic-graphs";
-import { waitForEditorReady } from "../utils/waitForEditorReady";
+import { waitForEditorReady } from "../editor-ready/wait";
 import { callBridge, callBridgeSync } from "../services/bridge-call";
 
 /**

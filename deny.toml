@@ -1,0 +1,28 @@
+# Cargo deny configuration
+#
+# Per implementation-plan E.1 for cycle application-stabilization-and-roadmap-convergence
+#
+# This file configures cargo-deny to check for banned dependencies.
+# Run `cargo deny check` to verify.
+
+[bans]
+# Crates that are explicitly banned from the workspace dependency tree.
+# Each entry can be a exact version, a version range, or "*" for any version.
+
+# axum: banned per OQ-D1 design decision.
+# Using a workspace-level wildcard is too broad; we ban by exact crate name.
+# Since cargo-deny bans work by name, we list the crate name without a version
+# to ban all versions.
+name = "axum"
+usage = "deny"
+
+# ai-proxy: banned per OQ-D1 design decision.
+name = "ai-proxy"
+usage = "deny"
+
+# editor-core: TRIPWIRE only (per OQ-D1).
+# This crate does not exist in the workspace - the name is a tripwire to
+# catch any accidental references. Since the crate doesn't exist, cargo-deny
+# will warn but not fail when it checks this entry.
+name = "editor-core"
+usage = "warn"

@@ -30,7 +30,7 @@
  * now; they migrate in subsequent Wave D units.
  */
 
-import { waitForEditorReady } from "../utils/waitForEditorReady";
+import { waitForEditorReady } from "../editor-ready/wait";
 
 /**
  * Read result for scene snapshots and asset bodies. We model the

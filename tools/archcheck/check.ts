@@ -428,6 +428,36 @@ const ASSERTIONS: Assertion[] = [
       }
     },
   },
+  // ── B9 (Wave D3.3): no-direct-scene-mutation ─────────────────────────────────
+  {
+    id: "B9",
+    description:
+      "no-direct-scene-mutation: scene state must not be mutated outside " +
+      "scene-session module or useSceneState hook. Only useSceneState.ts may " +
+      "call setScene; all other mutations must route through scene-session " +
+      "module or EditorGateway",
+    run() {
+      const files = collectTsxFiles(join(root, "frontend/src"));
+      for (const file of files) {
+        // Skip the sanctioned files
+        if (/useSceneState\.tsx?$/.test(file)) continue; // useSceneState is the sanctioned hook
+        if (/scene-session/.test(file)) continue; // scene-session owns its own state
+        if (/EditorGateway/.test(file)) continue; // EditorGateway is the WASM boundary
+        const content = readFileSync(file, "utf8");
+        // Strip comments to avoid false positives
+        const stripped = content
+          .replace(/\/\*[\s\S]*?\*\//g, "")
+          .replace(/\/\/.*$/gm, "");
+        // Check for direct setScene calls (the React useState setter pattern)
+        // This catches direct scene state mutations outside sanctioned modules
+        if (/\bsetScene\s*\(/.test(stripped)) {
+          failures.push(
+            `Assertion failed: ${this.description} — setScene found in ${file} (must use scene-session or EditorGateway)`,
+          );
+        }
+      }
+    },
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

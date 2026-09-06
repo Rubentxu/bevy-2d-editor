@@ -13,7 +13,7 @@
  * 5. `get_external_source_wasm(resource_ref)` — gets the provenance record
  */
 
-import { waitForEditorReady } from "../utils/waitForEditorReady";
+import { waitForEditorReady } from "../editor-ready/wait";
 
 /** Window augmented with the WASM bridge. */
 interface WindowWithBridge {

@@ -10,10 +10,10 @@
  * - EditorReadyEvent: event shape for listeners
  * - onEditorReady(): subscribe to readiness changes
  * - getReadyState(): get current state synchronously
- * - waitForEditorReady(): re-export from utils/waitForEditorReady
+ * - waitForEditorReady(): re-export from ./wait
  */
 
-import { waitForEditorReady as _waitForEditorReady, isEditorReady } from "../utils/waitForEditorReady";
+import { waitForEditorReady as _waitForEditorReady, isEditorReady } from "./wait";
 
 // ---------------------------------------------------------------------------
 // Public types
