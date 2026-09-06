@@ -267,7 +267,7 @@ pub fn reimport(
         &new_fingerprint,
         &old_sidecar.importer_id,
         old_sidecar.importer_version,
-        now_fn,
+        &now_fn,
         &parse_output,
         old_sidecar.conflict_policy,
     );
@@ -291,8 +291,13 @@ pub fn reimport(
         return Ok(ReimportResult::NoOp);
     }
 
-    let change_set =
-        build_change_set_from_diff(&change_set_id, &diff, &old_sidecar.importer_id, source_uri);
+    let change_set = build_change_set_from_diff(
+        &change_set_id,
+        &diff,
+        &old_sidecar.importer_id,
+        source_uri,
+        now_fn,
+    );
 
     if requires_review {
         // Route to ChangeWorkbench with RequiresHuman
@@ -347,7 +352,7 @@ fn build_new_sidecar(
     fingerprint: &str,
     importer_id: &str,
     importer_version: editor_model::importer::ImporterVersion,
-    now_fn: impl Fn() -> Timestamp,
+    now_fn: &dyn Fn() -> Timestamp,
     parse_output: &editor_model::importer::ParseOutput,
     conflict_policy: Option<editor_model::external_source::ConflictPolicy>,
 ) -> ExternalSource {
@@ -366,11 +371,17 @@ fn build_new_sidecar(
 }
 
 /// Build a `PendingChangeSet` from a `ProvenanceDiff`.
+///
+/// `now_fn` is the wall-clock injection point — the caller must thread a
+/// production clock (e.g. `editor_bevy::time::JsSysClock`) from outside this
+/// crate, because `editor-application` is wasm-allowed but `editor-model` is
+/// pure (archcheck B8 / ADR-0030). Tests can pass `|| Timestamp(0)`.
 fn build_change_set_from_diff(
     change_set_id: &str,
     diff: &ProvenanceDiff,
     importer_id: &str,
     source_uri: &str,
+    now_fn: impl Fn() -> Timestamp,
 ) -> PendingChangeSet {
     use editor_model::PendingChangeSet;
 
@@ -417,7 +428,7 @@ fn build_change_set_from_diff(
         actor: format!("importer:{}", importer_id),
         rationale,
         ops: Vec::new(), // Ops are built by the scene-level change set application
-        submitted_at_ms: editor_model::time::now_millis(),
+        submitted_at_ms: now_fn().into_u64(),
     }
 }
 
