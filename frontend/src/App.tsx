@@ -48,6 +48,7 @@ import { useCanvasViewport } from "./hooks/useCanvasViewport";
 import { useDockResize } from "./hooks/useDockResize";
 import { useEditorWorkspaceController } from "./hooks/useEditorWorkspaceController";
 import { useSceneHandlers } from "./hooks/useSceneHandlers";
+import { AppShell } from "./components/AppShell";
 import type {
   DockableRegion,
   FloatingPanelState,
@@ -1022,320 +1023,56 @@ function AppInner() {
   );
 
   return (
-    <div className="app">
-      <DockLayout
-        onMovePanel={handlers.handleMovePanel}
-        menu={
-          <>
-            <AppHeader
-              editorMode={editorMode}
-              onOpenAssets={() => {}}
-              onBackToScene={
-                editorMode === "asset-authoring" ? handlers.handleBackToScene : undefined
-              }
-              onOpenLogic={editorMode === "scene" ? handlers.handleOpenLogic : undefined}
-              onOpenCode={editorMode === "scene" ? handlers.handleOpenCode : undefined}
-              onOpenWorldWorkspace={handlers.handleOpenWorldWorkspace}
-              logState={editorMode === "scene" ? logState : assetLogState}
-              onUndo={editorMode === "scene" ? handlers.handleUndo : handlers.handleAssetUndo}
-              onRedo={editorMode === "scene" ? handlers.handleRedo : handlers.handleAssetRedo}
-              onSave={editorMode === "scene" ? handlers.handleSave : handlers.handleAssetSave}
-              onSaveAs={() => setSaveModalOpen(true)}
-              onLoad={handlers.handleLoad}
-              onExportRust={() => setExportRustOpen(true)}
-              onNewScene={() => handlers.handleNewScene(`scene_${Date.now()}`)}
-              onDeleteEntity={() => {
-                if (selectedEntityId) void handlers.handleDeleteEntity(selectedEntityId);
-              }}
-              selectedEntityId={selectedEntityId}
-              onToggleAI={handlers.handleToggleAI}
-              aiPanelOpen={aiPanelOpen}
-              onToggleValidationCenter={handlers.handleToggleValidationCenter}
-              validationCenterOpen={validationCenterOpen}
-              onToggleTileset={handlers.handleToggleTileset}
-              tilesetPanelOpen={tilesetPanelOpen}
-              onToggleAutoLayer={handlers.handleToggleAutoLayer}
-              autoLayerPanelOpen={autoLayerPanelOpen}
-              onTogglePlay={handlers.handleTogglePlay}
-              onOpenSearch={() => setCommandPaletteOpen(true)}
-              onOpenCheatSheet={() => setCheatSheetOpen(true)}
-              onWelcomeTour={() =>
-                console.warn("[menu] TODO: wire Welcome Tour")
-              }
-              onAbout={handlers.handleAbout}
-              onToggleLeftDock={dock.toggleLeft}
-              onToggleOutlineDock={dock.toggleOutline}
-              onTogglePropertiesDock={dock.toggleProperties}
-              onToggleFullscreen={fullscreen.toggle}
-              onResetLayout={dock.reset}
-              onApplyPreset={dock.applyPreset}
-              onSaveWorkspacePreset={() => {
-                setSaveWorkspacePresetOpen(true);
-              }}
-              // ModeContextBar props
-              currentSceneName={
-                scenes.find((s) => s.id === currentId)?.name ?? null
-              }
-              activeAssetPath={activeAssetLogicalPath}
-              assetDirty={assetDirty}
-              sceneDirty={logState.size > 0}
-              activeLogicGraphId={activeLogicGraph?.logical_path ?? null}
-              activeCodeFileName={pendingNavigation?.fileId ?? null}
-              isPlaying={editorMode === "play"}
-              canUndo={logState.can_undo}
-              canRedo={logState.can_redo}
-              assetCanUndo={assetLogState.can_undo}
-              assetCanRedo={assetLogState.can_redo}
-            />
-            {editorMode === "play" && <GameOverlay onStop={handlers.handleTogglePlay} />}
-          </>
-        }
-        status={
-          <StatusBar
-            selectedEntityId={selectedEntityId}
-            onExportRust={() => setExportRustOpen(true)}
-          />
-        }
-        leftWidth={dock.prefs.left.width}
-        rightWidth={dock.prefs.right.width}
-        bottomHeight={dock.prefs.bottom.height}
-        statusBarHeight={dock.prefs.statusBar.height}
-        onResizeLeft={handlers.handleResizeLeft}
-        onResizeRight={handlers.handleResizeRight}
-        onResizeBottom={handlers.handleResizeBottom}
-        onResizeStatusBar={handlers.handleResizeStatusBar}
-        onResetLeft={() => dock.setLeftWidth(280)}
-        onResetRight={() => dock.setRightWidth(320)}
-        onResetBottom={() => dock.setBottomHeight(240)}
-        onResetStatusBar={() => dock.setStatusBarHeight(24)}
-        leftVisible={dock.prefs.left.visible}
-        bottomVisible={dock.prefs.bottom.visible && editorMode === "scene"}
-        left={
-          floatingPanelIds.has("assets") ? null : (
-            <LeftDock
-              visible={dock.prefs.left.visible}
-              collapsed={leftCollapsed}
-              onToggleCollapse={() => setLeftCollapsed((v) => !v)}
-              onClose={dock.toggleLeft}
-              onMove={(target) => dock.movePanel("assets", target)}
-              onFloatToggle={() => handlers.handleFloatPanel("assets")}
-              floating={false}
-            />
-          )
-        }
-        center={
-          <CenterDock
-            scenes={scenes}
-            currentId={currentId}
-            onTabClick={handlers.handleTabClick}
-            onNewScene={handlers.handleNewScene}
-            onDeleteScene={handlers.handleDeleteScene}
-            onRenameScene={handlers.handleRenameScene}
-            canvas={
-              editorMode === "world" ? (
-                <WorldWorkspace
-                  onOpenLevel={(levelId, _assetRef) => {
-                    // Open level from world workspace switches to scene mode
-                    setEditorMode("scene");
-                  }}
-                  onBackToScene={() => setEditorMode("scene")}
-                />
-              ) : (
-                <div
-                  className={`canvas-container${isDragOverCanvas ? " canvas-drop-active" : ""}`}
-                  data-testid="canvas-drop-target"
-                  onDragOver={handlers.handleCanvasDragOver}
-                  onDragLeave={handlers.handleCanvasDragLeave}
-                  onDrop={handlers.handleCanvasDrop}
-                >
-                  {!ready && (
-                    <div style={{ padding: 16, color: "#888" }}>
-                      {initError ? `Error: ${initError}` : "Loading WASM..."}
-                    </div>
-                  )}
-                  <div
-                    className="canvas-transform"
-                    style={{
-                      transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-                    }}
-                  >
-                    <canvas id="bevy-canvas" />
-                  </div>
-                  {isDragOverCanvas && (
-                    <div
-                      className="canvas-drop-outline"
-                      data-testid="canvas-drop-outline"
-                      aria-hidden="true"
-                    />
-                  )}
-                  <ViewportControls />
-                </div>
-              )
-            }
-          />
-        }
-        right={
-          <RightDock
-            visible={dock.prefs.right.visible}
-            outlineVisible={dock.prefs.right.outlineVisible}
-            propertiesVisible={dock.prefs.right.propertiesVisible}
-            outlineCollapsed={dock.prefs.right.outlineCollapsed}
-            propertiesCollapsed={dock.prefs.right.propertiesCollapsed}
-            topHeightPct={dock.prefs.right.topHeight}
-            editorMode={editorMode}
-            outlineFloating={floatingPanelIds.has("outline")}
-            propertiesFloating={floatingPanelIds.has("properties")}
-            onFloatToggleOutline={() => handlers.handleFloatPanel("outline")}
-            onFloatToggleProperties={() => handlers.handleFloatPanel("properties")}
-            outline={outlinePanelContent}
-            properties={propertiesPanelContent}
-            onToggleCollapseOutline={dock.toggleOutlineCollapsed}
-            onToggleCollapseProperties={dock.togglePropertiesCollapsed}
-            onCloseOutline={dock.toggleOutline}
-            onCloseProperties={dock.toggleProperties}
-            onResizeSplit={handlers.handleResizeRightSplit}
-            onResetSplit={() => dock.setRightTopHeight(60)}
-            onOpen={dock.toggleRight}
-            onMove={(target) => dock.movePanel("outline", target)}
-          />
-        }
-        bottom={
-          floatingPanelIds.has("bottom") ? null : (
-            <BottomDock
-              visible={dock.prefs.bottom.visible && editorMode === "scene"}
-              onToggle={dock.toggleBottom}
-              onClose={dock.toggleBottom}
-              onMove={(target) => dock.movePanel("bottom", target)}
-              onFloatToggle={() => handlers.handleFloatPanel("bottom")}
-              floating={false}
-              onSourceNavigate={setPendingNavigation}
-            />
-          )
-        }
-      />
-      {/* v0.82 P2 (ADR-0025) floating panels — render portals for any
-       * panel id whose entry lives in `dock.prefs.floats`. Each portal
-       * hosts a lightweight body that points the user back at the dock
-       * region it lifted from; filling the floating portal with the
-       * full docked content (Inspector / Hierarchy / AssetNavigator
-       * / BottomDock tabs) is the next iteration. */}
-      {Array.from(floatingPanelIds).map((panelId) => {
-        const rect = dock.prefs.floats[panelId];
-        if (!rect) return null;
-        // Mode-aware floating panel titles — mirrors RightDock.getOutlineTitle/getPropertiesTitle
-        // so floating portals show the same labels as their docked counterparts.
-        const outlineFloatingTitle =
-          editorMode === "asset-authoring"
-            ? "Project Assets"
-            : editorMode === "scene"
-              ? "Outline"
-              : "Outline"; // logic/code/play: outline body is empty
-        const propertiesFloatingTitle =
-          editorMode === "asset-authoring"
-            ? "Authoring"
-            : editorMode === "scene"
-              ? "Properties"
-              : "Properties"; // logic/code/play: properties body is empty
-        const floatingTitles: Record<PanelId, string> = {
-          assets: "Assets",
-          outline: outlineFloatingTitle,
-          properties: propertiesFloatingTitle,
-          bottom: "Tools",
-          "change-workbench": "Workbench",
-        };
-        return (
-          <FloatingPanel
-            key={panelId}
-            panelId={panelId}
-            title={floatingTitles[panelId]}
-            initialRect={rect}
-            focused={focusedFloatingPanel === panelId}
-            onFocus={() => setFocusedFloatingPanel(panelId)}
-            onDock={() => handlers.handleDockFloatingPanel(panelId)}
-            onPersistRect={(next) => dock.setFloatRect(panelId, next)}
-          >
-            {/* Phase B T2.1: render the actual dock body content, not a placeholder.
-                The panel body matches what the docked version renders. */}
-            <div data-testid={`floating-panel-${panelId}-body`}>
-              {panelId === "assets" && <AssetNavigator />}
-              {panelId === "outline" && outlinePanelContent}
-              {panelId === "properties" && propertiesPanelContent}
-              {panelId === "bottom" && bottomPanelContent}
-            </div>
-          </FloatingPanel>
-        );
-      })}
-      {exportRustOpen && (
-        <ExportRustModal onClose={() => setExportRustOpen(false)} />
-      )}
-      {saveModalOpen && (
-        <SaveSceneModal
-          defaultName={
-            scenes.find((s) => s.id === currentId)?.name ?? "level_01"
-          }
-          onSave={handlers.handleSaveConfirm}
-          onCancel={() => setSaveModalOpen(false)}
-        />
-      )}
-      {saveWorkspacePresetOpen && (
-        <PromptDialog
-          title="Save Workspace Preset"
-          label="Preset name"
-          placeholder="e.g. level-design"
-          defaultValue=""
-          onConfirm={handlers.handleSaveWorkspacePresetSubmit}
-          onCancel={() => setSaveWorkspacePresetOpen(false)}
-        />
-      )}
-      {aboutOpen && (
-        <ConfirmDialog
-          title="About"
-          message="Bevy 2D Editor v0.80.0"
-          confirmLabel="OK"
-          onConfirm={() => setAboutOpen(false)}
-          onCancel={() => setAboutOpen(false)}
-        />
-      )}
-      {pendingSwitchId !== null && pendingSwitchSource !== null && (
-        <UnsavedChangesDialog
-          sourceName={pendingSwitchSource}
-          onSave={handlers.handleSaveAndSwitch}
-          onDiscard={handlers.handleDiscardAndSwitch}
-          onCancel={handlers.handleCancelSwitch}
-        />
-      )}
-      {pendingBackToScene && activeAssetLogicalPath && (
-        <AssetUnsavedChangesDialog
-          logicalPath={activeAssetLogicalPath}
-          unsavedCount={assetLogState.size}
-          onSave={handlers.handleAssetSaveAndLeave}
-          onDiscard={handlers.handleAssetDiscardAndLeave}
-          onCancel={handlers.handleAssetCancelBack}
-        />
-      )}
-      {commandPaletteOpen && (
-        <CommandPalette
-          commands={paletteCommands}
-          onClose={() => setCommandPaletteOpen(false)}
-        />
-      )}
-      {cheatSheetOpen && (
-        <CheatSheet
-          groups={cheatSheetGroups}
-          onClose={() => setCheatSheetOpen(false)}
-        />
-      )}
-      <WelcomeDismissalProvider>
-        <OnboardingBanner
-          onCreateBlankScene={() => handlers.handleNewScene(`scene_${Date.now()}`)}
-          onOpenLogicEditor={handlers.handleOpenLogic}
-        />
-        <WelcomeOverlay
-          onTakeTour={() => setEditorMode("asset-authoring")}
-          onSkip={() => undefined}
-        />
-      </WelcomeDismissalProvider>
-      <Toasts />
-    </div>
+    <AppShell
+      handlers={handlers}
+      editorMode={editorMode}
+      selectedEntityId={selectedEntityId}
+      pendingNavigation={pendingNavigation}
+      activeAssetLogicalPath={activeAssetLogicalPath}
+      assetDirty={assetDirty}
+      logState={logState}
+      assetLogState={assetLogState}
+      activeLogicGraph={activeLogicGraph}
+      scenes={scenes}
+      currentId={currentId}
+      setEditorMode={setEditorMode}
+      setSaveModalOpen={setSaveModalOpen}
+      setExportRustOpen={setExportRustOpen}
+      setSaveWorkspacePresetOpen={setSaveWorkspacePresetOpen}
+      setAboutOpen={setAboutOpen}
+      setCommandPaletteOpen={setCommandPaletteOpen}
+      setCheatSheetOpen={setCheatSheetOpen}
+      setFocusedFloatingPanel={setFocusedFloatingPanel}
+      setLeftCollapsed={setLeftCollapsed}
+      setPendingNavigation={setPendingNavigation}
+      dock={dock}
+      fullscreen={fullscreen}
+      floatingPanelIds={floatingPanelIds}
+      focusedFloatingPanel={focusedFloatingPanel}
+      leftCollapsed={leftCollapsed}
+      aiPanelOpen={aiPanelOpen}
+      validationCenterOpen={validationCenterOpen}
+      tilesetPanelOpen={tilesetPanelOpen}
+      autoLayerPanelOpen={autoLayerPanelOpen}
+      exportRustOpen={exportRustOpen}
+      saveModalOpen={saveModalOpen}
+      saveWorkspacePresetOpen={saveWorkspacePresetOpen}
+      aboutOpen={aboutOpen}
+      commandPaletteOpen={commandPaletteOpen}
+      cheatSheetOpen={cheatSheetOpen}
+      pendingSwitchId={pendingSwitchId}
+      pendingSwitchSource={pendingSwitchSource}
+      pendingBackToScene={pendingBackToScene}
+      ready={ready}
+      initError={initError}
+      pan={pan}
+      zoom={zoom}
+      isDragOverCanvas={isDragOverCanvas}
+      outlinePanelContent={outlinePanelContent}
+      propertiesPanelContent={propertiesPanelContent}
+      bottomPanelContent={bottomPanelContent}
+      paletteCommands={paletteCommands}
+      cheatSheetGroups={cheatSheetGroups}
+    />
   );
 }
