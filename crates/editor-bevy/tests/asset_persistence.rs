@@ -190,7 +190,7 @@ fn catalog_update_version_bumps() {
     catalog.register(e).expect("register should succeed");
 
     catalog
-        .update_version("id_1", 2)
+        .update_version("id_1", 2, &FakeClock::new())
         .expect("version bump should succeed");
 
     let updated = catalog.get("id_1").expect("entry should exist");
@@ -205,7 +205,7 @@ fn catalog_update_version_rejects_downgrade() {
     catalog.register(e).expect("register should succeed");
 
     let err = catalog
-        .update_version("id_1", 1)
+        .update_version("id_1", 1, &FakeClock::new())
         .expect_err("downgrade should fail");
     assert!(matches!(
         err,
@@ -242,7 +242,7 @@ fn catalog_mint_asset_id_produces_unique_ids() {
     let ids: Vec<String> = (0..50)
         .map(|i| {
             clock.advance(1);
-            mint_asset_id(&clock, &random_hex_8())
+            mint_asset_id(&clock, &random_hex_8(&clock))
         })
         .collect();
     let unique: std::collections::HashSet<_> = ids.iter().collect();
@@ -257,7 +257,7 @@ fn catalog_duplicate_entry_with_unique_id() {
     catalog.register(e1).expect("register should succeed");
 
     // Simulate duplicate: new entry with different id
-    let new_id = mint_asset_id(&FakeClock::new(), &random_hex_8());
+    let new_id = mint_asset_id(&FakeClock::new(), &random_hex_8(&FakeClock::new()));
     let e2 = entry(&new_id, "player", SceneAssetRole::Actor, 1);
     let err = catalog.register(e2).expect_err("same path should fail");
 

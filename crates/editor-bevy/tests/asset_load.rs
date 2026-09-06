@@ -6,6 +6,7 @@
 //! S19: catalog survives across calls without project.json write.
 
 use editor_bevy::scene_asset::SceneAssetRole;
+use editor_bevy::test_helpers::FakeClock;
 use editor_model::scene_asset_catalog::{
     CatalogWarning, SceneAssetCatalog, SceneAssetCatalogEntry,
 };
@@ -82,7 +83,7 @@ fn catalog_update_version_survives_in_memory() {
 
     // Later call: bump version (simulates save_scene_asset)
     catalog
-        .update_version("id_1", 2)
+        .update_version("id_1", 2, &FakeClock::new())
         .expect("version bump should succeed");
 
     // Third call: verify version persisted

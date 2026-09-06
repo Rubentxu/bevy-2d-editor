@@ -404,14 +404,14 @@ fn update_version_validates_monotonic() {
 
     // Advance version
     catalog
-        .update_version("id_1", 2)
+        .update_version("id_1", 2, &FakeClock::new())
         .expect("version bump should succeed");
     assert_eq!(catalog.get("id_1").unwrap().current_version, 2);
     assert!(catalog.get("id_1").unwrap().updated_at > 1000);
 
     // Same version fails
     let err = catalog
-        .update_version("id_1", 2)
+        .update_version("id_1", 2, &FakeClock::new())
         .expect_err("same version should fail");
     assert!(matches!(
         err,
@@ -420,7 +420,7 @@ fn update_version_validates_monotonic() {
 
     // Downgrade fails
     let err = catalog
-        .update_version("id_1", 1)
+        .update_version("id_1", 1, &FakeClock::new())
         .expect_err("downgrade should fail");
     assert!(matches!(
         err,
@@ -429,7 +429,7 @@ fn update_version_validates_monotonic() {
 
     // Missing asset
     let err = catalog
-        .update_version("id_99", 2)
+        .update_version("id_99", 2, &FakeClock::new())
         .expect_err("missing asset should fail");
     assert!(matches!(err, CatalogError::NotFound { id } if id == "id_99"));
 }
@@ -444,7 +444,7 @@ fn mint_asset_id_produces_distinct_ids() {
     let ids: Vec<String> = (0..100)
         .map(|i| {
             clock.advance(1);
-            mint_asset_id(&clock, &random_hex_8())
+            mint_asset_id(&clock, &random_hex_8(&clock))
         })
         .collect();
     // All should be unique
