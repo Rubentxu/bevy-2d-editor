@@ -4,6 +4,31 @@ All notable changes to Bevy 2D Editor are documented here. The project follows s
 
 ## Unreleased
 
+### Recovery-3 — Playwright OPFS persistence race fix
+
+Closes C-2 (deterministic Playwright smoke flake on `engine.spec.ts` `:526` and `:744`).
+
+- **Root cause**: `frontend/src/engine-bridge.ts` was assigning the test bridge
+  functions (`window.load_scene`, `save_scene`, `load_project`, `dispatch_command`,
+  etc.) immediately after the WASM module loaded — BEFORE
+  `await wasm.init_project_store()` could register the thread-local
+  `PROJECT_STORE` slot (`crates/editor-model/src/ports.rs`). After
+  `page.reload()`, React renders `AppHeader` (with `data-testid="topbar"`)
+  unconditionally, so the topbar-visibility wait becomes a no-op readiness
+  signal. The test pattern `waitForFunction(typeof load_scene === "function")`
+  then resolves while `init_project_store()` is still mid-flight, and the
+  caller hits `with_project_store().ok_or_else("project store not initialized")`.
+
+- **Fix**: install only the OPFS bridge (`window.opfs_*`) before
+  `init_project_store` (that function uses it to hydrate); defer every
+  other `window.*` test bridge to AFTER `init_project_store` completes.
+  New contract: once `initEngine()` resolves, every `window.*` bridge is
+  callable.
+
+- **Verified**: 20/20 `engine.spec.ts` tests pass; both previously-failing
+  OPFS persistence tests (`:526`, `:744`) now pass deterministically
+  (14.6 s combined). No regressions; full suite time unchanged at 1.2 m.
+
 ### Recovery-1 — Archcheck B8 closure (Clock trait dep injection)
 
 Closes C-1 (the only cycle-introduced release-gate failure from `application-stabilization-and-roadmap-convergence`).
