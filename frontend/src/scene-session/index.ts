@@ -36,7 +36,7 @@ import { getEditorGateway } from "../services/EditorGateway";
 let _document: SceneDocument | null = null;
 let _dirty: boolean = false;
 let _activeSceneId: string | null = null;
-let _operationLog: object[] = [];
+const _operationLog: object[] = [];
 
 // ============================================================================
 // Internal helpers

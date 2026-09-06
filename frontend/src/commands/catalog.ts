@@ -22,7 +22,8 @@ import type { EditorMode } from "../components/MenuBar";
 export interface WorkspaceCommand<K extends string, P> {
   readonly kind: K;
   readonly payload: P;
-  readonly capability: "@modal" | "@selection" | "@dirty" | "@scene" | "@test-bridge";
+  readonly capability:
+    "@modal" | "@selection" | "@dirty" | "@scene" | "@test-bridge";
 }
 
 export const workspaceCommands = {
@@ -35,7 +36,12 @@ export const workspaceCommands = {
       message: "",
       onConfirm: () => {},
       onCancel: () => {},
-    } as { title: string; message: string; onConfirm: () => void; onCancel: () => void },
+    } as {
+      title: string;
+      message: string;
+      onConfirm: () => void;
+      onCancel: () => void;
+    },
   },
 
   openPromptDialog: {
@@ -46,7 +52,12 @@ export const workspaceCommands = {
       initialValue: "",
       onConfirm: () => {},
       onCancel: () => {},
-    } as { title: string; initialValue: string; onConfirm: (v: string) => void; onCancel: () => void },
+    } as {
+      title: string;
+      initialValue: string;
+      onConfirm: (v: string) => void;
+      onCancel: () => void;
+    },
   },
 
   openSaveSceneModal: {
@@ -184,4 +195,5 @@ export const workspaceCommands = {
   },
 } as const satisfies Record<string, WorkspaceCommand<string, unknown>>;
 
-export type AnyWorkspaceCommand = (typeof workspaceCommands)[keyof typeof workspaceCommands];
+export type AnyWorkspaceCommand =
+  (typeof workspaceCommands)[keyof typeof workspaceCommands];

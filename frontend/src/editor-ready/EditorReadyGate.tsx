@@ -10,7 +10,12 @@
  */
 
 import React, { useEffect, useRef, useState } from "react";
-import { getReadyState, onEditorReady, READY_STATE, type ReadyState } from "./index";
+import {
+  getReadyState,
+  onEditorReady,
+  READY_STATE,
+  type ReadyState,
+} from "./index";
 
 interface QueuedAction {
   label: string;
@@ -49,7 +54,9 @@ export function EditorReadyGate({
   queueActions = true,
   onPreReadyAttempt,
 }: EditorReadyGateProps) {
-  const [readyState, setReadyState] = useState<ReadyState>(() => getReadyState());
+  const [readyState, setReadyState] = useState<ReadyState>(() =>
+    getReadyState(),
+  );
   const queueRef = useRef<QueuedAction[]>([]);
 
   useEffect(() => {
@@ -79,11 +86,7 @@ export function EditorReadyGate({
     }
   };
 
-  return (
-    <>
-      {children}
-    </>
-  );
+  return <>{children}</>;
 }
 
 /**

@@ -13,7 +13,10 @@
  * - waitForEditorReady(): re-export from ./wait
  */
 
-import { waitForEditorReady as _waitForEditorReady, isEditorReady } from "./wait";
+import {
+  waitForEditorReady as _waitForEditorReady,
+  isEditorReady,
+} from "./wait";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -29,8 +32,8 @@ export type ReadyState = (typeof READY_STATE)[keyof typeof READY_STATE];
 
 export interface EditorReadyEvent {
   state: ReadyState;
-  reason?: string;        // populated when state === ERROR
-  measuredMs?: number;    // engine init elapsed
+  reason?: string; // populated when state === ERROR
+  measuredMs?: number; // engine init elapsed
 }
 
 // ---------------------------------------------------------------------------
@@ -40,7 +43,7 @@ export interface EditorReadyEvent {
 type Listener = (e: EditorReadyEvent) => void;
 
 let _currentState: ReadyState = READY_STATE.LOADING;
-let _listeners: Set<Listener> = new Set();
+const _listeners: Set<Listener> = new Set();
 let _initStart: number | null = null;
 
 // ---------------------------------------------------------------------------
