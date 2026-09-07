@@ -1,0 +1,42 @@
+# Transitional allowlist for the cargo-graph architecture fitness checker.
+#
+# Each entry exempts one (from, to) forbidden dependency edge defined in
+# tools/archcheck-cargo/check.ts. Add an entry only when the edge is a
+# temporary, documented migration state. The list must shrink over
+# time; new exceptions require an ADR or explicit approval per
+# docs/architecture/DEPENDENCY_RULES.md.
+#
+# Schema:
+#   - id:           ARCH-EXCEPTION-NNN (monotonic, never reused)
+#   - edge.from:    source crate name
+#   - edge.to:      target crate name (the one forbidden by the rule)
+#   - owner:        milestone that owns the cleanup (e.g. H1.2)
+#   - reason:       one-sentence justification
+#   - expires_when: milestone when this exception must be removed
+#
+# Initial state (H0.2 entry): empty. The current workspace has zero
+# forbidden edges, so no exceptions are required yet.
+
+exceptions:
+  # Pre-H1.2 — application layer still imports the concrete storage
+  # adapter directly. The owner milestone H1.2 inverts this edge so
+  # editor-storage-web becomes an editor-application port implementation.
+  - id: ARCH-EXCEPTION-001
+    edge:
+      from: editor-application
+      to: editor-storage-web
+    owner: H1.2
+    reason: "concrete ProjectStore still imported in application layer; port abstraction lands in H1.2"
+    expires_when: H1.2
+
+  # Pre-H1.4 — editor-application pulls editor-bevy under target-arch
+  # wasm32 to satisfy the WASM composition shim. The owner milestone
+  # H1.4 moves all bevy-specific composition to editor-wasm so this
+  # dep disappears entirely.
+  - id: ARCH-EXCEPTION-002
+    edge:
+      from: editor-application
+      to: editor-bevy
+    owner: H1.4
+    reason: "wasm32-only bevy shim in application; H1.4 relocates composition into editor-wasm"
+    expires_when: H1.4
