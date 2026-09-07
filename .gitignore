@@ -32,7 +32,10 @@ frontend/.vite/
 .atl/
 
 # SDDK local working artifacts (ADR-0022 local-only policy)
-sddk/
+# `sddk/` blocks the root-level SDDK workdir; `docs/sddk/` is the team's
+# canonical SDD cycle directory and MUST stay tracked.
+/sddk
+!/docs/sddk
 openspec/
 cycles/
 
