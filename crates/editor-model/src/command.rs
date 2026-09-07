@@ -4,11 +4,21 @@
 //! that form the editor's mutation surface. Per Hito 0 §6.4, commands are
 //! semantic (not raw diffs), fully reversible, and carry authorship metadata
 //! for future agent auditing.
+//!
+//! H2.3: moved from `editor_bevy::command` so `OperationLog` (which depends on
+//! `Command`/`CommandEnvelope`/`CommandError`) can live in `editor_model::operation_log`
+//! as part of `SceneSessionState` on `EditorSession`. Existing field-level docs
+//! are preserved in `editor-bevy::command` history; new fields added in editor-model
+//! MUST add a `///` line.
+#![allow(missing_docs)]
 
-use crate::document::ComponentInstance;
-use crate::scene_asset::{AssetReference, LocalId};
+use crate::component::ComponentInstance;
+use crate::ids::{SceneAssetLocalId, StableId};
+use crate::scene_asset::AssetReference;
 use crate::scene_instance::SceneInstance;
-use editor_model::ids::StableId;
+use crate::schema::{ComponentSchema, ComponentTypeId, FieldDef};
+use crate::world::EntranceRef;
+use crate::world_command::WorldCommand;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use thiserror::Error;
@@ -101,10 +111,10 @@ pub enum Command {
         instance_id: StableId,
         asset_ref: AssetReference,
         asset_version: u32,
-        id_map: BTreeMap<LocalId, StableId>,
+        id_map: BTreeMap<SceneAssetLocalId, StableId>,
         /// Components owned by the placed occurrence (placement-time).
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        instance_components: Vec<crate::document::ComponentInstance>,
+        instance_components: Vec<ComponentInstance>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         component_overrides: Vec<crate::scene_instance::ComponentOverride>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -126,8 +136,8 @@ pub enum Command {
     /// Inverse: RevertOverride if no prior override existed; UpsertOverride{old_patch} otherwise.
     UpsertOverride {
         instance_id: StableId,
-        target_local_id: LocalId,
-        component_type_id: crate::schema::ComponentTypeId,
+        target_local_id: SceneAssetLocalId,
+        component_type_id: ComponentTypeId,
         field_path: Vec<String>,
         value: serde_json::Value,
     },
@@ -135,8 +145,8 @@ pub enum Command {
     /// Idempotent no-op when absent; inverse re-inserts the captured patch.
     RevertOverride {
         instance_id: StableId,
-        target_local_id: LocalId,
-        component_type_id: crate::schema::ComponentTypeId,
+        target_local_id: SceneAssetLocalId,
+        component_type_id: ComponentTypeId,
         field_path: Vec<String>,
     },
     // ─────────────────────────────────────────────────────────────────────────
@@ -148,7 +158,7 @@ pub enum Command {
     CreateSceneComponent {
         /// Full schema JSON (type_id, display_name, fields, kind, binding,
         /// auto_spawn, source_location, exports_to_bevy).
-        schema: crate::schema::ComponentSchema,
+        schema: ComponentSchema,
     },
     /// Update an existing SceneComponent schema's fields. Inverse restores
     /// the captured pre-state schema.
@@ -157,7 +167,7 @@ pub enum Command {
         /// Replacement field list. The whole `fields: Vec<FieldDef>` is
         /// replaced atomically; partial updates use the underlying
         /// `SetComponentField` command instead.
-        fields: Vec<crate::schema::FieldDef>,
+        fields: Vec<FieldDef>,
     },
     /// Bind a schema (typically `Simple` or `SceneComponent`) to a scene
     /// asset. When the schema is `Simple`, the bind upgrades it to
@@ -304,7 +314,7 @@ fn current_timestamp_ms() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::document::ComponentInstance;
+    use crate::component::ComponentInstance;
 
     #[test]
     fn test_create_entity_serializes_with_type_tag() {
@@ -475,8 +485,8 @@ mod tests {
     fn test_upsert_override_serializes_with_type_tag() {
         let cmd = Command::UpsertOverride {
             instance_id: StableId::new("inst_1"),
-            target_local_id: LocalId::new("root"),
-            component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
+            target_local_id: SceneAssetLocalId::new("root"),
+            component_type_id: ComponentTypeId::new("editor.Sprite2D"),
             field_path: vec!["asset".to_string()],
             value: serde_json::json!("cannon.png"),
         };
@@ -493,8 +503,8 @@ mod tests {
     fn test_revert_override_serializes_with_type_tag() {
         let cmd = Command::RevertOverride {
             instance_id: StableId::new("inst_1"),
-            target_local_id: LocalId::new("root"),
-            component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
+            target_local_id: SceneAssetLocalId::new("root"),
+            component_type_id: ComponentTypeId::new("editor.Sprite2D"),
             field_path: vec!["asset".to_string()],
         };
         let json = serde_json::to_string(&cmd).unwrap();
@@ -509,8 +519,8 @@ mod tests {
     fn test_upsert_override_roundtrip() {
         let cmd = Command::UpsertOverride {
             instance_id: StableId::new("inst_1"),
-            target_local_id: LocalId::new("root"),
-            component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
+            target_local_id: SceneAssetLocalId::new("root"),
+            component_type_id: ComponentTypeId::new("editor.Sprite2D"),
             field_path: vec!["asset".to_string()],
             value: serde_json::json!("cannon.png"),
         };
@@ -523,8 +533,8 @@ mod tests {
     fn test_revert_override_roundtrip() {
         let cmd = Command::RevertOverride {
             instance_id: StableId::new("inst_1"),
-            target_local_id: LocalId::new("root"),
-            component_type_id: crate::schema::ComponentTypeId::new("editor.Sprite2D"),
+            target_local_id: SceneAssetLocalId::new("root"),
+            component_type_id: ComponentTypeId::new("editor.Sprite2D"),
             field_path: vec!["asset".to_string(), "x".to_string()],
         };
         let json = serde_json::to_string(&cmd).unwrap();

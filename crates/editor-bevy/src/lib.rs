@@ -24,7 +24,6 @@ pub mod bsn_export;
 pub mod bsn_import;
 pub mod bsn_ir;
 mod code_export;
-pub mod command;
 pub mod document;
 mod dynamic_scene;
 pub mod hot_reload_state;
@@ -73,7 +72,6 @@ mod wasm_preview;
 mod wasm_recipes;
 mod wasm_scene_instance;
 mod wasm_tile;
-pub mod world_command;
 pub mod world_recipes;
 pub mod world_recipes_registry;
 pub mod world_state;
@@ -201,13 +199,15 @@ pub use bsn_ir::{
     BsnIr, BsnIrNode, BsnIrRelationship, BsnPatch, BsnPatchOp, bsn_ir_from_scene_asset,
 };
 pub use code_export::{CodeGenResult, export_rust_source};
-pub use command::{Command, CommandEnvelope, CommandError, CommandMetadata, CommandResult};
 pub use document::{ComponentInstance, Entity, SceneDocument, StableId};
 pub use dynamic_scene::{
     DynamicSceneExport, EXPORT_VERSION, EntityExport, ExportError, ExportWarning,
     anchor_str_to_normalized_offset, export_dynamic_scene, is_known_anchor_str,
 };
 pub use editor_model::ProjectMetadata;
+pub use editor_model::command::{
+    Command, CommandEnvelope, CommandError, CommandMetadata, CommandResult,
+};
 pub use instance_projection::{PreviewEntity, project_instances, root_local_ids};
 pub use logic_command::{LogicCommand, LogicCommandError, LogicOperationLog};
 pub use logic_evaluator::{
@@ -316,14 +316,13 @@ pub struct TransformSnapshot {
 // crates/editor-core/src/state.rs. Re-exported here so existing
 // callers in lib.rs continue to work without modification.
 use crate::state::{
-    ASSET_BODY_CACHE, ASSET_OPERATION_LOG, DIRTY_FLAG, HOT_RELOAD_BUS, HotReloadRequest,
-    LOGIC_OPERATION_LOG, PLAY_MODE_REQUEST, PlayModeRequest, RESYNC_REPORTS, SCENE_ASSET_DOC,
-    SCENE_REGISTRY, VALIDATION_ISSUES, clear_asset_catalog_warnings, get_asset_catalog_warnings,
-    mark_dirty, with_asset_body_cache, with_asset_body_cache_mut, with_asset_catalog,
-    with_asset_catalog_mut, with_asset_doc, with_asset_doc_and_log_mut, with_asset_doc_mut,
-    with_asset_log, with_asset_log_mut, with_logic_graph, with_logic_graph_catalog,
-    with_logic_graph_catalog_mut, with_logic_graph_mut, with_logic_log, with_logic_log_mut,
-    with_registry, with_registry_mut,
+    ASSET_BODY_CACHE, ASSET_OPERATION_LOG, HOT_RELOAD_BUS, HotReloadRequest, LOGIC_OPERATION_LOG,
+    PLAY_MODE_REQUEST, PlayModeRequest, RESYNC_REPORTS, SCENE_ASSET_DOC, SCENE_REGISTRY,
+    VALIDATION_ISSUES, clear_asset_catalog_warnings, get_asset_catalog_warnings, mark_dirty,
+    with_asset_body_cache, with_asset_body_cache_mut, with_asset_catalog, with_asset_catalog_mut,
+    with_asset_doc, with_asset_doc_and_log_mut, with_asset_doc_mut, with_asset_log,
+    with_asset_log_mut, with_logic_graph, with_logic_graph_catalog, with_logic_graph_catalog_mut,
+    with_logic_graph_mut, with_logic_log, with_logic_log_mut, with_registry, with_registry_mut,
 };
 // Also import binding registry helpers for tests
 use crate::state::{with_binding_registry, with_binding_registry_mut};
@@ -338,12 +337,12 @@ where
 
 /// Clear the cross-system dirty flag from integration tests.
 pub fn clear_dirty_for_tests() {
-    DIRTY_FLAG.with(|dirty| *dirty.borrow_mut() = false);
+    crate::scene_session::clear_dirty();
 }
 
 /// Read the cross-system dirty flag from integration tests.
 pub fn is_dirty_for_tests() -> bool {
-    DIRTY_FLAG.with(|dirty| *dirty.borrow())
+    crate::scene_session::is_dirty()
 }
 
 /// Access the binding registry from integration tests.
@@ -614,20 +613,35 @@ pub fn dispatch_command_via_kernel(
     }
 
     // Get mutable access to the scene doc and operation log.
-    // NOTE: single source of truth is `scene_session::SCENE_DOC` /
-    // `scene_session::OPERATION_LOG` (ADR-0031). The kernel path must
-    // operate on the SAME cells that `load_scene_json`, `get_scene_snapshot`,
-    // undo and redo use — a duplicate thread_local here caused edits to be
-    // applied to an orphan scene while the UI read a different one.
-    let (inverse, snapshot) = scene_session::SCENE_DOC.with(|cell| {
-        let mut doc_ref = cell.borrow_mut();
-        let doc = doc_ref
-            .as_mut()
+    // NOTE: single source of truth is `EditorSession.active_scene` (H2.3) —
+    // accessed via `EditorSessionPort::active_scene_mut()`. The kernel path
+    // operates on the SAME focus that `load_scene_json`, `get_scene_snapshot`,
+    // undo and redo use — a duplicate store here caused edits to be applied to
+    // an orphan scene while the UI read a different one.
+    let (inverse, snapshot) = {
+        // Take the focus out of the session so the kernel call does not hold
+        // the session Mutex. The take/write-back pattern guarantees the lock
+        // is released for the duration of the kernel call.
+        let mut focus = editor_model::ports::with_session_mut(|s| {
+            std::mem::replace(s.active_scene_mut(), editor_model::SceneFocus::Empty)
+        })
+        .ok_or_else(|| DispatchError::ExecutionFailed("EditorSession unavailable".to_string()))?;
+
+        if focus.is_empty() {
+            // Restore and return error.
+            editor_model::ports::with_session_mut(|s| {
+                *s.active_scene_mut() = editor_model::SceneFocus::Empty;
+            });
+            return Err(DispatchError::ExecutionFailed(
+                "No active scene".to_string(),
+            ));
+        }
+
+        let doc = focus
+            .doc_mut()
             .ok_or_else(|| DispatchError::ExecutionFailed("No active scene".to_string()))?;
 
         // Create a temporary HistoryScope for the kernel call.
-        // Note: The kernel updates HistoryScope but we also record in OperationLog
-        // for undo/redo compatibility. The HistoryScope is not persisted.
         let mut history = HistoryScope::new();
 
         let kernel = scene_transaction_kernel();
@@ -648,20 +662,32 @@ pub fn dispatch_command_via_kernel(
                 });
 
         // Record in OperationLog for undo/redo (byte-equality with legacy path).
-        // Use record_with_provenance to pass origin, actor, and change_id from the ChangeSet.
-        scene_session::OPERATION_LOG.with(|l| {
-            l.borrow_mut().as_mut().unwrap().record_with_provenance(
-                &envelope,
-                inverse.clone(),
-                format!("{:?}", origin),
-                envelope.metadata.authorship.clone(),
-                Some(cs.id.clone()),
-            );
-        });
+        let log = focus
+            .log_mut()
+            .ok_or_else(|| DispatchError::ExecutionFailed("No active scene".to_string()))?;
+        log.record_with_provenance(
+            &envelope,
+            inverse.clone(),
+            format!("{:?}", origin),
+            envelope.metadata.authorship.clone(),
+            Some(cs.id.clone()),
+        );
 
-        // Return the inverse and post-apply snapshot.
-        Ok::<(Command, SceneDocument), DispatchError>((inverse, doc.clone()))
-    })?;
+        // Mark the scene dirty via the ADT (the SceneFocus::Focused.dirty bit).
+        if let editor_model::SceneFocus::Focused { dirty, .. } = &mut focus {
+            *dirty = true;
+        }
+
+        let snapshot = focus
+            .doc()
+            .ok_or_else(|| DispatchError::ExecutionFailed("No active scene".to_string()))?
+            .clone();
+
+        // Write the mutated focus back.
+        editor_model::ports::with_session_mut(|s| *s.active_scene_mut() = focus);
+
+        (inverse, snapshot)
+    };
 
     scene_state::mark_dirty();
 
@@ -873,14 +899,14 @@ pub fn replace_scene_instance_asset(
 /// Returns the `instances` BTreeMap serialized as JSON.
 #[wasm_bindgen]
 pub fn get_scene_instances() -> Result<String, JsValue> {
-    scene_session::SCENE_DOC.with(|s| {
-        let doc_ref = s.borrow();
-        let doc = doc_ref
-            .as_ref()
-            .ok_or_else(|| JsValue::from_str("No scene loaded — call load_scene_json first"))?;
-
+    scene_session::with_active_doc(|doc| {
         serde_json::to_string(&doc.instances)
             .map_err(|e| JsValue::from_str(&format!("Failed to serialize instances: {}", e)))
+    })
+    .unwrap_or_else(|| {
+        Err(JsValue::from_str(
+            "No scene loaded — call load_scene_json first",
+        ))
     })
 }
 
@@ -1079,17 +1105,15 @@ pub fn redo() -> Result<String, JsValue> {
 /// Useful for UI to enable/disable undo/redo buttons.
 #[wasm_bindgen]
 pub fn get_log_state() -> String {
-    scene_session::OPERATION_LOG.with(|l| {
-        let binding = l.borrow();
-        let log = binding.as_ref().unwrap();
-        serde_json::json!({
-            "size": log.get_log_size(),
-            "can_undo": log.can_undo(),
-            "can_redo": log.can_redo(),
-            "cursor": log.get_cursor(),
+    match scene_session::log_state_snapshot() {
+        snap => serde_json::json!({
+            "size": snap.size,
+            "can_undo": snap.can_undo,
+            "can_redo": snap.can_redo,
+            "cursor": snap.cursor,
         })
-        .to_string()
-    })
+        .to_string(),
+    }
 }
 
 // HIGH-1 god-module phase 4: Bevy runtime systems extracted to
@@ -1940,42 +1964,15 @@ pub fn scene_switch_commit(id: &str) -> Result<(), JsValue> {
 }
 
 /// Perform the actual value-swap between scenes.
-/// Stores current SCENE_DOC/OPERATION_LOG to registry[old_id],
-/// then loads registry[new_id] into the thread_locals.
+/// Stores current focus to registry[old_id], then loads registry[new_id]
+/// into the focus.
 fn perform_scene_swap(old_id: &str, new_id: &str) {
-    // Store current scene back to registry
-    let doc_opt = scene_session::SCENE_DOC.with(|s| s.borrow().clone());
-    let log = scene_session::OPERATION_LOG
-        .with(|l| l.borrow().clone())
-        .unwrap_or_else(crate::operation_log::OperationLog::new_const);
+    scene_session::swap_scene(old_id, new_id);
 
-    let (doc, log) = match doc_opt {
-        Some(doc) => (doc, log),
-        None => (
-            crate::document::SceneDocument {
-                version: "0.1".to_string(),
-                scene_id: format!("scratch-{}", crate::time::now_nanos()),
-                name: old_id.to_string(),
-                entities: Vec::new(),
-                instances: BTreeMap::new(),
-            },
-            crate::operation_log::OperationLog::new_const(),
-        ),
-    };
-
-    with_registry_mut(|r| r.store_to(old_id, doc, log));
-
-    // Load new scene from registry into thread_locals
-    if let Some((new_doc, new_log)) = with_registry(|r| r.swap_in(new_id)) {
-        scene_session::replace_active_doc(new_doc);
-        scene_session::OPERATION_LOG.with(|l| *l.borrow_mut() = Some(new_log));
-        // replace_active_doc sets the registry current to the DOC's internal
-        // scene_id (e.g. "scene-{nanos}"), which is NOT the registry key
-        // (the scene NAME). That breaks the name-keyed registry: subsequent
-        // dirty checks, tab highlights and switches miss the entry. Restore
-        // the registry key as current after the swap.
-        with_registry_mut(|r| r.set_current(Some(new_id.to_string())));
-    }
+    // restore the registry key as current after the swap (replace_active_doc
+    // sets the registry current to the DOC's internal scene_id, which is NOT
+    // the registry key — that breaks the name-keyed registry).
+    with_registry_mut(|r| r.set_current(Some(new_id.to_string())));
 
     mark_dirty();
 }
@@ -2049,7 +2046,10 @@ pub async fn discard_scene_changes(id: &str) -> Result<(), JsValue> {
 
     if current_id.as_deref() == Some(id) {
         scene_session::replace_active_doc(doc);
-        scene_session::OPERATION_LOG.with(|l| *l.borrow_mut() = Some(log));
+        editor_model::ports::with_session_mut(|s| {
+            s.active_scene_mut()
+                .focus_with_log(doc.clone(), log.clone());
+        });
     }
 
     with_registry_mut(|r| r.clear_current_dirty());
@@ -4081,14 +4081,19 @@ pub mod test_helpers {
 mod rust_source_integration_tests {
     use super::*;
 
-    /// Test helper: set SCENE_DOC for testing.
+    /// Test helper: set the focused scene for testing (H2.3 — uses the
+    /// `EditorSession.active_scene` port cell, not the removed thread_local).
     fn set_scene_doc_for_test(doc: Option<SceneDocument>) {
-        scene_session::SCENE_DOC.with(|cell| {
-            *cell.borrow_mut() = doc;
+        editor_model::ports::with_session_mut(|s| {
+            let focus = s.active_scene_mut();
+            match doc {
+                Some(d) => focus.focus(d),
+                None => focus.unfocus(),
+            }
         });
     }
 
-    /// Test helper: clear SCENE_DOC after each test.
+    /// Test helper: clear the focused scene after each test.
     fn clear_scene_doc() {
         set_scene_doc_for_test(None);
     }
@@ -4118,6 +4123,7 @@ mod rust_source_integration_tests {
                             values: serde_json::json!({}),
                         },
                     ],
+                    extension_data: Default::default(),
                 },
                 Entity {
                     id: StableId::new("ent_enemy"),
@@ -4128,6 +4134,7 @@ mod rust_source_integration_tests {
                         type_id: "game.EnemyAI".to_string(),
                         values: serde_json::json!({}),
                     }],
+                    extension_data: Default::default(),
                 },
                 Entity {
                     id: StableId::new("ent_ally"),
@@ -4138,6 +4145,7 @@ mod rust_source_integration_tests {
                         type_id: "game.PlayerHealth".to_string(),
                         values: serde_json::json!({}),
                     }],
+                    extension_data: Default::default(),
                 },
             ],
             instances: BTreeMap::new(),

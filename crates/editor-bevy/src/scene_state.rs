@@ -1,19 +1,19 @@
 //! HIGH-1 phase 2: scene state sub-module.
 //!
-//! Owns the SceneRegistry and the cross-system DIRTY_FLAG. Split out from
-//! state.rs to keep each state concern in its own file. Re-exported via
-//! state.rs for backward compatibility with the existing `crate::state::*`
-//! import in lib.rs.
+//! Owns the `SceneRegistry` and exposes the cross-system dirty flag. The
+//! `DIRTY_FLAG` itself was removed in H2.3: the dirty bit is now carried by
+//! `EditorSession.active_scene` (`SceneFocus::Focused.dirty`) and accessed
+//! through `EditorSessionPort::active_scene_mut()`.
+//!
+//! `SCENE_REGISTRY` is still a `thread_local!` here — registry access is a
+//! tight, hot read path that doesn't warrant the port cell round-trip yet.
+//! A future slice can move it into `EditorSession` if needed.
 
 use std::cell::RefCell;
 
 use crate::scenes::SceneRegistry;
 
 thread_local! {
-    /// Cross-system dirty flag set by `dispatch_command` and read by
-    /// `rebuild_preview_world`. Visible across the WASM→Bevy boundary
-    /// because both run on the same thread (single-threaded WASM).
-    pub static DIRTY_FLAG: RefCell<bool> = const { RefCell::new(false) };
     /// Scene registry: maps scene_id → loaded scene metadata.
     pub static SCENE_REGISTRY: RefCell<Option<SceneRegistry>> = const { RefCell::new(None) };
 }
@@ -46,22 +46,42 @@ where
     })
 }
 
-/// Mark the current scene as dirty (set DIRTY_FLAG + registry flag).
-/// Triggers rebuild_preview_world on the next frame.
+/// Run a closure with mutable access to the editor session's
+/// `SceneFocus::Focused.dirty` flag (H2.3).
+///
+/// No-op if the session has not been registered yet (WASM startup has not
+/// completed) or if no scene is currently focused. The closure receives
+/// `true` if a focused scene exists, `false` otherwise.
+fn with_dirty_mut<R, F: FnOnce(&mut bool) -> R>(f: F) -> Option<R> {
+    editor_model::ports::with_session_mut(|session| {
+        let focus = session.active_scene_mut();
+        if let editor_model::SceneFocus::Focused { dirty, .. } = focus {
+            Some(f(dirty))
+        } else {
+            None
+        }
+    })
+    .flatten()
+}
+
+/// Mark the current scene as dirty (sets `EditorSession.active_scene.dirty =
+/// true` + marks the registry's current scene dirty).
+///
+/// Triggers `rebuild_preview_world` on the next frame.
 pub fn mark_dirty() {
-    DIRTY_FLAG.with(|d| *d.borrow_mut() = true);
+    with_dirty_mut(|dirty| *dirty = true);
     with_registry_mut(|r| r.mark_current_dirty());
 }
 
 /// Read the cross-system dirty flag without touching it.
 pub fn is_dirty() -> bool {
-    DIRTY_FLAG.with(|d| *d.borrow())
+    with_dirty_mut(|dirty| *dirty).unwrap_or(false)
 }
 
-/// Reset the cross-system dirty flag to false. Callers MUST also
-/// re-mark the active scene dirty after loading fresh data, otherwise
-/// the next preview frame will not rebuild.
+/// Reset the cross-system dirty flag to `false`. Callers MUST also re-mark
+/// the active scene dirty after loading fresh data, otherwise the next
+/// preview frame will not rebuild.
 pub fn clear_dirty() {
-    DIRTY_FLAG.with(|d| *d.borrow_mut() = false);
+    with_dirty_mut(|dirty| *dirty = false);
     with_registry_mut(|r| r.clear_current_dirty());
 }

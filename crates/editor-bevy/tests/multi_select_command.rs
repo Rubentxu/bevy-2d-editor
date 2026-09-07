@@ -12,10 +12,10 @@
 
 use editor_bevy::{
     StableId,
-    command::{Command, CommandError},
     document::{ComponentInstance, Entity, LocalId, SceneDocument},
     processor,
 };
+use editor_model::command::{Command, CommandError};
 use serde_json::json;
 use std::collections::BTreeMap;
 
@@ -26,6 +26,7 @@ fn empty_doc() -> SceneDocument {
         name: "Multi-Select Test".to_string(),
         entities: vec![],
         instances: BTreeMap::new(),
+        extension_data: Default::default(),
     }
 }
 
@@ -39,6 +40,7 @@ fn entity_with_transform(id: &str, x: f32, y: f32) -> Entity {
             type_id: "Transform2D".to_string(),
             values: json!({ "translation": { "x": x, "y": y } }),
         }],
+        extension_data: Default::default(),
     }
 }
 
@@ -49,6 +51,7 @@ fn entity_without_transform(id: &str) -> Entity {
         name: id.to_string(),
         parent: None,
         components: vec![],
+        extension_data: Default::default(),
     }
 }
 
@@ -146,6 +149,7 @@ fn set_component_field_on_multiple_partial_failure_rolls_back() {
                 // path can't resolve.
                 values: json!({ "translation": { "x": 1.0, "y": 2.0 } }),
             }],
+            extension_data: Default::default(),
         },
         entity_with_transform("e_b", 7.0, 8.0),
     ];

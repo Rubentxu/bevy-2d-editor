@@ -19,23 +19,8 @@ entries:
     owner: H2.5
     reason: "runtime coordination bus; absorbed into EditorSession/TransactionKernel"
 
-  - name: SCENE_DOC
-    kind: thread_local
-    declared_at: crates/editor-bevy/src/scene_session.rs:59
-    owner: H2.3
-    reason: "scene session family; absorbed by EditorSession.scene"
 
-  - name: OPERATION_LOG
-    kind: thread_local
-    declared_at: crates/editor-bevy/src/scene_session.rs:64
-    owner: H2.3
-    reason: "scene history; absorbed by EditorSession.log"
 
-  - name: DIRTY_FLAG
-    kind: thread_local
-    declared_at: crates/editor-bevy/src/scene_state.rs:16
-    owner: H2.3
-    reason: "scene dirty bit; moves to EditorSession dirty field"
 
   - name: SCENE_REGISTRY
     kind: thread_local

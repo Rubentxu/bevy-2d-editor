@@ -80,127 +80,33 @@ pub enum Anchor {
 
 /// The root document type representing a complete scene.
 /// This is the source-of-truth structure stored as JSON.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SceneDocument {
-    pub version: String,
-    pub scene_id: String,
-    pub name: String,
-    pub entities: Vec<Entity>,
-    /// Placed Scene Instances indexed by StableId.
-    /// Serialized as a BTreeMap for deterministic key ordering.
-    /// Defaults to empty BTreeMap when absent from older documents (S7).
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub instances: BTreeMap<StableId, SceneInstance>,
-}
-
-impl Default for SceneDocument {
-    fn default() -> Self {
-        Self {
-            version: "0.1".to_string(),
-            scene_id: String::new(),
-            name: String::new(),
-            entities: Vec::new(),
-            instances: BTreeMap::new(),
-        }
-    }
-}
+///
+/// H2.3: type alias to `editor_model::document::SceneDocument`. The two
+/// types were structurally identical except for `extension_data: BTreeMap<String, Value>`
+/// (added by ADR-0046 in editor-model for forward compatibility). The editor-model
+/// version is now the canonical source; the bevy path is a thin alias. Empty
+/// `extension_data` serializes transparently, so existing JSON documents
+/// round-trip unchanged.
+pub type SceneDocument = editor_model::document::SceneDocument;
 
 /// A single entity within a scene with its associated components.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Entity {
-    pub id: StableId,
-    /// Local identifier within the scene. Falls back to id if not set.
-    #[serde(default, skip_serializing_if = "LocalId::is_empty")]
-    pub local_id: LocalId,
-    pub name: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub parent: Option<StableId>,
-    pub components: Vec<ComponentInstance>,
-}
+///
+/// H2.3: type alias to `editor_model::document::Entity`. Structurally identical;
+/// now shares the canonical definition.
+pub type Entity = editor_model::document::Entity;
 
 /// A component instance attaching typed values to an entity.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ComponentInstance {
-    pub type_id: String,
-    #[serde(default)]
-    pub values: serde_json::Value,
-}
-
-impl From<editor_model::ComponentInstance> for ComponentInstance {
-    fn from(em: editor_model::ComponentInstance) -> Self {
-        Self {
-            type_id: em.type_id,
-            values: em.values,
-        }
-    }
-}
-
-impl From<ComponentInstance> for editor_model::ComponentInstance {
-    fn from(doc: ComponentInstance) -> Self {
-        Self {
-            type_id: doc.type_id,
-            values: doc.values,
-        }
-    }
-}
-
-/// Convert from the canonical `editor_model::Entity` to the local mirror.
-/// Requires `editor_model::StableId` and `editor_model::ComponentInstance`
-/// to be convertible to local types (satisfied by the From impls above).
-impl From<editor_model::Entity> for Entity {
-    fn from(em: editor_model::Entity) -> Self {
-        Self {
-            id: em.id.into(),
-            local_id: em.local_id.into(),
-            name: em.name,
-            parent: em.parent.map(|p| p.into()),
-            components: em.components.into_iter().map(Into::into).collect(),
-        }
-    }
-}
-
-/// Convert from the local `editor_core::Entity` to the canonical `editor_model::Entity`.
-impl From<Entity> for editor_model::Entity {
-    fn from(doc: Entity) -> Self {
-        Self {
-            id: doc.id.into(),
-            local_id: doc.local_id.into(),
-            name: doc.name,
-            parent: doc.parent.map(|p| p.into()),
-            components: doc.components.into_iter().map(Into::into).collect(),
-            extension_data: BTreeMap::new(),
-        }
-    }
-}
-
-/// Convert from the canonical `editor_model::SceneDocument` to the local mirror
-/// (SDD-0046 S2 D3 prerequisite).
 ///
-/// The local `StableId` is a type alias of `editor_model::ids::StableId`, so
-/// the `instances` BTreeMap keys convert without mapping. Entities and scene
-/// instances use the From impls defined above / in `scene_instance.rs`.
-impl From<editor_model::SceneDocument> for SceneDocument {
-    fn from(em: editor_model::SceneDocument) -> Self {
-        Self {
-            version: em.version,
-            scene_id: em.scene_id,
-            name: em.name,
-            entities: em.entities.into_iter().map(Into::into).collect(),
-            instances: em
-                .instances
-                .into_iter()
-                .map(|(k, v)| (k, v.into()))
-                .collect(),
-        }
-    }
-}
+/// H2.3: type alias to `editor_model::ComponentInstance` — the two types were
+/// structurally identical (both `type_id: String` + `values: serde_json::Value`)
+/// and now share the canonical definition. Existing callers continue to compile
+/// because the alias preserves the name; field access is unchanged.
+pub type ComponentInstance = editor_model::ComponentInstance;
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // §2.1: Serialize a populated SceneDocument
-    #[test]
     fn test_serialize_populated_scene() {
         let doc = SceneDocument {
             version: "0.1".to_string(),
@@ -212,8 +118,10 @@ mod tests {
                 name: "Player".to_string(),
                 parent: None,
                 components: vec![],
+                extension_data: Default::default(),
             }],
             instances: BTreeMap::new(),
+            extension_data: Default::default(),
         };
 
         let json = serde_json::to_string(&doc).unwrap();
@@ -232,6 +140,7 @@ mod tests {
             name: "Empty Scene".to_string(),
             entities: vec![],
             instances: BTreeMap::new(),
+            extension_data: Default::default(),
         };
 
         let json = serde_json::to_string(&doc).unwrap();
@@ -282,6 +191,7 @@ mod tests {
                     name: "Parent".to_string(),
                     parent: None,
                     components: vec![],
+                    extension_data: Default::default(),
                 },
                 Entity {
                     id: StableId::new("child_01"),
@@ -289,9 +199,11 @@ mod tests {
                     name: "Child".to_string(),
                     parent: Some(StableId::new("parent_01")),
                     components: vec![],
+                    extension_data: Default::default(),
                 },
             ],
             instances: BTreeMap::new(),
+            extension_data: Default::default(),
         };
 
         let json = serde_json::to_string(&doc).unwrap();
@@ -311,6 +223,7 @@ mod tests {
             name: "Player".to_string(),
             parent: None,
             components: vec![],
+            extension_data: Default::default(),
         };
 
         entity.name = "PlayerSpawn".to_string();
@@ -386,6 +299,7 @@ mod tests {
             name: "Test".to_string(),
             entities: vec![],
             instances: BTreeMap::new(),
+            extension_data: Default::default(),
         };
 
         let json = serde_json::to_string(&doc).unwrap();

@@ -10,12 +10,12 @@
 
 use editor_bevy::{
     StableId,
-    command::{Command, CommandError},
     document::SceneDocument,
     processor,
     scene_asset::{AssetReference, LocalId, SceneAssetDocument, SceneAssetEntity, SceneAssetRole},
     scene_instance::{ComponentOverride, SceneInstance},
 };
+use editor_model::command::{Command, CommandError};
 use std::collections::BTreeMap;
 
 // Helper: create a minimal SceneAssetDocument with one entity
@@ -95,6 +95,7 @@ fn empty_doc() -> SceneDocument {
         name: "Test".to_string(),
         entities: vec![],
         instances: BTreeMap::new(),
+        extension_data: Default::default(),
     }
 }
 

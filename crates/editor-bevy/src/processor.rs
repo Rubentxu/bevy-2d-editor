@@ -16,11 +16,11 @@
 //! construct context explicitly via [`ProcessorContext::with_asset_body`] or use
 //! [`ProcessorContext::empty`] for commands that don't need external resources.
 
-use crate::command::{Command, CommandError};
 use crate::document::{ComponentInstance, Entity, LocalId, SceneDocument, StableId};
 use crate::scene_asset::SceneAssetDocument;
 use crate::scene_instance::SceneInstance;
 use crate::scene_instance_overrides::{remove_override, resync, upsert_override};
+use editor_model::command::{Command, CommandError};
 
 /// Context passed to commands that need to resolve external resources
 /// (HD-1 cleanup).
@@ -267,18 +267,18 @@ pub fn validate(doc: &SceneDocument, cmd: &Command) -> Result<(), CommandError> 
             find_entity(doc, entity_id)?;
         }
         Command::CreateSceneComponent { .. } => {
-            return Err(crate::command::CommandError::Unsupported(
+            return Err(editor_model::command::CommandError::Unsupported(
                 "CreateSceneComponent must be applied via command_scene_component::apply_create"
                     .to_string(),
             ));
         }
         Command::UpdateSceneComponentFields { .. } => {
-            return Err(crate::command::CommandError::Unsupported(
+            return Err(editor_model::command::CommandError::Unsupported(
                 "UpdateSceneComponentFields must be applied via command_scene_component::apply_update".to_string()
             ));
         }
         Command::BindSceneToSchema { .. } => {
-            return Err(crate::command::CommandError::Unsupported(
+            return Err(editor_model::command::CommandError::Unsupported(
                 "BindSceneToSchema must be applied via command_scene_component::apply_bind"
                     .to_string(),
             ));
@@ -330,7 +330,7 @@ pub fn validate(doc: &SceneDocument, cmd: &Command) -> Result<(), CommandError> 
             }
         }
         Command::World(_) => {
-            return Err(crate::command::CommandError::Unsupported(
+            return Err(editor_model::command::CommandError::Unsupported(
                 "World commands must be applied via WorldDocumentApplier".to_string(),
             ));
         }
@@ -374,6 +374,7 @@ pub fn apply_with_context(
                 name: name.clone(),
                 parent: None,
                 components: components.clone(),
+                extension_data: Default::default(),
             });
             Ok(Command::DeleteEntity { id: id.clone() })
         }
@@ -539,17 +540,17 @@ pub fn apply_with_context(
             })
         }
         Command::CreateSceneComponent { .. } => {
-            Err(crate::command::CommandError::Unsupported(
+            Err(editor_model::command::CommandError::Unsupported(
                 "CreateSceneComponent must be applied via command_scene_component::apply_create".to_string()
             ))
         }
         Command::UpdateSceneComponentFields { .. } => {
-            Err(crate::command::CommandError::Unsupported(
+            Err(editor_model::command::CommandError::Unsupported(
                 "UpdateSceneComponentFields must be applied via command_scene_component::apply_update".to_string()
             ))
         }
         Command::BindSceneToSchema { .. } => {
-            Err(crate::command::CommandError::Unsupported(
+            Err(editor_model::command::CommandError::Unsupported(
                 "BindSceneToSchema must be applied via command_scene_component::apply_bind".to_string()
             ))
         }
@@ -753,7 +754,7 @@ pub fn apply_with_context(
             }
         }
         Command::World(_) => {
-            return Err(crate::command::CommandError::Unsupported(
+            return Err(editor_model::command::CommandError::Unsupported(
                 "World commands must be applied via WorldDocumentApplier".to_string(),
             ));
         }
@@ -774,6 +775,7 @@ mod tests {
             name: "Test".to_string(),
             entities: vec![],
             instances: BTreeMap::new(),
+            extension_data: Default::default(),
         }
     }
 
@@ -795,6 +797,7 @@ mod tests {
             name: name.to_string(),
             parent: None,
             components,
+            extension_data: Default::default(),
         }
     }
 
@@ -872,6 +875,7 @@ mod tests {
             name: "Child".to_string(),
             parent: Some(StableId::new("parent")),
             components: vec![],
+            extension_data: Default::default(),
         });
         let cmd = Command::DeleteEntity {
             id: StableId::new("parent"),
@@ -1079,6 +1083,7 @@ mod tests {
             name: "C".to_string(),
             parent: Some(StableId::new("B")),
             components: vec![],
+            extension_data: Default::default(),
         });
         // B is child of A's chain? No, B is root. C is child of B.
         // Setting A's parent to C would create cycle: A → C → B (root, stops)

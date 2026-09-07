@@ -44,6 +44,27 @@ fn process_drains_bus_and_invalidates_cache() {
 // §1.4: Asset request invalidates ASSET_BODY_CACHE and sets DIRTY_FLAG
 #[test]
 fn asset_request_invalidates_body_cache() {
+    // H2.3: dirty bit lives on `EditorSession.active_scene.dirty`. Register
+    // a fresh session and focus a scene so mark_dirty() can mutate the bit.
+    #[path = "support/mod.rs"]
+    mod support;
+    use editor_model::EditorSessionPort;
+    use std::sync::{Arc, Mutex};
+    let session = support::FakeSessionWithDefaults(support::FakeSession::new());
+    let arc: Arc<Mutex<dyn EditorSessionPort>> = Arc::new(Mutex::new(session));
+    editor_model::ports::register_editor_session(arc);
+    editor_bevy::scene_session::replace_active_doc(
+        editor_bevy::scene_session::snapshot_active_doc().unwrap_or_else(|| {
+            editor_bevy::document::SceneDocument {
+                version: "0.1".to_string(),
+                scene_id: "hot-reload-test".to_string(),
+                name: "Hot Reload Test".to_string(),
+                entities: vec![],
+                instances: std::collections::BTreeMap::new(),
+                extension_data: std::collections::BTreeMap::new(),
+            }
+        }),
+    );
     // Clear any prior state
     editor_bevy::clear_dirty_for_tests();
 

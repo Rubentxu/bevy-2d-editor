@@ -11,12 +11,12 @@
 //! or `processor.rs` — it only provides thin adapter layers.
 
 use crate::asset_command::{AssetCommand, AssetCommandError, apply as asset_apply};
-use crate::command::{Command, CommandError};
 use crate::document::SceneDocument;
 use crate::logic_command::{LogicCommand, LogicCommandError, apply as logic_apply};
 use crate::logic_graph::LogicGraphAsset;
 use crate::processor;
 use crate::scene_asset::SceneAssetDocument;
+use editor_model::command::{Command, CommandError};
 
 // All kernel types from editor_model (the model layer).
 use editor_model::transaction::{
@@ -306,8 +306,8 @@ impl Applier for LogicCommandApplier {
 // WorldDocumentApplier
 // ─────────────────────────────────────────────────────────────────────────────
 
-use crate::world_command::{WorldCommand, WorldCommandError, apply as world_apply};
 use editor_model::world::WorldDocument;
+use editor_model::world_command::{WorldCommand, WorldCommandError, apply as world_apply};
 
 /// `WorldDocumentApplier` adapts the world command processor to the `Applier` trait.
 ///
@@ -425,8 +425,8 @@ pub fn world_transaction_kernel() -> WorldTransactionKernel {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command::Command;
     use crate::document::{Entity, LocalId, SceneDocument, StableId};
+    use editor_model::command::Command;
     use editor_model::session::HistoryScope;
 
     /// Helper: empty scene document for tests.
@@ -437,6 +437,7 @@ mod tests {
             name: "Test Scene".to_string(),
             entities: Vec::new(),
             instances: std::collections::BTreeMap::new(),
+            extension_data: Default::default(),
         }
     }
 
@@ -449,6 +450,7 @@ mod tests {
             name: "Existing".to_string(),
             parent: None,
             components: Vec::new(),
+            extension_data: Default::default(),
         });
         doc
     }

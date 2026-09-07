@@ -10,11 +10,11 @@
 
 use wasm_bindgen::prelude::*;
 
-use crate::command::{Command, CommandEnvelope, CommandMetadata};
 use crate::document::ComponentInstance;
 use crate::scene_asset::{LocalId, SceneAssetDocument};
 use crate::scene_instance::{ComponentOverride, SceneInstance};
 use crate::schema::ComponentTypeId;
+use editor_model::command::{Command, CommandEnvelope, CommandMetadata};
 
 /// Get `instance_components` for a given placed `instance_id`.
 ///
@@ -25,19 +25,14 @@ use crate::schema::ComponentTypeId;
 #[wasm_bindgen]
 pub fn get_instance_components_wasm(instance_id: &str) -> JsValue {
     let stable_id = crate::document::StableId::new(instance_id);
-    crate::scene_session::SCENE_DOC.with(|s| {
-        let doc_ref = s.borrow();
-        match doc_ref.as_ref() {
-            None => JsValue::NULL,
-            Some(doc) => match doc.instances.get(&stable_id) {
-                None => JsValue::NULL,
-                Some(instance) => match serde_json::to_string(&instance.instance_components) {
-                    Ok(json) => JsValue::from_str(&json),
-                    Err(_) => JsValue::NULL,
-                },
-            },
-        }
+    crate::scene_session::with_active_doc(|doc| match doc.instances.get(&stable_id) {
+        None => JsValue::NULL,
+        Some(instance) => match serde_json::to_string(&instance.instance_components) {
+            Ok(json) => JsValue::from_str(&json),
+            Err(_) => JsValue::NULL,
+        },
     })
+    .unwrap_or(JsValue::NULL)
 }
 
 /// Validate a SceneInstance's overrides against an asset document.

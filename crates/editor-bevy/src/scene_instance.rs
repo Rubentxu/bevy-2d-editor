@@ -21,24 +21,17 @@ use crate::scene_asset::LocalId;
 use crate::schema::ComponentTypeId;
 
 /// Component override health (ADR-0005 §Overrides, §Versioning; ADR-0009).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ComponentOverrideStatus {
-    Active,
-    Orphaned,
-    Stale,
-    Conflict,
-}
+///
+/// H2.3: type alias to `editor_model::scene_instance::ComponentOverrideStatus`.
+/// Structurally identical (4-variant enum with the same serde rename rule);
+/// now shares the canonical definition.
+pub type ComponentOverrideStatus = editor_model::scene_instance::ComponentOverrideStatus;
 
 /// A single non-destructive component field patch on a placed Scene Instance.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ComponentOverride {
-    pub target_local_id: SceneAssetLocalId,
-    pub component_type_id: ComponentTypeId,
-    pub field_path: Vec<String>,
-    pub value: serde_json::Value,
-    pub status: ComponentOverrideStatus,
-}
+///
+/// H2.3: type alias to `editor_model::scene_instance::ComponentOverride`.
+/// Structurally identical; now shares the canonical definition.
+pub type ComponentOverride = editor_model::scene_instance::ComponentOverride;
 
 /// A placed use of a Scene Asset: reference + instance components + component overrides,
 /// NOT a deep clone (ADR-0005/ADR-0009/level-design-layers-research).
@@ -51,20 +44,10 @@ pub struct ComponentOverride {
 ///    `editor.Name` for local labels.
 /// 3. **Component Overrides** (`component_overrides` / `orphaned_component_overrides`)
 ///    are non-destructive patches against asset-local Entity components only.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SceneInstance {
-    pub instance_id: StableId,
-    pub asset_ref: AssetReference,
-    pub asset_version_seen: u32,
-    pub id_map: BTreeMap<SceneAssetLocalId, StableId>,
-    /// Components owned by this placed occurrence (placement-time).
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub instance_components: Vec<ComponentInstance>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub component_overrides: Vec<ComponentOverride>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub orphaned_component_overrides: Vec<ComponentOverride>,
-}
+///
+/// H2.3: type alias to `editor_model::scene_instance::SceneInstance`. Structurally
+/// identical; now shares the canonical definition.
+pub type SceneInstance = editor_model::scene_instance::SceneInstance;
 
 /// Pure helper: returns `Stale` if any field_path segment equals renamed_field.0
 /// (the old name) AND the patch status is currently `Active`; otherwise returns
@@ -80,50 +63,5 @@ pub fn component_override_status_after_field_rename(
         ComponentOverrideStatus::Stale
     } else {
         patch.status
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SDD-0046 S2 D3 prerequisite — From impls from the canonical editor-model
-// ─────────────────────────────────────────────────────────────────────────────
-
-impl From<editor_model::scene_instance::ComponentOverrideStatus> for ComponentOverrideStatus {
-    fn from(em: editor_model::scene_instance::ComponentOverrideStatus) -> Self {
-        match em {
-            editor_model::scene_instance::ComponentOverrideStatus::Active => Self::Active,
-            editor_model::scene_instance::ComponentOverrideStatus::Orphaned => Self::Orphaned,
-            editor_model::scene_instance::ComponentOverrideStatus::Stale => Self::Stale,
-            editor_model::scene_instance::ComponentOverrideStatus::Conflict => Self::Conflict,
-        }
-    }
-}
-
-impl From<editor_model::scene_instance::ComponentOverride> for ComponentOverride {
-    fn from(em: editor_model::scene_instance::ComponentOverride) -> Self {
-        Self {
-            target_local_id: em.target_local_id,
-            component_type_id: crate::schema::ComponentTypeId(em.component_type_id.0),
-            field_path: em.field_path,
-            value: em.value,
-            status: em.status.into(),
-        }
-    }
-}
-
-impl From<editor_model::scene_instance::SceneInstance> for SceneInstance {
-    fn from(em: editor_model::scene_instance::SceneInstance) -> Self {
-        Self {
-            instance_id: em.instance_id,
-            asset_ref: em.asset_ref,
-            asset_version_seen: em.asset_version_seen,
-            id_map: em.id_map,
-            instance_components: em.instance_components.into_iter().map(Into::into).collect(),
-            component_overrides: em.component_overrides.into_iter().map(Into::into).collect(),
-            orphaned_component_overrides: em
-                .orphaned_component_overrides
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-        }
     }
 }

@@ -16,6 +16,7 @@ fn empty_doc() -> SceneDocument {
         name: "Test".to_string(),
         entities: vec![],
         instances: BTreeMap::new(),
+        extension_data: BTreeMap::new(),
     }
 }
 
@@ -385,6 +386,7 @@ fn s3_remove_instance_only_affects_instance() {
         name: "Authored Entity".to_string(),
         parent: None,
         components: vec![],
+        extension_data: BTreeMap::new(),
     });
 
     // Add an instance

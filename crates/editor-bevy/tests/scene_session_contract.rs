@@ -3,16 +3,27 @@
 //! dirty flag, registry) move together. The tests are written before
 //! any refactor so they lock down the current behaviour.
 
+#[path = "support/mod.rs"]
+mod support;
+
 use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex};
 
 use editor_bevy::StableId;
-use editor_bevy::command::{Command, CommandEnvelope, CommandMetadata};
 use editor_bevy::document::SceneDocument;
 use editor_bevy::scene_session::{
     apply_command, clear_active_doc, clear_dirty, is_dirty, log_state_snapshot, mark_dirty, redo,
     replace_active_doc, replace_with_empty, snapshot_active_doc, swap_scene, undo, with_active_doc,
     with_log,
 };
+use editor_model::EditorSessionPort;
+use editor_model::command::{Command, CommandEnvelope, CommandMetadata};
+
+fn fresh_session() {
+    let session = support::FakeSessionWithDefaults(support::FakeSession::new());
+    let arc: Arc<Mutex<dyn EditorSessionPort>> = Arc::new(Mutex::new(session));
+    editor_model::ports::register_editor_session(arc);
+}
 
 fn empty_doc(id: &str, name: &str) -> SceneDocument {
     SceneDocument {
@@ -21,6 +32,7 @@ fn empty_doc(id: &str, name: &str) -> SceneDocument {
         name: name.to_string(),
         entities: Vec::new(),
         instances: BTreeMap::new(),
+        extension_data: BTreeMap::new(),
     }
 }
 
@@ -31,6 +43,7 @@ fn load_default_scene() {
 
 #[test]
 fn replace_active_doc_marks_scene_dirty() {
+    fresh_session();
     load_default_scene();
     clear_dirty();
     assert!(!is_dirty());
@@ -40,6 +53,7 @@ fn replace_active_doc_marks_scene_dirty() {
 
 #[test]
 fn apply_command_records_inverse_and_marks_dirty() {
+    fresh_session();
     load_default_scene();
     clear_dirty();
 
@@ -69,6 +83,7 @@ fn apply_command_records_inverse_and_marks_dirty() {
 
 #[test]
 fn undo_restores_previous_state() {
+    fresh_session();
     load_default_scene();
 
     let envelope = CommandEnvelope {
@@ -95,6 +110,7 @@ fn undo_restores_previous_state() {
 
 #[test]
 fn redo_replays_command() {
+    fresh_session();
     load_default_scene();
     let envelope = CommandEnvelope {
         command: Command::CreateEntity {
@@ -117,6 +133,7 @@ fn redo_replays_command() {
 
 #[test]
 fn undo_without_active_doc_returns_none() {
+    fresh_session();
     clear_active_doc();
     let state = log_state_snapshot();
     assert_eq!(state.size, 0);
@@ -127,6 +144,7 @@ fn undo_without_active_doc_returns_none() {
 
 #[test]
 fn swap_scene_moves_active_doc_between_scenes() {
+    fresh_session();
     load_default_scene();
     let first = with_active_doc(|d| d.scene_id.clone()).expect("doc");
     assert_eq!(first, "scene-1");
@@ -140,6 +158,7 @@ fn swap_scene_moves_active_doc_between_scenes() {
         name: "Other".to_string(),
         parent: None,
         components: vec![],
+        extension_data: BTreeMap::new(),
     });
     {
         use editor_bevy::scene_state::with_registry_mut;
@@ -147,7 +166,7 @@ fn swap_scene_moves_active_doc_between_scenes() {
             r.store_to(
                 "scene-2",
                 doc2.clone(),
-                editor_bevy::operation_log::OperationLog::new_const(),
+                editor_model::operation_log::OperationLog::new_const(),
             );
         });
     }
@@ -162,6 +181,7 @@ fn swap_scene_moves_active_doc_between_scenes() {
 
 #[test]
 fn replace_with_empty_clears_log_and_marks_dirty() {
+    fresh_session();
     load_default_scene();
     let envelope = CommandEnvelope {
         command: Command::CreateEntity {
@@ -183,6 +203,8 @@ fn replace_with_empty_clears_log_and_marks_dirty() {
 
 #[test]
 fn mark_dirty_and_clear_dirty_round_trip() {
+    fresh_session();
+    load_default_scene();
     clear_dirty();
     assert!(!is_dirty());
     mark_dirty();
@@ -193,7 +215,8 @@ fn mark_dirty_and_clear_dirty_round_trip() {
 
 #[test]
 fn with_log_borrows_immutably() {
+    fresh_session();
     load_default_scene();
     let size = with_log(|log| log.get_log_size());
-    assert_eq!(size, 0);
+    assert_eq!(size, Some(0));
 }
