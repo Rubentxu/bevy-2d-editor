@@ -118,6 +118,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: 'npm'
+          cache-dependency-path: 'tools/docs-check/package-lock.json'
 
       - name: Install docs-check tool
         working-directory: tools/docs-check
@@ -172,6 +174,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: 'npm'
+          cache-dependency-path: 'tools/archcheck/package-lock.json'
 
       - name: Install archcheck tool
         working-directory: tools/archcheck

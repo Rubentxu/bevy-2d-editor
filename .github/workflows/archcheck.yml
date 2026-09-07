@@ -17,7 +17,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'tools/archcheck/node_modules'
+          cache: 'npm'
+          cache-dependency-path: 'tools/archcheck/package-lock.json'
 
       - name: Install dependencies
         working-directory: tools/archcheck
