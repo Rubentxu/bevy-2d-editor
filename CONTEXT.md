@@ -275,3 +275,51 @@ Explicit target level for a semantic edit: instance, selected instances, definit
 
 **Editor Extension**:
 A capability-limited contribution to actions, validators, recipes, importers, inspectors, panels or diagnostics. Extensions do not receive unrestricted mutable EditorSession access (ADR-0040).
+
+## Hardening Pack Additions (Architecture & UX Hardening, 2026-09-07)
+
+These are introduced or refined by `docs/bevy-2d-editor-hardening-pack/` (ADR-0056 → ADR-0063) and the converged pre-v1 roadmap (H0 → H10). Each entry preserves the English anchor as the canonical term used in code, identifiers, comments and UI strings; the Spanish gloss is provided for discussion and review only.
+
+**Composition Root** (Composición Raíz):
+The unique target-specific code location (`crates/editor-wasm`) that owns the canonical `EditorSession`, the `ProjectStore` adapter and the `PreviewRuntime` adapter as a single container. Only the composition root may own ambient target lifecycle (ADR-0057, supersedes ADR-0031).
+_Avoid_: "service locator", "singleton", "global session".
+
+**Mutation Path** (Ruta de Mutación):
+The single normal pipeline through which an authoring mutation travels: UI intent → typed capability command → application use case → `ChangeSet`/`TransactionKernel` → domain mutation → persistence/projection effects → typed result → UI refresh. TransactionKernel is the only normal mutation path before v1.0 (ADR-0059, supersedes ADR-0049).
+_Avoid_: "bypass kernel", "fast path", "raw dispatch".
+
+**Typed Capability** (Capacidad Tipada):
+A narrow TS interface method on the `EditorBackend` contract, returning a typed result or discriminated error. Capabilities replace raw `window as any` bridge calls (ADR-0058, supersedes ADR-0034). The production implementation is `WasmEditorBackend`; tests inject in-memory/recording/fault-injecting variants.
+_Avoid_: "bridge call", "raw API", "global".
+
+**Workspace State** (Estado de Workspace):
+The orthogonal concept replacing the global `EditorMode` enum. Decomposed into: `ActiveDocument` (which document is open), `RuntimeMode` (edit/play/pause), `WorkspaceLayout` (panel positions) and `ContextSelection` (ADR-0060).
+_Avoid_: "mode enum", "global editor mode", "single state machine".
+
+**Feature Slice** (Feature Slice / Rodaja de Funcionalidad):
+A frontend module under `frontend/src/features/<name>/` that owns its hooks, controllers, components, local state and capability calls. `App`/shell only compose providers and render the shell — they do not know every feature callback (ADR-0063).
+_Avoid_: "god component", "central handler contract", "App knows everything".
+
+**Fitness Gate** (Puerta de Fitness):
+An executable check (`cargo fmt`, `cargo test`, `cargo metadata`-based dependency gate, frontend static, Playwright cohort, benchmark corpus, BSN round-trip) that turns architectural intent into CI reality. A gate that fails before executing its checker is considered **not operational**, not green (ADR-0044 + `docs/specs/quality-fitness-gates.md`).
+_Avoid_: "lint", "best-effort check", "advisory".
+
+**Anti-Corruption Layer** (Capa Anticorrupción):
+The intermediate IR + codec adapter that mediates between the editor semantic model and Bevy/BSN. The semantic model does not mirror Bevy's evolving syntax; only the adapter changes on Bevy upgrades (ADR-0062).
+_Avoid_: "leaky abstraction", "BSN as source of truth", "domain tied to Bevy".
+
+**Hierarchy Index** (Índice de Jerarquía):
+Per-revision precomputed maps (`entityById`, `childrenByParent`, `parentById`, `depthById`, `visibleFlattenedTree`) that prevent repeated linear parent lookups during hierarchy rendering. Required to meet the 10k-entity p95 budget in `docs/specs/hierarchy-inspector-performance-accessibility.md` (H7).
+_Avoid_: "scan on render", "linear lookup", "rebuild per row".
+
+**GraphKernel Mutation Capability** (Capacidad de Mutación del GraphKernel):
+The split-traits proposal `GraphRead` + `GraphTopologyMut` + `GraphNodeDataMut` + `GraphEdgeDataMut`. Dialects only implement what they semantically support (ADR-0061, extends ADR-0053). ISP-driven; benchmark spike decides adjacency/index representation.
+_Avoid_: "GraphMut forces everything", "boxed iterators as default", "edge scan per query".
+
+**Principal / Capability Provenance** (Procedencia de Principal/Capacidad):
+Typed `Principal` (Human/Agent/Extension/Importer/Runtime/System) and typed `MutationCapability` (SceneRead/SceneWrite/AssetWrite/LogicWrite/SourceWrite/ProjectRead/RuntimeApplyBack/ProposeChanges) replacing legacy actor-prefix string parsing (`docs/specs/principal-capability-provenance.md`). Legacy wire formats parsed at the protocol/WASM boundary.
+_Avoid_: "actor string", "prefix parsing", "permission string".
+
+**Author-Time Apply-Back** (Aplicación-tras-Juego en Tiempo de Autor):
+A runtime-to-authoring reversible mutation, restricted to authorable fields, reviewed via `ChangeSet` and only applied on explicit user intent (ADR-0042; reinforced by `docs/specs/feature-strengthening-plan.md` Runtime Preview / Apply-Back section). Distinct from runtime tunables that never cross the boundary.
+_Avoid_: "live edit silent", "auto-commit runtime", "save play state".
