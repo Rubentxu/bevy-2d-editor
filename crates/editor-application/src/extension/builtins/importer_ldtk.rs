@@ -1,11 +1,10 @@
 //! Built-in LDtk importer registration.
 //!
 //! Registers `builtin.ldtk` with `Capability::Importers` in the importer registry.
-//! The concrete `LdtkImporter` implementation lives in `editor_bevy::importer::ldtk`.
+//! The concrete `LdtkImporter` implementation lives in `editor_bevy::importer::ldtk`
+//! and is composed into the registry by `editor_wasm` (the WASM composition root).
 
-use editor_bevy::importer::LdtkImporter;
 use editor_model::extension::{Capability, CapabilityDescriptor, ExtensionId, ExtensionManifest, Permission, PermissionArea, PermissionScope, SemVer};
-use std::sync::Arc;
 
 /// Manifest for `builtin.ldtk`.
 ///
@@ -21,9 +20,4 @@ pub fn manifest() -> ExtensionManifest {
         }],
         vec![Permission::new(PermissionArea::Importers, PermissionScope::Read)],
     )
-}
-
-/// Construct the `LdtkImporter` concrete implementation for registration.
-pub fn importer() -> Arc<dyn editor_model::importer::Importer> {
-    Arc::new(LdtkImporter::new())
 }

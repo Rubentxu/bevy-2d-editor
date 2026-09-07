@@ -2413,7 +2413,6 @@ name = "editor-application"
 version = "0.1.0"
 dependencies = [
  "base64",
- "editor-bevy",
  "editor-model",
  "editor-protocol",
  "hex",

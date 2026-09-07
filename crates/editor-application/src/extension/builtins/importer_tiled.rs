@@ -1,11 +1,10 @@
 //! Built-in Tiled importer registration.
 //!
 //! Registers `builtin.tiled` with `Capability::Importers` in the importer registry.
-//! The concrete `TiledImporter` implementation lives in `editor_bevy::importer::tiled`.
+//! The concrete `TiledImporter` implementation lives in `editor_bevy::importer::tiled`
+//! and is composed into the registry by `editor_wasm` (the WASM composition root).
 
-use editor_bevy::importer::TiledImporter;
 use editor_model::extension::{Capability, CapabilityDescriptor, ExtensionId, ExtensionManifest, Permission, PermissionArea, PermissionScope, SemVer};
-use std::sync::Arc;
 
 /// Manifest for `builtin.tiled`.
 ///
@@ -21,9 +20,4 @@ pub fn manifest() -> ExtensionManifest {
         }],
         vec![Permission::new(PermissionArea::Importers, PermissionScope::Read)],
     )
-}
-
-/// Construct the `TiledImporter` concrete implementation for registration.
-pub fn importer() -> Arc<dyn editor_model::importer::Importer> {
-    Arc::new(TiledImporter::new())
 }

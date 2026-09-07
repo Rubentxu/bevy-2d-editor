@@ -17,15 +17,4 @@
 # Initial state (H0.2 entry): empty. The current workspace has zero
 # forbidden edges, so no exceptions are required yet.
 
-exceptions:
-  # Pre-H1.4 — editor-application pulls editor-bevy under target-arch
-  # wasm32 to satisfy the WASM composition shim. The owner milestone
-  # H1.4 moves all bevy-specific composition to editor-wasm so this
-  # dep disappears entirely.
-  - id: ARCH-EXCEPTION-002
-    edge:
-      from: editor-application
-      to: editor-bevy
-    owner: H1.4
-    reason: "wasm32-only bevy shim in application; H1.4 relocates composition into editor-wasm"
-    expires_when: H1.4
+exceptions: []

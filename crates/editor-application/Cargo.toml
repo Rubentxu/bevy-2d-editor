@@ -27,4 +27,9 @@ wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
 serde-wasm-bindgen = "0.6"
 base64 = "0.22"
-editor-bevy = { path = "../editor-bevy" }
+# uuid on wasm32 requires a randomness source. The `js` feature was
+# previously unified into the build via editor-bevy (a wasm32 dep of
+# editor-application). Once editor-bevy is no longer pulled in here
+# (H1.4), we declare the feature explicitly so uuid v1 still compiles
+# on wasm32.
+uuid = { version = "1", features = ["v4", "js"] }
