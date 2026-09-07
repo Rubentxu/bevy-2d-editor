@@ -1,0 +1,239 @@
+schema_version: 1
+entries:
+  # ── editor-bevy (large cluster; mostly scene + runtime state) ────────────
+  - name: DISPATCH_VIA_KERNEL
+    kind: static
+    declared_at: crates/editor-bevy/src/lib.rs:109
+    owner: H1.4
+    reason: "feature-gated atomic for the dual-dispatch gate; removed when the runtime toggle closes"
+
+  - name: COMMAND_BUS
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/lib.rs:407
+    owner: H2.5
+    reason: "runtime coordination bus; absorbed into EditorSession/TransactionKernel"
+
+  - name: EVENT_BUS
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/lib.rs:408
+    owner: H2.5
+    reason: "runtime coordination bus; absorbed into EditorSession/TransactionKernel"
+
+  - name: SCENE_DOC
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/scene_session.rs:59
+    owner: H2.3
+    reason: "scene session family; absorbed by EditorSession.scene"
+
+  - name: OPERATION_LOG
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/scene_session.rs:64
+    owner: H2.3
+    reason: "scene history; absorbed by EditorSession.log"
+
+  - name: DIRTY_FLAG
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/scene_state.rs:16
+    owner: H2.3
+    reason: "scene dirty bit; moves to EditorSession dirty field"
+
+  - name: SCENE_REGISTRY
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/scene_state.rs:18
+    owner: H2.3
+    reason: "registry of loaded scenes; absorbed by EditorSession registry"
+
+  - name: USER_SCHEMAS
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/schema.rs:419
+    owner: H2.2
+    reason: "registry of user-authored schemas; absorbed by EditorSession.schemas"
+
+  - name: SOURCE_FILE_REGISTRY
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/source_files.rs:17
+    owner: H2.2
+    reason: "registry of indexed source files; absorbed by EditorSession.sources"
+
+  - name: PREVIEW_METRICS
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/preview_inspector.rs:60
+    owner: H2.5
+    reason: "runtime preview metrics; absorbed by preview subsystem state"
+
+  - name: PREVIEW_MAPPING
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/preview_inspector.rs:68
+    owner: H2.5
+    reason: "StableId -> PreviewEntity mapping; absorbed by preview subsystem state"
+
+  - name: PREVIEW_PROVENANCE
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/preview_inspector.rs:72
+    owner: H2.5
+    reason: "preview provenance; absorbed by preview subsystem state"
+
+  - name: HOT_RELOAD_BUS
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/hot_reload_state.rs:32
+    owner: H2.5
+    reason: "hot-reload request bus; absorbed by EditorSession.hot_reload"
+
+  - name: PLAY_MODE_REQUEST
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/hot_reload_state.rs:35
+    owner: H2.5
+    reason: "play mode request queue; absorbed by EditorSession.play_mode"
+
+  - name: SCENE_ASSET_DOC
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/asset_state.rs:32
+    owner: H2.4
+    reason: "scene asset document; absorbed by EditorSession.assets"
+
+  - name: ASSET_OPERATION_LOG
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/asset_state.rs:37
+    owner: H2.4
+    reason: "asset operation history; absorbed by EditorSession.asset_log"
+
+  - name: ASSET_BODY_CACHE
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/asset_state.rs:39
+    owner: H2.4
+    reason: "scene asset body cache; absorbed by EditorSession.asset_cache"
+
+  - name: RESYNC_REPORTS
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/asset_state.rs:41
+    owner: H2.4
+    reason: "scene instance resync reports; absorbed by EditorSession.resync"
+
+  - name: VALIDATION_ISSUES
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/asset_state.rs:43
+    owner: H2.4
+    reason: "validation issues buffer; absorbed by EditorSession.validation"
+
+  - name: ACTUATOR_OUTPUT_BUS
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/actuator_bus.rs:53
+    owner: H2.5
+    reason: "logic bricks actuator output bus; absorbed by EditorSession.actuators"
+
+  - name: LOGIC_GRAPH_DOC
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/logic_state.rs:21
+    owner: H2.4
+    reason: "active logic graph document; absorbed by EditorSession.logic"
+
+  - name: LOGIC_OPERATION_LOG
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/logic_state.rs:25
+    owner: H2.4
+    reason: "logic operation history; absorbed by EditorSession.logic_log"
+
+  - name: LOGIC_GRAPH_CATALOG
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/logic_state.rs:27
+    owner: H2.4
+    reason: "logic graph catalog; absorbed by EditorSession.logic_catalog"
+
+  - name: BUILTIN_CATALOG_SEEDED
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/logic_state.rs:222
+    owner: H2.4
+    reason: "one-time seed flag for builtin logic recipes; removed when seed is permanent"
+
+  - name: LOGIC_BINDING_REGISTRY
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/logic_state.rs:290
+    owner: H2.4
+    reason: "logic binding registry; absorbed by EditorSession.bindings"
+
+  - name: SEEDING_LOCAL
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/logic_recipes.rs:80
+    owner: H2.4
+    reason: "re-entrancy guard for builtin recipe seeding; removed when seeding becomes idempotent"
+
+  - name: REGISTRY
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/logic_evaluator.rs:212
+    owner: H2.4
+    reason: "logic NodeEvaluator registry; absorbed by EditorSession.node_registry"
+
+  - name: LOGIC_GRAPH_REGISTRY
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/logic_evaluator.rs:230
+    owner: H2.4
+    reason: "logic graph asset registry; absorbed by EditorSession.graph_registry"
+
+  - name: KEYBOARD_STATE
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/logic_evaluator.rs:1049
+    owner: H2.5
+    reason: "runtime sensor state for input-driven logic nodes; absorbed by preview subsystem"
+
+  - name: WORLD_DOC
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/world_state.rs:22
+    owner: H2.4
+    reason: "active world document (ADR-0037); absorbed by EditorSession.world"
+
+  - name: WORLD_CATALOG
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/world_state.rs:29
+    owner: H2.4
+    reason: "world catalog (ADR-0037); absorbed by EditorSession.world_catalog"
+
+  # ── editor-model (the sanctioned registry set per ADR-0057) ───────────────
+  - name: ADAPTERS
+    kind: thread_local
+    declared_at: crates/editor-model/src/adapter.rs:166
+    owner: H1.x
+    reason: "legacy adapter bus; absorbed by EditorSession.adapters during the H1 EditorSession migration"
+
+  - name: PROJECT_STORE
+    kind: thread_local
+    declared_at: crates/editor-model/src/ports.rs:121
+    owner: H1.2
+    reason: "ProjectStore port cell; absorbed by EditorSession.project_store once H1.2 lands the port inversion"
+
+  - name: EDITOR_SESSION
+    kind: thread_local
+    declared_at: crates/editor-model/src/ports.rs:159
+    owner: H1.x
+    reason: "canonical EditorSession cell — the sanctioned owner per ADR-0057; remains after H1 closes"
+
+  - name: EXTENSION_REGISTRY
+    kind: thread_local
+    declared_at: crates/editor-model/src/ports.rs:243
+    owner: H2.2
+    reason: "extension registry cell; absorbed by EditorSession.extensions"
+
+  - name: IMPORTER_REGISTRY
+    kind: thread_local
+    declared_at: crates/editor-model/src/ports.rs:324
+    owner: H2.2
+    reason: "importer registry cell; absorbed by EditorSession.importers"
+
+  - name: C
+    kind: static
+    declared_at: crates/editor-model/src/scene_asset_catalog.rs:400
+    owner: H2.x
+    reason: "AtomicU64 id minting counter (function-local static); moved into EditorSession.id_mint once EditorSession owns id allocation"
+
+  # ── editor-wasm (composition root per ADR-0057) ───────────────────────────
+  - name: SESSION
+    kind: thread_local
+    declared_at: crates/editor-wasm/src/lib.rs:40
+    owner: H1.x
+    reason: "WASM composition root singleton (ADR-0057); remains after H1 closes"
+
+  # ── ai-proxy (separate binary crate; OK as memoized OnceLock) ──────────────
+  - name: SCHEMA
+    kind: static
+    declared_at: crates/ai-proxy/src/openai/function_calling.rs:32
+    owner: H2.x
+    reason: "OnceLock memoization of the OpenAI function-calling schema (function-local static); candidate to move into a non-static Lazy once the function-call surface stabilizes"

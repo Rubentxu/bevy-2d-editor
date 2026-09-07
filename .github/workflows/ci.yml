@@ -238,6 +238,32 @@ jobs:
         working-directory: tools/archcheck-cargo
         run: npm test
 
+  globals-inventory:
+    name: Global-state inventory ratchet
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: 'tools/archcheck-globals/package-lock.json'
+
+      - name: Install archcheck-globals tool
+        working-directory: tools/archcheck-globals
+        run: npm ci
+
+      - name: Run archcheck-globals assertions
+        working-directory: tools/archcheck-globals
+        run: npm run check
+
+      - name: Run archcheck-globals fixture tests
+        working-directory: tools/archcheck-globals
+        run: npm test
+
   playwright-smoke:
     name: Playwright smoke cohort
     runs-on: ubuntu-latest
