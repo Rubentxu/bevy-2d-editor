@@ -18,17 +18,6 @@
 # forbidden edges, so no exceptions are required yet.
 
 exceptions:
-  # Pre-H1.2 — application layer still imports the concrete storage
-  # adapter directly. The owner milestone H1.2 inverts this edge so
-  # editor-storage-web becomes an editor-application port implementation.
-  - id: ARCH-EXCEPTION-001
-    edge:
-      from: editor-application
-      to: editor-storage-web
-    owner: H1.2
-    reason: "concrete ProjectStore still imported in application layer; port abstraction lands in H1.2"
-    expires_when: H1.2
-
   # Pre-H1.4 — editor-application pulls editor-bevy under target-arch
   # wasm32 to satisfy the WASM composition shim. The owner milestone
   # H1.4 moves all bevy-specific composition to editor-wasm so this
