@@ -18,6 +18,7 @@ use std::sync::{Arc, Mutex};
 // All 11 fields exist in support::FakeSession but we declare only the 4 we use.
 struct FakeSession {
     scene_states: BTreeMap<String, support::SceneSessionState>,
+    active_scene: editor_model::SceneFocus,
     asset_states: BTreeMap<String, support::AssetSessionState>,
     logic_states: BTreeMap<String, support::LogicSessionState>,
     world_states: BTreeMap<String, support::WorldSessionState>,
@@ -29,6 +30,9 @@ impl EditorSessionPort for FakeSession {
         self.scene_states
             .entry(path.to_string())
             .or_insert_with(support::SceneSessionState::default)
+    }
+    fn active_scene_mut(&mut self) -> &mut editor_model::SceneFocus {
+        &mut self.active_scene
     }
     fn asset_state_mut(&mut self, path: &str) -> &mut support::AssetSessionState {
         self.asset_states
@@ -95,6 +99,7 @@ impl EditorSessionPort for FakeSession {
 fn fresh_session() {
     let session = FakeSession {
         scene_states: BTreeMap::new(),
+        active_scene: editor_model::SceneFocus::Empty,
         asset_states: BTreeMap::new(),
         logic_states: BTreeMap::new(),
         world_states: BTreeMap::new(),

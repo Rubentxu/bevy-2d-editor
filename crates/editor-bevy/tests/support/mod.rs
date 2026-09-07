@@ -138,6 +138,7 @@ pub use editor_model::WorldSessionState;
 #[derive(Debug, Default)]
 pub struct FakeSession {
     pub scene_states: BTreeMap<String, SceneSessionState>,
+    pub active_scene: editor_model::SceneFocus,
     pub asset_states: BTreeMap<String, AssetSessionState>,
     pub logic_states: BTreeMap<String, LogicSessionState>,
     pub world_states: BTreeMap<String, WorldSessionState>,
@@ -168,6 +169,9 @@ impl EditorSessionPort for FakeSession {
         self.scene_states
             .entry(path.to_string())
             .or_insert_with(SceneSessionState::default)
+    }
+    fn active_scene_mut(&mut self) -> &mut editor_model::SceneFocus {
+        &mut self.active_scene
     }
     fn asset_state_mut(&mut self, path: &str) -> &mut AssetSessionState {
         self.asset_states
@@ -262,6 +266,9 @@ impl EditorSessionPort for FakeSessionWithDefaults {
     // Forward all calls to FakeSession's impl
     fn scene_state_mut(&mut self, path: &str) -> &mut SceneSessionState {
         self.0.scene_state_mut(path)
+    }
+    fn active_scene_mut(&mut self) -> &mut editor_model::SceneFocus {
+        self.0.active_scene_mut()
     }
     fn asset_state_mut(&mut self, path: &str) -> &mut AssetSessionState {
         self.0.asset_state_mut(path)

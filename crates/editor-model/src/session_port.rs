@@ -38,6 +38,13 @@ pub trait EditorSessionPort {
     /// Scene session state (per scene path).
     fn scene_state_mut(&mut self, path: &str) -> &mut crate::session::SceneSessionState;
 
+    /// Currently-focused scene (H2.3 — collapses SCENE_DOC + OPERATION_LOG +
+    /// DIRTY_FLAG thread-locals into one ADT slot on the session).
+    ///
+    /// Replaces the three coupled invariants that previously lived as
+    /// thread_locals in `editor-bevy::scene_session` and `editor-bevy::scene_state`.
+    fn active_scene_mut(&mut self) -> &mut crate::scene_focus::SceneFocus;
+
     /// Asset session state (per asset path).
     fn asset_state_mut(&mut self, path: &str) -> &mut crate::session::AssetSessionState;
 

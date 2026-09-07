@@ -4,7 +4,8 @@
 //! `use crate::state::*` continue to work without modification.
 //!
 //! The actual thread-local declarations and `with_*` helpers now live in:
-//! - [`scene_state`]: SCENE_REGISTRY, DIRTY_FLAG, mark_dirty
+//! - [`scene_state`]: SCENE_REGISTRY, mark_dirty (H2.3 — DIRTY_FLAG moved to
+//!   `EditorSession.active_scene.dirty`, see `scene_session::*`)
 //! - [`asset_state`]: SCENE_ASSET_CATALOG/DOC, ASSET_OPERATION_LOG,
 //!   ASSET_BODY_CACHE, RESYNC_REPORTS, VALIDATION_ISSUES
 //! - [`logic_state`]: LOGIC_GRAPH_DOC, LOGIC_OPERATION_LOG
@@ -25,14 +26,16 @@ pub use crate::logic_state::{
 // BindingRecord is needed by tests
 pub use crate::logic_state::BindingRecord;
 pub use crate::logic_state::LOGIC_BINDING_REGISTRY;
-pub use crate::scene_state::{
-    DIRTY_FLAG, SCENE_REGISTRY, mark_dirty, with_registry, with_registry_mut,
-};
+pub use crate::scene_state::{SCENE_REGISTRY, mark_dirty, with_registry, with_registry_mut};
+
+// H2.3: SCENE_DOC, OPERATION_LOG and DIRTY_FLAG thread_locals removed —
+// they live on `EditorSession.active_scene: SceneFocus` (see
+// `editor_model::SceneFocus` and `editor_model::ports::with_session_mut`).
 
 // v0.91 PR2: SCENE_ASSET_CATALOG and SCENE_ASSET_CATALOG_WARNINGS are no longer
 // thread_locals — they live on `EditorSession::asset_states["_active"]` (see
 // `editor_model::AssetSessionState`). The remaining thread_locals (DOC,
-// OPERATION_LOG, BODY_CACHE, RESYNC_REPORTS, VALIDATION_ISSUES) stay for
+// BODY_CACHE, RESYNC_REPORTS, VALIDATION_ISSUES) stay for
 // PR3 (causality migration) and PR5 (`OperationLog` type move).
 pub use crate::asset_state::{
     ASSET_BODY_CACHE, ASSET_OPERATION_LOG, RESYNC_REPORTS, SCENE_ASSET_DOC, VALIDATION_ISSUES,

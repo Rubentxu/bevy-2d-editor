@@ -11,11 +11,17 @@
 //! | `WorldConnectLevels` | `WorldRemoveLink` |
 //! | `WorldSetLayoutPolicy` | `WorldSetLayoutPolicy` (captures pre-policy) |
 //! | `WorldSetStreamingPolicy` | `WorldSetStreamingPolicy` (captures pre-policy) |
+//!
+//! H2.3: moved from `editor_bevy::world_command` so `Command::World(WorldCommand)`
+//! can live in `editor_model::command`. Doc comments will be backfilled in a
+//! follow-up; the types are otherwise identical.
+#![allow(missing_docs)]
+
 use std::collections::BTreeMap;
 
-use editor_model::world::{
-    LayoutPolicy, LinkDirection, StreamingPolicy, WorldDocument, WorldId, WorldLevelRef, WorldLink,
-    WorldLinkKind,
+use crate::world::{
+    EntranceRef, LayoutPolicy, LinkDirection, StreamingPolicy, WorldDocument, WorldId,
+    WorldLevelRef, WorldLink, WorldLinkKind,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -112,9 +118,9 @@ pub enum WorldCommand {
         direction: LinkDirection,
         kind: WorldLinkKind,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        entrance: Option<editor_model::world::EntranceRef>,
+        entrance: Option<EntranceRef>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        exit: Option<editor_model::world::EntranceRef>,
+        exit: Option<EntranceRef>,
     },
 
     /// Disconnect (remove) a link between two levels.

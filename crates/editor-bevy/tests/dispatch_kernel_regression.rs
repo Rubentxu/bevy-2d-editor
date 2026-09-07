@@ -15,11 +15,11 @@
 //! The key verification is that a Plugin-origin ChangeSet goes through
 //! `transaction_kernel_check_plugin_permission` which is called before apply.
 
-use editor_bevy::command::{Command, CommandEnvelope, CommandMetadata};
 use editor_bevy::document::{ComponentInstance, Entity, LocalId, SceneDocument, StableId};
 use editor_bevy::operation_log::OperationLog;
 use editor_bevy::processor;
 use editor_bevy::transaction_bridge::scene_transaction_kernel;
+use editor_model::command::{Command, CommandEnvelope, CommandMetadata};
 use editor_model::session::HistoryScope;
 use editor_model::transaction::{ChangeOrigin, ChangeSet};
 
@@ -35,6 +35,7 @@ fn empty_doc() -> SceneDocument {
         name: "Test Scene".to_string(),
         entities: Vec::new(),
         instances: std::collections::BTreeMap::new(),
+        extension_data: Default::default(),
     }
 }
 
@@ -52,6 +53,7 @@ fn doc_with_entity() -> SceneDocument {
                 "translation": { "x": 10.0, "y": 10.0 }
             }),
         }],
+        extension_data: Default::default(),
     });
     doc
 }

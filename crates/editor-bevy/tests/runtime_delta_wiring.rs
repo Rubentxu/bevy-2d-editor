@@ -30,6 +30,9 @@ impl EditorSessionPort for FakeSessionWithCap {
     fn scene_state_mut(&mut self, path: &str) -> &mut editor_model::SceneSessionState {
         self.0.scene_state_mut(path)
     }
+    fn active_scene_mut(&mut self) -> &mut editor_model::SceneFocus {
+        self.0.active_scene_mut()
+    }
     fn asset_state_mut(&mut self, path: &str) -> &mut editor_model::AssetSessionState {
         self.0.asset_state_mut(path)
     }

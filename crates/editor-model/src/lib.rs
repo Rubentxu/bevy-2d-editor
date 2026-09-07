@@ -8,6 +8,7 @@
 pub mod adapter;
 pub mod auto_layer;
 pub mod causality;
+pub mod command;
 pub mod component;
 pub mod document;
 pub mod extension;
@@ -19,6 +20,7 @@ pub mod int_grid;
 pub mod logic_activation;
 pub mod logic_graph;
 pub mod migration;
+pub mod operation_log;
 pub mod pending_change_set;
 pub mod ports;
 pub mod project_metadata;
@@ -26,6 +28,7 @@ pub mod rebuild_cause;
 pub mod runtime_delta;
 pub mod scene_asset;
 pub mod scene_asset_catalog;
+pub mod scene_focus;
 pub mod scene_instance;
 pub mod schema;
 pub mod session;
@@ -35,6 +38,7 @@ pub mod tileset;
 pub mod time;
 pub mod transaction;
 pub mod world;
+pub mod world_command;
 
 // Re-export all public types at the root for ergonomic use.
 pub use auto_layer::{
@@ -66,6 +70,7 @@ pub use scene_asset_catalog::{
     CatalogError, CatalogWarning, SceneAssetCatalog, SceneAssetCatalogEntry, mint_asset_id,
     normalize_logical_path,
 };
+pub use scene_focus::{ApplyOutcome, SceneFocus, SceneFocusError};
 pub use scene_instance::{
     ComponentOverride, ComponentOverrideStatus, SceneInstance,
     component_override_status_after_field_rename,

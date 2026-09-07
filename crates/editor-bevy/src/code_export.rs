@@ -530,6 +530,7 @@ mod tests {
             name: "Test".to_string(),
             entities,
             instances: BTreeMap::new(),
+            extension_data: Default::default(),
         }
     }
 
@@ -576,6 +577,7 @@ mod tests {
             name: name.to_string(),
             parent: None,
             components,
+            extension_data: Default::default(),
         }
     }
 
@@ -586,6 +588,7 @@ mod tests {
             name: name.to_string(),
             parent: Some(StableId::new(parent_id)),
             components,
+            extension_data: Default::default(),
         }
     }
 

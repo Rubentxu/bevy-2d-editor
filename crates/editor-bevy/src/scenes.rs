@@ -386,6 +386,7 @@ impl SceneRegistry {
             name: name.to_string(),
             entities: Vec::new(),
             instances: BTreeMap::new(),
+            extension_data: BTreeMap::new(),
         }
     }
 }
@@ -408,6 +409,7 @@ mod tests {
             name: name.to_string(),
             entities: Vec::new(),
             instances: BTreeMap::new(),
+            extension_data: BTreeMap::new(),
         }
     }
 

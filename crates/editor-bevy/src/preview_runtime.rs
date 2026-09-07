@@ -7,10 +7,10 @@
 //! - `setup` — `Startup` system that initializes default resources
 //! - `process_play_mode_request` — handles Enter/Exit Play transitions
 //! - `process_hot_reload_requests` — drains the hot-reload bus each frame
-//! - `rebuild_preview_world` — respawns scene entities when DIRTY_FLAG is set
+//! - `rebuild_preview_world` — respawns scene entities when `active_scene.dirty` is set
 //! - `process_commands` — drains the command bus and applies the legacy
 //!   sprite-move command (kept for backward compatibility with the JS host)
-//! - `sync_log_state` — mirrors thread-local `OPERATION_LOG` into the
+//! - `sync_log_state` — mirrors `EditorSession.active_scene.log` into the
 //!   `OperationLogState` resource for UI hooks
 //! - `emit_events` — publishes Sprite position + FPS on the event bus
 //! - `in_play_mode` / `in_edit_mode` — `RunIf` helpers gating systems
@@ -31,7 +31,7 @@ use crate::instance_projection::{PreviewEntity, project_instances};
 use crate::logic_dispatch;
 use crate::logic_evaluator::{self, PortValue};
 use crate::state::{
-    DIRTY_FLAG, HOT_RELOAD_BUS, HotReloadRequest, PLAY_MODE_REQUEST, PlayModeRequest, mark_dirty,
+    HOT_RELOAD_BUS, HotReloadRequest, PLAY_MODE_REQUEST, PlayModeRequest, mark_dirty,
     with_asset_body_cache_mut, with_logic_graph_mut,
 };
 use crate::{
@@ -73,7 +73,7 @@ pub fn capture_baselines_from_scene_doc() -> String {
     use crate::state::with_asset_body_cache;
     use std::collections::BTreeMap;
 
-    let doc = crate::scene_session::SCENE_DOC.with(|s| s.borrow().clone());
+    let doc = crate::scene_session::snapshot_active_doc();
     let doc = match doc {
         Some(d) => d,
         None => return String::new(),
@@ -273,7 +273,7 @@ fn setup(mut commands: Commands) {
     commands.spawn(Camera2d);
 
     // Try to load scene from thread-local SCENE_DOC, otherwise use default
-    let doc = crate::scene_session::SCENE_DOC.with(|s| s.borrow().clone());
+    let doc = crate::scene_session::snapshot_active_doc();
     let scene = match doc {
         Some(doc) => doc,
         None => match serde_json::from_str(DEFAULT_SCENE_JSON) {
@@ -303,7 +303,7 @@ fn setup(mut commands: Commands) {
     // so that `get_scene_snapshot()` (which reads from SCENE_DOC) returns
     // the same data as SceneDocumentState. Without this, the JS bridge
     // returns NULL on the very first call (before any load_scene_json).
-    crate::scene_session::SCENE_DOC.with(|s| *s.borrow_mut() = Some(scene));
+    editor_model::ports::with_session_mut(|sess| sess.active_scene_mut().focus(scene));
 
     // Initialize the World catalog to an empty catalog so world_*_wasm
     // calls do not panic before load_project() rebuilds it from OPFS
@@ -673,15 +673,15 @@ fn rebuild_preview_world(
     scene_entities: Query<BevyEntity, With<SceneEntity>>,
 ) {
     // Check both the resource dirty flag and the cross-thread flag
-    let external_dirty = DIRTY_FLAG.with(|d| *d.borrow());
+    let external_dirty = crate::scene_session::is_dirty();
     if !state.dirty && !external_dirty {
         return;
     }
 
-    // Sync document from SCENE_DOC thread_local (value-swap source)
-    // This ensures the preview reflects the currently active scene after a switch
-    let current_doc = crate::scene_session::SCENE_DOC.with(|s| s.borrow().clone());
-    if let Some(doc) = current_doc {
+    // Sync document from `EditorSession.active_scene` (H2.3 — replaces the
+    // SCENE_DOC thread_local). This ensures the preview reflects the
+    // currently focused scene after a switch.
+    if let Some(doc) = crate::scene_session::snapshot_active_doc() {
         state.document = doc;
     }
 
@@ -709,7 +709,7 @@ fn rebuild_preview_world(
     push_preview_inspector_state(&state.document, &projected);
 
     state.dirty = false;
-    DIRTY_FLAG.with(|d| *d.borrow_mut() = false);
+    crate::scene_session::clear_dirty();
 }
 
 /// Update the runtime preview inspector thread-locals after a rebuild.
@@ -1149,16 +1149,14 @@ fn emit_events(
 // sync_log_state
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Sync the OperationLogState Resource from the thread_local! OperationLog.
+/// Sync the OperationLogState Resource from `EditorSession.active_scene.log`
+/// (H2.3 — replaces the OPERATION_LOG thread_local).
 /// UI hooks (future change) read this resource to enable/disable undo/redo buttons.
 fn sync_log_state(mut log_state: ResMut<OperationLogState>) {
-    crate::scene_session::OPERATION_LOG.with(|l| {
-        let binding = l.borrow();
-        let log = binding.as_ref().unwrap();
-        log_state.size = log.get_log_size();
-        log_state.can_undo = log.can_undo();
-        log_state.can_redo = log.can_redo();
-    });
+    let snap = crate::scene_session::log_state_snapshot();
+    log_state.size = snap.size;
+    log_state.can_undo = snap.can_undo;
+    log_state.can_redo = snap.can_redo;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1267,14 +1265,18 @@ pub fn apply_actuator_outputs_in_preview(
 /// Periodic poll: walks the operation log and pushes one
 /// `ChangeSetSummary` per entry to the active scene's recent-change buffer.
 ///
-/// v0.91 PR1 stop-gap: iterates the in-process `OPERATION_LOG` once per call,
+/// v0.91 PR1 stop-gap: iterates `EditorSession.active_scene.log` once per call,
 /// pushes any entries not yet seen. Deduplication by `change_id` is deferred
 /// (a future PR will add a `last_seen` cursor on the buffer). Currently the
 /// poll is called from the Bevy system below; tests call it directly.
 pub fn poll_recent_change_sets_inner() {
     use editor_model::ChangeSetSummary;
-    let entries: Vec<crate::operation_log::LogEntry> = crate::scene_session::OPERATION_LOG
-        .with(|log| log.borrow().as_ref().unwrap().snapshot_entries());
+    let entries: Vec<crate::operation_log::LogEntry> =
+        editor_model::ports::with_session_mut(|sess| match sess.active_scene_mut().log() {
+            Some(log) => log.snapshot_entries(),
+            None => Vec::new(),
+        })
+        .unwrap_or_default();
     if entries.is_empty() {
         return;
     }

@@ -737,7 +737,7 @@ impl LdtkImporter {
         &self,
         level_outputs: &[LevelParseOutput],
     ) -> Result<Vec<serde_json::Value>, ImporterError> {
-        use crate::world_command::WorldCommand;
+        use editor_model::world_command::WorldCommand;
 
         let mut commands = Vec::new();
 

@@ -12,11 +12,11 @@
 //! - THEN `OperationLog` entries MUST be byte-identical to v0.88 legacy path
 //! - AND `E1.translation` MUST equal `(10,10)`
 
-use editor_bevy::command::{Command, CommandEnvelope, CommandMetadata};
 use editor_bevy::document::{ComponentInstance, Entity, LocalId, SceneDocument, StableId};
-use editor_bevy::operation_log::OperationLog;
+use editor_bevy::operation_log::{OperationLog, ProcessorApply};
 use editor_bevy::processor;
 use editor_bevy::transaction_bridge::scene_transaction_kernel;
+use editor_model::command::{Command, CommandEnvelope, CommandMetadata};
 use editor_model::session::HistoryScope;
 use editor_model::transaction::{ChangeOrigin, ChangeSet};
 
@@ -32,6 +32,7 @@ fn empty_doc() -> SceneDocument {
         name: "Test Scene".to_string(),
         entities: Vec::new(),
         instances: std::collections::BTreeMap::new(),
+        extension_data: Default::default(),
     }
 }
 
@@ -49,6 +50,7 @@ fn doc_with_transform() -> SceneDocument {
                 "translation": { "x": 10.0, "y": 10.0 }
             }),
         }],
+        extension_data: Default::default(),
     });
     doc
 }
@@ -182,7 +184,8 @@ fn test_kernel_undo_restores_original() {
 
     // ─── Undo ───────────────────────────────────────────────────────────────
     let _env = envelope(cmd.clone());
-    log.undo(&mut doc).expect("undo should succeed");
+    log.undo(&mut doc, &ProcessorApply)
+        .expect("undo should succeed");
 
     let doc_json_undo = serde_json::to_string(&doc).expect("serialize doc after undo");
     let original_json = serde_json::to_string(&original_doc).expect("serialize original doc");
@@ -227,7 +230,8 @@ fn test_kernel_undo_then_redo_restores_new() {
     log.record(&_env, receipt.inverses.into_iter().next().unwrap());
 
     // ─── Undo ───────────────────────────────────────────────────────────────
-    log.undo(&mut doc).expect("undo should succeed");
+    log.undo(&mut doc, &ProcessorApply)
+        .expect("undo should succeed");
     let doc_json_undo = serde_json::to_string(&doc).expect("serialize doc after undo");
 
     let original_json = serde_json::to_string(&original_doc).expect("serialize original doc");
@@ -237,7 +241,8 @@ fn test_kernel_undo_then_redo_restores_new() {
     );
 
     // ─── Redo ───────────────────────────────────────────────────────────────
-    log.redo(&mut doc).expect("redo should succeed");
+    log.redo(&mut doc, &ProcessorApply)
+        .expect("redo should succeed");
     let doc_json_redo = serde_json::to_string(&doc).expect("serialize doc after redo");
 
     // After redo, translation should be (20, 20)
@@ -296,7 +301,8 @@ fn test_scene_dispatch_byte_equivalent_undo() {
     );
 
     // ─── Undo ───────────────────────────────────────────────────────────────
-    log.undo(&mut doc).expect("undo should succeed");
+    log.undo(&mut doc, &ProcessorApply)
+        .expect("undo should succeed");
 
     // Extract translation from doc
     let doc_json_final = serde_json::to_string(&doc).expect("serialize doc final");

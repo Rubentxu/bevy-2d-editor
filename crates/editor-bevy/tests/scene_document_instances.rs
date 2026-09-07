@@ -98,6 +98,7 @@ fn s13_entities_array_shape_unchanged_when_instances_present() {
             name: "Player".to_string(),
             parent: None,
             components: vec![],
+            extension_data: Default::default(),
         }],
         instances: BTreeMap::from([(
             StableId::new("inst_001"),
@@ -112,6 +113,7 @@ fn s13_entities_array_shape_unchanged_when_instances_present() {
                 orphaned_component_overrides: vec![],
             },
         )]),
+        extension_data: Default::default(),
     };
 
     let json = serde_json::to_string(&doc).expect("Must serialize");
@@ -144,8 +146,10 @@ fn s14_authored_entities_do_not_have_instance_id() {
             name: "Player".to_string(),
             parent: None,
             components: vec![],
+            extension_data: Default::default(),
         }],
         instances: BTreeMap::new(),
+        extension_data: Default::default(),
     };
 
     let json = serde_json::to_string(&doc).expect("Must serialize");
@@ -190,6 +194,7 @@ fn s6_instances_with_id_map_3_entries_byte_equal_roundtrip() {
                 orphaned_component_overrides: vec![],
             },
         )]),
+        extension_data: Default::default(),
     };
 
     let json = serde_json::to_string(&doc).expect("Must serialize");

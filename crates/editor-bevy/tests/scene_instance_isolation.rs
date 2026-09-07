@@ -7,12 +7,12 @@
 
 use editor_bevy::{
     StableId,
-    command::Command,
     document::SceneDocument,
     processor,
     scene_asset::{AssetReference, LocalId},
     scene_instance::SceneInstance,
 };
+use editor_model::command::Command;
 use std::collections::BTreeMap;
 
 // Helper: empty SceneDocument
@@ -23,6 +23,7 @@ fn empty_doc() -> SceneDocument {
         name: "Test".to_string(),
         entities: vec![],
         instances: BTreeMap::new(),
+        extension_data: Default::default(),
     }
 }
 
