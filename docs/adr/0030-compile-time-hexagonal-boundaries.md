@@ -3,6 +3,7 @@
 ## Status
 
 Accepted — 2026-08-14
+Superseded by [ADR-0056](./0056-enforce-hexagonal-dependency-direction.md) (2026-09-07). The split into crates remains the foundation; ADR-0056 adds the cargo-metadata-enforced direction rules and forbids application→adapter edges. Historical body preserved below for traceability.
 
 
 ## Context

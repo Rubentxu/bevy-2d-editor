@@ -3,6 +3,7 @@
 ## Status
 
 Accepted — 2026-08-14
+Superseded by [ADR-0057](./0057-single-wasm-composition-root.md) (2026-09-07). The decision to own session state explicitly remains; ADR-0057 narrows it to "exactly one target-specific composition root owns the container; model/application never hold service locators". Historical body preserved below for traceability.
 
 
 ## Context

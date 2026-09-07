@@ -3,6 +3,7 @@
 ## Status
 
 **Draft** — Ratification pending. This ADR is part of the v0.89-change-runtime-workbench cycle (PR1).
+Superseded by [ADR-0059](./0059-single-transaction-dispatch-path.md) (2026-09-07). The dual-gate mechanism described below was the safe migration path used during v0.89 PR1; ADR-0059 plans to retire the runtime toggle and make TransactionKernel the sole normal mutation path after parity is proven. Historical body preserved below for traceability.
 
 ## Context
 
