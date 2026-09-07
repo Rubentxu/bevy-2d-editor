@@ -51,9 +51,9 @@ entries:
 
   - name: SOURCE_FILE_REGISTRY
     kind: thread_local
-    declared_at: crates/editor-bevy/src/source_files.rs:17
+    declared_at: crates/editor-bevy/src/source_files.rs (removed in H2.2)
     owner: H2.2
-    reason: "registry of indexed source files; absorbed by EditorSession.sources"
+    reason: "registry of indexed source files; collapsed into EditorSession.preview_state.source_files via EditorSessionPort::source_files_mut (no new port trait needed — the existing EditorSessionPort seam is the canonical H2.2 path)"
 
   - name: PREVIEW_METRICS
     kind: thread_local
