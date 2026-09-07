@@ -31,7 +31,8 @@ import DockDivider from "./DockDivider";
 import { stampDockPanelDrag } from "./drag-payload";
 import type { DockableRegion } from "../../hooks/useDockPrefs";
 
-type EditorMode = "scene" | "asset-authoring" | "logic" | "code" | "play" | "world";
+type EditorMode =
+  "scene" | "asset-authoring" | "logic" | "code" | "play" | "world";
 
 interface Props {
   visible: boolean;
