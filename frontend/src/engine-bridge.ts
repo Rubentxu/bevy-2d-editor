@@ -5,6 +5,7 @@ import {
   opfsListTree,
   opfsLoadBinary,
   opfsLoadFile,
+  opfsSaveAtomic,
   opfsSaveBinary,
   opfsSaveFile,
 } from "./opfs-bridge";
@@ -89,6 +90,11 @@ export async function initEngine(
   (window as any).opfs_delete_file = opfsDeleteFile;
   (window as any).opfs_save_binary = opfsSaveBinary;
   (window as any).opfs_load_binary = opfsLoadBinary;
+  // Atomic-write bridge (shadow + commit + cleanup). Installed before
+  // init_project_store because hydrate may invoke it if a pre-existing
+  // path happens to be touched (currently hydrate only deletes .tmp
+  // shadows, but the symmetry keeps the contract uniform).
+  (window as any).opfs_save_atomic = opfsSaveAtomic;
 
   // Initialize the Rust-side project store: eagerly hydrates the OPFS mirror
   // through the window.opfs_* bridge installed above (ADR-0031 composition

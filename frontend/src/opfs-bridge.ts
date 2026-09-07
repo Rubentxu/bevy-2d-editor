@@ -218,6 +218,54 @@ export async function opfsSaveBinary(
   }
 }
 
+/**
+ * Atomic save — write `contents` to `path` via the shadow-file +
+ * commit-on-close pattern described on `ProjectStore::write`.
+ *
+ * Used as the JS-side counterpart to the Rust
+ * `wasm_bridge::write_atomic_op`. The Rust flush path orchestrates the
+ * three steps via the lower-level primitives (`opfs_save_file`,
+ * `opfs_delete_file`); this wrapper is provided for symmetry so that
+ * tests and any future JS callers can request atomic semantics
+ * directly without manually scripting the dance.
+ *
+ * On success the real `path` exists with `contents` and no `<path>.tmp`
+ * shadow remains. On failure the shadow is cleaned up (best-effort)
+ * and the original `path` is preserved.
+ */
+export async function opfsSaveAtomic(
+  path: string,
+  contents: string,
+): Promise<OpfsResult> {
+  const shadow = `${path}.tmp`;
+  // Step 1: shadow write.
+  const shadowResult = await opfsSaveFile(shadow, contents);
+  if (!shadowResult.ok) {
+    return {
+      ok: false,
+      error: `atomic write shadow failed: ${shadowResult.error}`,
+    };
+  }
+  // Step 2: real-path commit. The OPFS `createWritable()+close()` is
+  // the commit point and is atomic per the W3C File System spec.
+  const commitResult = await opfsSaveFile(path, contents);
+  // Step 3: shadow cleanup, always attempted.
+  const cleanupResult = await opfsDeleteFile(shadow);
+  if (!commitResult.ok) {
+    return {
+      ok: false,
+      error: `atomic write commit failed (shadow cleaned): ${commitResult.error}`,
+    };
+  }
+  if (!cleanupResult.ok) {
+    return {
+      ok: false,
+      error: `atomic write succeeded but shadow cleanup failed: ${cleanupResult.error}`,
+    };
+  }
+  return { ok: true };
+}
+
 export async function opfsLoadBinary(
   path: string,
 ): Promise<OpfsResult<Uint8Array>> {
