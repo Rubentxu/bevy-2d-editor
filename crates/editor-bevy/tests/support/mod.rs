@@ -140,6 +140,7 @@ pub struct FakeSession {
     pub scene_states: BTreeMap<String, SceneSessionState>,
     pub active_scene: editor_model::SceneFocus,
     pub asset_states: BTreeMap<String, AssetSessionState>,
+    pub active_asset: editor_model::AssetFocus,
     pub logic_states: BTreeMap<String, LogicSessionState>,
     pub world_states: BTreeMap<String, WorldSessionState>,
     pub tunable_baselines: BTreeMap<String, serde_json::Value>,
@@ -172,6 +173,9 @@ impl EditorSessionPort for FakeSession {
     }
     fn active_scene_mut(&mut self) -> &mut editor_model::SceneFocus {
         &mut self.active_scene
+    }
+    fn active_asset_mut(&mut self) -> &mut editor_model::AssetFocus {
+        &mut self.active_asset
     }
     fn asset_state_mut(&mut self, path: &str) -> &mut AssetSessionState {
         self.asset_states
@@ -269,6 +273,9 @@ impl EditorSessionPort for FakeSessionWithDefaults {
     }
     fn active_scene_mut(&mut self) -> &mut editor_model::SceneFocus {
         self.0.active_scene_mut()
+    }
+    fn active_asset_mut(&mut self) -> &mut editor_model::AssetFocus {
+        self.0.active_asset_mut()
     }
     fn asset_state_mut(&mut self, path: &str) -> &mut AssetSessionState {
         self.0.asset_state_mut(path)

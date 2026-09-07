@@ -599,7 +599,7 @@ where
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Drains the HOT_RELOAD_BUS, de-duplicates by (variant, key), and dispatches:
-/// - Asset{asset_id}  → ASSET_BODY_CACHE.remove(&asset_id) + mark_dirty()
+/// - `Asset{asset_id}` → remove from the active-path asset body cache + mark dirty (H2.4; formerly `ASSET_BODY_CACHE` thread_local).
 /// - ForceReloadAll   → clear all caches + LOGIC_GRAPH_DOC=None + mark_dirty()
 ///
 /// Runs in Update before rebuild_preview_world so stale data is purged

@@ -6,6 +6,8 @@
 #![deny(missing_docs)]
 
 pub mod adapter;
+pub mod asset_focus;
+pub mod asset_operation_log;
 pub mod auto_layer;
 pub mod causality;
 pub mod command;
@@ -37,10 +39,16 @@ pub mod tile_layer;
 pub mod tileset;
 pub mod time;
 pub mod transaction;
+pub mod validation;
 pub mod world;
 pub mod world_command;
 
 // Re-export all public types at the root for ergonomic use.
+pub use asset_focus::{AssetApplyOutcome, AssetFocus, AssetFocusError};
+pub use asset_operation_log::{
+    AssetApplyCommandFn, AssetCommand, AssetCommandError, AssetLogEntry, AssetOperationLog,
+    ResyncReport,
+};
 pub use auto_layer::{
     AutoLayer, AutoLayerId, Pattern3x3, PatternCell, is_auto_layer_stale, regenerate,
 };

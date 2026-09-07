@@ -20,6 +20,7 @@ struct FakeSession {
     scene_states: BTreeMap<String, support::SceneSessionState>,
     active_scene: editor_model::SceneFocus,
     asset_states: BTreeMap<String, support::AssetSessionState>,
+    active_asset: editor_model::AssetFocus,
     logic_states: BTreeMap<String, support::LogicSessionState>,
     world_states: BTreeMap<String, support::WorldSessionState>,
     recent_change_sets: BTreeMap<String, Vec<support::ChangeSetSummary>>,
@@ -33,6 +34,9 @@ impl EditorSessionPort for FakeSession {
     }
     fn active_scene_mut(&mut self) -> &mut editor_model::SceneFocus {
         &mut self.active_scene
+    }
+    fn active_asset_mut(&mut self) -> &mut editor_model::AssetFocus {
+        &mut self.active_asset
     }
     fn asset_state_mut(&mut self, path: &str) -> &mut support::AssetSessionState {
         self.asset_states
@@ -101,6 +105,7 @@ fn fresh_session() {
         scene_states: BTreeMap::new(),
         active_scene: editor_model::SceneFocus::Empty,
         asset_states: BTreeMap::new(),
+        active_asset: editor_model::AssetFocus::Empty,
         logic_states: BTreeMap::new(),
         world_states: BTreeMap::new(),
         recent_change_sets: BTreeMap::new(),

@@ -1,210 +1,47 @@
 //! Asset Command processor for Scene Asset Authoring mode.
 //!
-//! A separate command surface (per ADR-0007) for mutating `SceneAssetDocument`.
-//! Uses `LocalId` instead of `StableId` — assets are isolated authoring documents
-//! with no parent/child hierarchy in the scene sense.
+//! H2.4 (Asset Family collapse): the command enum, error type, log entry, and
+//! operation log live canonically in `editor_model::asset_operation_log`. This
+//! module re-exports them and keeps the Bevy-side **application logic** that
+//! actually mutates a `SceneAssetDocument`.
 //!
-//! ## Design
-//! - Mechanical inverse generation (same pattern as `processor.rs`)
-//! - `field_path: Vec<String>` for unambiguous component field addressing (D2)
-//! - `AssetOperationLog` mirrors `OperationLog` for per-asset undo/redo
+//! The dependency inversion introduced by H2.4 mirrors the one in `operation_log`:
 //!
-//! ## Inverse table (design §5)
-//! | Forward | Inverse |
-//! |---------|---------|
-//! | `AddEntity` | `RemoveEntity { local_id }` |
-//! | `RemoveEntity` | `AddEntity { full captured entity }` |
-//! | `RenameEntity` | `RenameEntity { old_name, swapped_new }` |
-//! | `AddComponent` | `RemoveComponent { local_id, type_id }` |
-//! | `RemoveComponent` | `AddComponent { captured values }` |
-//! | `SetComponentValue` | `SetComponentValue { old value at field_path }` |
-//! | `Batch` | `Batch { reversed inverses }` |
+//! - `AssetOperationLog::undo` / `redo` take a `&dyn AssetApplyCommandFn`
+//!   callback so the log type can stay pure.
+//! - `AssetProcessorApply` is the production callback. It delegates to the
+//!   Bevy-side `apply` function below.
+//!
+//! The kernel (`transaction_bridge::AssetCommandApplier`) also calls into
+//! `apply` directly via the `apply as asset_apply` import in
+//! `transaction_bridge.rs` — both paths share the same single source of
+//! application logic, so the inverse generation cannot drift between the
+//! `dispatch_asset_command` path and the `undo_asset` / `redo_asset` path.
 
-use crate::scene_asset::{LayerId, LocalId, SceneAssetDocument, SceneAssetEntity};
-use crate::tileset::{TileCoord, TileGrid, TileRef};
-use editor_model::ComponentInstance;
-use serde::{Deserialize, Serialize};
+pub use editor_model::asset_operation_log::{
+    AssetApplyCommandFn, AssetCommand, AssetCommandError, AssetLogEntry, AssetOperationLog,
+};
+
+use crate::scene_asset::{LevelLayer, SceneAssetEntity};
+use editor_model::auto_layer::AutoLayer;
+use editor_model::ids::{LayerId, SceneAssetLocalId};
+use editor_model::scene_asset::SceneAssetDocument;
+use editor_model::tileset::{TileCoord, TileRef};
 use std::collections::BTreeMap;
-use thiserror::Error;
-
-// ─────────────────────────────────────────────────────────────────────────
-// AssetCommand enum
-// ─────────────────────────────────────────────────────────────────────────
-
-/// Typed command enum for Scene Asset document mutations.
-///
-/// Uses `#[serde(tag = "type")]` so each variant serializes as
-/// `{"type": "AddEntity", ...}` — self-describing and extensible.
-///
-/// Mirror of `Command` but for `SceneAssetDocument` with `LocalId` identity.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "PascalCase")]
-pub enum AssetCommand {
-    /// Add a new entity to the asset document.
-    AddEntity {
-        local_id: String,
-        name: String,
-        local_path: String,
-        #[serde(default)]
-        components: Vec<ComponentInstance>,
-    },
-    /// Remove an entity from the asset document.
-    RemoveEntity { local_id: String },
-    /// Change an entity's human-readable name.
-    RenameEntity {
-        local_id: String,
-        /// Captured pre-state: the name before the rename.
-        /// The processor populates this if caller leaves it as None.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        old_name: Option<String>,
-        new_name: String,
-    },
-    /// Attach a new component instance to an existing entity.
-    AddComponent {
-        local_id: String,
-        type_id: String,
-        #[serde(default)]
-        values: serde_json::Value,
-    },
-    /// Remove a component instance from an entity.
-    RemoveComponent { local_id: String, type_id: String },
-    /// Update one field of a component instance.
-    /// `field_path` is `Vec<String>` for unambiguous dot-separated names.
-    SetComponentValue {
-        local_id: String,
-        type_id: String,
-        /// Array of field names: `["translation", "x"]` for `values.translation.x`.
-        field_path: Vec<String>,
-        value: serde_json::Value,
-    },
-    /// Group multiple commands into a single atomic history entry.
-    Batch {
-        label: String,
-        commands: Vec<AssetCommand>,
-    },
-    /// Regenerate an AutoLayer's cached tile grid from its source TileLayer.
-    ///
-    /// Captures `cached` and `source_generation` for the inverse so undo
-    /// can restore the pre-regeneration state.
-    RegenerateAutoLayer {
-        /// The layer being regenerated (identifies which LevelLayer::Auto).
-        layer_id: LayerId,
-        /// Captured pre-regeneration cached grid for undo.
-        #[serde(default)]
-        old_cached: TileGrid,
-        /// Captured pre-regeneration source_generation for undo.
-        #[serde(default)]
-        old_source_generation: u64,
-    },
-    /// Paint a tile at (x, y) on a TileLayer. Captures the previous TileRef
-    /// (if any) for undo via `EraseTile`.
-    PaintTile {
-        layer_id: crate::tile_layer::TileLayerId,
-        x: i32,
-        y: i32,
-        /// Captured pre-state: the TileRef previously at this coord,
-        /// or None if the coord was empty. The processor populates this
-        /// if the caller leaves it as None.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        old_tile: Option<TileRef>,
-        tileset_id: String,
-        local_index: u32,
-    },
-    /// Erase a tile at (x, y) on a TileLayer. Captures the erased TileRef
-    /// for undo via `PaintTile`.
-    EraseTile {
-        layer_id: crate::tile_layer::TileLayerId,
-        x: i32,
-        y: i32,
-        /// Captured pre-state: the TileRef that was erased.
-        /// The processor populates this if the caller leaves it as None.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        erased_tile: Option<TileRef>,
-    },
-    /// Add an AutoRule to an AutoLayer. Captures the pre-existing rules
-    /// length for undo via `RemoveAutoRule`.
-    AddAutoRule {
-        layer_id: crate::auto_layer::AutoLayerId,
-        /// The new rule.
-        rule: crate::auto_layer::AutoRule,
-    },
-    /// Update an AutoRule in an AutoLayer at the given index. Captures
-    /// pre-state (the old rule) for undo via `UpdateAutoRule`.
-    UpdateAutoRule {
-        layer_id: crate::auto_layer::AutoLayerId,
-        index: usize,
-        /// Captured pre-state: the rule being replaced.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        old_rule: Option<crate::auto_layer::AutoRule>,
-        new_rule: crate::auto_layer::AutoRule,
-    },
-    /// Remove an AutoRule from an AutoLayer at the given index. Captures
-    /// pre-state (the removed rule) for undo via `AddAutoRule`.
-    RemoveAutoRule {
-        layer_id: crate::auto_layer::AutoLayerId,
-        index: usize,
-        /// Captured pre-state: the rule being removed.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        removed_rule: Option<crate::auto_layer::AutoRule>,
-    },
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// Error types
-// ─────────────────────────────────────────────────────────────────────────
-
-#[derive(Debug, Error)]
-pub enum AssetCommandError {
-    #[error("entity not found: {0}")]
-    EntityNotFound(String),
-
-    #[error("duplicate local_id: {0}")]
-    DuplicateLocalId(String),
-
-    #[error("component not found: {0}")]
-    ComponentNotFound(String),
-
-    #[error("field not found: {0:?}")]
-    FieldNotFound(Vec<String>),
-
-    #[error("batch failed at {index}: {source}")]
-    BatchFailed {
-        index: usize,
-        #[source]
-        source: Box<AssetCommandError>,
-    },
-
-    #[error("JSON error: {0}")]
-    JsonError(String),
-
-    #[error("layer not found: {0}")]
-    LayerNotFound(String),
-
-    #[error("no tile at ({x}, {y}) on layer {layer_id}")]
-    TileNotFound { layer_id: String, x: i32, y: i32 },
-
-    #[error("source layer not found for auto layer: {0}")]
-    SourceLayerNotFound(String),
-}
-
-impl From<serde_json::Error> for AssetCommandError {
-    fn from(e: serde_json::Error) -> Self {
-        AssetCommandError::JsonError(e.to_string())
-    }
-}
 
 // ─────────────────────────────────────────────────────────────────────────
 // AssetProcessor
 // ─────────────────────────────────────────────────────────────────────────
 
-/// Find a mutable entity by LocalId.
+/// Find a mutable entity by `local_id` (string key).
 fn find_entity_mut<'a>(
     doc: &'a mut SceneAssetDocument,
     local_id: &str,
 ) -> Result<&'a mut SceneAssetEntity, AssetCommandError> {
+    let key = SceneAssetLocalId(local_id.to_string());
     doc.entities
         .iter_mut()
-        .find(|e| e.local_id.as_str() == local_id)
+        .find(|e| e.local_id == key)
         .ok_or_else(|| AssetCommandError::EntityNotFound(local_id.to_string()))
 }
 
@@ -252,7 +89,6 @@ pub fn apply(
     doc: &mut SceneAssetDocument,
     cmd: &AssetCommand,
 ) -> Result<AssetCommand, AssetCommandError> {
-    use crate::scene_asset::LevelLayer;
     match cmd {
         AssetCommand::AddEntity {
             local_id,
@@ -265,7 +101,7 @@ pub fn apply(
                 return Err(AssetCommandError::DuplicateLocalId(local_id.clone()));
             }
             doc.entities.push(SceneAssetEntity {
-                local_id: LocalId::new(local_id.clone()),
+                local_id: SceneAssetLocalId(local_id.clone()),
                 local_path: local_path.clone(),
                 name: name.clone(),
                 components: components.clone(),
@@ -321,7 +157,7 @@ pub fn apply(
             values,
         } => {
             let entity = find_entity_mut(doc, local_id)?;
-            entity.components.push(ComponentInstance {
+            entity.components.push(editor_model::ComponentInstance {
                 type_id: type_id.clone(),
                 values: values.clone(),
             });
@@ -380,7 +216,6 @@ pub fn apply(
             old_source_generation,
         } => {
             use crate::auto_layer::regenerate as auto_regenerate;
-            use crate::scene_asset::LevelLayer;
             use rand::SeedableRng;
 
             // ── ALL immutable data collection (before any mutable borrow) ──────────────
@@ -404,7 +239,8 @@ pub fn apply(
 
             // Find source TileLayer and clone it so we can drop the borrow.
             let source_clone = {
-                let source_idx = doc.layers
+                let source_idx = doc
+                    .layers
                     .iter()
                     .position(|l| matches!(l, LevelLayer::Tile(tl) if tl.id.as_str() == source_layer_id.as_str()))
                     .ok_or_else(|| AssetCommandError::SourceLayerNotFound(source_layer_id.0.clone()))?;
@@ -420,17 +256,13 @@ pub fn apply(
 
             // ── Mutable phase ──────────────────────────────────────────────────────────
             let al_mut = match &mut doc.layers[auto_idx] {
-                LevelLayer::Auto(al) => al as &mut crate::auto_layer::AutoLayer,
+                LevelLayer::Auto(al) => al as &mut AutoLayer,
                 _ => return Err(AssetCommandError::LayerNotFound(layer_id.0.clone())),
             };
 
             // Differentiate undo vs redo/forward using length comparison:
             // - If old_cached.len() != current cached.len() → UNDO (restore saved values)
             // - If lengths match → FORWARD or REDO (regenerate)
-            // This works because:
-            //   Forward: old_cached = {} (len 0), current = {} (len 0) → match → regenerate ✓
-            //   Undo:    old_cached = {} (len 0), current = {tile99} (len 1) → differ → restore ✓
-            //   Redo:    old_cached = {} (len 0), current = {} (len 0) after undo → match → regenerate ✓
             if old_cached.len() != al_mut.cached.len() {
                 // UNDO: restore saved values directly, do NOT regenerate
                 al_mut.cached = old_cached.clone();
@@ -462,7 +294,7 @@ pub fn apply(
             // captures the previous TileRef (if any) for restoration.
             let coord = TileCoord::new(*x, *y);
             let layer_id_str = layer_id.as_str().to_string();
-            let tile_layer_id = editor_model::ids::LayerId::new(layer_id_str.clone());
+            let tile_layer_id = LayerId::new(layer_id_str.clone());
             let layer = doc
                 .layers
                 .iter_mut()
@@ -495,7 +327,7 @@ pub fn apply(
             // HIGH-10: route tile erase through the command surface.
             let coord = TileCoord::new(*x, *y);
             let layer_id_str = layer_id.as_str().to_string();
-            let tile_layer_id = editor_model::ids::LayerId::new(layer_id_str.clone());
+            let tile_layer_id = LayerId::new(layer_id_str.clone());
             let layer = doc
                 .layers
                 .iter_mut()
@@ -527,7 +359,7 @@ pub fn apply(
         AssetCommand::AddAutoRule { layer_id, rule } => {
             // MED-8: route through command surface for undo/redo.
             let layer_id_str = layer_id.as_str().to_string();
-            let auto_layer_id = editor_model::ids::LayerId::new(layer_id_str.clone());
+            let auto_layer_id = LayerId::new(layer_id_str.clone());
             let layer = doc
                 .layers
                 .iter_mut()
@@ -553,7 +385,7 @@ pub fn apply(
             new_rule,
         } => {
             let layer_id_str = layer_id.as_str().to_string();
-            let auto_layer_id = editor_model::ids::LayerId::new(layer_id_str.clone());
+            let auto_layer_id = LayerId::new(layer_id_str.clone());
             let layer = doc
                 .layers
                 .iter_mut()
@@ -586,7 +418,7 @@ pub fn apply(
             removed_rule,
         } => {
             let layer_id_str = layer_id.as_str().to_string();
-            let auto_layer_id = editor_model::ids::LayerId::new(layer_id_str.clone());
+            let auto_layer_id = LayerId::new(layer_id_str.clone());
             let layer = doc
                 .layers
                 .iter_mut()
@@ -610,6 +442,38 @@ pub fn apply(
             Ok(AssetCommand::AddAutoRule {
                 layer_id: layer_id.clone(),
                 rule: captured,
+            })
+        }
+
+        AssetCommand::SetIntGridCell {
+            layer_id,
+            coord,
+            old_value,
+            value,
+        } => {
+            // IntGrid cells are stored on IntGridLayer directly; the apply
+            // path delegates to `paint_cell` for the typed lookup.
+            use editor_model::int_grid::{IntGridLayer, IntGridLayerId};
+            let layer_id_str = layer_id.as_str().to_string();
+            let target = IntGridLayerId::new(layer_id_str.clone());
+            let layer = doc
+                .layers
+                .iter_mut()
+                .find(|l| matches!(l, LevelLayer::IntGrid(il) if il.id == target))
+                .ok_or_else(|| AssetCommandError::LayerNotFound(layer_id_str.clone()))?;
+            let il = match layer {
+                LevelLayer::IntGrid(il) => il as &mut IntGridLayer,
+                _ => return Err(AssetCommandError::LayerNotFound(layer_id_str)),
+            };
+            let prior = old_value
+                .clone()
+                .or_else(|| il.get_cell(coord.x, coord.y).map(|c| c.value));
+            il.paint_cell(coord.x, coord.y, *value, None);
+            Ok(AssetCommand::SetIntGridCell {
+                layer_id: layer_id.clone(),
+                coord: coord.clone(),
+                old_value: prior,
+                value: *value,
             })
         }
 
@@ -641,470 +505,25 @@ pub fn apply(
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// AssetOperationLog
+// AssetProcessorApply — AssetApplyCommandFn impl
 // ─────────────────────────────────────────────────────────────────────────
 
-/// Single entry in the asset operation log: forward command, inverse, and metadata.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct AssetLogEntry {
-    pub forward: AssetCommand,
-    pub inverse: AssetCommand,
-}
+/// Production `AssetApplyCommandFn` callback for `AssetOperationLog::undo` / `redo`.
+///
+/// H2.4: lives in `editor-bevy` (the Bevy side) and delegates to the local
+/// `apply` function so the log type in `editor_model` stays pure.
+///
+/// `transaction_bridge::AssetCommandApplier` calls `apply` directly for the
+/// kernel path — both paths share the same single source of application
+/// logic.
+pub struct AssetProcessorApply;
 
-/// Append-only history with cursor-based undo/redo for asset commands.
-#[derive(Debug, Clone)]
-pub struct AssetOperationLog {
-    entries: Vec<AssetLogEntry>,
-    cursor: isize,
-    max_size: usize,
-}
-
-impl AssetOperationLog {
-    /// Create a new empty log with default max size (1000 entries).
-    pub fn new() -> Self {
-        Self::with_max_size(1000)
-    }
-
-    /// Const constructor for use in `thread_local!` initializers.
-    pub const fn new_const() -> Self {
-        Self {
-            entries: Vec::new(),
-            cursor: -1,
-            max_size: 1000,
-        }
-    }
-
-    /// Create a new empty log with custom max size.
-    pub fn with_max_size(max_size: usize) -> Self {
-        Self {
-            entries: Vec::new(),
-            cursor: -1,
-            max_size,
-        }
-    }
-
-    /// Record a forward command and its inverse after apply.
-    pub fn record(&mut self, forward: &AssetCommand, inverse: AssetCommand) {
-        // Truncate redo branch
-        if self.cursor < self.entries.len() as isize - 1 {
-            let keep = (self.cursor + 1) as usize;
-            self.entries.truncate(keep);
-        }
-        self.entries.push(AssetLogEntry {
-            forward: forward.clone(),
-            inverse,
-        });
-        while self.entries.len() > self.max_size {
-            self.entries.remove(0);
-            self.cursor -= 1;
-        }
-        self.cursor = self.entries.len() as isize - 1;
-    }
-
-    /// Apply the inverse of the entry at the cursor, moving the cursor back.
-    pub fn undo(&mut self, doc: &mut SceneAssetDocument) -> Result<(), AssetCommandError> {
-        if !self.can_undo() {
-            return Err(AssetCommandError::JsonError("Nothing to undo".to_string()));
-        }
-        let entry = &self.entries[self.cursor as usize];
-        apply(doc, &entry.inverse)?;
-        self.cursor -= 1;
-        Ok(())
-    }
-
-    /// Apply the forward of the entry after the cursor, moving forward.
-    pub fn redo(&mut self, doc: &mut SceneAssetDocument) -> Result<(), AssetCommandError> {
-        if !self.can_redo() {
-            return Err(AssetCommandError::JsonError("Nothing to redo".to_string()));
-        }
-        self.cursor += 1;
-        let entry = &self.entries[self.cursor as usize];
-        apply(doc, &entry.forward)?;
-        Ok(())
-    }
-
-    pub fn can_undo(&self) -> bool {
-        self.cursor >= 0
-    }
-
-    pub fn can_redo(&self) -> bool {
-        self.cursor < self.entries.len() as isize - 1
-    }
-
-    pub fn get_log_size(&self) -> usize {
-        self.entries.len()
-    }
-
-    pub fn get_cursor(&self) -> isize {
-        self.cursor
-    }
-
-    /// Returns true if there are un-saved changes (entries beyond cursor).
-    /// After record, the log is "dirty" until saved/cleared.
-    pub fn is_dirty(&self) -> bool {
-        // Dirty means: there are recorded changes that may not be saved.
-        // A simple heuristic: log has entries
-        self.cursor >= 0
-    }
-
-    pub fn clear(&mut self) {
-        self.entries.clear();
-        self.cursor = -1;
-    }
-}
-
-impl Default for AssetOperationLog {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use editor_model::ComponentInstance;
-    use serde_json::json;
-
-    fn empty_doc() -> SceneAssetDocument {
-        SceneAssetDocument {
-            layers: vec![],
-            asset_id: "id_test".to_string(),
-            logical_path: "test/asset".to_string(),
-            role: crate::scene_asset::SceneAssetRole::Actor,
-            version: 1,
-            entities: vec![],
-            relationships: vec![],
-            exposed_properties: vec![],
-            metadata: Default::default(),
-            extension_data: BTreeMap::new(),
-        }
-    }
-
-    fn entity(local_id: &str, name: &str, components: Vec<ComponentInstance>) -> SceneAssetEntity {
-        SceneAssetEntity {
-            local_id: LocalId::new(local_id),
-            local_path: format!("./{}", local_id),
-            name: name.to_string(),
-            components,
-            extension_data: BTreeMap::new(),
-        }
-    }
-
-    #[test]
-    fn test_add_entity_applies_and_inverts() {
-        let mut doc = empty_doc();
-        let cmd = AssetCommand::AddEntity {
-            local_id: "a1".to_string(),
-            name: "A".to_string(),
-            local_path: "./a1".to_string(),
-            components: vec![],
-        };
-        let inverse = apply(&mut doc, &cmd).unwrap();
-        assert_eq!(doc.entities.len(), 1);
-        match inverse {
-            AssetCommand::RemoveEntity { local_id } => assert_eq!(local_id, "a1"),
-            _ => panic!("Expected RemoveEntity"),
-        }
-    }
-
-    #[test]
-    fn test_remove_entity_inverse_contains_full_entity() {
-        let mut doc = empty_doc();
-        let transform = ComponentInstance {
-            type_id: "editor.Transform2D".to_string(),
-            values: json!({"translation": {"x": 0.0, "y": 0.0}}),
-        };
-        doc.entities.push(entity("a1", "A", vec![transform]));
-
-        let cmd = AssetCommand::RemoveEntity {
-            local_id: "a1".to_string(),
-        };
-        let inverse = apply(&mut doc, &cmd).unwrap();
-        assert_eq!(doc.entities.len(), 0);
-
-        match inverse {
-            AssetCommand::AddEntity {
-                local_id,
-                name,
-                local_path,
-                components,
-            } => {
-                assert_eq!(local_id, "a1");
-                assert_eq!(name, "A");
-                assert_eq!(local_path, "./a1");
-                assert_eq!(components.len(), 1);
-            }
-            _ => panic!("Expected AddEntity"),
-        }
-    }
-
-    #[test]
-    fn test_rename_entity_inverse_swaps_names() {
-        let mut doc = empty_doc();
-        doc.entities.push(entity("a1", "Original", vec![]));
-
-        let cmd = AssetCommand::RenameEntity {
-            local_id: "a1".to_string(),
-            old_name: None,
-            new_name: "New".to_string(),
-        };
-        let inverse = apply(&mut doc, &cmd).unwrap();
-        assert_eq!(doc.entities[0].name, "New");
-
-        match inverse {
-            AssetCommand::RenameEntity {
-                local_id,
-                old_name,
-                new_name,
-            } => {
-                assert_eq!(local_id, "a1");
-                assert_eq!(old_name, Some("Original".to_string()));
-                assert_eq!(new_name, "Original");
-            }
-            _ => panic!("Expected RenameEntity"),
-        }
-    }
-
-    #[test]
-    fn test_set_component_value_inverse_restores_old_value() {
-        let mut doc = empty_doc();
-        let transform = ComponentInstance {
-            type_id: "editor.Transform2D".to_string(),
-            values: json!({"translation": {"x": 0.0, "y": 0.0}}),
-        };
-        doc.entities.push(entity("a1", "A", vec![transform]));
-
-        let cmd = AssetCommand::SetComponentValue {
-            local_id: "a1".to_string(),
-            type_id: "editor.Transform2D".to_string(),
-            field_path: vec!["translation".to_string(), "x".to_string()],
-            value: json!(100.0),
-        };
-        let inverse = apply(&mut doc, &cmd).unwrap();
-        assert_eq!(
-            doc.entities[0].components[0].values["translation"]["x"],
-            json!(100.0)
-        );
-
-        apply(&mut doc, &inverse).unwrap();
-        assert_eq!(
-            doc.entities[0].components[0].values["translation"]["x"],
-            json!(0.0)
-        );
-    }
-
-    #[test]
-    fn test_batch_inverse_reverses_order() {
-        let mut doc = empty_doc();
-        let cmd = AssetCommand::Batch {
-            label: "test".to_string(),
-            commands: vec![
-                AssetCommand::AddEntity {
-                    local_id: "a1".to_string(),
-                    name: "A".to_string(),
-                    local_path: "./a1".to_string(),
-                    components: vec![],
-                },
-                AssetCommand::AddEntity {
-                    local_id: "a2".to_string(),
-                    name: "B".to_string(),
-                    local_path: "./a2".to_string(),
-                    components: vec![],
-                },
-            ],
-        };
-        let inverse = apply(&mut doc, &cmd).unwrap();
-        assert_eq!(doc.entities.len(), 2);
-
-        apply(&mut doc, &inverse).unwrap();
-        assert_eq!(doc.entities.len(), 0);
-    }
-
-    #[test]
-    fn test_set_field_path_vec_simple() {
-        let mut v = json!({"a": 1});
-        let old = set_field_path_vec(&mut v, &["a".to_string()], json!(99)).unwrap();
-        assert_eq!(old, json!(1));
-        assert_eq!(v["a"], json!(99));
-    }
-
-    #[test]
-    fn test_set_field_path_vec_nested() {
-        let mut v = json!({"a": {"b": {"c": 1}}});
-        let old = set_field_path_vec(
-            &mut v,
-            &["a".to_string(), "b".to_string(), "c".to_string()],
-            json!(42),
-        )
-        .unwrap();
-        assert_eq!(old, json!(1));
-        assert_eq!(v["a"]["b"]["c"], json!(42));
-    }
-
-    #[test]
-    fn test_asset_operation_log_record_and_undo() {
-        let mut log = AssetOperationLog::new_const();
-        let mut doc = empty_doc();
-
-        let cmd = AssetCommand::AddEntity {
-            local_id: "a1".to_string(),
-            name: "A".to_string(),
-            local_path: "./a1".to_string(),
-            components: vec![],
-        };
-        let inverse = apply(&mut doc, &cmd).unwrap();
-        log.record(&cmd, inverse);
-
-        assert!(log.can_undo());
-        assert!(!log.can_redo());
-
-        log.undo(&mut doc).unwrap();
-        assert_eq!(doc.entities.len(), 0);
-        assert!(!log.can_undo());
-        assert!(log.can_redo());
-    }
-
-    #[test]
-    fn test_asset_operation_log_redo() {
-        let mut log = AssetOperationLog::new_const();
-        let mut doc = empty_doc();
-
-        let cmd = AssetCommand::AddEntity {
-            local_id: "a1".to_string(),
-            name: "A".to_string(),
-            local_path: "./a1".to_string(),
-            components: vec![],
-        };
-        let inverse = apply(&mut doc, &cmd).unwrap();
-        log.record(&cmd, inverse);
-
-        log.undo(&mut doc).unwrap();
-        assert_eq!(doc.entities.len(), 0);
-
-        log.redo(&mut doc).unwrap();
-        assert_eq!(doc.entities.len(), 1);
-    }
-
-    #[test]
-    fn test_asset_operation_log_is_dirty() {
-        let log = AssetOperationLog::new_const();
-        assert!(!log.is_dirty());
-    }
-
-    #[test]
-    fn test_asset_operation_log_clear() {
-        let mut log = AssetOperationLog::new_const();
-        let mut doc = empty_doc();
-
-        let cmd = AssetCommand::AddEntity {
-            local_id: "a1".to_string(),
-            name: "A".to_string(),
-            local_path: "./a1".to_string(),
-            components: vec![],
-        };
-        let inverse = apply(&mut doc, &cmd).unwrap();
-        log.record(&cmd, inverse);
-
-        log.clear();
-        assert!(!log.can_undo());
-        assert!(!log.can_redo());
-        assert!(!log.is_dirty());
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // RG2 — apply regen → inverse → cached restored to C1
-    // ─────────────────────────────────────────────────────────────────────────
-
-    #[test]
-    fn test_regenerate_auto_layer_inverse_restores_cached() {
-        use crate::auto_layer::{AutoLayer, AutoLayerId, AutoRule, Pattern3x3, PatternCell};
-        use crate::scene_asset::{LayerId, LevelLayer};
-        use crate::tile_layer::TileLayer;
-        use crate::tileset::{TileCoord, TileGrid, TileRef};
-
-        let tileset_id = crate::tileset::TilesetId::new("ts_test".to_string());
-        let source_layer_id = LayerId::new("lyr_src".to_string());
-        let auto_layer_id = AutoLayerId::new("al_01".to_string());
-
-        // Source TileLayer with one tile at (0, 0), generation = 1
-        let mut source_tl = TileLayer::new(
-            crate::tile_layer::TileLayerId::new("lyr_src".to_string()),
-            "Source".to_string(),
-            tileset_id.clone(),
-        );
-        source_tl.generation = 1;
-        source_tl.paint_tile(
-            TileCoord::new(0, 0),
-            TileRef {
-                tileset_id: "ts_test".to_string(),
-                local_index: 0,
-            },
-        );
-
-        // AutoLayer: initially stale (cached empty, source_gen = 0)
-        // Rule pattern: all Any (matches any neighborhood)
-        let pattern: Pattern3x3 = [
-            [PatternCell::Any, PatternCell::Any, PatternCell::Any],
-            [PatternCell::Any, PatternCell::Any, PatternCell::Any],
-            [PatternCell::Any, PatternCell::Any, PatternCell::Any],
-        ];
-        let auto_layer = AutoLayer {
-            id: auto_layer_id.clone(),
-            name: "Auto".to_string(),
-            order: 0,
-            source_layer_id: source_layer_id.clone(),
-            tileset_id: tileset_id.clone(),
-            rules: vec![AutoRule {
-                pattern,
-                output: vec![TileRef {
-                    tileset_id: "ts_test".to_string(),
-                    local_index: 99,
-                }],
-                chance: None,
-            }],
-            cached: TileGrid::default(),
-            source_generation: 0, // stale — source is at gen 1
-        };
-
-        let mut doc = empty_doc();
-        doc.layers.push(LevelLayer::Tile(source_tl));
-        doc.layers.push(LevelLayer::Auto(auto_layer));
-
-        // C1: pre-regen cached state (should be empty)
-        let pre_cached: TileGrid = match &doc.layers[1] {
-            LevelLayer::Auto(al) => al.cached.clone(),
-            _ => panic!("expected AutoLayer"),
-        };
-        assert!(pre_cached.is_empty(), "pre-regen cached should be empty");
-
-        // Apply RegenerateAutoLayer
-        let cmd = AssetCommand::RegenerateAutoLayer {
-            layer_id: LayerId::new(auto_layer_id.0.clone()),
-            old_cached: TileGrid::default(),
-            old_source_generation: 0,
-        };
-        let inverse = apply(&mut doc, &cmd).unwrap();
-
-        // After regen: cached should no longer be empty (rule fires for source tile)
-        let post_cached: TileGrid = match &doc.layers[1] {
-            LevelLayer::Auto(al) => al.cached.clone(),
-            _ => panic!("expected AutoLayer"),
-        };
-        assert!(
-            !post_cached.is_empty(),
-            "post-regen cached should not be empty"
-        );
-
-        // Apply inverse: should restore cached to C1
-        apply(&mut doc, &inverse).unwrap();
-
-        let restored_cached: TileGrid = match &doc.layers[1] {
-            LevelLayer::Auto(al) => al.cached.clone(),
-            _ => panic!("expected AutoLayer"),
-        };
-        assert!(
-            restored_cached.is_empty(),
-            "inverse should restore cached to C1 (empty)"
-        );
+impl AssetApplyCommandFn for AssetProcessorApply {
+    fn apply(
+        &self,
+        doc: &mut SceneAssetDocument,
+        cmd: &AssetCommand,
+    ) -> Result<AssetCommand, AssetCommandError> {
+        apply(doc, cmd)
     }
 }

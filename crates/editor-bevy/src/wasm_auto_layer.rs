@@ -92,7 +92,9 @@ pub fn regenerate_auto_layer_wasm(asset_ref: &str, layer_id: &str) -> Result<Str
     // Route through dispatch_asset_command for operation log recording
     super::dispatch_asset_command(&cmd_json)?;
 
-    // Fetch the updated doc and sync to asset_body_cache and SCENE_ASSET_DOC
+    // Fetch the updated doc and sync to asset_body_cache and the focused
+    // asset (H2.4: both live on `EditorSession.active_asset` /
+    // `EditorSession.asset_states[_active]`).
     let updated_doc = crate::asset_state::with_asset_doc(|doc_opt| doc_opt.clone())
         .ok_or_else(|| JsValue::from_str("No asset open — asset doc was not set"))?;
 
@@ -101,7 +103,7 @@ pub fn regenerate_auto_layer_wasm(asset_ref: &str, layer_id: &str) -> Result<Str
         cache.insert(asset_ref.to_string(), updated_doc.clone());
     });
 
-    // Sync to SCENE_ASSET_DOC via set_asset_document_wasm
+    // Sync the focused asset via set_asset_document_wasm
     let updated_json = serde_json::to_string(&updated_doc)
         .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
     super::set_asset_document_wasm(&updated_json)?;

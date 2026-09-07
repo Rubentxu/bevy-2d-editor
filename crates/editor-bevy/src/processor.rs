@@ -33,7 +33,7 @@ use editor_model::command::{Command, CommandError};
 /// [`ProcessorContext::with_asset_body`] (passing the asset body explicitly
 /// from `EditorSession`) or [`ProcessorContext::empty`] (for commands that
 /// don't need external resources). The thread-local lookups that
-/// `from_globals` used (SCENE_ASSET_CATALOG, ASSET_BODY_CACHE) are slated
+/// `from_globals` used (`SCENE_ASSET_CATALOG`, the active-path asset body cache) are slated
 /// for v0.91 migration.
 ///
 /// All fields are optional: when `None`, commands that need the resource
