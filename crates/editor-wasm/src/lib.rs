@@ -878,6 +878,67 @@ pub async fn init_project_store() -> Result<(), JsValue> {
         register_importer_registry(guard.importer_registry());
     }
 
+    // H1.3 + H1.4: compose the built-in importer implementations from
+    // editor-bevy into the descriptor-only registry seeded by
+    // `EditorSession::with_builtins`. This is the canonical composition
+    // step (ADR-0057) — only the WASM target knows about the concrete
+    // Bevy-backed `Importer` impls.
+    compose_builtin_importers(&session)?;
+
+    Ok(())
+}
+
+/// Compose the built-in `Importer` implementations from `editor_bevy`
+/// into the session's `ImporterRegistry`.
+///
+/// The registry is seeded with descriptors only (see
+/// `ImporterRegistry::with_builtins`). This step instantiates the
+/// concrete `AsepriteImporter`, `LdtkImporter` and `TiledImporter`
+/// implementations from `editor_bevy::importer::*` and threads them
+/// into the registry via `ImporterRegistryPort::register`.
+fn compose_builtin_importers(session: &Arc<Mutex<EditorSession>>) -> Result<(), JsValue> {
+    use editor_bevy::importer::{AsepriteImporter, LdtkImporter, TiledImporter};
+    use editor_model::importer::Importer;
+    use editor_model::ports::ImporterRegistryPort;
+
+    let guard = session
+        .lock()
+        .map_err(|e| JsValue::from_str(&format!("Session lock poisoned: {}", e)))?;
+    let registry_arc = guard.importer_registry();
+    let mut registry = registry_arc
+        .lock()
+        .map_err(|e| JsValue::from_str(&format!("Registry lock poisoned: {}", e)))?;
+
+    // Aseprite
+    let aseprite = AsepriteImporter::new();
+    let aseprite_desc = aseprite.descriptor();
+    registry
+        .register(
+            aseprite_desc,
+            std::sync::Arc::new(aseprite) as std::sync::Arc<dyn Importer>,
+        )
+        .map_err(|e| JsValue::from_str(&format!("builtin.aseprite register failed: {}", e)))?;
+
+    // LDtk
+    let ldtk = LdtkImporter::new();
+    let ldtk_desc = ldtk.descriptor();
+    registry
+        .register(
+            ldtk_desc,
+            std::sync::Arc::new(ldtk) as std::sync::Arc<dyn Importer>,
+        )
+        .map_err(|e| JsValue::from_str(&format!("builtin.ldtk register failed: {}", e)))?;
+
+    // Tiled
+    let tiled = TiledImporter::new();
+    let tiled_desc = tiled.descriptor();
+    registry
+        .register(
+            tiled_desc,
+            std::sync::Arc::new(tiled) as std::sync::Arc<dyn Importer>,
+        )
+        .map_err(|e| JsValue::from_str(&format!("builtin.tiled register failed: {}", e)))?;
+
     Ok(())
 }
 

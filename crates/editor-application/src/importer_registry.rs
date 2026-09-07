@@ -44,59 +44,15 @@ impl ImporterRegistry {
 
     /// Construct a registry pre-populated with the three built-in importers.
     ///
-    /// Built-in importers (Aseprite, LDtk, Tiled) are registered here so that
-    /// `EditorSession::with_builtins` seeds them at session creation.
-    ///
-    /// The concrete `AsepriteImporter` implementation lives in `editor_core::importer::aseprite`
-    /// (only available on wasm32 targets). LDtk and Tiled implementations are added
-    /// in PR3 and PR4 respectively.
-    #[cfg(target_arch = "wasm32")]
+    /// Registers **descriptors only** — concrete implementations are
+    /// composed by `editor_wasm` (the WASM composition root) which
+    /// instantiates `editor_bevy::importer::*` and threads them in via
+    /// `ImporterRegistry::register`. This keeps `editor-application`
+    /// free of any `editor-bevy` dependency (H1.3 + H1.4).
     pub fn with_builtins() -> Self {
         let mut registry = Self::empty();
 
-        // Built-in Aseprite importer — real implementation from editor-bevy (v0.93 PR2)
-        let aseprite_importer = editor_bevy::importer::AsepriteImporter::new();
-        let aseprite_desc = aseprite_importer.descriptor();
-        registry
-            .register(aseprite_desc, std::sync::Arc::new(aseprite_importer))
-            .expect("builtin.aseprite must not duplicate");
-
-        // Built-in LDtk importer — real implementation from editor-bevy (v0.93 PR3)
-        let ldtk_importer = editor_bevy::importer::LdtkImporter::new();
-        let ldtk_desc = ldtk_importer.descriptor();
-        registry
-            .register(ldtk_desc, std::sync::Arc::new(ldtk_importer))
-            .expect("builtin.ldtk must not duplicate");
-
-        // Built-in Tiled importer — placeholder (implemented in PR4)
-        let tiled_desc = ImporterDescriptor::new(
-            "builtin.tiled",
-            ExternalSourceKind::Tiled,
-            editor_model::importer::ImporterVersionRange::new(
-                editor_model::importer::ImporterVersion::new(1, 0, 0),
-                editor_model::importer::ImporterVersion::new(1, 10, 0),
-            ),
-            "Tiled",
-        );
-        Self::register_single(&mut registry, tiled_desc).expect("builtin.tiled must not duplicate");
-
-        registry
-    }
-
-    /// Construct a registry pre-populated with the three built-in importers (non-wasm32 stub).
-    ///
-    /// On non-wasm32 targets, editor-core is not available so this creates
-    /// a registry with only descriptors (no implementations).
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn with_builtins() -> Self {
-        Self::with_builtins_descriptors_only()
-    }
-
-    /// Non-wasm32 version that only registers descriptors without implementations.
-    fn with_builtins_descriptors_only() -> Self {
-        let mut registry = Self::empty();
-
-        // Built-in Aseprite importer descriptor only (implementation requires wasm32)
+        // Built-in Aseprite importer descriptor.
         let aseprite_desc = ImporterDescriptor::new(
             "builtin.aseprite",
             ExternalSourceKind::Aseprite,
@@ -109,7 +65,7 @@ impl ImporterRegistry {
         Self::register_single(&mut registry, aseprite_desc)
             .expect("builtin.aseprite must not duplicate");
 
-        // Built-in LDtk importer descriptor
+        // Built-in LDtk importer descriptor.
         let ldtk_desc = ImporterDescriptor::new(
             "builtin.ldtk",
             ExternalSourceKind::Ldtk,
@@ -121,7 +77,7 @@ impl ImporterRegistry {
         );
         Self::register_single(&mut registry, ldtk_desc).expect("builtin.ldtk must not duplicate");
 
-        // Built-in Tiled importer descriptor
+        // Built-in Tiled importer descriptor.
         let tiled_desc = ImporterDescriptor::new(
             "builtin.tiled",
             ExternalSourceKind::Tiled,
