@@ -29,11 +29,19 @@ export interface LogicBindingSectionProps {
   /** All bindings currently active on this instance. */
   bindings: LogicBindingEntry[];
   /** Called when user picks a recipe from the picker. */
-  onBind: (instanceId: string, recipeId: string, fieldOverrides?: Record<string, unknown>) => Promise<string>;
+  onBind: (
+    instanceId: string,
+    recipeId: string,
+    fieldOverrides?: Record<string, unknown>,
+  ) => Promise<string>;
   /** Called when user clicks Remove on a binding. */
   onUnbind: (instanceId: string, bindingId: string) => Promise<void>;
   /** Called when user edits a field override value. */
-  onFieldOverride: (bindingId: string, fieldPath: string, value: unknown) => Promise<void>;
+  onFieldOverride: (
+    bindingId: string,
+    fieldPath: string,
+    value: unknown,
+  ) => Promise<void>;
   /** Called when user clicks "Open Logic" to edit the graph. */
   onOpenGraph?: (graphAssetId: string) => void;
   /** Whether the section is currently loading (disable buttons). */
@@ -68,7 +76,10 @@ function FieldOverrideRow({
 
   if (!editing) {
     return (
-      <div className="logic-binding-field-row" data-testid={`lb-field-${fieldPath}`}>
+      <div
+        className="logic-binding-field-row"
+        data-testid={`lb-field-${fieldPath}`}
+      >
         <span className="logic-binding-field-name">{fieldPath}</span>
         <span
           className="logic-binding-field-value"
@@ -87,7 +98,10 @@ function FieldOverrideRow({
   }
 
   return (
-    <div className="logic-binding-field-row editing" data-testid={`lb-field-${fieldPath}-edit`}>
+    <div
+      className="logic-binding-field-row editing"
+      data-testid={`lb-field-${fieldPath}-edit`}
+    >
       <span className="logic-binding-field-name">{fieldPath}</span>
       <input
         type="text"
@@ -120,7 +134,11 @@ function BindingEntry({
   entry: LogicBindingEntry;
   instanceId: string;
   onUnbind: (instanceId: string, bindingId: string) => Promise<void>;
-  onFieldOverride: (bindingId: string, fieldPath: string, value: unknown) => Promise<void>;
+  onFieldOverride: (
+    bindingId: string,
+    fieldPath: string,
+    value: unknown,
+  ) => Promise<void>;
   onOpenGraph?: (graphAssetId: string) => void;
   loading?: boolean;
 }) {
@@ -170,13 +188,17 @@ function BindingEntry({
           className="logic-binding-field-overrides"
           data-testid={`lb-overrides-${entry.bindingId}`}
         >
-          <span className="logic-binding-overrides-label">Field overrides:</span>
+          <span className="logic-binding-overrides-label">
+            Field overrides:
+          </span>
           {Object.entries(entry.fieldOverrides).map(([fieldPath, value]) => (
             <FieldOverrideRow
               key={fieldPath}
               fieldPath={fieldPath}
               value={value}
-              onCommit={(newValue) => onFieldOverride(entry.bindingId, fieldPath, newValue)}
+              onCommit={(newValue) =>
+                onFieldOverride(entry.bindingId, fieldPath, newValue)
+              }
             />
           ))}
         </div>
@@ -227,17 +249,11 @@ export default function LogicBindingSection({
       badge={bindings.length > 0 ? bindings.length : undefined}
     >
       {bindings.length === 0 ? (
-        <div
-          className="panel-empty"
-          data-testid="lb-empty"
-        >
+        <div className="panel-empty" data-testid="lb-empty">
           No logic bindings on this instance
         </div>
       ) : (
-        <div
-          className="logic-binding-list"
-          data-testid="lb-list"
-        >
+        <div className="logic-binding-list" data-testid="lb-list">
           {bindings.map((entry) => (
             <BindingEntry
               key={entry.bindingId}
