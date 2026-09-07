@@ -1,0 +1,21 @@
+{
+  "name": "archcheck-globals",
+  "version": "0.1.0",
+  "description": "",
+  "scripts": {
+    "test": "tsx check.test.ts",
+    "check": "tsx check.ts",
+    "seed": "tsx check.ts --seed"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "private": "true",
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.3",
+    "yaml": "^2.9.0"
+  }
+}
