@@ -144,6 +144,74 @@ G8 compatibility policy still red — pending P3 and P4).
 Cycle context: `v1.0-stabilization` P2. `rig-agent-runtime-foundation`
 still **paused per user directive 2026-09-06**.
 
+### v1.0-stabilization — P4 compatibility policy (closes G8)
+
+Closes v1.0 product gate **G8** ("extension and agent capability APIs have
+documented compatibility policy"). The editor's three contract surfaces
+are now pinned at v1.0 with an explicit breaking-change process and a
+12-month deprecation window.
+
+- **New artifact** `docs/compatibility-policy.md` — the v1.0 contract for
+  what the editor guarantees to keep working, how compatibility is
+  versioned, and how breaking changes are made. Covers:
+  - **Document format versions** — all 5 core document types
+    (`SceneDocument`, `SceneAssetDocument`, `WorldDocument`,
+    `LogicGraphAsset`, `ProjectMetadata`) at v1, declared as
+    `*_VERSION: u32 = 1` constants in
+    `crates/editor-model/src/migration.rs`. Loading rules: forward-compat
+    via typed `migrate::<type>(N, &mut doc)` (SEM-5, ADR-0046);
+    backward-compat returns `MigrationError::UnsupportedVersion` loudly.
+    Field-level forward-compat per ADR-0003 (unknown fields preserved).
+    `#[serde(default)]` is the preferred path for additive changes that
+    do not warrant a format version bump.
+  - **Schema registry compatibility** — additive changes are non-breaking;
+    renaming, removing, or re-binding (`SceneComponent` schema binding to
+    a `SceneAssetDocument`, ADR-0016) is a breaking change for projects
+    holding instances of that schema.
+  - **Extension API** — `ExtensionManifest.version` is SemVer with the
+    standard major/minor/patch semantics; `Capability`,
+    `CapabilityDescriptor`, and `Permission` are all `#[non_exhaustive]`
+    so future SDK versions add variants without an SDK major bump. The
+    three built-in extensions (`builtin.logic-bricks.controllers`,
+    `builtin.logic-recipes`, `builtin.scene-validator`) ship with every
+    v1.x release; if any of them cannot be built against the new SDK,
+    the release is blocked.
+  - **Capability tool surface** — the `EditorBackend` API groups
+    (`SceneApi`, `SceneAssetApi`, `WorldApi`, `LogicApi`, `RuntimeApi`,
+    `CodeApi`, `ValidationApi`, `SearchApi`, `ChangeApi`, `ProjectApi`)
+    and the `BackendError` envelope are Stable. Adding methods is
+    non-breaking; removing methods or changing error-envelope field
+    meaning is breaking.
+  - **Stability levels** — Stable (full contract), Beta (forward-compat
+    + loud-fail, breaking changes allowed in minor releases with
+    `CHANGELOG.md` notice), Experimental (no guarantees; documented as
+    such in the relevant spec).
+  - **Deprecation policy** — 12-month window from announcement to removal,
+    in three stages: announce (month 0) → soft-deprecate (month 3,
+    runtime WARN) → hard-deprecate (month 9, dev-build error +
+    `ValidationIssue::Error`) → remove (month 12). The clock starts at
+    the editor release that first announces the deprecation, not at the
+    commit date.
+  - **Breaking change process** — ADR required, migration path required,
+    `CHANGELOG.md` entry required, deterministic gate test required,
+    deprecation window if the change removes an element. Pure additions
+    are exempt from the window.
+  - **Version pinning strategy** — major releases may break Stable
+    surfaces (subject to the 12-month window); minor releases may only
+    break Beta surfaces; patch releases are bug fixes only. The
+    compatibility policy itself is part of the Stable surface.
+
+The legacy `window as any.*` Playwright test-bridge surface is **not
+part of this contract** — it is an internal debugging interface and may
+be added, renamed, or removed without notice.
+
+Coverage update: G8 moves from 🔴 to 🟢. The 9 v1.0 product gates
+re-score to **6 ✅ / 3 🟡 / 1 🔴** (G8 added; only G6 perf corpus
+still red — pending P3).
+
+Cycle context: `v1.0-stabilization` P4. `rig-agent-runtime-foundation`
+still **paused per user directive 2026-09-06**.
+
 ### Recovery-3 — Playwright OPFS persistence race fix
 
 Closes C-2 (deterministic Playwright smoke flake on `engine.spec.ts` `:526` and `:744`).
