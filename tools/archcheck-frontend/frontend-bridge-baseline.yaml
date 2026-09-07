@@ -1,0 +1,28 @@
+# Frontend bridge boundary baseline
+#
+# Every entry is a known direct import of frontend/src/engine-bridge.ts
+# from a file outside the sanctioned allowlist. The ratchet forbids NEW
+# entries; existing entries shrink as consumers migrate through
+# frontend/src/services/. Remove an entry in the same change that
+# migrates the consumer.
+#
+# Owner mapping: H2.x migration milestones. Services-layer migration is
+# tracked in the H2.
+
+schema_version: 1
+entries:
+  - file: frontend/src/hooks/useLogState.ts
+    owner: H2.6
+    reason: "log-state consumer; migrated to useEditorGateway().bridge.getLogState() once the runtime telemetry subsystem moves under EditorSession.log"
+
+  - file: frontend/src/hooks/useHotReloadStatus.ts
+    owner: H2.5
+    reason: "forceReload consumer; migrated through services/hot-reload once the runtime coordination cluster (H2.5) lands"
+
+  - file: frontend/src/hooks/useAIAssistant.ts
+    owner: H2.4
+    reason: "scene-snapshot consumer; migrated to services/ai-context (bridge-call) once the AI context subsystem exposes a typed snapshot accessor"
+
+  - file: frontend/src/components/ExportRustModal.tsx
+    owner: H2.4
+    reason: "scene-snapshot consumer; migrated to services/code-export.getSnapshot() once the asset/logic family (H2.4) surfaces a typed export API"
