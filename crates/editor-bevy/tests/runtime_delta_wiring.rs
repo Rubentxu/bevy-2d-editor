@@ -136,6 +136,9 @@ fn runtime_delta_buffer_cap_holds_at_64() {
 fn compute_runtime_deltas_diff_finds_changed_field() {
     // Set baselines with 1 instance, 1 component, 2 fields.
     fresh_session();
+    // H2.2: register the test-built user-schema registry so the diff
+    // function's `is_eligible_for_apply_back` lookup succeeds.
+    editor_bevy::schema::__test_only::register_builtins();
     let mut baselines = BTreeMap::new();
     baselines.insert(
         "inst1".to_string(),

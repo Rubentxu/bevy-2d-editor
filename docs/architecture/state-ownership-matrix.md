@@ -32,10 +32,11 @@ augmented with the columns the inventory does not track.
 
 | Global              | Crate        | Declared at                                  | Writers                                          | Readers                                          | Durability | Target owner                       | Migration PR |
 |---------------------|--------------|----------------------------------------------|--------------------------------------------------|--------------------------------------------------|------------|------------------------------------|--------------|
-| `USER_SCHEMAS`      | editor-bevy  | `crates/editor-bevy/src/schema.rs:419`       | `register_user_schema`                           | `list_user_schemas`, `with_user_schema`          | session    | `EditorSession.schemas`            | BLOCKED (value-type unification) |
+| `USER_SCHEMAS`      | editor-bevy  | `crates/editor-bevy/src/schema.rs:419` (removed in H2.2) | `register_user_schema` (now `register_schema`) | `list_user_schemas`, `with_user_schema` (now `combined_registry`) | session    | `EditorSession.user_schemas` (via `UserSchemaRegistryPort` cell in `editor_model::ports`) | RETIRED (this slice) |
 | `SOURCE_FILE_REGISTRY` | editor-bevy | `crates/editor-bevy/src/source_files.rs` (removed in H2.2) | `cache_source`, `invalidate_cache`, `clear_cache` | `get_cached_source` | session    | `EditorSession.preview_state.source_files` (via `EditorSessionPort::source_files_mut`) | RETIRED (this slice) |
 | `EXTENSION_REGISTRY` | editor-model | `crates/editor-model/src/ports.rs:243`       | `register_extension_registry` (sanctioned cell)  | `with_extension_registry`, `with_extension_registry_mut` | session | sanctioned port cell (kept)        | SANCTIONED   |
 | `IMPORTER_REGISTRY` | editor-model | `crates/editor-model/src/ports.rs:324`       | `register_importer_registry` (sanctioned cell)   | `with_importer_registry`, `with_importer_registry_mut` | session | sanctioned port cell (kept)        | SANCTIONED   |
+| `USER_SCHEMA_REGISTRY` (new) | editor-model | `crates/editor-model/src/ports.rs` (H2.2 PR) | `register_user_schema_registry` (WASM composition root) | `with_user_schema_registry` (Bevy facades)        | session | sanctioned port cell (new)        | SANCTIONED (H2.2 PR) |
 
 `PROJECT_STORE` lives in `editor-model/src/ports.rs:121` but is no longer
 mutated from production code after H1.2; the cell survives as the

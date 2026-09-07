@@ -878,6 +878,17 @@ pub async fn init_project_store() -> Result<(), JsValue> {
         register_importer_registry(guard.importer_registry());
     }
 
+    // H2.2: register the user-schema registry globally so editor-bevy can
+    // route `register_schema`/`unregister_schema`/`combined_registry` through
+    // the port cell without importing editor-application (per H1.4 dep direction).
+    {
+        let guard = session
+            .lock()
+            .map_err(|e| JsValue::from_str(&format!("Session lock poisoned: {}", e)))?;
+        use editor_model::ports::register_user_schema_registry;
+        register_user_schema_registry(guard.user_schemas());
+    }
+
     // H1.3 + H1.4: compose the built-in importer implementations from
     // editor-bevy into the descriptor-only registry seeded by
     // `EditorSession::with_builtins`. This is the canonical composition

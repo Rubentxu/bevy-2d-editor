@@ -1,912 +1,305 @@
-//! Component Schema Registry for the Bevy 2D Editor.
+//! Component Schema Registry — Bevy adapter facade.
 //!
-//! Provides a global registry of component schemas that define the structure
-//! of component instances used in scene documents.
+//! H2.2 (single-session composition root): this module is a thin
+//! Bevy-side facade over the canonical registry in
+//! `editor_application::registry::user_schemas`, accessed via the
+//! `UserSchemaRegistryPort` port cell in `editor_model::ports`.
+//!
+//! Value types (`ComponentSchema`, `FieldType`, `Constraint`, `FieldDef`,
+//! `SourceLocation`, `SchemaKind`, `SchemaError`, `ApplyBackPolicy`,
+//! `ComponentTypeId`) are re-exported from `editor_model::schema` so
+//! existing call sites continue to compile. The legacy `REGISTRY`
+//! `OnceLock<ComponentSchemaRegistry>` and `USER_SCHEMAS` `thread_local!`
+//! have been removed — built-in seeds live on `EditorSession.user_schemas`
+//! at the WASM composition root.
+//!
+//! The facade functions in this module are kept for backward source
+//! compatibility with WASM exports and Bevy internals:
+//!
+//! - `register_schema` / `unregister_schema` delegate to the port cell.
+//! - `combined_registry()` returns a `Vec<ComponentSchema>` snapshot from
+//!   the port cell (callers that previously iterated `ComponentSchemaRegistry`
+//!   must be updated to iterate the `Vec` — see `code_export.rs`).
+//! - `is_builtin_type` delegates to `editor_model::schema::is_builtin_type`.
 
-use serde::{Deserialize, Serialize};
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::sync::OnceLock;
-use thiserror::Error;
+pub use editor_model::schema::{
+    ApplyBackPolicy, ComponentSchema, ComponentTypeId, Constraint, FieldDef, FieldType,
+    SchemaError, SchemaKind, SourceLocation, is_builtin_type,
+};
 
-/// Policy governing whether and how a component's runtime values may be
-/// applied back to the authoring state (ADR-0050, ADR-0042).
-///
-/// Serialized as part of `ComponentSchema`. Defaults to `Never` for all
-/// existing schemas (per D4 — conservative default). Defined in `editor-core`
-/// because `ComponentSchema` is editor-core's authoring type; editor-application
-/// re-exports the enum for downstream consumers.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ApplyBackPolicy {
-    /// Never apply runtime values back to authoring state.
-    #[default]
-    Never,
-    /// Apply back only when explicitly requested by the user.
-    ExplicitOnly,
-    /// Apply back is suggested; user may tune the value.
-    Tunable,
-}
-
-/// Scope of an apply-back operation (ADR-0050).
-///
-/// v1 only supports `ThisInstance` — apply-back targets the same scene
-/// instance that produced the delta.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ApplyBackScope {
-    /// Apply back only to the same scene instance that produced the delta.
-    ThisInstance,
-}
-
-/// Opaque component type identifier used by the Component Schema Registry.
-/// Transparent so it serializes as a plain string, e.g. `editor.Transform2D`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct ComponentTypeId(pub String);
-
-impl ComponentTypeId {
-    pub fn new(id: impl Into<String>) -> Self {
-        Self(id.into())
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-/// Source location in a Rust source file.
-/// Used for "jump to definition" navigation from component schema to source.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SourceLocation {
-    pub file_id: String,
-    pub line: u32,
-    #[serde(default = "default_source_location_column")]
-    pub column: u32,
-}
-
-fn default_source_location_column() -> u32 {
-    1
-}
-
-/// Field type enumeration for schema field definitions.
-///
-/// Hito 4 Order 7 (`scene-component-authoring`): added `ComponentRef` and
-/// `Enum` variants. `ComponentRef` is `#[serde(untagged)]` to serialize as
-/// a plain string (the type_id) for backward compat with v0.72.0 and
-/// earlier clients.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum FieldType {
-    String,
-    F32,
-    Bool,
-    Vec2,
-    Color,
-    Anchor,
-    AssetReference,
-    /// Reference to another component schema by type_id.
-    /// Serializes as a plain string (the type_id).
-    ComponentRef(String),
-    /// Bounded string-enum; only values in `variants` are accepted.
-    Enum {
-        variants: Vec<String>,
-    },
-}
-
-/// Constraint on a field value.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum Constraint {
-    Min(f32),
-    Max(f32),
-    NonEmpty,
-}
-
-/// A single field definition within a component schema.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct FieldDef {
-    pub name: String,
-    pub field_type: FieldType,
-    #[serde(default = "default_json_value")]
-    pub default: serde_json::Value,
-    #[serde(default)]
-    pub constraints: Vec<Constraint>,
-}
-
-fn default_json_value() -> serde_json::Value {
-    serde_json::Value::Null
-}
-
-/// Discriminator for component schema purpose.
-///
-/// Hito 4 Order 7 (`scene-component-authoring`): `SceneComponent` indicates
-/// the schema wraps a `SceneAssetDocument` and is authored via Bevy 0.19's
-/// `#[derive(SceneComponent)]` semantics. `Simple` is the legacy default.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SchemaKind {
-    #[default]
-    Simple,
-    /// Bound to a `SceneAssetDocument`; instancing spawns the bound scene
-    /// (when `auto_spawn: true`, which is the default).
-    SceneComponent,
-}
-
-/// A component schema defining the structure of a component type.
-///
-/// Hito 4 Order 7: added 3 fields, all `#[serde(default)]` for backward
-/// compatibility with v0.72.0 and earlier clients (they default to
-/// `kind = Simple`, `bound_scene_asset_ref = None`, `auto_spawn = false`).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ComponentSchema {
-    pub type_id: String,
-    pub display_name: String,
-    pub fields: Vec<FieldDef>,
-    /// Whether this component exports to Bevy runtime.
-    /// Editorial-only components (Visible, Locked) set this to false.
-    pub exports_to_bevy: bool,
-    /// Optional source location for "jump to definition" navigation.
-    /// Points to the Rust struct definition in the editor's source files.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source_location: Option<SourceLocation>,
-    /// Hito 4 Order 7: schema discriminator.
-    #[serde(default)]
-    pub kind: SchemaKind,
-    /// Hito 4 Order 7: when `kind == SceneComponent`, references the bound
-    /// `SceneAssetDocument` id. Otherwise `None`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub bound_scene_asset_ref: Option<String>,
-    /// Hito 4 Order 7: when `kind == SceneComponent`, controls whether
-    /// instancing auto-spawns the bound scene (Bevy parity) or requires
-    /// explicit opt-in. Defaults to `true` for SceneComponent schemas.
-    #[serde(default = "default_auto_spawn")]
-    pub auto_spawn: bool,
-    /// Apply-back policy for fields of this component (ADR-0042, ADR-0050).
-    ///
-    /// Defaults to `Never` — runtime values are never applied back to the
-    /// authoring state unless the schema explicitly opts in.
-    #[serde(default)]
-    pub apply_back: ApplyBackPolicy,
-}
-
-fn default_auto_spawn() -> bool {
-    // Default `true` so new SceneComponent schemas match Bevy 0.19
-    // `#[derive(SceneComponent)]` behavior out of the box.
-    true
-}
-
-impl Default for ComponentSchema {
-    fn default() -> Self {
-        Self {
-            type_id: String::new(),
-            display_name: String::new(),
-            fields: Vec::new(),
-            exports_to_bevy: true,
-            source_location: None,
-            kind: SchemaKind::default(), // Simple
-            bound_scene_asset_ref: None,
-            auto_spawn: default_auto_spawn(), // true
-            apply_back: ApplyBackPolicy::Never,
-        }
-    }
-}
-
-/// Global registry of all component schemas.
-#[derive(Debug, Clone)]
-pub struct ComponentSchemaRegistry {
-    schemas: HashMap<String, ComponentSchema>,
-}
-
-impl ComponentSchemaRegistry {
-    /// Create a new empty registry.
-    pub fn new() -> Self {
-        Self {
-            schemas: HashMap::new(),
-        }
-    }
-
-    /// Get a schema by its type_id.
-    pub fn get(&self, type_id: &str) -> Option<&ComponentSchema> {
-        self.schemas.get(type_id)
-    }
-
-    /// Insert a schema into the registry. If a schema with the same type_id
-    /// already exists, it is replaced.
-    ///
-    /// Hito 4 Order 7: returns `Err` if the schema is `kind = SceneComponent`
-    /// but `bound_scene_asset_ref` is `None`. Scene Component schemas MUST
-    /// reference a bound scene asset to be meaningful.
-    pub fn insert(&mut self, schema: ComponentSchema) -> Result<(), SchemaError> {
-        if schema.kind == SchemaKind::SceneComponent && schema.bound_scene_asset_ref.is_none() {
-            return Err(SchemaError::MissingBoundSceneAsset(schema.type_id));
-        }
-        self.schemas.insert(schema.type_id.clone(), schema);
-        Ok(())
-    }
-
-    /// Remove a schema by type_id. Returns the removed schema if found.
-    pub fn remove(&mut self, type_id: &str) -> Option<ComponentSchema> {
-        self.schemas.remove(type_id)
-    }
-
-    /// Iterate over all schemas.
-    pub fn iter(&self) -> impl Iterator<Item = &ComponentSchema> {
-        self.schemas.values()
-    }
-
-    /// Create a registry seeded with the 5 built-in editor schemas.
-    ///
-    /// Hito 4 Order 7: returns `Result` because `insert` can fail (e.g.
-    /// if a future seed has `kind = SceneComponent` without a binding).
-    /// The 5 built-in seeds here are all `Simple`, so `Ok` is guaranteed.
-    pub fn with_builtin_seeds() -> Result<Self, SchemaError> {
-        let mut registry = Self::new();
-
-        // editor.Name
-        registry.insert(ComponentSchema {
-            type_id: "editor.Name".to_string(),
-            display_name: "Name".to_string(),
-            fields: vec![FieldDef {
-                name: "name".to_string(),
-                field_type: FieldType::String,
-                default: serde_json::json!(""),
-                constraints: vec![],
-            }],
-            exports_to_bevy: true,
-            source_location: None,
-            kind: SchemaKind::Simple,
-            bound_scene_asset_ref: None,
-            auto_spawn: true,
-            apply_back: ApplyBackPolicy::Never,
-        })?;
-
-        // editor.Transform2D
-        registry.insert(ComponentSchema {
-            type_id: "editor.Transform2D".to_string(),
-            display_name: "Transform 2D".to_string(),
-            fields: vec![
-                FieldDef {
-                    name: "translation".to_string(),
-                    field_type: FieldType::Vec2,
-                    default: serde_json::json!({"x": 0.0, "y": 0.0}),
-                    constraints: vec![],
-                },
-                FieldDef {
-                    name: "rotation".to_string(),
-                    field_type: FieldType::F32,
-                    default: serde_json::json!(0.0),
-                    constraints: vec![],
-                },
-                FieldDef {
-                    name: "scale".to_string(),
-                    field_type: FieldType::Vec2,
-                    default: serde_json::json!({"x": 1.0, "y": 1.0}),
-                    constraints: vec![],
-                },
-            ],
-            exports_to_bevy: true,
-            source_location: None,
-            kind: SchemaKind::Simple,
-            bound_scene_asset_ref: None,
-            auto_spawn: true,
-            apply_back: ApplyBackPolicy::Never,
-        })?;
-
-        // editor.Sprite2D
-        registry.insert(ComponentSchema {
-            type_id: "editor.Sprite2D".to_string(),
-            display_name: "Sprite 2D".to_string(),
-            fields: vec![
-                FieldDef {
-                    name: "asset".to_string(),
-                    field_type: FieldType::AssetReference,
-                    default: serde_json::json!(""),
-                    constraints: vec![],
-                },
-                FieldDef {
-                    name: "color".to_string(),
-                    field_type: FieldType::Color,
-                    default: serde_json::json!({"r": 1.0, "g": 1.0, "b": 1.0, "a": 1.0}),
-                    constraints: vec![],
-                },
-                FieldDef {
-                    name: "anchor".to_string(),
-                    field_type: FieldType::Anchor,
-                    default: serde_json::json!("Center"),
-                    constraints: vec![],
-                },
-            ],
-            exports_to_bevy: true,
-            source_location: None,
-            kind: SchemaKind::Simple,
-            bound_scene_asset_ref: None,
-            auto_spawn: true,
-            apply_back: ApplyBackPolicy::Never,
-        })?;
-
-        // editor.Visible
-        registry.insert(ComponentSchema {
-            type_id: "editor.Visible".to_string(),
-            display_name: "Visible".to_string(),
-            fields: vec![FieldDef {
-                name: "visible".to_string(),
-                field_type: FieldType::Bool,
-                default: serde_json::json!(true),
-                constraints: vec![],
-            }],
-            exports_to_bevy: false,
-            source_location: None,
-            kind: SchemaKind::Simple,
-            bound_scene_asset_ref: None,
-            auto_spawn: true,
-            apply_back: ApplyBackPolicy::Never,
-        })?;
-
-        // editor.Locked
-        registry.insert(ComponentSchema {
-            type_id: "editor.Locked".to_string(),
-            display_name: "Locked".to_string(),
-            fields: vec![FieldDef {
-                name: "locked".to_string(),
-                field_type: FieldType::Bool,
-                default: serde_json::json!(false),
-                constraints: vec![],
-            }],
-            exports_to_bevy: false,
-            source_location: None,
-            kind: SchemaKind::Simple,
-            bound_scene_asset_ref: None,
-            auto_spawn: true,
-            apply_back: ApplyBackPolicy::Never,
-        })?;
-
-        // editor.LogicBinding — binds a Scene Instance to a LogicGraphAsset
-        registry.insert(ComponentSchema {
-            type_id: "editor.LogicBinding".to_string(),
-            display_name: "Logic Binding".to_string(),
-            fields: vec![
-                FieldDef {
-                    name: "asset_id".to_string(),
-                    field_type: FieldType::AssetReference,
-                    default: serde_json::json!(""),
-                    constraints: vec![],
-                },
-                FieldDef {
-                    name: "version".to_string(),
-                    field_type: FieldType::F32,
-                    default: serde_json::json!(1.0),
-                    constraints: vec![],
-                },
-            ],
-            exports_to_bevy: true,
-            source_location: None,
-            kind: SchemaKind::Simple,
-            bound_scene_asset_ref: None,
-            auto_spawn: true,
-            apply_back: ApplyBackPolicy::Never,
-        })?;
-
-        Ok(registry)
-    }
-}
-
-impl Default for ComponentSchemaRegistry {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Global singleton registry instance.
-static REGISTRY: OnceLock<ComponentSchemaRegistry> = OnceLock::new();
-
-/// Get the global component schema registry (built-ins only).
-/// Initializes with built-in seeds on first call.
-pub fn global_registry() -> &'static ComponentSchemaRegistry {
-    REGISTRY.get_or_init(|| {
-        ComponentSchemaRegistry::with_builtin_seeds()
-            .expect("builtin seeds must succeed (all built-ins are Simple)")
-    })
-}
+use std::sync::Arc;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Mutable user schema registry — runtime additions/deletions
+// Mutable user-schema facade (H2.2 — port-cell-backed)
 // ─────────────────────────────────────────────────────────────────────────────
-
-thread_local! {
-    /// Mutable user-defined schemas. Built-ins live in `REGISTRY` (OnceLock)
-    /// and are immutable. User schemas can be added/removed at runtime via
-    /// `register_schema` / `unregister_schema`.
-    pub(crate) static USER_SCHEMAS: RefCell<ComponentSchemaRegistry> = RefCell::new(ComponentSchemaRegistry::new());
-}
-
-/// Returns true if the type_id is a built-in (starts with `editor.`).
-/// Built-ins are immutable: cannot be registered, unregistered, or deleted.
-pub fn is_builtin_type(type_id: &str) -> bool {
-    type_id.starts_with("editor.")
-}
 
 /// Register a user-defined schema in memory (does NOT save to OPFS).
-/// Built-in schemas (editor.*) are rejected.
+/// Built-in `editor.*` schemas are rejected.
 pub fn register_schema(schema: ComponentSchema) -> Result<(), SchemaError> {
-    if is_builtin_type(&schema.type_id) {
-        return Err(SchemaError::CannotRegisterBuiltin(schema.type_id));
-    }
-    USER_SCHEMAS.with(|r| r.borrow_mut().insert(schema));
-    Ok(())
+    crate::schema::ports_bridge::with_registry_write(|reg| reg.register(schema))
 }
 
 /// Unregister a user-defined schema from memory (does NOT delete OPFS file).
-/// Built-in schemas are rejected. Missing schemas are a no-op success.
+/// Built-in `editor.*` schemas are rejected. Missing schemas are a no-op success.
 pub fn unregister_schema(type_id: &str) -> Result<(), SchemaError> {
-    if is_builtin_type(type_id) {
-        return Err(SchemaError::CannotUnregisterBuiltin(type_id.to_string()));
-    }
-    USER_SCHEMAS.with(|r| {
-        r.borrow_mut().remove(type_id); // ignore if not present
-    });
-    Ok(())
+    crate::schema::ports_bridge::with_registry_write(|reg| reg.unregister(type_id))
 }
 
-/// Returns a combined registry containing built-ins + user-defined schemas.
-/// User schemas override built-ins if the same type_id is used.
-pub fn combined_registry() -> ComponentSchemaRegistry {
-    let mut combined = ComponentSchemaRegistry::new();
-    for schema in global_registry().iter() {
-        combined.insert(schema.clone());
-    }
-    USER_SCHEMAS.with(|r| {
-        for schema in r.borrow().iter() {
-            combined.insert(schema.clone());
-        }
-    });
-    combined
+/// Returns a snapshot of all schemas (built-ins + user-defined).
+///
+/// H2.2: returns `Vec<ComponentSchema>` instead of the legacy
+/// `ComponentSchemaRegistry` struct (which moved to
+/// `editor_application::registry::user_schemas::UserSchemaRegistry`).
+/// Callers that need iteration should iterate the `Vec` directly; callers
+/// that need lookup should call `get_schema(type_id)`.
+pub fn combined_registry() -> Vec<ComponentSchema> {
+    crate::schema::ports_bridge::with_registry_read(|reg| reg.combined_view())
 }
 
-/// Errors returned by schema registry mutations.
-#[derive(Debug, Error)]
-pub enum SchemaError {
-    #[error("Cannot register built-in schema: {0}")]
-    CannotRegisterBuiltin(String),
-
-    #[error("Cannot unregister built-in schema: {0}")]
-    CannotUnregisterBuiltin(String),
-
-    #[error("Cannot delete built-in schema: {0}")]
-    CannotDeleteBuiltin(String),
-
-    #[error("Schema not found: {0}")]
-    NotFound(String),
-
-    /// Hito 4 Order 7: SceneComponent schema must reference a bound scene asset.
-    #[error("SceneComponent schema {0} is missing bound_scene_asset_ref")]
-    MissingBoundSceneAsset(String),
+/// Look up a schema by type_id from the combined (built-ins + user) view.
+///
+/// H2.2 replacement for the previous `ComponentSchemaRegistry::get` method
+/// on the returned-by-`combined_registry()` value.
+pub fn get_schema(type_id: &str) -> Option<ComponentSchema> {
+    crate::schema::ports_bridge::with_registry_read(|reg| reg.get(type_id))
 }
 
-#[cfg(test)]
-mod tests {
+/// Iterate the combined (built-ins + user) view.
+///
+/// H2.2 replacement for the previous `ComponentSchemaRegistry::iter`.
+/// Provided as a free function because `Vec` already has `iter()`; this
+/// exists for source-compat with sites that used `combined_registry().iter()`.
+pub fn iter_schemas() -> Vec<ComponentSchema> {
+    combined_registry()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Internal: ports bridge helper
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Test-only helper used by `editor-bevy` unit tests to initialise the
+/// `USER_SCHEMA_REGISTRY` port cell with the 6 built-in schemas.
+///
+/// H2.2: `editor-bevy` cannot import `editor_application::UserSchemaRegistry`
+/// directly (H1.4 dependency direction), so the seed data is duplicated
+/// here as a test fixture. The canonical seeds live in
+/// `editor_application::registry::user_schemas::UserSchemaRegistry::with_builtins`.
+///
+/// Production code MUST NOT use this module — production code path is
+/// `editor_wasm::init_project_store` → `register_user_schema_registry` →
+/// `editor-bevy` facades.
+#[doc(hidden)]
+pub mod __test_only {
     use super::*;
+    use editor_model::ports::{UserSchemaRegistryPort, register_user_schema_registry};
+    use std::sync::{Arc, Mutex};
 
-    // §3.1: Built-in schemas are present
-    #[test]
-    fn test_registry_has_6_builtin_schemas() {
-        let registry = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
-        let count = registry.iter().count();
-        assert_eq!(count, 6);
+    fn seed() -> Vec<ComponentSchema> {
+        vec![
+            ComponentSchema {
+                type_id: "editor.Name".to_string(),
+                display_name: "Name".to_string(),
+                fields: vec![FieldDef {
+                    name: "name".to_string(),
+                    field_type: FieldType::String,
+                    default: serde_json::json!(""),
+                    constraints: vec![],
+                }],
+                exports_to_bevy: true,
+                source_location: None,
+                ..Default::default()
+            },
+            ComponentSchema {
+                type_id: "editor.Transform2D".to_string(),
+                display_name: "Transform 2D".to_string(),
+                fields: vec![
+                    FieldDef {
+                        name: "translation".to_string(),
+                        field_type: FieldType::Vec2,
+                        default: serde_json::json!({"x": 0.0, "y": 0.0}),
+                        constraints: vec![],
+                    },
+                    FieldDef {
+                        name: "rotation".to_string(),
+                        field_type: FieldType::F32,
+                        default: serde_json::json!(0.0),
+                        constraints: vec![],
+                    },
+                    FieldDef {
+                        name: "scale".to_string(),
+                        field_type: FieldType::Vec2,
+                        default: serde_json::json!({"x": 1.0, "y": 1.0}),
+                        constraints: vec![],
+                    },
+                ],
+                exports_to_bevy: true,
+                source_location: None,
+                ..Default::default()
+            },
+            ComponentSchema {
+                type_id: "editor.Sprite2D".to_string(),
+                display_name: "Sprite 2D".to_string(),
+                fields: vec![
+                    FieldDef {
+                        name: "asset".to_string(),
+                        field_type: FieldType::AssetReference,
+                        default: serde_json::json!(""),
+                        constraints: vec![],
+                    },
+                    FieldDef {
+                        name: "color".to_string(),
+                        field_type: FieldType::Color,
+                        default: serde_json::json!({"r": 1.0, "g": 1.0, "b": 1.0, "a": 1.0}),
+                        constraints: vec![],
+                    },
+                    FieldDef {
+                        name: "anchor".to_string(),
+                        field_type: FieldType::Anchor,
+                        default: serde_json::json!("Center"),
+                        constraints: vec![],
+                    },
+                ],
+                exports_to_bevy: true,
+                source_location: None,
+                ..Default::default()
+            },
+            ComponentSchema {
+                type_id: "editor.Visible".to_string(),
+                display_name: "Visible".to_string(),
+                fields: vec![FieldDef {
+                    name: "visible".to_string(),
+                    field_type: FieldType::Bool,
+                    default: serde_json::json!(true),
+                    constraints: vec![],
+                }],
+                exports_to_bevy: false,
+                source_location: None,
+                ..Default::default()
+            },
+            ComponentSchema {
+                type_id: "editor.Locked".to_string(),
+                display_name: "Locked".to_string(),
+                fields: vec![FieldDef {
+                    name: "locked".to_string(),
+                    field_type: FieldType::Bool,
+                    default: serde_json::json!(false),
+                    constraints: vec![],
+                }],
+                exports_to_bevy: false,
+                source_location: None,
+                ..Default::default()
+            },
+            ComponentSchema {
+                type_id: "editor.LogicBinding".to_string(),
+                display_name: "Logic Binding".to_string(),
+                fields: vec![
+                    FieldDef {
+                        name: "asset_id".to_string(),
+                        field_type: FieldType::AssetReference,
+                        default: serde_json::json!(""),
+                        constraints: vec![],
+                    },
+                    FieldDef {
+                        name: "version".to_string(),
+                        field_type: FieldType::F32,
+                        default: serde_json::json!(1.0),
+                        constraints: vec![],
+                    },
+                ],
+                exports_to_bevy: true,
+                source_location: None,
+                ..Default::default()
+            },
+        ]
     }
 
-    // §3.2: Known type_id returns its schema
-    #[test]
-    fn test_get_schema_known_type_id() {
-        let registry = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
-        let schema = registry.get("editor.Transform2D");
-        assert!(schema.is_some());
-        assert_eq!(schema.unwrap().type_id, "editor.Transform2D");
-    }
-
-    // §3.3: Unknown type_id returns None (no panic)
-    #[test]
-    fn test_get_schema_unknown_returns_none() {
-        let registry = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
-        let schema = registry.get("editor.NonExistent");
-        assert!(schema.is_none());
-    }
-
-    // §3.4: Transform2D fields are defined
-    #[test]
-    fn test_transform2d_fields_defined() {
-        let registry = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
-        let schema = registry.get("editor.Transform2D").unwrap();
-
-        let field_names: Vec<&str> = schema.fields.iter().map(|f| f.name.as_str()).collect();
-        assert!(field_names.contains(&"translation"));
-        assert!(field_names.contains(&"rotation"));
-        assert!(field_names.contains(&"scale"));
-
-        // Check field types
-        let translation_type = schema
-            .fields
-            .iter()
-            .find(|f| f.name == "translation")
-            .map(|f| &f.field_type);
-        assert_eq!(translation_type, Some(&FieldType::Vec2));
-    }
-
-    // §3.5: Name schema defaults
-    #[test]
-    fn test_name_schema_default() {
-        let registry = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
-        let schema = registry.get("editor.Name").unwrap();
-
-        assert_eq!(schema.fields.len(), 1);
-        let name_field = &schema.fields[0];
-        assert_eq!(name_field.name, "name");
-        assert_eq!(name_field.field_type, FieldType::String);
-        assert_eq!(name_field.default, serde_json::json!(""));
-    }
-
-    // §3.6: Sprite2D asset is logical path
-    #[test]
-    fn test_sprite2d_asset_is_logical_path() {
-        let registry = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
-        let schema = registry.get("editor.Sprite2D").unwrap();
-
-        let asset_field = schema.fields.iter().find(|f| f.name == "asset").unwrap();
-        assert_eq!(asset_field.field_type, FieldType::AssetReference);
-        // Asset reference is a logical path string
-        assert_eq!(asset_field.default, serde_json::json!(""));
-    }
-
-    // §3.7: Visible and Locked editorial-only
-    #[test]
-    fn test_visible_locked_editorial_only() {
-        let registry = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
-
-        let visible = registry.get("editor.Visible").unwrap();
-        assert!(!visible.exports_to_bevy);
-        assert_eq!(visible.fields.len(), 1);
-        assert_eq!(visible.fields[0].name, "visible");
-        assert_eq!(visible.fields[0].field_type, FieldType::Bool);
-
-        let locked = registry.get("editor.Locked").unwrap();
-        assert!(!locked.exports_to_bevy);
-        assert_eq!(locked.fields.len(), 1);
-        assert_eq!(locked.fields[0].name, "locked");
-        assert_eq!(locked.fields[0].field_type, FieldType::Bool);
-    }
-
-    // §Phase 3.1: editor.LogicBinding resolves through global_registry() and combined_registry()
-    #[test]
-    fn test_logic_binding_schema_in_global_registry() {
-        let registry = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
-        let schema = registry.get("editor.LogicBinding");
-        assert!(
-            schema.is_some(),
-            "editor.LogicBinding should be in global registry"
-        );
-        let schema = schema.unwrap();
-        assert_eq!(schema.type_id, "editor.LogicBinding");
-        assert_eq!(schema.display_name, "Logic Binding");
-
-        // Check fields: asset_id (AssetReference) and version (F32)
-        let field_names: Vec<&str> = schema.fields.iter().map(|f| f.name.as_str()).collect();
-        assert!(
-            field_names.contains(&"asset_id"),
-            "should have asset_id field"
-        );
-        assert!(
-            field_names.contains(&"version"),
-            "should have version field"
-        );
-
-        let asset_id_field = schema.fields.iter().find(|f| f.name == "asset_id").unwrap();
-        assert_eq!(asset_id_field.field_type, FieldType::AssetReference);
-
-        let version_field = schema.fields.iter().find(|f| f.name == "version").unwrap();
-        assert_eq!(version_field.field_type, FieldType::F32);
-    }
-
-    #[test]
-    fn test_logic_binding_schema_in_combined_registry() {
-        let combined = combined_registry();
-        let schema = combined.get("editor.LogicBinding");
-        assert!(
-            schema.is_some(),
-            "editor.LogicBinding should be in combined registry"
-        );
-    }
-
-    // §3.8: Global singleton
-    #[test]
-    fn test_global_registry_singleton() {
-        let reg1 = global_registry();
-        let reg2 = global_registry();
-        assert_eq!(reg1 as *const _, reg2 as *const _);
-        assert_eq!(reg1.iter().count(), 6);
-    }
-
-    // ===== Mutable user schema registry =====
-
-    fn user_schema(type_id: &str) -> ComponentSchema {
-        ComponentSchema {
-            type_id: type_id.to_string(),
-            display_name: type_id.to_string(),
-            fields: vec![FieldDef {
-                name: "value".to_string(),
-                field_type: FieldType::F32,
-                default: serde_json::json!(0.0),
-                constraints: vec![],
-            }],
-            exports_to_bevy: true,
-            source_location: None,
-            ..Default::default()
+    /// Register the test registry in the port cell. Idempotent within a
+    /// single test process — re-registration is a no-op.
+    pub fn register_builtins() {
+        // Use a one-shot inner registry; the port cell stores an Arc clone.
+        struct TestRegistry {
+            schemas: HashMap<String, ComponentSchema>,
         }
-    }
+        impl UserSchemaRegistryPort for TestRegistry {
+            fn register(&mut self, schema: ComponentSchema) -> Result<(), SchemaError> {
+                self.schemas.insert(schema.type_id.clone(), schema);
+                Ok(())
+            }
+            fn unregister(&mut self, type_id: &str) -> Result<(), SchemaError> {
+                self.schemas.remove(type_id);
+                Ok(())
+            }
+            fn is_builtin(&self, type_id: &str) -> bool {
+                is_builtin_type(type_id)
+            }
+            fn combined_view(&self) -> Vec<ComponentSchema> {
+                self.schemas.values().cloned().collect()
+            }
+            fn get(&self, type_id: &str) -> Option<ComponentSchema> {
+                self.schemas.get(type_id).cloned()
+            }
+        }
 
-    #[test]
-    fn test_is_builtin_type_editor_prefix_true() {
-        assert!(is_builtin_type("editor.Transform2D"));
-        assert!(is_builtin_type("editor.Name"));
-        assert!(is_builtin_type("editor."));
-    }
-
-    #[test]
-    fn test_is_builtin_type_game_prefix_false() {
-        assert!(!is_builtin_type("game.PlayerHealth"));
-        assert!(!is_builtin_type("my.Foo"));
-        assert!(!is_builtin_type(""));
-    }
-
-    #[test]
-    fn test_register_schema_rejects_builtin() {
-        let result = register_schema(user_schema("editor.NewName"));
-        assert!(matches!(result, Err(SchemaError::CannotRegisterBuiltin(_))));
-    }
-
-    #[test]
-    fn test_register_schema_adds_user() {
-        // Cleanup from any prior test
-        let _ = unregister_schema("game.PlayerHealth");
-
-        register_schema(user_schema("game.PlayerHealth")).unwrap();
-        let combined = combined_registry();
-        assert!(combined.get("game.PlayerHealth").is_some());
-
-        // Cleanup
-        let _ = unregister_schema("game.PlayerHealth");
-    }
-
-    #[test]
-    fn test_register_schema_replaces_existing_user() {
-        let _ = unregister_schema("game.EnemyAI");
-        register_schema(user_schema("game.EnemyAI")).unwrap();
-
-        // Replace with schema with different field
-        let mut replacement = user_schema("game.EnemyAI");
-        replacement.fields.push(FieldDef {
-            name: "speed".to_string(),
-            field_type: FieldType::F32,
-            default: serde_json::json!(1.0),
-            constraints: vec![],
-        });
-        register_schema(replacement).unwrap();
-
-        let combined = combined_registry();
-        let schema = combined.get("game.EnemyAI").unwrap();
-        assert_eq!(schema.fields.len(), 2);
-
-        let _ = unregister_schema("game.EnemyAI");
-    }
-
-    #[test]
-    fn test_unregister_schema_removes_user() {
-        let _ = unregister_schema("game.Foo");
-        register_schema(user_schema("game.Foo")).unwrap();
-        assert!(combined_registry().get("game.Foo").is_some());
-        unregister_schema("game.Foo").unwrap();
-        assert!(combined_registry().get("game.Foo").is_none());
-    }
-
-    #[test]
-    fn test_unregister_schema_rejects_builtin() {
-        let result = unregister_schema("editor.Transform2D");
-        assert!(matches!(
-            result,
-            Err(SchemaError::CannotUnregisterBuiltin(_))
-        ));
-    }
-
-    #[test]
-    fn test_unregister_schema_nonexistent_is_noop() {
-        let result = unregister_schema("game.NeverRegistered");
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_combined_registry_includes_builtins() {
-        let combined = combined_registry();
-        assert_eq!(combined.iter().count(), 6);
-        assert!(combined.get("editor.Name").is_some());
-        assert!(combined.get("editor.Transform2D").is_some());
-    }
-
-    #[test]
-    fn test_combined_registry_includes_user_added() {
-        let _ = unregister_schema("game.Bar");
-        register_schema(user_schema("game.Bar")).unwrap();
-        let combined = combined_registry();
-        assert_eq!(combined.iter().count(), 7);
-        assert!(combined.get("game.Bar").is_some());
-        let _ = unregister_schema("game.Bar");
-    }
-
-    #[test]
-    fn test_remove_method_on_registry() {
-        let mut reg = ComponentSchemaRegistry::new();
-        reg.insert(user_schema("game.X"));
-        assert!(reg.get("game.X").is_some());
-        let removed = reg.remove("game.X");
-        assert!(removed.is_some());
-        assert!(reg.get("game.X").is_none());
-        // Removing non-existent returns None
-        assert!(reg.remove("game.NonExistent").is_none());
-    }
-
-    // ===== SourceLocation tests =====
-
-    #[test]
-    fn test_source_location_serde_roundtrip() {
-        let loc = SourceLocation {
-            file_id: "src/components/player.rs".to_string(),
-            line: 42,
-            column: 7,
+        let mut registry = TestRegistry {
+            schemas: HashMap::new(),
         };
-        let json = serde_json::to_string(&loc).unwrap();
-        let roundtrip: SourceLocation = serde_json::from_str(&json).unwrap();
-        assert_eq!(roundtrip.file_id, "src/components/player.rs");
-        assert_eq!(roundtrip.line, 42);
-        assert_eq!(roundtrip.column, 7);
+        for schema in seed() {
+            // Built-in seed: bypass `register` validation (it would reject
+            // editor.* as new entries). Use insert directly.
+            registry.schemas.insert(schema.type_id.clone(), schema);
+        }
+        let arc: Arc<Mutex<dyn UserSchemaRegistryPort>> = Arc::new(Mutex::new(registry));
+        register_user_schema_registry(Arc::clone(&arc));
     }
 
-    #[test]
-    fn test_source_location_default_column() {
-        // column should default to 1 when deserializing from JSON without column field
-        let json = r#"{"file_id": "lib.rs", "line": 10}"#;
-        let loc: SourceLocation = serde_json::from_str(json).unwrap();
-        assert_eq!(loc.column, 1);
+    /// Returns the test registry handle (used by tests that want to add
+    /// user schemas to the same registry the facades see).
+    pub fn handle() -> Arc<Mutex<dyn UserSchemaRegistryPort>> {
+        editor_model::ports::with_user_schema_registry().expect(
+            "register_builtins() must be called before handle() — typically via \
+             init_user_schema_registry() in test setup",
+        )
     }
+}
 
-    #[test]
-    fn test_source_location_none_in_schema() {
-        // Built-in schemas have no source location
-        let registry = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
-        let schema = registry.get("editor.Transform2D").unwrap();
-        assert!(schema.source_location.is_none());
-    }
+// Re-export HashMap for the test-only module above.
+use std::collections::HashMap;
 
-    #[test]
-    fn test_schema_with_source_location() {
-        let schema = ComponentSchema {
-            type_id: "game.Player".to_string(),
-            display_name: "Player".to_string(),
-            fields: vec![],
-            exports_to_bevy: true,
-            source_location: Some(SourceLocation {
-                file_id: "src/ecs/components.rs".to_string(),
-                line: 10,
-                column: 1,
-            }),
-            ..Default::default()
-        };
-        let json = serde_json::to_string(&schema).unwrap();
-        let roundtrip: ComponentSchema = serde_json::from_str(&json).unwrap();
-        assert!(roundtrip.source_location.is_some());
-        assert_eq!(
-            roundtrip.source_location.unwrap().file_id,
-            "src/ecs/components.rs"
+mod ports_bridge {
+    use super::*;
+    use editor_model::ports::{UserSchemaRegistryPort, with_user_schema_registry as cell_get};
+
+    /// Convenience: run `f` with the registered registry (or panic if not
+    /// initialised, since Bevy facade calls assume the composition root
+    /// has been wired).
+    ///
+    /// Bevy systems that run before `editor_wasm::init_project_store`
+    /// would panic here — but per ADR-0057, the composition root is the
+    /// only owner of session lifecycle, so the cell is always populated
+    /// before any Bevy system observes the editor.
+    ///
+    /// `read_only` selects between `&*guard` (for `is_builtin`,
+    /// `combined_view`, `get`) and `&mut *guard` (for `register`,
+    /// `unregister`). The caller picks the variant at the call site.
+    pub(crate) fn with_registry_read<R>(f: impl FnOnce(&dyn UserSchemaRegistryPort) -> R) -> R {
+        let arc: Arc<std::sync::Mutex<dyn UserSchemaRegistryPort>> = cell_get().expect(
+            "USER_SCHEMA_REGISTRY not initialised — composition root must call \
+             `editor_model::ports::register_user_schema_registry` before Bevy \
+             systems observe the editor",
         );
+        let guard = arc.lock().expect("USER_SCHEMA_REGISTRY lock poisoned");
+        f(&*guard)
     }
 
-    #[test]
-    fn test_schema_source_location_missing_from_json_is_none() {
-        // Existing JSON without source_location should deserialize with None
-        let json = r#"{
-            "type_id": "game.OldSchema",
-            "display_name": "Old Schema",
-            "fields": [],
-            "exports_to_bevy": true
-        }"#;
-        let schema: ComponentSchema = serde_json::from_str(json).unwrap();
-        assert!(schema.source_location.is_none());
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Hito 4 Order 7 — SchemaKind + FieldType + WASM exports tests
-    // ─────────────────────────────────────────────────────────────────────────
-
-    #[test]
-    fn test_schema_kind_default_is_simple() {
-        let schema = ComponentSchema {
-            type_id: "game.Test".to_string(),
-            display_name: "Test".to_string(),
-            fields: vec![],
-            exports_to_bevy: true,
-            source_location: None,
-            ..Default::default()
-        };
-        assert_eq!(schema.kind, SchemaKind::Simple);
-        assert_eq!(schema.bound_scene_asset_ref, None);
-        assert!(schema.auto_spawn, "auto_spawn defaults to true");
-    }
-
-    #[test]
-    fn test_field_type_component_ref_serializes_as_string() {
-        let ft = FieldType::ComponentRef("game.Enemy".to_string());
-        let json = serde_json::to_string(&ft).unwrap();
-        assert_eq!(json, "\"game.Enemy\"");
-        // Backward-compat: deserialize as plain string
-        let parsed: FieldType = serde_json::from_str("\"game.Player\"").unwrap();
-        assert_eq!(parsed, FieldType::ComponentRef("game.Player".to_string()));
-    }
-
-    #[test]
-    fn test_field_type_enum_serializes_with_variants() {
-        let ft = FieldType::Enum {
-            variants: vec!["red".to_string(), "green".to_string(), "blue".to_string()],
-        };
-        let json = serde_json::to_string(&ft).unwrap();
-        let parsed: FieldType = serde_json::from_str(&json).unwrap();
-        assert_eq!(parsed, ft);
-    }
-
-    #[test]
-    fn test_schema_backward_compat_no_kind_field() {
-        // v0.72.0 and earlier schemas serialized without `kind`. The
-        // #[serde(default)] ensures deserialization still works.
-        let json = r#"{
-            "type_id": "game.Old",
-            "display_name": "Old",
-            "fields": [],
-            "exports_to_bevy": true
-        }"#;
-        let schema: ComponentSchema = serde_json::from_str(json).unwrap();
-        assert_eq!(schema.kind, SchemaKind::Simple);
-        assert_eq!(schema.bound_scene_asset_ref, None);
-        assert!(schema.auto_spawn);
-    }
-
-    #[test]
-    fn test_insert_scene_component_requires_bound_asset() {
-        let mut registry = ComponentSchemaRegistry::new();
-        let schema = ComponentSchema {
-            type_id: "game.Enemy".to_string(),
-            display_name: "Enemy".to_string(),
-            fields: vec![],
-            exports_to_bevy: true,
-            source_location: None,
-            kind: SchemaKind::SceneComponent,
-            bound_scene_asset_ref: None, // missing
-            ..Default::default()
-        };
-        let result = registry.insert(schema);
-        assert!(matches!(
-            result,
-            Err(SchemaError::MissingBoundSceneAsset(_))
-        ));
-    }
-
-    #[test]
-    fn test_insert_scene_component_with_bound_asset_succeeds() {
-        let mut registry = ComponentSchemaRegistry::new();
-        let schema = ComponentSchema {
-            type_id: "game.Enemy".to_string(),
-            display_name: "Enemy".to_string(),
-            fields: vec![],
-            exports_to_bevy: true,
-            source_location: None,
-            kind: SchemaKind::SceneComponent,
-            bound_scene_asset_ref: Some("level1".to_string()),
-            ..Default::default()
-        };
-        assert!(registry.insert(schema).is_ok());
+    pub(crate) fn with_registry_write<R>(
+        f: impl FnOnce(&mut dyn UserSchemaRegistryPort) -> R,
+    ) -> R {
+        let arc: Arc<std::sync::Mutex<dyn UserSchemaRegistryPort>> = cell_get().expect(
+            "USER_SCHEMA_REGISTRY not initialised — composition root must call \
+             `editor_model::ports::register_user_schema_registry` before Bevy \
+             systems observe the editor",
+        );
+        let mut guard = arc.lock().expect("USER_SCHEMA_REGISTRY lock poisoned");
+        f(&mut *guard)
     }
 }
