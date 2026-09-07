@@ -59,7 +59,7 @@ pub fn paint_tile(
         cache.insert(asset_ref.to_string(), doc.clone());
     });
 
-    // Sync to SCENE_ASSET_DOC so save_scene_asset persists the change
+    // Sync to focused asset (H2.4: EditorSession.active_asset) so save_scene_asset persists the change
     let doc_json = serde_json::to_string(&doc)
         .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
     super::set_asset_document_wasm(&doc_json)?;
@@ -102,7 +102,7 @@ pub fn erase_tile(asset_ref: &str, layer_id: &str, x: i32, y: i32) -> Result<JsV
         cache.insert(asset_ref.to_string(), doc.clone());
     });
 
-    // Sync to SCENE_ASSET_DOC so save_scene_asset persists the change
+    // Sync to focused asset (H2.4: EditorSession.active_asset) so save_scene_asset persists the change
     let doc_json = serde_json::to_string(&doc)
         .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
     super::set_asset_document_wasm(&doc_json)?;

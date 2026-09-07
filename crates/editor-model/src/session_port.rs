@@ -45,6 +45,14 @@ pub trait EditorSessionPort {
     /// thread_locals in `editor-bevy::scene_session` and `editor-bevy::scene_state`.
     fn active_scene_mut(&mut self) -> &mut crate::scene_focus::SceneFocus;
 
+    /// Currently-focused scene asset (H2.4).
+    ///
+    /// Replaces the `SCENE_ASSET_DOC` + `ASSET_OPERATION_LOG` thread_locals
+    /// in `editor-bevy::asset_state`. Per-path caches (body_cache,
+    /// resync_reports, validation_issues) live in `AssetSessionState` and are
+    /// accessed via `asset_state_mut(path)`.
+    fn active_asset_mut(&mut self) -> &mut crate::asset_focus::AssetFocus;
+
     /// Asset session state (per asset path).
     fn asset_state_mut(&mut self, path: &str) -> &mut crate::session::AssetSessionState;
 

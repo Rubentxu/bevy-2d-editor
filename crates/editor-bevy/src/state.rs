@@ -6,8 +6,10 @@
 //! The actual thread-local declarations and `with_*` helpers now live in:
 //! - [`scene_state`]: SCENE_REGISTRY, mark_dirty (H2.3 — DIRTY_FLAG moved to
 //!   `EditorSession.active_scene.dirty`, see `scene_session::*`)
-//! - [`asset_state`]: SCENE_ASSET_CATALOG/DOC, ASSET_OPERATION_LOG,
-//!   ASSET_BODY_CACHE, RESYNC_REPORTS, VALIDATION_ISSUES
+//! - [`asset_state`]: thin wrappers over `EditorSession.active_asset` (H2.4
+//!   — SCENE_ASSET_DOC + ASSET_OPERATION_LOG collapsed into `AssetFocus`,
+//!   plus ASSET_BODY_CACHE / RESYNC_REPORTS / VALIDATION_ISSUES per-path on
+//!   `AssetSessionState`).
 //! - [`logic_state`]: LOGIC_GRAPH_DOC, LOGIC_OPERATION_LOG
 //! - [`hot_reload_state`]: HOT_RELOAD_BUS, PLAY_MODE_REQUEST
 
@@ -32,14 +34,13 @@ pub use crate::scene_state::{SCENE_REGISTRY, mark_dirty, with_registry, with_reg
 // they live on `EditorSession.active_scene: SceneFocus` (see
 // `editor_model::SceneFocus` and `editor_model::ports::with_session_mut`).
 
-// v0.91 PR2: SCENE_ASSET_CATALOG and SCENE_ASSET_CATALOG_WARNINGS are no longer
-// thread_locals — they live on `EditorSession::asset_states["_active"]` (see
-// `editor_model::AssetSessionState`). The remaining thread_locals (DOC,
-// BODY_CACHE, RESYNC_REPORTS, VALIDATION_ISSUES) stay for
-// PR3 (causality migration) and PR5 (`OperationLog` type move).
-pub use crate::asset_state::{
-    ASSET_BODY_CACHE, ASSET_OPERATION_LOG, RESYNC_REPORTS, SCENE_ASSET_DOC, VALIDATION_ISSUES,
-};
+// H2.4 (full): every asset thread_local is gone. SCENE_ASSET_DOC +
+// ASSET_OPERATION_LOG collapsed into `EditorSession.active_asset:
+// AssetFocus`; SCENE_ASSET_CATALOG + warnings + ASSET_BODY_CACHE +
+// RESYNC_REPORTS + VALIDATION_ISSUES live per-path on
+// `EditorSession::asset_states[path]`. The helpers in `asset_state.rs`
+// are now thin wrappers over the session port.
+// No thread_locals remain in this asset family.
 // v0.91 PR2: LOGIC_GRAPH_DOC is removed (migrated to session).
 // LOGIC_GRAPH_CATALOG and LOGIC_OPERATION_LOG stay as thread_locals (PR3/PR5).
 pub use crate::logic_state::{LOGIC_GRAPH_CATALOG, LOGIC_OPERATION_LOG};

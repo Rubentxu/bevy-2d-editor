@@ -91,12 +91,8 @@ pub fn try_rebind_wasm(orphaned_override_json: &str, asset_json: &str) -> Result
 /// Clears the internal reports cache after draining.
 #[wasm_bindgen]
 pub fn get_resync_reports() -> Result<String, JsValue> {
-    let reports = crate::asset_state::RESYNC_REPORTS.with(|r| {
-        let mut reports = r.borrow_mut();
-        let result = reports.clone();
-        reports.clear();
-        result
-    });
+    // H2.4: drain from the session rather than a thread_local.
+    let reports = crate::asset_state::take_resync_reports();
 
     // Serialize as a JSON array of [stable_id, ResyncReport] tuples
     let mut as_arrays: Vec<serde_json::Value> = Vec::with_capacity(reports.len());

@@ -11,6 +11,12 @@ use crate::scene_asset::{LocalId, SceneAssetDocument, SceneAssetEntity};
 use crate::scene_instance::{ComponentOverride, ComponentOverrideStatus, SceneInstance};
 use editor_model::ComponentInstance;
 
+// H2.4 — ResyncReport moved to editor_model::asset_operation_log so
+// AssetSessionState can hold Vec<(StableId, ResyncReport)> without
+// editor_model depending on editor_bevy. Re-exported here for
+// source-compat with downstream code that used `crate::ResyncReport`.
+pub use editor_model::asset_operation_log::ResyncReport;
+
 // ---------------------------------------------------------------------------
 // Public Types
 // ---------------------------------------------------------------------------
@@ -31,16 +37,6 @@ pub struct ResolvedEntity {
     pub local_path: String,
     pub name: String,
     pub components: Vec<ComponentInstance>,
-}
-
-/// Summary of what happened during a `resync` call.
-#[derive(Debug, Clone, Default, PartialEq, Serialize)]
-pub struct ResyncReport {
-    pub active: usize,
-    pub orphaned: usize,
-    pub stale: usize,
-    pub conflict: usize,
-    pub rebound: usize,
 }
 
 /// An issue found by `validate_overrides`.

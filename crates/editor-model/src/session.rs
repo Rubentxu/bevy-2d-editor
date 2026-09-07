@@ -114,8 +114,9 @@ pub struct SceneSessionState {
     pub reload_count: u32,
 }
 
-/// Per-asset session state. Replaces the `SCENE_ASSET_CATALOG`
-/// thread_local in editor-core.
+/// Per-asset session state. Replaces the `SCENE_ASSET_CATALOG`,
+/// `ASSET_BODY_CACHE`, `RESYNC_REPORTS`, and `VALIDATION_ISSUES` thread_locals
+/// in editor-core (H2.4).
 #[derive(Debug, Clone, Default)]
 pub struct AssetSessionState {
     /// The current scene asset catalog for this asset path (None = no asset loaded).
@@ -124,6 +125,25 @@ pub struct AssetSessionState {
     /// Catalog warnings accumulated during the last build/refresh.
     /// v0.91 PR2: replaces `SCENE_ASSET_CATALOG_WARNINGS` thread_local.
     pub catalog_warnings: Vec<crate::scene_asset_catalog::CatalogWarning>,
+    /// Cached body of every scene asset loaded in this session, keyed by
+    /// logical path.
+    ///
+    /// H2.4: replaces the `ASSET_BODY_CACHE` thread_local.
+    /// `None` means "cache cold — load bodies from OPFS on demand".
+    pub body_cache:
+        Option<std::collections::BTreeMap<String, crate::scene_asset::SceneAssetDocument>>,
+    /// Per-instance override resync reports accumulated during the last
+    /// resync pass.
+    ///
+    /// H2.4: replaces the `RESYNC_REPORTS` thread_local.
+    pub resync_reports: Vec<(
+        crate::ids::StableId,
+        crate::asset_operation_log::ResyncReport,
+    )>,
+    /// Project-wide validation issues attributed to this asset path.
+    ///
+    /// H2.4: replaces the `VALIDATION_ISSUES` thread_local.
+    pub validation_issues: Vec<crate::validation::ValidationIssue>,
 }
 
 /// Per-logic-graph session state. Replaces the `LOGIC_GRAPH_DOC`

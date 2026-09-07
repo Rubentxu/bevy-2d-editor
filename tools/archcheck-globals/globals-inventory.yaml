@@ -58,36 +58,6 @@ entries:
     owner: H2.5
     reason: "play mode request queue; absorbed by EditorSession.play_mode"
 
-  - name: SCENE_ASSET_DOC
-    kind: thread_local
-    declared_at: crates/editor-bevy/src/asset_state.rs:32
-    owner: H2.4
-    reason: "scene asset document; absorbed by EditorSession.assets"
-
-  - name: ASSET_OPERATION_LOG
-    kind: thread_local
-    declared_at: crates/editor-bevy/src/asset_state.rs:37
-    owner: H2.4
-    reason: "asset operation history; absorbed by EditorSession.asset_log"
-
-  - name: ASSET_BODY_CACHE
-    kind: thread_local
-    declared_at: crates/editor-bevy/src/asset_state.rs:39
-    owner: H2.4
-    reason: "scene asset body cache; absorbed by EditorSession.asset_cache"
-
-  - name: RESYNC_REPORTS
-    kind: thread_local
-    declared_at: crates/editor-bevy/src/asset_state.rs:41
-    owner: H2.4
-    reason: "scene instance resync reports; absorbed by EditorSession.resync"
-
-  - name: VALIDATION_ISSUES
-    kind: thread_local
-    declared_at: crates/editor-bevy/src/asset_state.rs:43
-    owner: H2.4
-    reason: "validation issues buffer; absorbed by EditorSession.validation"
-
   - name: ACTUATOR_OUTPUT_BUS
     kind: thread_local
     declared_at: crates/editor-bevy/src/actuator_bus.rs:53
@@ -216,3 +186,33 @@ entries:
     declared_at: crates/ai-proxy/src/openai/function_calling.rs:32
     owner: H2.x
     reason: "OnceLock memoization of the OpenAI function-calling schema (function-local static); candidate to move into a non-static Lazy once the function-call surface stabilizes"
+
+# H2.4 retired entries — kept here for the next ledger sweep so the
+# archcheck can prove every Asset thread_local has been migrated to the
+# `EditorSession` composition root (ADR-0057).
+retired:
+  - name: SCENE_ASSET_DOC
+    kind: thread_local
+    was_at: crates/editor-bevy/src/asset_state.rs:32
+    retired_in: H2.4
+    replacement: "EditorSession.active_asset: AssetFocus (focused variant carries `SceneAssetDocument`)"
+  - name: ASSET_OPERATION_LOG
+    kind: thread_local
+    was_at: crates/editor-bevy/src/asset_state.rs:37
+    retired_in: H2.4
+    replacement: "EditorSession.active_asset: AssetFocus (focused variant carries `AssetOperationLog`)"
+  - name: ASSET_BODY_CACHE
+    kind: thread_local
+    was_at: crates/editor-bevy/src/asset_state.rs:39
+    retired_in: H2.4
+    replacement: "EditorSession.asset_states[active_path].body_cache"
+  - name: RESYNC_REPORTS
+    kind: thread_local
+    was_at: crates/editor-bevy/src/asset_state.rs:41
+    retired_in: H2.4
+    replacement: "EditorSession.asset_states[active_path].resync_reports"
+  - name: VALIDATION_ISSUES
+    kind: thread_local
+    was_at: crates/editor-bevy/src/asset_state.rs:43
+    retired_in: H2.4
+    replacement: "EditorSession.asset_states[active_path].validation_issues"

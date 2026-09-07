@@ -4,7 +4,7 @@
 //! Strict TDD: RED first — tests define the expected API contract.
 
 use editor_bevy::asset_command::{
-    AssetCommand, AssetCommandError, AssetOperationLog, apply as asset_apply,
+    AssetCommand, AssetCommandError, AssetOperationLog, AssetProcessorApply, apply as asset_apply,
 };
 use editor_bevy::scene_asset::{LocalId, SceneAssetDocument, SceneAssetEntity, SceneAssetRole};
 use editor_model::ComponentInstance;
@@ -342,7 +342,7 @@ fn asset_operation_log_undo_applies_inverse() {
     assert_eq!(doc.entities.len(), 1);
 
     // Undo
-    log.undo(&mut doc).unwrap();
+    log.undo(&mut doc, &AssetProcessorApply).unwrap();
     assert_eq!(doc.entities.len(), 0);
     assert!(!log.can_undo());
     assert!(log.can_redo());
@@ -363,11 +363,11 @@ fn asset_operation_log_redo_applies_forward() {
     log.record(&cmd, inverse);
 
     // Undo
-    log.undo(&mut doc).unwrap();
+    log.undo(&mut doc, &AssetProcessorApply).unwrap();
     assert_eq!(doc.entities.len(), 0);
 
     // Redo
-    log.redo(&mut doc).unwrap();
+    log.redo(&mut doc, &AssetProcessorApply).unwrap();
     assert_eq!(doc.entities.len(), 1);
 }
 

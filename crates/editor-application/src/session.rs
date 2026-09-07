@@ -474,6 +474,11 @@ pub struct EditorSession {
     active_scene: editor_model::SceneFocus,
     /// Per-asset-path session state (SCENE_ASSET_CATALOG etc.).
     asset_states: BTreeMap<String, LocalAssetSessionState>,
+    /// Currently-focused scene asset (H2.4 — collapses SCENE_ASSET_DOC +
+    /// ASSET_OPERATION_LOG thread-locals into one ADT slot on the session).
+    /// Orthogonal to `asset_states` (which is the per-path cache); the
+    /// `active_asset` is the one the editor UI is currently showing.
+    active_asset: editor_model::AssetFocus,
     /// Per-logic-graph-path session state (LOGIC_GRAPH_DOC etc.).
     logic_states: BTreeMap<String, LocalLogicSessionState>,
     /// Per-world session state (WorldDocument bodies).
@@ -549,6 +554,7 @@ impl EditorSession {
             scene_states: BTreeMap::new(),
             active_scene: editor_model::SceneFocus::Empty,
             asset_states: BTreeMap::new(),
+            active_asset: editor_model::AssetFocus::Empty,
             logic_states: BTreeMap::new(),
             world_states: BTreeMap::new(),
             preview_state: PreviewSessionState::new(),
@@ -580,6 +586,7 @@ impl EditorSession {
             scene_states: BTreeMap::new(),
             active_scene: editor_model::SceneFocus::Empty,
             asset_states: BTreeMap::new(),
+            active_asset: editor_model::AssetFocus::Empty,
             logic_states: BTreeMap::new(),
             world_states: BTreeMap::new(),
             preview_state: PreviewSessionState::new(),
@@ -672,6 +679,17 @@ impl EditorSession {
     /// the per-path cache that survives scene switches.
     pub fn active_scene_mut(&mut self) -> &mut editor_model::SceneFocus {
         &mut self.active_scene
+    }
+
+    /// Returns a mutable reference to the currently-focused scene asset (H2.4).
+    ///
+    /// Replaces `SCENE_ASSET_DOC` + `ASSET_OPERATION_LOG` thread_locals in
+    /// `editor-bevy::asset_state`. The focus is a singleton: there is at
+    /// most one focused asset at any time. Use `asset_state_mut(path)` for
+    /// the per-path cache (body_cache, resync_reports, validation_issues)
+    /// that survives asset switches.
+    pub fn active_asset_mut(&mut self) -> &mut editor_model::AssetFocus {
+        &mut self.active_asset
     }
 
     /// Returns a mutable reference to the logic session state for the given path,
@@ -1109,6 +1127,10 @@ impl EditorSessionPort for EditorSession {
 
     fn active_scene_mut(&mut self) -> &mut editor_model::SceneFocus {
         &mut self.active_scene
+    }
+
+    fn active_asset_mut(&mut self) -> &mut editor_model::AssetFocus {
+        &mut self.active_asset
     }
 
     fn asset_state_mut(&mut self, path: &str) -> &mut editor_model::AssetSessionState {

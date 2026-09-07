@@ -137,53 +137,6 @@ pub fn set_dispatch_mode_wasm(mode: &str) -> Result<(), JsValue> {
 // Validation Issue — unified issue type for Validation Center
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Unified validation issue surfaced by the Validation Center.
-/// Aggregates CatalogWarning, OverrideIssue, ExportWarning, and other
-/// project-wide issues into a single typed structure.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ValidationIssue {
-    /// Unique identifier for this issue (stable across polls).
-    pub id: String,
-    /// Error = blocks save/export. Warning = non-fatal. Info = advisory.
-    pub severity: ValidationSeverity,
-    /// Which subsystem generated this issue.
-    pub category: ValidationCategory,
-    /// Machine-readable issue code (e.g. "orphaned_index", "missing_entity").
-    pub code: String,
-    /// Human-readable description.
-    pub message: String,
-    /// StableId of the affected entity, if applicable.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub affected_entity_id: Option<String>,
-    /// asset_id of the affected asset, if applicable.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub affected_asset_id: Option<String>,
-    /// scene_id of the affected scene, if applicable.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub affected_scene_id: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum ValidationSeverity {
-    Error,
-    Warning,
-    Info,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum ValidationCategory {
-    Catalog,
-    Override,
-    Export,
-    Schema,
-    Dirty,
-    Logic,
-    /// Issues produced during external source import (ADR-0041).
-    Import,
-}
-
 pub use asset_command::{AssetCommand, AssetCommandError, AssetOperationLog};
 pub use asset_files::{AssetFile, AssetFileId, AssetFileKind, RESOURCE_DIR};
 pub use auto_layer::{
@@ -208,6 +161,7 @@ pub use editor_model::ProjectMetadata;
 pub use editor_model::command::{
     Command, CommandEnvelope, CommandError, CommandMetadata, CommandResult,
 };
+pub use editor_model::validation::{ValidationCategory, ValidationIssue, ValidationSeverity};
 pub use instance_projection::{PreviewEntity, project_instances, root_local_ids};
 pub use logic_command::{LogicCommand, LogicCommandError, LogicOperationLog};
 pub use logic_evaluator::{
@@ -316,9 +270,8 @@ pub struct TransformSnapshot {
 // crates/editor-core/src/state.rs. Re-exported here so existing
 // callers in lib.rs continue to work without modification.
 use crate::state::{
-    ASSET_BODY_CACHE, ASSET_OPERATION_LOG, HOT_RELOAD_BUS, HotReloadRequest, LOGIC_OPERATION_LOG,
-    PLAY_MODE_REQUEST, PlayModeRequest, RESYNC_REPORTS, SCENE_ASSET_DOC, SCENE_REGISTRY,
-    VALIDATION_ISSUES, clear_asset_catalog_warnings, get_asset_catalog_warnings, mark_dirty,
+    HOT_RELOAD_BUS, HotReloadRequest, LOGIC_OPERATION_LOG, PLAY_MODE_REQUEST, PlayModeRequest,
+    SCENE_REGISTRY, clear_asset_catalog_warnings, get_asset_catalog_warnings, mark_dirty,
     with_asset_body_cache, with_asset_body_cache_mut, with_asset_catalog, with_asset_catalog_mut,
     with_asset_doc, with_asset_doc_and_log_mut, with_asset_doc_mut, with_asset_log,
     with_asset_log_mut, with_logic_graph, with_logic_graph_catalog, with_logic_graph_catalog_mut,
@@ -1075,8 +1028,13 @@ fn parse_asset_doc(asset_json: &str) -> Result<SceneAssetDocument, JsValue> {
 #[wasm_bindgen]
 pub fn set_asset_document_wasm(asset_json: &str) -> Result<(), JsValue> {
     let doc: SceneAssetDocument = parse_asset_doc(asset_json)?;
-    SCENE_ASSET_DOC.with(|s| {
-        *s.borrow_mut() = Some(doc);
+    // H2.4: write to the session via the AssetFocus ADT. The focus must
+    // be transitioned to Focused with the new doc; the log resets to empty.
+    let _ = editor_model::ports::with_session_mut(|s| {
+        *s.active_asset_mut() = editor_model::AssetFocus::Focused {
+            doc,
+            log: editor_model::AssetOperationLog::new(),
+        };
     });
     // Bump version so downstream resync sees a change if same logical content.
     // (Optional — semantic versioning is out of scope for this slice.)
@@ -2061,7 +2019,7 @@ pub async fn discard_scene_changes(id: &str) -> Result<(), JsValue> {
 // load_project integration — populates SceneRegistry from OPFS
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Warm the ASSET_BODY_CACHE by loading all scene asset bodies from OPFS.
+/// Warm the asset body cache by loading all scene asset bodies from OPFS.
 ///
 /// Called after `load_project` clears the cache. This ensures that subsequent
 /// `place_scene_instance` calls find assets in cache without needing to load
@@ -2123,7 +2081,7 @@ pub async fn load_project() -> Result<(), JsValue> {
     editor_model::migration::migrate::project_metadata(v, &mut project)
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
-    // Step A: Clear ASSET_BODY_CACHE (D4)
+    // Step A: Clear the active-path asset body cache (H2.4; formerly `ASSET_BODY_CACHE` thread_local).
     with_asset_body_cache_mut(|cache| {
         cache.clear();
     });
@@ -2254,7 +2212,7 @@ pub async fn load_project() -> Result<(), JsValue> {
     }
     crate::world_state::set_world_catalog(world_catalog);
 
-    // Step D4: Warm ASSET_BODY_CACHE with all scene asset bodies
+    // Step D4: Warm the active-path asset body cache with all scene asset bodies
     warm_asset_body_cache().await;
 
     Ok(())
@@ -2348,8 +2306,8 @@ pub async fn load_scene(name: &str) -> Result<(), JsValue> {
 
     // Run resync to catch any asset version bumps since last save
     let reports = resync_instances_on_load(&mut doc);
-    // Store in thread-local for UI to drain via get_resync_reports()
-    RESYNC_REPORTS.with(|r| *r.borrow_mut() = reports);
+    // Store in session for UI to drain via get_resync_reports() (H2.4)
+    crate::asset_state::set_resync_reports(reports);
 
     scene_session::replace_active_doc(doc);
     Ok(())
@@ -2390,37 +2348,62 @@ fn dispatch_asset_command_via_kernel(cmd: AssetCommand) -> Result<String, JsValu
     cs.add_resource("scene_asset", "assets/current.asset.json");
     cs.push_op(cmd.clone());
 
-    // Get mutable access to the asset doc and log.
-    let result_json = with_asset_doc_mut(|doc_opt| {
-        let doc = doc_opt
-            .as_mut()
-            .ok_or_else(|| JsValue::from_str("No asset open — call open_scene_asset first"))?;
+    // H2.4: take the focus out so the kernel call doesn't hold the session
+    // mutex. The take/write-back pattern matches `dispatch_command` for
+    // scenes (H2.3): release the lock for the duration of apply, then put
+    // the focus back. Without this, any nested call that re-enters the
+    // session (preview rebuild, validation, etc.) would deadlock.
+    let result_json = {
+        let mut focus = editor_model::ports::with_session_mut(|s| {
+            std::mem::replace(s.active_asset_mut(), editor_model::AssetFocus::Empty)
+        })
+        .ok_or_else(|| JsValue::from_str("EditorSession unavailable"))?;
 
-        let mut history = HistoryScope::new();
-        let kernel = asset_transaction_kernel();
+        if focus.is_empty() {
+            return Err(JsValue::from_str(
+                "No asset open — call open_scene_asset first",
+            ));
+        }
 
-        let receipt = kernel
-            .apply_atomic(&cs, doc, &mut history)
-            .map_err(|e| JsValue::from_str(&format!("kernel apply failed: {}", e)))?;
+        let (inverse, snapshot) =
+            {
+                let mut history = HistoryScope::new();
+                let kernel = asset_transaction_kernel();
 
-        // Extract the inverse.
-        let inverse = receipt.inverses.into_iter().next().unwrap_or_else(|| {
-            // Should not happen for a well-formed apply, but handle gracefully.
-            AssetCommand::RenameEntity {
-                local_id: String::new(),
-                old_name: None,
-                new_name: String::new(),
-            }
-        });
+                // SAFETY: We just checked the focus is not empty; the inner
+                // doc/log are the only valid sources for the kernel call.
+                let (doc, log) = match &mut focus {
+                    editor_model::AssetFocus::Focused { doc, log } => (doc, log),
+                    editor_model::AssetFocus::Empty => unreachable!("checked above"),
+                };
 
-        // Record in asset operation log for undo/redo.
-        with_asset_log_mut(|log| {
-            log.record(&cmd, inverse.clone());
+                let receipt = kernel
+                    .apply_atomic(&cs, doc, &mut history)
+                    .map_err(|e| JsValue::from_str(&format!("kernel apply failed: {}", e)))?;
+
+                let inverse = receipt.inverses.into_iter().next().unwrap_or_else(|| {
+                    AssetCommand::RenameEntity {
+                        local_id: String::new(),
+                        old_name: None,
+                        new_name: String::new(),
+                    }
+                });
+
+                // Record in the asset operation log.
+                log.record(&cmd, inverse.clone());
+
+                let snapshot = doc.clone();
+                (inverse, snapshot)
+            };
+
+        // Write the focus back into the session.
+        let _ = editor_model::ports::with_session_mut(|s| {
+            *s.active_asset_mut() = focus;
         });
 
         serde_json::to_string(&inverse)
             .map_err(|e| JsValue::from_str(&format!("Failed to serialize inverse: {}", e)))
-    })?;
+    }?;
 
     Ok(result_json)
 }
@@ -2432,7 +2415,7 @@ fn dispatch_asset_command_via_kernel(cmd: AssetCommand) -> Result<String, JsValu
 #[wasm_bindgen]
 pub fn undo_asset() -> Result<String, JsValue> {
     with_asset_doc_and_log_mut(|doc, log| {
-        log.undo(doc)
+        log.undo(doc, &crate::asset_command::AssetProcessorApply)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         serde_json::to_string(&())
             .map_err(|e| JsValue::from_str(&format!("Failed to serialize: {}", e)))
@@ -2445,7 +2428,7 @@ pub fn undo_asset() -> Result<String, JsValue> {
 #[wasm_bindgen]
 pub fn redo_asset() -> Result<String, JsValue> {
     with_asset_doc_and_log_mut(|doc, log| {
-        log.redo(doc)
+        log.redo(doc, &crate::asset_command::AssetProcessorApply)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         serde_json::to_string(&())
             .map_err(|e| JsValue::from_str(&format!("Failed to serialize: {}", e)))
@@ -2811,7 +2794,7 @@ pub async fn create_scene_asset(name: &str, role: &str) -> Result<String, JsValu
     with_asset_catalog_mut(|cat| cat.register(entry.clone()))
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
-    // Warm ASSET_BODY_CACHE with the new body so in-session placement works
+    // Warm the active-path asset body cache with the new body so in-session placement works
     // without a load_project round-trip (load_project normally rebuilds the
     // cache; without this, place_scene_instance fails with "Asset not in
     // cache" for freshly created assets).
@@ -2937,7 +2920,7 @@ pub async fn rename_scene_asset(asset_id: &str, new_path: &str) -> Result<String
         return Err(e);
     }
 
-    // Invalidate ASSET_BODY_CACHE by old_path (D4)
+    // Invalidate the active-path asset body cache by old_path (D4)
     with_asset_body_cache_mut(|cache| {
         cache.remove(old_path);
     });
@@ -3030,7 +3013,7 @@ pub async fn delete_scene_asset(asset_id: &str) -> Result<(), JsValue> {
     // correct partial state. See opfs-catalog-flake-fix ADR-0019.
     update_project_metadata_for_asset(&entry, "delete").await?;
 
-    // Invalidate ASSET_BODY_CACHE by logical_path (D4)
+    // Invalidate the active-path asset body cache by logical_path (D4)
     with_asset_body_cache_mut(|cache| {
         cache.remove(&path);
     });
@@ -3061,7 +3044,7 @@ pub fn list_scene_assets(role_filter: Option<String>) -> Result<String, JsValue>
     serde_json::to_string(&entries).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
-/// Open a Scene Asset by asset_id into SCENE_ASSET_DOC thread-local.
+/// Open a Scene Asset by asset_id into `EditorSession.active_asset` (H2.4; formerly `SCENE_ASSET_DOC` thread_local).
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn open_scene_asset(asset_id: &str) -> Result<String, JsValue> {
@@ -3079,14 +3062,14 @@ pub async fn open_scene_asset(asset_id: &str) -> Result<String, JsValue> {
     let doc: SceneAssetDocument = serde_json::from_str(&body_json)
         .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
 
-    // Store in thread-local
-    with_asset_doc_mut(|doc_opt| {
-        *doc_opt = Some(doc.clone());
-    });
-
-    // Reset operation log
-    with_asset_log_mut(|log| {
-        log.clear();
+    // Store in session via the AssetFocus ADT (H2.4). The previous
+    // thread_local stored both the doc and the log; the ADT keeps them
+    // co-present, so resetting the focus resets both.
+    let _ = editor_model::ports::with_session_mut(|s| {
+        *s.active_asset_mut() = editor_model::AssetFocus::Focused {
+            doc: doc.clone(),
+            log: editor_model::AssetOperationLog::new(),
+        };
     });
 
     serde_json::to_string(&doc).map_err(|e| JsValue::from_str(&e.to_string()))
@@ -3095,21 +3078,21 @@ pub async fn open_scene_asset(asset_id: &str) -> Result<String, JsValue> {
 /// Close the currently open Scene Asset (no-op if none open).
 #[wasm_bindgen]
 pub fn close_scene_asset() {
-    with_asset_doc_mut(|doc_opt| {
-        *doc_opt = None;
-    });
-    with_asset_log_mut(|log| {
-        log.clear();
+    // H2.4: drop the AssetFocus back to Empty. The session owns both the
+    // doc and the log, so a single transition resets both.
+    let _ = editor_model::ports::with_session_mut(|s| {
+        *s.active_asset_mut() = editor_model::AssetFocus::Empty;
     });
 }
 
 /// Get the active SceneAssetDocument as JSON.
 #[wasm_bindgen]
 pub fn get_asset_document_json() -> Result<String, JsValue> {
-    with_asset_doc(|doc_opt| match doc_opt {
+    editor_model::ports::with_session_mut(|s| match s.active_asset_mut().doc() {
         Some(doc) => serde_json::to_string(doc).map_err(|e| JsValue::from_str(&e.to_string())),
         None => Err(JsValue::from_str("No asset open")),
     })
+    .unwrap_or_else(|| Err(JsValue::from_str("No session")))
 }
 
 /// Get the Scene Asset Catalog as JSON.
@@ -3123,15 +3106,17 @@ pub fn get_scene_asset_catalog_json() -> Result<String, JsValue> {
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn save_scene_asset() -> Result<String, JsValue> {
-    let (asset_id, path, doc_json) = with_asset_doc_mut(|doc_opt| {
-        let doc = doc_opt
-            .as_ref()
+    let (asset_id, path, doc_json) = editor_model::ports::with_session_mut(|s| {
+        let doc = s
+            .active_asset_mut()
+            .doc()
             .ok_or_else(|| JsValue::from_str("No asset open"))?;
         let asset_id = doc.asset_id.clone();
         let path = doc.logical_path.clone();
         let doc_json = serde_json::to_string(doc).map_err(|e| JsValue::from_str(&e.to_string()))?;
         Ok::<_, JsValue>((asset_id, path, doc_json))
-    })?;
+    })
+    .ok_or_else(|| JsValue::from_str("No session"))??;
 
     // Step 1: Write body file first
     js_save_file(&persistence::asset_path(&path), &doc_json)
@@ -3165,7 +3150,7 @@ pub async fn save_scene_asset() -> Result<String, JsValue> {
         log.clear();
     });
 
-    // Step 5: Keep ASSET_BODY_CACHE in sync with the persisted body.
+    // Step 5: Keep the active-path asset body cache in sync with the persisted body.
     // Previously this INVALIDATED the entry (D4), but nothing re-warms it
     // until load_project — so an in-session edit → save → place_scene_instance
     // failed with "Asset not in cache". The freshly saved doc IS the current
