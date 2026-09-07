@@ -49,12 +49,6 @@ entries:
     owner: H2.2
     reason: "registry of user-authored schemas; absorbed by EditorSession.schemas"
 
-  - name: SOURCE_FILE_REGISTRY
-    kind: thread_local
-    declared_at: crates/editor-bevy/src/source_files.rs:17
-    owner: H2.2
-    reason: "registry of indexed source files; absorbed by EditorSession.sources"
-
   - name: PREVIEW_METRICS
     kind: thread_local
     declared_at: crates/editor-bevy/src/preview_inspector.rs:60

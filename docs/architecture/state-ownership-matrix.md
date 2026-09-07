@@ -32,8 +32,8 @@ augmented with the columns the inventory does not track.
 
 | Global              | Crate        | Declared at                                  | Writers                                          | Readers                                          | Durability | Target owner                       | Migration PR |
 |---------------------|--------------|----------------------------------------------|--------------------------------------------------|--------------------------------------------------|------------|------------------------------------|--------------|
-| `USER_SCHEMAS`      | editor-bevy  | `crates/editor-bevy/src/schema.rs:419`       | `register_user_schema`                           | `list_user_schemas`, `with_user_schema`          | session    | `EditorSession.schemas`            | OPEN         |
-| `SOURCE_FILE_REGISTRY` | editor-bevy | `crates/editor-bevy/src/source_files.rs:17`  | `index_source_file`, `unindex_source_file`       | `lookup_source_file`, `list_source_files`        | session    | `EditorSession.sources`            | OPEN         |
+| `USER_SCHEMAS`      | editor-bevy  | `crates/editor-bevy/src/schema.rs:419`       | `register_user_schema`                           | `list_user_schemas`, `with_user_schema`          | session    | `EditorSession.schemas`            | BLOCKED (value-type unification) |
+| `SOURCE_FILE_REGISTRY` | editor-bevy | `crates/editor-bevy/src/source_files.rs` (removed in H2.2) | `cache_source`, `invalidate_cache`, `clear_cache` | `get_cached_source` | session    | `EditorSession.preview_state.source_files` (via `EditorSessionPort::source_files_mut`) | RETIRED (this slice) |
 | `EXTENSION_REGISTRY` | editor-model | `crates/editor-model/src/ports.rs:243`       | `register_extension_registry` (sanctioned cell)  | `with_extension_registry`, `with_extension_registry_mut` | session | sanctioned port cell (kept)        | SANCTIONED   |
 | `IMPORTER_REGISTRY` | editor-model | `crates/editor-model/src/ports.rs:324`       | `register_importer_registry` (sanctioned cell)   | `with_importer_registry`, `with_importer_registry_mut` | session | sanctioned port cell (kept)        | SANCTIONED   |
 

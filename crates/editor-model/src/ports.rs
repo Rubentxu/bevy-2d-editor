@@ -343,3 +343,67 @@ pub fn with_importer_registry() -> Option<Arc<Mutex<dyn ImporterRegistryPort>>> 
         .ok()
         .flatten()
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Source files cache (H2.2 — collapsed via `EditorSessionPort`)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// The source-file cache (`SourceFilesCache` in `editor_model::session`)
+// already lives on `EditorSession.preview_state.source_files` and is
+// exposed to Bevy systems through the `EditorSessionPort` trait's
+// `source_files_mut()` method (defined in `editor_model::session_port`).
+//
+// Bevy systems read/write it via:
+//
+// ```ignore
+// editor_model::ports::with_session_mut(|sess| sess.source_files_mut().cache(...))
+// ```
+//
+// No additional port cell is needed for source files — the
+// `EditorSessionPort` already provides the canonical seam. The legacy
+// `thread_local! SOURCE_FILE_REGISTRY` in the editor-bevy source_files module
+// duplicated the cache and is removed by this H2.2 slice. See
+// `docs/architecture/state-ownership-matrix.md` (H2.2 entry for
+// `SOURCE_FILE_REGISTRY`).
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// UserSchemaRegistry (H2.2 — blocked on value-type unification)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// The H2.2 plan in `docs/architecture/state-ownership-matrix.md` calls for
+// collapsing the `USER_SCHEMAS` `thread_local!` in the editor-bevy schema module
+// into a port cell + `EditorSession.user_schemas` field, mirroring the
+// `EXTENSION_REGISTRY` / `IMPORTER_REGISTRY` / `EXTENSION_REGISTRY` pattern.
+//
+// That collapse is **blocked** on a pre-requisite refactor: the value
+// types for `ComponentSchema`, `FieldType`, `Constraint`, `FieldDef`,
+// `SourceLocation` and `SchemaError` currently exist in two divergent
+// shapes:
+//
+// - `editor_model::schema` (310 lines, value-types-only, the intended
+//   canonical set per the comment at the top of that file).
+// - editor-bevy schema (912 lines, full registry + facades, used by
+//   the Bevy adapter and ~50 call sites).
+//
+// The port trait must reference `editor_model::schema::*` types (the Bevy
+// adapter cannot import `editor_application`, and `editor_application`
+// cannot import `editor_bevy` per H1.4). Until the value types are
+// unified under `editor_model::schema`, the `UserSchemaRegistry` port
+// trait cannot be defined cleanly.
+//
+// Once the value-type unification lands, the port trait will look like:
+//
+// ```ignore
+// pub trait UserSchemaRegistryPort: Send + Sync {
+//     fn register(&self, schema: ComponentSchema) -> Result<(), SchemaError>;
+//     fn unregister(&self, type_id: &str) -> Result<(), SchemaError>;
+//     fn is_builtin(&self, type_id: &str) -> bool;
+//     fn combined_view(&self) -> Vec<ComponentSchema>;
+//     fn get(&self, type_id: &str) -> Option<ComponentSchema>;
+// }
+// ```
+//
+// with the same cell + `register_*` / `with_*` accessors that the other
+// three port cells in this file use. See
+// `docs/architecture/state-ownership-matrix.md` for the migration PR
+// placeholder.
