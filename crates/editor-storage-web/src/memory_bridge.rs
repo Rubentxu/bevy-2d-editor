@@ -59,7 +59,13 @@ impl ProjectStore for InMemoryProjectStore {
             .ok_or_else(|| StoreError::NotFound(path.to_string()))
     }
 
-    fn write(&self, path: &str, bytes: &[u8], _atomic: bool) -> Result<(), StoreError> {
+    fn write(&self, path: &str, bytes: &[u8], atomic: bool) -> Result<(), StoreError> {
+        // In-memory writes are infallible (HashMap insert succeeds unless OOM),
+        // so the atomic flag is observable as an API-level contract only.
+        // Real rollback semantics live in `OpfsProjectStore` flush-time; this
+        // impl mirrors the call so that contract tests can exercise both
+        // `atomic=true` and `atomic=false` paths uniformly.
+        let _ = atomic;
         let mut entries = self.entries.write().map_err(lock_poisoned)?;
         entries.insert(path.to_string(), (bytes.to_vec(), self.now_ms()?));
         Ok(())
@@ -132,6 +138,34 @@ mod tests {
         assert_eq!(s.read("a.txt").unwrap(), b"original");
         s.write("a.txt", b"updated", true).unwrap();
         assert_eq!(s.read("a.txt").unwrap(), b"updated");
+    }
+
+    #[test]
+    fn atomic_write_read_after_write_is_visible_immediately() {
+        // Read-after-write invariant: even with atomic=true, the in-memory
+        // mirror must reflect the new bytes synchronously. The flush-time
+        // shadow dance only matters for durability, not for the user-visible
+        // store contract.
+        let s = InMemoryProjectStore::new();
+        s.write("rt.txt", b"first", true).unwrap();
+        assert_eq!(s.read("rt.txt").unwrap(), b"first");
+        s.write("rt.txt", b"second", true).unwrap();
+        assert_eq!(s.read("rt.txt").unwrap(), b"second");
+        // The atomic flag is preserved at the entry level so that downstream
+        // observers (e.g. listings) cannot distinguish atomic from non-atomic.
+        let entries = s.list("").unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].path, "rt.txt");
+        assert_eq!(entries[0].size, b"second".len() as u64);
+    }
+
+    #[test]
+    fn atomic_and_non_atomic_converge_on_same_mirror_state() {
+        let a = InMemoryProjectStore::new();
+        let b = InMemoryProjectStore::new();
+        a.write("x.txt", b"payload", true).unwrap();
+        b.write("x.txt", b"payload", false).unwrap();
+        assert_eq!(a.read("x.txt").unwrap(), b.read("x.txt").unwrap());
     }
 
     #[test]

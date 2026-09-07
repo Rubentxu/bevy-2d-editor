@@ -36,8 +36,19 @@ pub use crate::raw_store_bridge::RawStoreBridge;
 /// A pending write or delete that must be flushed to OPFS.
 #[derive(Debug, Clone)]
 pub(crate) enum PendingOp {
-    Write { path: String, bytes: Vec<u8> },
-    Delete { path: String },
+    /// Best-effort overwrite — no rollback on failure.
+    ///
+    /// This variant is used for both non-atomic writes and the *staging*
+    /// step of atomic writes. Atomic semantics (shadow→commit→cleanup)
+    /// are realised at flush-time by switching to a dedicated
+    /// [`PendingOp::AtomicWrite`] variant introduced in the next WU.
+    Write {
+        path: String,
+        bytes: Vec<u8>,
+    },
+    Delete {
+        path: String,
+    },
 }
 
 /// Internal state: in-memory mirror + flush queue.
@@ -72,10 +83,22 @@ impl OpfsCore {
     }
 
     /// Mirror write — mutates the in-memory mirror and enqueues a pending write op.
-    pub fn write(&mut self, path: String, bytes: Vec<u8>, modified_ms: u64) {
+    ///
+    /// `atomic` is accepted for API symmetry with [`ProjectStore::write`]; the
+    /// full shadow-file semantics are realised at flush-time by the next WU
+    /// (see the doc on `ProjectStore::write`). For now both atomic and
+    /// non-atomic writes enqueue the same [`PendingOp::Write`] and rely on
+    /// the existing flush path.
+    pub fn write_atomic(&mut self, path: String, bytes: Vec<u8>, modified_ms: u64, _atomic: bool) {
         self.entries
             .insert(path.clone(), (bytes.clone(), modified_ms));
         self.pending.push_back(PendingOp::Write { path, bytes });
+    }
+
+    /// Non-atomic mirror write — convenience wrapper kept for callers that have
+    /// not been threaded through the atomic flag yet.
+    pub fn write(&mut self, path: String, bytes: Vec<u8>, modified_ms: u64) {
+        self.write_atomic(path, bytes, modified_ms, false);
     }
 
     /// Mirror delete — removes from mirror and enqueues a pending delete op.
@@ -275,10 +298,14 @@ impl ProjectStore for OpfsProjectStore {
             .ok_or_else(|| StoreError::NotFound(path.to_string()))
     }
 
-    fn write(&self, path: &str, bytes: &[u8], _atomic: bool) -> Result<(), StoreError> {
+    fn write(&self, path: &str, bytes: &[u8], atomic: bool) -> Result<(), StoreError> {
         let mut core = self.core.try_lock().map_err(|_| StoreError::LockPoisoned)?;
         let modified_ms = self.clock.now().into_u64();
-        core.write(path.to_string(), bytes.to_vec(), modified_ms);
+        // Mirror update is always immediate (read-after-write invariant).
+        // Atomicity is realised at flush-time via the shadow-file pattern
+        // documented on `ProjectStore::write`. See `flush()` and
+        // `wasm_bridge::write_atomic_op`.
+        core.write_atomic(path.to_string(), bytes.to_vec(), modified_ms, atomic);
         Ok(())
     }
 

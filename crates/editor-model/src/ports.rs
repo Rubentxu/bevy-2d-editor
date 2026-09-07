@@ -38,6 +38,12 @@ pub enum StoreError {
     #[error("io error: {0}")]
     Io(String),
     /// Atomic write failed and was rolled back.
+    ///
+    /// Returned when an `atomic: true` write cannot complete the
+    /// shadow→commit sequence. The original file contents are preserved;
+    /// any `<path>.tmp` shadow file has been (or will be) cleaned up on
+    /// the next hydrate. The inner `String` carries the bridge-level
+    /// reason (e.g. quota exceeded, permission denied).
     #[error("atomic write failed and was rolled back: {0}")]
     AtomicRollback(String),
     /// A lock was poisoned by a panicked thread.
@@ -57,7 +63,43 @@ pub trait ProjectStore: Send + Sync {
 
     /// Write contents to a file.
     ///
-    /// If `atomic` is true, the write should be atomic (all-or-nothing).
+    /// # Atomic semantics
+    ///
+    /// If `atomic` is true, the write MUST be all-or-nothing at the file
+    /// level: the target file ends up with either the previous contents
+    /// (rolled back) or the new contents (committed), never a partial mix.
+    ///
+    /// ## Implementation pattern (v1)
+    ///
+    /// OPFS main-thread exposes neither `rename` nor `fsync`, so atomicity
+    /// is realised via a **shadow-file + commit-on-close** dance:
+    ///
+    /// 1. Write `bytes` to `<path>.tmp` via `createWritable() + close()`.
+    /// 2. Write `bytes` to `<path>` via `createWritable() + close()` —
+    ///    the OPFS `close()` is the commit point and is atomic per the
+    ///    W3C File System spec.
+    /// 3. Delete `<path>.tmp`.
+    ///
+    /// On failure between steps 1 and 2, the bridge returns
+    /// [`StoreError::AtomicRollback`] and cleans up `<path>.tmp`; the
+    /// original `<path>` contents are untouched (rollback natural to OPFS,
+    /// since the final close never happened).
+    ///
+    /// On hydrate (startup), any orphan `<path>.tmp` files left by a crash
+    /// mid-step-1 are deleted before the in-memory mirror is populated.
+    ///
+    /// ## Scope of atomicity
+    ///
+    /// Atomicity is **per file**, not multi-file. A flush that contains
+    /// multiple atomic writes can still leave the project in a mixed state
+    /// if the process crashes between bridge calls. This is a documented
+    /// v1 limitation; multi-file atomicity requires a write-ahead log and
+    /// is tracked as a post-v1 hardening item.
+    ///
+    /// # Non-atomic writes (`atomic = false`)
+    ///
+    /// Best-effort overwrite, no rollback. Used for transient caches,
+    /// derived state, or any case where partial corruption is acceptable.
     fn write(&self, path: &str, bytes: &[u8], atomic: bool) -> Result<(), StoreError>;
 
     /// Delete a file.
