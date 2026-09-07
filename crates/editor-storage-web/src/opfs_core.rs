@@ -37,14 +37,17 @@ pub use crate::raw_store_bridge::RawStoreBridge;
 #[derive(Debug, Clone)]
 pub(crate) enum PendingOp {
     /// Best-effort overwrite — no rollback on failure.
-    ///
-    /// This variant is used for both non-atomic writes and the *staging*
-    /// step of atomic writes. Atomic semantics (shadow→commit→cleanup)
-    /// are realised at flush-time by switching to a dedicated
-    /// [`PendingOp::AtomicWrite`] variant introduced in the next WU.
     Write {
         path: String,
         bytes: Vec<u8>,
+    },
+    /// Atomic write realised at flush-time via the shadow-file pattern
+    /// documented on `ProjectStore::write`. `shadow` is the `<path>.tmp`
+    /// staging file written before the real `<path>` is committed.
+    AtomicWrite {
+        path: String,
+        bytes: Vec<u8>,
+        shadow: String,
     },
     Delete {
         path: String,
@@ -84,15 +87,22 @@ impl OpfsCore {
 
     /// Mirror write — mutates the in-memory mirror and enqueues a pending write op.
     ///
-    /// `atomic` is accepted for API symmetry with [`ProjectStore::write`]; the
-    /// full shadow-file semantics are realised at flush-time by the next WU
-    /// (see the doc on `ProjectStore::write`). For now both atomic and
-    /// non-atomic writes enqueue the same [`PendingOp::Write`] and rely on
-    /// the existing flush path.
-    pub fn write_atomic(&mut self, path: String, bytes: Vec<u8>, modified_ms: u64, _atomic: bool) {
+    /// When `atomic` is true, the entry is recorded as a [`PendingOp::AtomicWrite`]
+    /// so [`OpfsCore::flush`] can realise the shadow→commit→cleanup sequence.
+    /// When `atomic` is false, a plain [`PendingOp::Write`] is enqueued.
+    pub fn write_atomic(&mut self, path: String, bytes: Vec<u8>, modified_ms: u64, atomic: bool) {
         self.entries
             .insert(path.clone(), (bytes.clone(), modified_ms));
-        self.pending.push_back(PendingOp::Write { path, bytes });
+        if atomic {
+            let shadow = format!("{}.tmp", path);
+            self.pending.push_back(PendingOp::AtomicWrite {
+                path,
+                bytes,
+                shadow,
+            });
+        } else {
+            self.pending.push_back(PendingOp::Write { path, bytes });
+        }
     }
 
     /// Non-atomic mirror write — convenience wrapper kept for callers that have
@@ -208,13 +218,25 @@ impl OpfsProjectStore {
     /// lazily read only the bytes needed per operation.
     #[cfg(target_arch = "wasm32")]
     pub async fn hydrate(&self) -> Result<(), String> {
-        use crate::wasm_bridge::{list_tree_op, read_op};
+        use crate::wasm_bridge::{delete_op, list_tree_op, read_op};
 
         let paths = list_tree_op("/")
             .await
             .map_err(|e| format!("hydrate: list failed: {}", e))?;
 
         for path in paths {
+            // Recovery step: any orphan `<path>.tmp` shadow left by a crash
+            // mid-atomic-write is deleted before the mirror is populated.
+            // Without this, a fresh load could surface stale staging bytes
+            // via `read` if the real `<path>` happened to be absent too.
+            if path.ends_with(".tmp") {
+                // Best-effort: failures here are logged via the bridge error
+                // but do not abort hydration — the next flush will retry.
+                if let Err(e) = delete_op(&path).await {
+                    eprintln!("hydrate: failed to remove orphan shadow {}: {}", path, e);
+                }
+                continue;
+            }
             let bytes: Vec<u8> = match read_op(&path).await {
                 Ok(b) => b,
                 Err(_) => {
@@ -254,6 +276,7 @@ impl OpfsProjectStore {
         for op in ops {
             let path = match &op {
                 PendingOp::Write { path, .. } => path.clone(),
+                PendingOp::AtomicWrite { path, .. } => path.clone(),
                 PendingOp::Delete { path } => path.clone(),
             };
             flush_op(&path, op).await.map_err(|e| StoreError::Io(e))?;
@@ -262,6 +285,11 @@ impl OpfsProjectStore {
     }
 
     /// Flush — non-wasm32 stub for test bridge (blocking).
+    ///
+    /// Atomic writes are flushed via the underlying bridge as ordinary
+    /// writes. Real atomicity is realised at the wasm32 JS layer via the
+    /// shadow-file pattern; in native tests with [`MemoryBridge`] the
+    /// atomic flag is vacuously satisfied (writes are infallible).
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn flush(&self) -> Result<(), StoreError> {
         let ops = {
@@ -272,6 +300,11 @@ impl OpfsProjectStore {
         for op in ops {
             match op {
                 PendingOp::Write { path, bytes } => {
+                    self.bridge
+                        .write(&path, &bytes)
+                        .map_err(|e| StoreError::Io(e))?;
+                }
+                PendingOp::AtomicWrite { path, bytes, .. } => {
                     self.bridge
                         .write(&path, &bytes)
                         .map_err(|e| StoreError::Io(e))?;
@@ -333,6 +366,7 @@ impl ProjectStore for OpfsProjectStore {
             for op in ops {
                 let path = match &op {
                     PendingOp::Write { path, .. } => path.clone(),
+                    PendingOp::AtomicWrite { path, .. } => path.clone(),
                     PendingOp::Delete { path } => path.clone(),
                 };
                 flush_op(&path, op).await.map_err(|e| StoreError::Io(e))?;
