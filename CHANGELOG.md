@@ -4,6 +4,115 @@ All notable changes to Bevy 2D Editor are documented here. The project follows s
 
 ## Unreleased
 
+### docs — Architecture & UX Hardening convergence (Slice-0 landing)
+
+Documentation-only landing of `docs/bevy-2d-editor-hardening-pack/`. No
+production code changed. The package replaces the historical parallel roadmaps
+with a single converged pre-v1 program (H0 → H10) and supersedes four historical
+ADRs with eight sharper ones.
+
+- **Roadmap source of truth pre-v1 is now**:
+  - [`docs/roadmaps/MASTER_ROADMAP.md`](docs/roadmaps/MASTER_ROADMAP.md)
+    (H0 Release Truth → H1 Dependency Inversion → H2 Single Session → H3 Typed
+    Backend → H4 Single Mutation Path → H5 Slim editor-bevy → H6 Feature Slices
+    → H7 UX/Performance → H8 GraphKernel → H9 Data/BSN → H10 Product Proof →
+    v1.0).
+  - [`docs/roadmaps/v1.0-architecture-ux-hardening.md`](docs/roadmaps/v1.0-architecture-ux-hardening.md)
+    (execution roadmap with slice-level PR budgets).
+  - [`docs/roadmaps/v1.0-stabilization.md`](docs/roadmaps/v1.0-stabilization.md)
+    (release gate — product gates G1–G9).
+  - [`docs/roadmaps/ROADMAP_CONVERGENCE.md`](docs/roadmaps/ROADMAP_CONVERGENCE.md)
+    (why the historical `v0.87–v0.93`, ui-overhaul, app-stabilization and
+    ai-native roadmaps are historical, not active).
+  - [`docs/roadmaps/TRACEABILITY_MATRIX.md`](docs/roadmaps/TRACEABILITY_MATRIX.md)
+    (existing-intent → converged-destination mapping).
+- **Historical roadmaps preserved as documentation** (not active execution):
+  `v0.87-architecture-foundation.md`, `v0.88-production-authoring.md`,
+  `v0.89-change-runtime-workbench.md`, `v0.90-agent-runtime.md`,
+  `v0.91-semantic-agents.md`, `v0.92-ecosystem-sdk-importers.md`,
+  `application-stabilization-roadmap.md`, `ui-workflow-overhaul-roadmap.md`,
+  `ai-native-editor-roadmap.md`. `ROADMAP_CONVERGENCE.md` declares their
+  status.
+- **Eight new ADRs (ADR-0056 → ADR-0063)**:
+  - `0056-enforce-hexagonal-dependency-direction.md` — **supersedes ADR-0030**
+    (cargo-metadata-enforced direction rules; application→adapter edges
+    forbidden).
+  - `0057-single-wasm-composition-root.md` — **supersedes ADR-0031** (exactly
+    one target-specific composition root owns the container; no service
+    locators in model/application).
+  - `0058-typed-editor-backend-capability-api.md` — **supersedes ADR-0034**
+    (typed `EditorBackend` split into narrow capability interfaces; production
+    files outside `frontend/src/backend/wasm/` cannot import the raw WASM
+    module; codegen spike at `docs/research/spike-typed-backend-bindings.md`).
+  - `0059-single-transaction-dispatch-path.md` — **supersedes ADR-0049**
+    (TransactionKernel as sole normal mutation path after parity is proven;
+    runtime dual-dispatch toggle planned for retirement).
+  - `0060-active-document-workspace-over-global-editor-mode.md` — NEW
+    (orthogonal workspace state replaces global `EditorMode`).
+  - `0061-capability-segregated-graph-kernel.md` — NEW **extends ADR-0053**
+    (split `GraphMut` into `GraphRead / GraphTopologyMut / GraphNodeDataMut /
+    GraphEdgeDataMut`; pending benchmark spike).
+  - `0062-bsn-anti-corruption-layer.md` — NEW (semantic model does not mirror
+    Bevy syntax; intermediate IR absorbs Bevy churn).
+  - `0063-frontend-feature-slices-no-direct-bridge.md` — NEW (UI components
+    call feature/capability APIs, never raw bridge names).
+- **ADR housekeeping**:
+  - `[EVOLUTION_INDEX.md](docs/adr/EVOLUTION_INDEX.md)` updated with
+    supersede/extend relationships for ADR-0030, 0031, 0034, 0049 and missing
+    rows for ADR-0047…0063 (including the parked-post-v1 rows 0043/0054).
+  - `[ADR README](docs/adr/README.md)` index extended with rows ADR-0047 →
+    0063 and a Related Documents section pointing at the new
+    `docs/architecture`, `docs/uat`, `docs/testing`, `docs/research`
+    directories.
+- **Specs landed** (11 files in `docs/specs/`):
+  - `architecture-ux-hardening-program.md` (top-level program spec)
+  - `single-session-composition-root.md` (H2)
+  - `editor-backend-capabilities.md` (H3)
+  - `frontend-feature-slices-workspace.md` (H6)
+  - `hierarchy-inspector-performance-accessibility.md` (H7)
+  - `graph-kernel-hardening.md` (H8)
+  - `bsn-compatibility-contract.md` (H9)
+  - `quality-fitness-gates.md` (H0/H10; extends ADR-0044)
+  - `editor-bevy-slimming.md` (H5)
+  - `principal-capability-provenance.md` (H4)
+  - `feature-strengthening-plan.md` (cross-cutting)
+- **Architecture docs landed** (8 files in `docs/architecture/`):
+  `CURRENT_STATE_FINDINGS.md`, `TARGET_ARCHITECTURE.md` (extends the existing
+  `02-target-architecture.md`), `DEPENDENCY_RULES.md` (extends the existing
+  `03-bounded-contexts-and-dependency-rules.md`),
+  `EMERGENT_ARCHITECTURE_PLAYBOOK.md`, `TECHNICAL_DEBT_REGISTER.md` (TD-001
+  …TD-024 with explicit exit conditions),
+  `UX_INFORMATION_ARCHITECTURE.md`, `IMPLEMENTATION_CHECKLIST.md`,
+  `MILESTONE_EVIDENCE_TEMPLATE.md`.
+- **UAT landed** (4 files in `docs/uat/`):
+  `UAT_ARCHITECTURE_UX_HARDENING.md`, `UAT_PERFORMANCE_ACCESSIBILITY.md`,
+  `UAT_DATA_INTEGRITY_AND_BSN.md`, `UAT_CANONICAL_GAME.md`. UAT IDs use the
+  `UAT-{CI|ARCH|UI|WORKSPACE|PERF|A11Y|DATA|BSN|GAME}-NNN` namespace.
+- **Testing docs landed** (3 files in `docs/testing/`):
+  `TEST_STRATEGY.md`, `BENCHMARK_PLAN.md`, `REAL_TEST_MATRIX.md`.
+- **Research landed** (6 files in `docs/research/`):
+  `RESEARCH_BACKLOG.md` (spike catalogue R-01…R-12) plus five pre-decision
+  spikes: WASM composition & DI, typed backend bindings, large hierarchy,
+  GraphKernel performance, Bevy/BSN/Jackdaw.
+- **Domain vocabulary** in `CONTEXT.md` extended with bilingual entries for
+  the 10 new hardening-pack concepts: Composition Root, Mutation Path, Typed
+  Capability, Workspace State, Feature Slice, Fitness Gate, Anti-Corruption
+  Layer, Hierarchy Index, GraphKernel Mutation Capability, Principal/Capability
+  Provenance, Author-Time Apply-Back. English anchor remains canonical for code
+  and identifiers.
+- **Existing `sddk/` cycles mapped** to H0–H10 slots in the new
+  `## Existing sddk cycle mapping (2026-09-07)` section of
+  `ROADMAP_CONVERGENCE.md` (31 cycle paths).
+- **NOT changed in this PR**:
+  - No source code (Rust + TypeScript).
+  - No CI workflow files (`.github/workflows/*.yml`).
+  - No replacement of historical `docs/architecture/02-target-architecture.md`
+    or `03-bounded-contexts-and-dependency-rules.md` — the new
+    `architecture/TARGET_ARCHITECTURE.md` and `DEPENDENCY_RULES.md` extend
+    them; a future PR will consolidate.
+  - `tools/ARCHCHECK_V2_PROPOSAL.md` from the source pack is **not** merged
+    yet; H0.2 (`archcheck v2 cargo-metadata dependency gate`) absorbs it.
+
 ### v1.0-stabilization — P1 canonical sample game (closes G1)
 
 Closes v1.0 product gate **G1** ("no canonical playable game"): a committed,

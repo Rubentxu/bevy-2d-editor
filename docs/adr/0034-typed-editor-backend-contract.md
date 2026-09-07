@@ -3,6 +3,7 @@
 ## Status
 
 Accepted — 2026-08-14
+Superseded by [ADR-0058](./0058-typed-editor-backend-capability-api.md) (2026-09-07). The typed `EditorBackend` interface and the no-new-`window as any` rule remain; ADR-0058 splits the contract into narrow capability interfaces, defines the fitness rule (production files outside `frontend/src/backend/wasm/` cannot import the raw WASM module) and adds a spike to decide handwritten vs generated bindings. Historical body preserved below for traceability.
 
 
 ## Context

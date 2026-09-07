@@ -1,141 +1,236 @@
 # MASTER ROADMAP — Bevy 2D Workbench
 
-**Approved:** 2026-08-14  
-**Starting point:** v0.86.x
+**Revision:** 2026-09 architecture/UX convergence proposal  
+**Primary target:** v1.0 product contract
 
 ## Vision
 
-Reach v1.0 as a production-capable 2D Bevy authoring workbench whose defining strengths are semantic/reversible editing, specialised 2D workflows, runtime causality and AI/extension operations over safe typed capabilities.
+Deliver a production-capable browser-first 2D Bevy authoring workbench whose strengths are:
 
-## Dependency graph
+- semantic reversible editing;
+- reliable project/data workflows;
+- reusable Scene Assets and overrides;
+- Logic Bricks and runtime causality;
+- Bevy/BSN interoperability without domain lock-in;
+- typed extension/automation capabilities;
+- a UI that scales to real projects;
+- an architecture that can later host agents without giving them privileged mutation paths.
+
+## Current strategic decision
+
+The project has enough breadth for v1.0. The active program is **hardening and proving the existing product**, not expanding feature count.
+
+The Rig/agent-native program remains parked until the v1.0 gates pass.
+
+## Active dependency graph
 
 ```mermaid
 flowchart LR
-  A[v0.87 Architecture Foundation]
-  B[v0.88 Production Authoring]
-  C[v0.89 Change + Runtime Workbench]
-  D[v0.90 Agent Runtime]
-  E[v0.91 Semantic Retrieval + Agent Workbench]
-  F[v0.92 Ecosystem / SDK / Importers]
-  G[v1.0 Stabilization]
-  A --> B --> C --> D --> E --> F --> G
+  H0[H0 Release Truth + Fitness]
+  H1[H1 Hexagonal Dependency Direction]
+  H2[H2 Single Session + Composition]
+  H3[H3 Typed Frontend Backend]
+  H4[H4 Single Mutation Path]
+  H5[H5 Slim editor-bevy]
+  H6[H6 Frontend Feature Slices]
+  H7[H7 UX + Large Project Performance]
+  H8[H8 GraphKernel Hardening]
+  H9[H9 Data Safety + BSN Contracts]
+  H10[H10 v1 Product Proof]
+  V1[v1.0 Release]
+  AG[Post-v1 Agent Runtime]
+
+  H0 --> H1 --> H2 --> H3 --> H4 --> H5
+  H3 --> H6 --> H7
+  H1 --> H8
+  H2 --> H9
+  H5 --> H10
+  H7 --> H10
+  H8 --> H10
+  H9 --> H10
+  H10 --> V1 --> AG
 ```
 
-## v0.87 — Architecture Foundation
+Parallel work is allowed when dependencies permit; the diagram is a safety ordering, not a mandate for serial execution.
+
+## H0 — Release Truth & Architecture Fitness
 
 ### Outcome
-The existing editor behaves the same, but the architecture can enforce future direction.
+
+CI tells the truth about the architecture and baseline.
 
 ### Must ship
-- CI workflows + required checks;
-- `editor-model` extraction;
-- initial `editor-application`;
-- `EditorSession` migration foundation;
-- `Clock`/`IdGenerator` ports;
-- `ProjectStore` port + existing OPFS adapter;
-- Transaction Kernel v1 around existing operation logs;
-- `ChangeSet` v1 metadata/effects;
-- typed backend foundation and no-new-`window as any` gate;
-- architecture fitness tests.
 
-### Exit gate
-No new feature code depends directly on old global-state paths unless explicitly allowlisted as migration debt.
+- repair Architecture Fitness workflow so checker actually executes;
+- `cargo metadata` dependency graph gate;
+- global-state ratchet;
+- frontend no-direct-bridge rule;
+- deterministic smoke cohort;
+- release evidence manifest.
 
-## v0.88 — Production Authoring Foundation
+### Exit
+
+No critical gate is “green” merely because its checker did not run.
+
+## H1 — Hexagonal Dependency Direction
 
 ### Outcome
-The editor becomes materially faster for real 2D level production.
+
+Dependency inversion matches the documented target.
 
 ### Must ship
-- 2D direct manipulation toolkit;
-- World Workspace v1;
-- scope-of-change UX for instance vs definition;
-- filesystem-backed project spike/adapter or approved native companion mechanism;
-- Git-friendly deterministic format/migration corpus;
-- recipe engine + initial 5–8 recipes;
-- improved large-scene hierarchy/asset performance.
 
-## v0.89 — Change & Runtime Workbench
+- application-owned ports;
+- storage-web implements ports;
+- Bevy adapter depends inward;
+- target composition moves to `editor-wasm`;
+- remove application→storage-web and application→Bevy edges.
+
+## H2 — Single Session & Composition Root
 
 ### Outcome
-Bulk/refactor/import/runtime changes share one trustworthy workflow.
+
+One canonical ownership model for mutable editor/application state.
 
 ### Must ship
-- Change Workbench;
-- semantic diff renderer;
-- checkpoints/history improvements;
-- Runtime Causality Inspector v1;
-- Runtime Apply-Back v1;
-- ChangeSet cross-resource effects/verification;
-- search/navigation links across causality graph.
 
-## v0.90 — Agent Runtime Foundation
+- global state inventory;
+- migrate registries from model service locators;
+- migrate scene/assets/logic/runtime coordination family by family;
+- one target-specific app container;
+- explicit NotReady/error behavior;
+- two-session isolation tests.
+
+## H3 — Typed EditorBackend
 
 ### Outcome
-Rig-based runtime is integrated without bypassing editor architecture.
+
+React consumes typed capabilities, not raw WASM globals.
 
 ### Must ship
-- `editor-protocol` tool contracts;
-- `agent-runtime` crate;
-- manager + 2 specialist agents initially;
-- `/v1/propose` compatibility adapter;
-- read/planning tools;
-- ChangeSet proposal generation;
-- policy/approval enforcement;
-- telemetry/diagnostics.
 
-Do not start with every specialist. Prove the architecture with Scene + Validation/Runtime first.
+- `EditorBackend` contract;
+- Wasm implementation;
+- scene/assets/logic/runtime/validation/change capabilities migrated;
+- injectable test backend;
+- no new production `window as any` mutation APIs.
 
-## v0.91 — Semantic Retrieval & Agent Workbench
+## H4 — Single Mutation Path
 
 ### Outcome
-Agents understand the project and can safely execute multi-step workflows.
+
+All normal authoring mutation semantics converge on application/TransactionKernel rules.
 
 ### Must ship
-- semantic/typed retrieval;
-- full Change Workbench integration for agents;
-- scene/asset/logic/code/world specialists;
-- runtime-aware diagnostics;
-- post-apply verification loops;
-- limited safe background maintenance tasks.
 
-## v0.92 — Ecosystem, SDK & Import Pipelines
+- parity characterization;
+- kernel-only production dispatch;
+- typed principal/capability provenance;
+- removal of runtime legacy dispatch switch;
+- rollback/retry behavior verified.
+
+## H5 — Slim `editor-bevy`
 
 ### Outcome
-The workbench participates in the wider 2D toolchain and has a credible extension model.
+
+`editor-bevy` is primarily an adapter/runtime crate.
 
 ### Must ship
-- internal Editor Extension SDK;
-- Aseprite import/reimport;
-- LDtk import/reimport;
-- Tiled import/reimport;
-- recipe packs as extensions;
-- validator extension example;
-- capability permissions/versioning.
 
-### Delivered (v0.92.0)
-SDK + capability permissions + 3 built-in extensions shipped. Importers deferred to v0.93 per SDK-061 dependency.
+Extract pure behavior where evidence supports it:
 
-## v1.0 — Stabilization
+- asset use cases/commands;
+- pure validation;
+- pure persistence-independent transforms;
+- command/history orchestration that belongs to application.
+
+Do not split into crates mechanically; move responsibilities to existing boundaries first.
+
+## H6 — Frontend Feature Slices & Workspace
+
+### Outcome
+
+New features no longer amplify central App/handler contracts.
+
+### Must ship
+
+- backend provider;
+- scene/assets/logic/world/runtime/validation/change slices;
+- App as composition root;
+- document/workspace model spike;
+- reduce global EditorMode branching where evidence supports it.
+
+## H7 — UX, Accessibility & Large Project Performance
+
+### Outcome
+
+Core authoring workflows behave like a professional editor at declared v1 scale.
+
+### Must ship
+
+- indexed/virtualizable Hierarchy;
+- tree-aware search;
+- keyboard-accessible tree behavior;
+- Inspector field-level validation/revert improvements;
+- semantic design tokens completion on touched surfaces;
+- 10k-entity benchmark budget;
+- command/search/navigation consistency.
+
+## H8 — GraphKernel Hardening
+
+### Outcome
+
+Graph abstractions have measured complexity and precise capability contracts.
+
+### Must ship
+
+- graph property tests;
+- representative benchmarks;
+- endpoint/capability contract cleanup;
+- adjacency/iterator optimization only if evidence requires it.
+
+## H9 — Data Safety & BSN Contracts
+
+### Outcome
+
+Supported v1 project/BSN formats and recovery behavior are evidence-backed.
+
+### Must ship
+
+- fault-injected ProjectStore tests;
+- crash/interruption recovery UAT;
+- migration corpus;
+- BSN anti-corruption/IR contract tests;
+- declared Bevy/BSN compatibility matrix;
+- import/reimport recovery and conflict evidence.
+
+## H10 — v1 Product Proof
+
+### Outcome
+
+A user can create and maintain a complete small 2D game using supported editor workflows.
 
 ### Product gates
 
-- create a small complete 2D game without hand-editing editor data;
-- filesystem/Git workflow documented and stable;
-- browser-local workflow remains supported;
-- round-trip/migration compatibility guaranteed for declared v1 formats;
-- crash/data-loss recovery story tested;
-- performance corpus meets budgets;
-- accessibility critical paths pass;
-- extension and agent capability APIs have documented compatibility policy;
-- no critical architecture fitness exceptions remain.
+- canonical playable project authored through UI workflows;
+- save/reopen/recover tested;
+- scene assets, instances, overrides and logic exercised;
+- world/level workflow exercised if part of v1 promise;
+- import/export/BSN supported path exercised;
+- play/debug/runtime diagnostics exercised;
+- keyboard critical path tested;
+- performance corpus passes budgets;
+- no critical architecture exceptions;
+- release evidence reproducible from one commit.
 
-## Explicitly post-v1 unless pulled by evidence
+## Post-v1 priority order
 
-- marketplace;
-- multiplayer collaborative CRDT editing;
-- full visual scripting VM;
-- pixel-art editor;
-- full audio DAW tooling;
-- mobile/touch-first editor;
-- general 3D editor parity.
+After the v1 release gate:
+
+1. reassess Agent Runtime ADR against the final capability API;
+2. implement a minimal manager + 1–2 specialists;
+3. semantic retrieval;
+4. Agent Workbench using existing ChangeSet review;
+5. runtime-aware diagnostics;
+6. background automation only after cancellation/recovery policy is proven.
+

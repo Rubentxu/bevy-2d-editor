@@ -705,3 +705,7 @@ readiness signal, and the documentation hierarchy contract
 ---
 
 _Architecture & Product Evolution Pack adopted (2026-08-14, docs-only, ADR-0030 → ADR-0046). The v0.87 Architecture Foundation gate now precedes the Hito 8 program; see `docs/roadmaps/MASTER_ROADMAP.md`. Rig-based agent work (ADR-0027) resumes at v0.90 behind typed capability ports._
+
+---
+
+_Hardening Pack adopted (2026-09-07, docs-only, ADR-0056 → ADR-0063). Supersedes ADR-0030 (→ ADR-0056 enforcement layer), ADR-0031 (→ ADR-0057 composition root), ADR-0034 (→ ADR-0058 capability split + codegen spike), ADR-0049 (→ ADR-0059 single-path end-state). Net-new: ADR-0060 (orthogonal workspace state), ADR-0061 (capability-segregated GraphKernel, extends ADR-0053, pending H8 spike), ADR-0062 (BSN anti-corruption layer), ADR-0063 (frontend feature slices + no direct bridge). Source of truth pre-v1 is the converged `docs/roadmaps/MASTER_ROADMAP.md` (H0 Release Truth → H10 Product Proof → v1.0); active engineering program is `docs/roadmaps/v1.0-architecture-ux-hardening.md`; release gate is `docs/roadmaps/v1.0-stabilization.md`. Rig/agent-runtime work remains parked post-v1 per `docs/roadmaps/ROADMAP_CONVERGENCE.md`._

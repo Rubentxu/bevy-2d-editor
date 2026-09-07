@@ -62,6 +62,17 @@ ADR numbering is monotonic and never reused. Superseded decisions keep their ori
 | [ADR-0050](./0050-apply-back-policy-not-mirrored.md)                              | ApplyBackPolicy Lives in editor-application (Mirror-Pair with editor-core)      | Accepted (2026-08-16) — v0.89 (`v0.89-change-runtime-workbench`)    |
 | [ADR-0051](./0051-change-workbench-bottom-dock-tab.md)                           | ChangeWorkbenchPanel Lives in Bottom-Dock as an Internal Tab (ADR-0039/0024)   | Accepted (2026-08-16) — v0.89 (`v0.89-change-runtime-workbench`)    |
 | [ADR-0052](./0052-runtime-causality-rebuild-cause.md)                            | Runtime Causality — RebuildCause + LogicActivationRing + CausalityEdge          | Accepted (2026-08-16) — v0.89 (`v0.89-change-runtime-workbench`)    |
+| [ADR-0053](./0053-graph-kernel-pure-rust-dialects.md)                            | Graph Kernel — A Pure-Rust Dialect-Agnostic Substrate                            | Accepted + Implemented (v0.101–v0.103) — extended by ADR-0061       |
+| [ADR-0054](./0054-rig-agent-runtime-transport-neutrality.md)                     | Rig Agent Runtime Foundation — Transport Neutrality Addendum                   | Accepted (2026-09-06) — parked post-v1                               |
+| [ADR-0055](./0055-work-unit-commit-discipline-trunk-based-split-policy.md)       | Work-Unit Commit Discipline — Trunk-Based Split Policy                          | Accepted (2026-09-06)                                                |
+| [ADR-0056](./0056-enforce-hexagonal-dependency-direction.md)                     | Enforce Hexagonal Dependency Direction (H1 — supersedes ADR-0030)               | Accepted (2026-09-07) — hardening H1                                 |
+| [ADR-0057](./0057-single-wasm-composition-root.md)                                | Single WASM Composition Root (H2 — supersedes ADR-0031)                         | Accepted (2026-09-07) — hardening H2                                 |
+| [ADR-0058](./0058-typed-editor-backend-capability-api.md)                        | Typed EditorBackend Capability API (H3 — supersedes ADR-0034)                   | Accepted (2026-09-07) — hardening H3                                 |
+| [ADR-0059](./0059-single-transaction-dispatch-path.md)                           | Single Transaction/Mutation Dispatch Path (H4 — supersedes ADR-0049)            | Accepted (2026-09-07) — hardening H4                                 |
+| [ADR-0060](./0060-active-document-workspace-over-global-editor-mode.md)          | Active Document + Orthogonal Workspace State (H6)                               | Accepted (2026-09-07) — hardening H6                                 |
+| [ADR-0061](./0061-capability-segregated-graph-kernel.md)                         | Capability-Segregated GraphKernel (H8 — extends ADR-0053, pending spike)        | Accepted (2026-09-07) — hardening H8                                   |
+| [ADR-0062](./0062-bsn-anti-corruption-layer.md)                                   | BSN Anti-Corruption Layer (H9)                                                  | Accepted (2026-09-07) — hardening H9                                 |
+| [ADR-0063](./0063-frontend-feature-slices-no-direct-bridge.md)                    | Frontend Feature Slices and No Direct Bridge from UI (H6)                       | Accepted (2026-09-07) — hardening H6                                 |
 
 ## Related Documents
 
@@ -69,4 +80,8 @@ ADR numbering is monotonic and never reused. Superseded decisions keep their ori
 - [docs/sddk/](../sddk/) — SDD change proposals, specs, and designs.
 - [docs/specs/](../specs/) — capability specifications.
 - [docs/roadmaps/](../roadmaps/) — forward-looking implementation programs.
-- [EVOLUTION_INDEX.md](./EVOLUTION_INDEX.md) — provenance of the Architecture & Product Evolution Pack (ADR-0030 → ADR-0046) and its relationship to historical ADRs.
+- [docs/architecture/](../architecture/) — architecture docs (target, dependency rules, debt register, emergent playbook).
+- [docs/uat/](../uat/) — User Acceptance Tests for hardening, performance, accessibility, data integrity, canonical game.
+- [docs/testing/](../testing/) — test strategy, benchmark plan, real-test matrix.
+- [docs/research/](../research/) — research backlog and pre-decision spikes.
+- [EVOLUTION_INDEX.md](./EVOLUTION_INDEX.md) — provenance of the Architecture & Product Evolution Pack (ADR-0030 → ADR-0046) and the Hardening Pack (ADR-0056 → ADR-0063) and their supersede relationships with historical ADRs.
