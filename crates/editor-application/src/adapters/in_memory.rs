@@ -59,7 +59,12 @@ impl ProjectStore for InMemoryProjectStore {
             .ok_or_else(|| StoreError::NotFound(path.to_string()))
     }
 
-    fn write(&self, path: &str, bytes: &[u8], _atomic: bool) -> Result<(), StoreError> {
+    fn write(&self, path: &str, bytes: &[u8], atomic: bool) -> Result<(), StoreError> {
+        // Mirror of `editor_storage_web::memory_bridge::InMemoryProjectStore`:
+        // the atomic flag is observable at the API surface only, since
+        // in-memory writes are infallible. Real rollback semantics live in
+        // `OpfsProjectStore` flush-time.
+        let _ = atomic;
         let mut entries = self.entries.write().map_err(lock_poisoned)?;
         entries.insert(path.to_string(), (bytes.to_vec(), self.now_ms()?));
         Ok(())
@@ -132,6 +137,28 @@ mod tests {
         assert_eq!(s.read("a.txt").unwrap(), b"original");
         s.write("a.txt", b"updated", true).unwrap();
         assert_eq!(s.read("a.txt").unwrap(), b"updated");
+    }
+
+    #[test]
+    fn atomic_write_read_after_write_is_visible_immediately() {
+        let s = InMemoryProjectStore::new();
+        s.write("rt.txt", b"first", true).unwrap();
+        assert_eq!(s.read("rt.txt").unwrap(), b"first");
+        s.write("rt.txt", b"second", true).unwrap();
+        assert_eq!(s.read("rt.txt").unwrap(), b"second");
+        let entries = s.list("").unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].path, "rt.txt");
+        assert_eq!(entries[0].size, b"second".len() as u64);
+    }
+
+    #[test]
+    fn atomic_and_non_atomic_converge_on_same_mirror_state() {
+        let a = InMemoryProjectStore::new();
+        let b = InMemoryProjectStore::new();
+        a.write("x.txt", b"payload", true).unwrap();
+        b.write("x.txt", b"payload", false).unwrap();
+        assert_eq!(a.read("x.txt").unwrap(), b.read("x.txt").unwrap());
     }
 
     #[test]

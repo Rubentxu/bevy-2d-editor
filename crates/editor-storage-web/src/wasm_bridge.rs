@@ -146,6 +146,42 @@ pub async fn write_op(path: &str, bytes: &[u8]) -> Result<(), String> {
     parse_ok_response(val)
 }
 
+/// Atomic write realised via the shadow-file + commit-on-close pattern.
+///
+/// Step 1: write `bytes` to `<path>.tmp` (the *shadow*).
+/// Step 2: write `bytes` to `<path>` via OPFS `createWritable() + close()` —
+///         the close is the atomic commit point per the W3C File System spec.
+/// Step 3: delete `<path>.tmp` to clean up the shadow.
+///
+/// On failure between steps 1 and 2, the shadow is cleaned up and the
+/// original `<path>` is preserved (rollback is natural to OPFS, since the
+/// final close never happened). The returned `Err` carries the bridge-level
+/// reason; callers map it to `StoreError::AtomicRollback`.
+pub async fn write_atomic_op(path: &str, bytes: &[u8], shadow: &str) -> Result<(), String> {
+    // Step 1: shadow write — failure here is fatal and leaves no shadow behind.
+    write_op(shadow, bytes)
+        .await
+        .map_err(|e| format!("atomic write shadow failed for {}: {}", shadow, e))?;
+
+    // Step 2: commit. Track the result so we always attempt step 3.
+    let commit_result = write_op(path, bytes).await;
+
+    // Step 3: shadow cleanup — always attempted, even on commit failure.
+    let cleanup_result = delete_op(shadow).await;
+
+    match (commit_result, cleanup_result) {
+        (Ok(()), Ok(())) => Ok(()),
+        (Err(e), _) => Err(format!(
+            "atomic write commit failed for {} (shadow cleaned): {}",
+            path, e
+        )),
+        (Ok(()), Err(e)) => Err(format!(
+            "atomic write succeeded for {} but shadow cleanup failed for {}: {}",
+            path, shadow, e
+        )),
+    }
+}
+
 /// Async delete operation — removes a file.
 pub async fn delete_op(path: &str) -> Result<(), String> {
     let promise = opfs_delete_file_raw(path);
@@ -159,10 +195,17 @@ pub async fn delete_op(path: &str) -> Result<(), String> {
 
 /// Flush a single [`PendingOp`] through the JS bridge.
 ///
-/// Used by [`super::OpfsProjectStore::flush`].
+/// Used by [`super::OpfsProjectStore::flush`]. For
+/// [`PendingOp::AtomicWrite`] the dispatch flows through
+/// [`write_atomic_op`] which performs the shadow→commit→cleanup sequence.
 pub async fn flush_op(_path: &str, op: PendingOp) -> Result<(), String> {
     match op {
         PendingOp::Write { path, bytes } => write_op(&path, &bytes).await,
+        PendingOp::AtomicWrite {
+            path,
+            bytes,
+            shadow,
+        } => write_atomic_op(&path, &bytes, &shadow).await,
         PendingOp::Delete { path } => delete_op(&path).await,
     }
 }

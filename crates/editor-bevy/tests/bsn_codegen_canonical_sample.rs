@@ -10,15 +10,17 @@
 //!      (the `regenerate` test writes the new output).
 //!   3. Inspect the diff, commit if correct.
 
-use editor_bevy::{
-    bsn_codegen::emit_bsn_source_from_document,
-    scene_asset::SceneAssetDocument,
-};
+use editor_bevy::{bsn_codegen::emit_bsn_source_from_document, scene_asset::SceneAssetDocument};
 
-const PLAYER_JSON: &str = include_str!("../../../examples/platformer-minimal/scene-assets/characters/player.actor.json");
-const ENEMY_JSON: &str = include_str!("../../../examples/platformer-minimal/scene-assets/characters/enemy.actor.json");
-const GROUND_JSON: &str = include_str!("../../../examples/platformer-minimal/scene-assets/environment/ground.fragment.json");
-const PICKUP_JSON: &str = include_str!("../../../examples/platformer-minimal/scene-assets/effects/pickup.actor.json");
+const PLAYER_JSON: &str =
+    include_str!("../../../examples/platformer-minimal/scene-assets/characters/player.actor.json");
+const ENEMY_JSON: &str =
+    include_str!("../../../examples/platformer-minimal/scene-assets/characters/enemy.actor.json");
+const GROUND_JSON: &str = include_str!(
+    "../../../examples/platformer-minimal/scene-assets/environment/ground.fragment.json"
+);
+const PICKUP_JSON: &str =
+    include_str!("../../../examples/platformer-minimal/scene-assets/effects/pickup.actor.json");
 
 const PLAYER_BSN_REF: &str = include_str!("../../../examples/platformer-minimal/export/player.bsn");
 const ENEMY_BSN_REF: &str = include_str!("../../../examples/platformer-minimal/export/enemy.bsn");
@@ -26,8 +28,8 @@ const GROUND_BSN_REF: &str = include_str!("../../../examples/platformer-minimal/
 const PICKUP_BSN_REF: &str = include_str!("../../../examples/platformer-minimal/export/pickup.bsn");
 
 fn assert_bsn_round_trip(label: &str, json: &str, reference_bsn: &str, scene_name: &str) {
-    let doc: SceneAssetDocument =
-        serde_json::from_str(json).unwrap_or_else(|e| panic!("{label}: failed to parse JSON — {e}"));
+    let doc: SceneAssetDocument = serde_json::from_str(json)
+        .unwrap_or_else(|e| panic!("{label}: failed to parse JSON — {e}"));
 
     let result = emit_bsn_source_from_document(&doc, scene_name);
 

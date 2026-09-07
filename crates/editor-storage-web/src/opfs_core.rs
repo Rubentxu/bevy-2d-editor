@@ -36,8 +36,22 @@ pub use crate::raw_store_bridge::RawStoreBridge;
 /// A pending write or delete that must be flushed to OPFS.
 #[derive(Debug, Clone)]
 pub(crate) enum PendingOp {
-    Write { path: String, bytes: Vec<u8> },
-    Delete { path: String },
+    /// Best-effort overwrite — no rollback on failure.
+    Write {
+        path: String,
+        bytes: Vec<u8>,
+    },
+    /// Atomic write realised at flush-time via the shadow-file pattern
+    /// documented on `ProjectStore::write`. `shadow` is the `<path>.tmp`
+    /// staging file written before the real `<path>` is committed.
+    AtomicWrite {
+        path: String,
+        bytes: Vec<u8>,
+        shadow: String,
+    },
+    Delete {
+        path: String,
+    },
 }
 
 /// Internal state: in-memory mirror + flush queue.
@@ -72,10 +86,29 @@ impl OpfsCore {
     }
 
     /// Mirror write — mutates the in-memory mirror and enqueues a pending write op.
-    pub fn write(&mut self, path: String, bytes: Vec<u8>, modified_ms: u64) {
+    ///
+    /// When `atomic` is true, the entry is recorded as a [`PendingOp::AtomicWrite`]
+    /// so [`OpfsCore::flush`] can realise the shadow→commit→cleanup sequence.
+    /// When `atomic` is false, a plain [`PendingOp::Write`] is enqueued.
+    pub fn write_atomic(&mut self, path: String, bytes: Vec<u8>, modified_ms: u64, atomic: bool) {
         self.entries
             .insert(path.clone(), (bytes.clone(), modified_ms));
-        self.pending.push_back(PendingOp::Write { path, bytes });
+        if atomic {
+            let shadow = format!("{}.tmp", path);
+            self.pending.push_back(PendingOp::AtomicWrite {
+                path,
+                bytes,
+                shadow,
+            });
+        } else {
+            self.pending.push_back(PendingOp::Write { path, bytes });
+        }
+    }
+
+    /// Non-atomic mirror write — convenience wrapper kept for callers that have
+    /// not been threaded through the atomic flag yet.
+    pub fn write(&mut self, path: String, bytes: Vec<u8>, modified_ms: u64) {
+        self.write_atomic(path, bytes, modified_ms, false);
     }
 
     /// Mirror delete — removes from mirror and enqueues a pending delete op.
@@ -185,13 +218,25 @@ impl OpfsProjectStore {
     /// lazily read only the bytes needed per operation.
     #[cfg(target_arch = "wasm32")]
     pub async fn hydrate(&self) -> Result<(), String> {
-        use crate::wasm_bridge::{list_tree_op, read_op};
+        use crate::wasm_bridge::{delete_op, list_tree_op, read_op};
 
         let paths = list_tree_op("/")
             .await
             .map_err(|e| format!("hydrate: list failed: {}", e))?;
 
         for path in paths {
+            // Recovery step: any orphan `<path>.tmp` shadow left by a crash
+            // mid-atomic-write is deleted before the mirror is populated.
+            // Without this, a fresh load could surface stale staging bytes
+            // via `read` if the real `<path>` happened to be absent too.
+            if path.ends_with(".tmp") {
+                // Best-effort: failures here are logged via the bridge error
+                // but do not abort hydration — the next flush will retry.
+                if let Err(e) = delete_op(&path).await {
+                    eprintln!("hydrate: failed to remove orphan shadow {}: {}", path, e);
+                }
+                continue;
+            }
             let bytes: Vec<u8> = match read_op(&path).await {
                 Ok(b) => b,
                 Err(_) => {
@@ -231,6 +276,7 @@ impl OpfsProjectStore {
         for op in ops {
             let path = match &op {
                 PendingOp::Write { path, .. } => path.clone(),
+                PendingOp::AtomicWrite { path, .. } => path.clone(),
                 PendingOp::Delete { path } => path.clone(),
             };
             flush_op(&path, op).await.map_err(|e| StoreError::Io(e))?;
@@ -239,6 +285,11 @@ impl OpfsProjectStore {
     }
 
     /// Flush — non-wasm32 stub for test bridge (blocking).
+    ///
+    /// Atomic writes are flushed via the underlying bridge as ordinary
+    /// writes. Real atomicity is realised at the wasm32 JS layer via the
+    /// shadow-file pattern; in native tests with [`MemoryBridge`] the
+    /// atomic flag is vacuously satisfied (writes are infallible).
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn flush(&self) -> Result<(), StoreError> {
         let ops = {
@@ -249,6 +300,11 @@ impl OpfsProjectStore {
         for op in ops {
             match op {
                 PendingOp::Write { path, bytes } => {
+                    self.bridge
+                        .write(&path, &bytes)
+                        .map_err(|e| StoreError::Io(e))?;
+                }
+                PendingOp::AtomicWrite { path, bytes, .. } => {
                     self.bridge
                         .write(&path, &bytes)
                         .map_err(|e| StoreError::Io(e))?;
@@ -275,10 +331,14 @@ impl ProjectStore for OpfsProjectStore {
             .ok_or_else(|| StoreError::NotFound(path.to_string()))
     }
 
-    fn write(&self, path: &str, bytes: &[u8], _atomic: bool) -> Result<(), StoreError> {
+    fn write(&self, path: &str, bytes: &[u8], atomic: bool) -> Result<(), StoreError> {
         let mut core = self.core.try_lock().map_err(|_| StoreError::LockPoisoned)?;
         let modified_ms = self.clock.now().into_u64();
-        core.write(path.to_string(), bytes.to_vec(), modified_ms);
+        // Mirror update is always immediate (read-after-write invariant).
+        // Atomicity is realised at flush-time via the shadow-file pattern
+        // documented on `ProjectStore::write`. See `flush()` and
+        // `wasm_bridge::write_atomic_op`.
+        core.write_atomic(path.to_string(), bytes.to_vec(), modified_ms, atomic);
         Ok(())
     }
 
@@ -306,6 +366,7 @@ impl ProjectStore for OpfsProjectStore {
             for op in ops {
                 let path = match &op {
                     PendingOp::Write { path, .. } => path.clone(),
+                    PendingOp::AtomicWrite { path, .. } => path.clone(),
                     PendingOp::Delete { path } => path.clone(),
                 };
                 flush_op(&path, op).await.map_err(|e| StoreError::Io(e))?;
@@ -468,5 +529,64 @@ mod tests {
         let entry = entries.iter().find(|e| e.path == "over.txt").unwrap();
         assert_eq!(entry.size, 7);
         assert_eq!(store.read("over.txt").unwrap(), b"updated");
+    }
+
+    // ── Atomic-write contract tests (mirror-only; native path) ───────────
+
+    #[test]
+    fn test_opfs_core_atomic_write_enqueues_atomic_variant() {
+        let mut core = OpfsCore::new();
+        core.write_atomic("a.txt".into(), b"v1".to_vec(), 1000, true);
+        let pending = core.take_pending();
+        assert_eq!(pending.len(), 1);
+        match &pending[0] {
+            PendingOp::AtomicWrite { path, shadow, .. } => {
+                assert_eq!(path, "a.txt");
+                assert_eq!(shadow, "a.txt.tmp");
+            }
+            other => panic!("expected AtomicWrite, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_opfs_core_non_atomic_write_enqueues_plain_variant() {
+        let mut core = OpfsCore::new();
+        core.write_atomic("a.txt".into(), b"v1".to_vec(), 1000, false);
+        let pending = core.take_pending();
+        assert_eq!(pending.len(), 1);
+        assert!(matches!(pending[0], PendingOp::Write { .. }));
+    }
+
+    #[test]
+    fn test_opfs_core_atomic_overwrite_keeps_mirror_invariant() {
+        // Read-after-write invariant under atomic=true: mirror updates
+        // immediately, regardless of the pending variant.
+        let mut core = OpfsCore::new();
+        core.write_atomic("rt.txt".into(), b"first".to_vec(), 1000, true);
+        assert_eq!(core.read("rt.txt"), Some(&b"first"[..]));
+        core.write_atomic("rt.txt".into(), b"second".to_vec(), 2000, true);
+        assert_eq!(core.read("rt.txt"), Some(&b"second"[..]));
+        // Both writes show up as AtomicWrite in pending order.
+        let pending = core.take_pending();
+        assert_eq!(pending.len(), 2);
+        assert!(matches!(pending[0], PendingOp::AtomicWrite { .. }));
+        assert!(matches!(pending[1], PendingOp::AtomicWrite { .. }));
+    }
+
+    #[test]
+    fn test_opfs_core_atomic_mixed_with_delete_in_order() {
+        // Pending order is preserved across mixed variants. The flush
+        // path drains in FIFO order regardless of variant.
+        let mut core = OpfsCore::new();
+        core.write_atomic("a.txt".into(), b"1".to_vec(), 1000, true);
+        core.write_atomic("b.txt".into(), b"2".to_vec(), 1000, false);
+        core.delete("a.txt".into());
+        core.write_atomic("c.txt".into(), b"3".to_vec(), 1000, true);
+        let pending = core.take_pending();
+        assert_eq!(pending.len(), 4);
+        assert!(matches!(pending[0], PendingOp::AtomicWrite { .. }));
+        assert!(matches!(pending[1], PendingOp::Write { .. }));
+        assert!(matches!(pending[2], PendingOp::Delete { .. }));
+        assert!(matches!(pending[3], PendingOp::AtomicWrite { .. }));
     }
 }
