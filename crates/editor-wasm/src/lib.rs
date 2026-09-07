@@ -23,7 +23,7 @@ use editor_bevy::CommandMetadata;
 use editor_bevy::dispatch_command_via_kernel;
 
 use editor_application::EditorSession;
-use editor_application::adapters::opfs::OpfsProjectStore;
+use editor_storage_web::OpfsProjectStore;
 
 use crate::clock::SysClock;
 

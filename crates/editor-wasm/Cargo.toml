@@ -16,6 +16,7 @@ serde_json = "1"
 editor-model = { path = "../editor-model" }
 editor-protocol = { path = "../editor-protocol" }
 editor-application = { path = "../editor-application" }
+editor-storage-web = { path = "../editor-storage-web" }
 editor-bevy = { path = "../editor-bevy" }
 uuid = { version = "1", features = ["v4"] }
 base64 = "0.22"
