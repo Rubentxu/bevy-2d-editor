@@ -76,6 +76,74 @@ Cycle context: this is `v1.0-stabilization` P1. The companion
 directive 2026-09-06** until the v1.0 gates pass — Cursor-like AI
 authoring is not built on top of unproven editor core.
 
+### v1.0-stabilization — P2 atomic writes & crash recovery (closes G5)
+
+Closes v1.0 product gate **G5** ("crash/data-loss recovery story
+tested"). The editor's persistence layer now writes atomically per
+file via a shadow-file + commit-on-close dance, and recovers from
+orphan `.tmp` shadows left by a previous crash on startup. Until now
+the `_atomic: bool` parameter on `ProjectStore::write` was silently
+ignored: callers like `reimport.rs::save_sidecar` requested atomic
+semantics but received best-effort overwrite.
+
+- **Contract surface** in `crates/editor-model/src/ports.rs`:
+  - `ProjectStore::write(path, bytes, atomic: true)` now has a
+    detailed v1 contract describing the shadow→commit→cleanup pattern,
+    the OPFS-specific rationale (no `rename`/`fsync` on main thread;
+    `createWritable() + close()` is the atomic commit point per W3C
+    File System spec), and the per-file (not multi-file) scope of
+    atomicity. Multi-file atomicity is explicitly deferred as a
+    post-v1 hardening item.
+  - `StoreError::AtomicRollback` documents the rollback semantics
+    (original `<path>` preserved, `<path>.tmp` cleaned up).
+- **OPFS impl** in `crates/editor-storage-web/src/opfs_core.rs`:
+  - New `PendingOp::AtomicWrite { path, bytes, shadow }` variant.
+  - `OpfsCore::write_atomic(..., atomic: bool)` selects between
+    `PendingOp::Write` (atomic=false) and `PendingOp::AtomicWrite`
+    (atomic=true with `shadow = "<path>.tmp"`).
+  - All four flush dispatch sites (wasm32 flush, non-wasm32 flush,
+    the `ProjectStore::flush` trait method, and the
+    `wasm_bridge::flush_op` dispatcher) handle the new variant.
+  - `wasm_bridge::write_atomic_op` orchestrates the dance: shadow
+    write → real-path commit (atomic close-as-commit) → shadow
+    cleanup. Step 3 always runs; on step-2 failure the shadow is
+    cleaned and the original `<path>` is preserved by virtue of
+    `close()` never having completed.
+  - `OpfsProjectStore::hydrate()` now scans the listing for paths
+    ending in `.tmp` and deletes them before populating the mirror,
+    recovering from any crash that left a stale staging file
+    behind. Failures are logged and hydration continues.
+- **JS-side atomic wrapper** in `frontend/src/opfs-bridge.ts`:
+  - `opfsSaveAtomic(path, contents)` mirrors the Rust dance for
+    JS callers (tests, future extensions). Installed on
+    `window.opfs_save_atomic` alongside the other opfs_* bridges,
+    before `init_project_store` per recovery-3 ordering.
+- **Tests**:
+  - 4 new unit tests in `crates/editor-storage-web/src/opfs_core.rs`:
+    atomic-flag → correct variant enqueue, mirror invariant under
+    atomic=true, and mixed-variant pending order preservation.
+    26/26 PASS in the `editor-storage-web` lib suite.
+  - New Playwright `@full` spec
+    `frontend/tests/crash-recovery.spec.ts` with 3 scenarios:
+    (a) `opfsSaveAtomic` commits + removes shadow,
+    (b) hydrate cleans orphan `.tmp` left by a previous crash,
+    (c) crash-survivor scenario (real file preserved when both
+    real + shadow exist). 3/3 PASS in 36.5 s on the @full cohort.
+    The `waitUntilReady` helper now also waits for
+    `window.__bevyEngineStarted === true` (the readiness signal
+    published only after `init_project_store` returns) to avoid
+    observing OPFS state pre-hydrate.
+- **Caller impact**: `reimport.rs::save_sidecar` (the sole
+  pre-existing caller passing `atomic=true`) now actually receives
+  atomic semantics at flush-time without any change on its side.
+
+Coverage update: G5 moves from 🔴 to 🟢. The 9 v1.0 product gates
+re-score to **5 ✅ / 3 🟡 / 2 🔴** (G5 added; G6 perf corpus and
+G8 compatibility policy still red — pending P3 and P4).
+
+Cycle context: `v1.0-stabilization` P2. `rig-agent-runtime-foundation`
+still **paused per user directive 2026-09-06**.
+
 ### Recovery-3 — Playwright OPFS persistence race fix
 
 Closes C-2 (deterministic Playwright smoke flake on `engine.spec.ts` `:526` and `:744`).
