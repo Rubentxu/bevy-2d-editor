@@ -18,7 +18,7 @@ use std::fmt::Write as FmtWrite;
 
 use crate::document::{ComponentInstance, SceneDocument};
 use crate::dynamic_scene::ExportWarning;
-use crate::schema::{ComponentSchema, ComponentSchemaRegistry, FieldType};
+use crate::schema::{ComponentSchema, FieldType};
 
 /// Result of Rust code generation.
 #[derive(Debug, Clone)]
@@ -131,7 +131,7 @@ fn emit_header(out: &mut String) {
 }
 
 /// Emits user-defined structs for every `game.*` schema with `exports_to_bevy = true`.
-fn emit_user_structs(out: &mut String, _scene: &SceneDocument, schemas: &ComponentSchemaRegistry) {
+fn emit_user_structs(out: &mut String, _scene: &SceneDocument, schemas: &[ComponentSchema]) {
     let mut user_schemas: Vec<&ComponentSchema> = schemas
         .iter()
         .filter(|s| s.type_id.starts_with("game.") && s.exports_to_bevy)
@@ -176,7 +176,7 @@ fn emit_plugin_shell(out: &mut String) {
 }
 
 /// Emits the `spawn_scene` function body.
-fn emit_spawn_scene(out: &mut String, scene: &SceneDocument, schemas: &ComponentSchemaRegistry) {
+fn emit_spawn_scene(out: &mut String, scene: &SceneDocument, schemas: &[ComponentSchema]) {
     let _ = writeln!(
         out,
         "// ─── Scene spawner ─────────────────────────────────────────────────────────────"
@@ -267,7 +267,7 @@ fn emit_spawn_scene(out: &mut String, scene: &SceneDocument, schemas: &Component
                     if other.starts_with("game.") {
                         // User-defined component
                         let struct_name = struct_name_for_type_id(other);
-                        if let Some(schema) = schemas.get(other) {
+                        if let Some(schema) = schemas.iter().find(|s| s.type_id == other) {
                             let mut field_inits = Vec::new();
                             for field in &schema.fields {
                                 let rust_ty = rust_type_for_field(&field.field_type);
@@ -355,10 +355,7 @@ fn default_for_type(rust_ty: &str) -> String {
 }
 
 /// Generates a complete Rust source file from a `SceneDocument`.
-pub fn export_rust_source(
-    scene: &SceneDocument,
-    schemas: &ComponentSchemaRegistry,
-) -> CodeGenResult {
+pub fn export_rust_source(scene: &SceneDocument, schemas: &[ComponentSchema]) -> CodeGenResult {
     let mut out = String::new();
     let warnings = Vec::new();
 
@@ -381,7 +378,148 @@ pub fn export_rust_source(
 mod tests {
     use super::*;
     use crate::document::{Entity, LocalId, StableId};
-    use crate::schema::{ComponentSchema, ComponentSchemaRegistry, FieldDef};
+    use crate::schema::{ComponentSchema, FieldDef};
+
+    /// H2.2: `editor-application::UserSchemaRegistry::with_builtins` moved out
+    /// of `editor-bevy` (H1.4 dependency direction). Tests here get a snapshot
+    /// of the 6 built-in schemas as `Vec<ComponentSchema>`. The seeds must
+    /// mirror the canonical ones in `editor_application::registry::user_schemas`.
+    fn builtin_schema_seeds() -> Vec<ComponentSchema> {
+        vec![
+            ComponentSchema {
+                type_id: "editor.Name".to_string(),
+                display_name: "Name".to_string(),
+                fields: vec![FieldDef {
+                    name: "name".to_string(),
+                    field_type: FieldType::String,
+                    default: serde_json::json!(""),
+                    constraints: vec![],
+                }],
+                exports_to_bevy: true,
+                source_location: None,
+                kind: crate::schema::SchemaKind::Simple,
+                bound_scene_asset_ref: None,
+                auto_spawn: true,
+                apply_back: crate::schema::ApplyBackPolicy::Never,
+            },
+            ComponentSchema {
+                type_id: "editor.Transform2D".to_string(),
+                display_name: "Transform 2D".to_string(),
+                fields: vec![
+                    FieldDef {
+                        name: "translation".to_string(),
+                        field_type: FieldType::Vec2,
+                        default: serde_json::json!({"x": 0.0, "y": 0.0}),
+                        constraints: vec![],
+                    },
+                    FieldDef {
+                        name: "rotation".to_string(),
+                        field_type: FieldType::F32,
+                        default: serde_json::json!(0.0),
+                        constraints: vec![],
+                    },
+                    FieldDef {
+                        name: "scale".to_string(),
+                        field_type: FieldType::Vec2,
+                        default: serde_json::json!({"x": 1.0, "y": 1.0}),
+                        constraints: vec![],
+                    },
+                ],
+                exports_to_bevy: true,
+                source_location: None,
+                kind: crate::schema::SchemaKind::Simple,
+                bound_scene_asset_ref: None,
+                auto_spawn: true,
+                apply_back: crate::schema::ApplyBackPolicy::Never,
+            },
+            ComponentSchema {
+                type_id: "editor.Sprite2D".to_string(),
+                display_name: "Sprite 2D".to_string(),
+                fields: vec![
+                    FieldDef {
+                        name: "asset".to_string(),
+                        field_type: FieldType::AssetReference,
+                        default: serde_json::json!(""),
+                        constraints: vec![],
+                    },
+                    FieldDef {
+                        name: "color".to_string(),
+                        field_type: FieldType::Color,
+                        default: serde_json::json!({"r": 1.0, "g": 1.0, "b": 1.0, "a": 1.0}),
+                        constraints: vec![],
+                    },
+                    FieldDef {
+                        name: "anchor".to_string(),
+                        field_type: FieldType::Anchor,
+                        default: serde_json::json!("Center"),
+                        constraints: vec![],
+                    },
+                ],
+                exports_to_bevy: true,
+                source_location: None,
+                kind: crate::schema::SchemaKind::Simple,
+                bound_scene_asset_ref: None,
+                auto_spawn: true,
+                apply_back: crate::schema::ApplyBackPolicy::Never,
+            },
+            ComponentSchema {
+                type_id: "editor.Visible".to_string(),
+                display_name: "Visible".to_string(),
+                fields: vec![FieldDef {
+                    name: "visible".to_string(),
+                    field_type: FieldType::Bool,
+                    default: serde_json::json!(true),
+                    constraints: vec![],
+                }],
+                exports_to_bevy: false,
+                source_location: None,
+                kind: crate::schema::SchemaKind::Simple,
+                bound_scene_asset_ref: None,
+                auto_spawn: true,
+                apply_back: crate::schema::ApplyBackPolicy::Never,
+            },
+            ComponentSchema {
+                type_id: "editor.Locked".to_string(),
+                display_name: "Locked".to_string(),
+                fields: vec![FieldDef {
+                    name: "locked".to_string(),
+                    field_type: FieldType::Bool,
+                    default: serde_json::json!(false),
+                    constraints: vec![],
+                }],
+                exports_to_bevy: false,
+                source_location: None,
+                kind: crate::schema::SchemaKind::Simple,
+                bound_scene_asset_ref: None,
+                auto_spawn: true,
+                apply_back: crate::schema::ApplyBackPolicy::Never,
+            },
+            ComponentSchema {
+                type_id: "editor.LogicBinding".to_string(),
+                display_name: "Logic Binding".to_string(),
+                fields: vec![
+                    FieldDef {
+                        name: "asset_id".to_string(),
+                        field_type: FieldType::AssetReference,
+                        default: serde_json::json!(""),
+                        constraints: vec![],
+                    },
+                    FieldDef {
+                        name: "version".to_string(),
+                        field_type: FieldType::F32,
+                        default: serde_json::json!(1.0),
+                        constraints: vec![],
+                    },
+                ],
+                exports_to_bevy: true,
+                source_location: None,
+                kind: crate::schema::SchemaKind::Simple,
+                bound_scene_asset_ref: None,
+                auto_spawn: true,
+                apply_back: crate::schema::ApplyBackPolicy::Never,
+            },
+        ]
+    }
     use serde_json::json;
     use std::collections::BTreeMap;
 
@@ -455,7 +593,7 @@ mod tests {
     #[test]
     fn test_codegen_empty_scene() {
         let doc = make_doc(vec![]);
-        let schemas = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
+        let schemas = builtin_schema_seeds();
         let result = export_rust_source(&doc, &schemas);
         assert!(result.source.contains("use bevy::prelude::*;"));
         assert!(result.source.contains("pub struct ScenePlugin"));
@@ -468,7 +606,7 @@ mod tests {
     #[test]
     fn test_codegen_header() {
         let doc = make_doc(vec![]);
-        let schemas = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
+        let schemas = builtin_schema_seeds();
         let result = export_rust_source(&doc, &schemas);
         assert!(result.source.contains("AUTO-GENERATED"));
         assert!(result.source.contains("Bevy 0.19"));
@@ -479,7 +617,7 @@ mod tests {
     #[test]
     fn test_codegen_name_component() {
         let doc = make_doc(vec![entity("e1", "Player", vec![name_component("Player")])]);
-        let schemas = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
+        let schemas = builtin_schema_seeds();
         let result = export_rust_source(&doc, &schemas);
         assert!(result.source.contains("Name::new(\"Player\")"));
         assert!(result.source.contains("ids.insert(\"e1\".to_string(), id)"));
@@ -493,7 +631,7 @@ mod tests {
             "T",
             vec![transform_component(100.0, 200.0, 0.5, 2.0, 3.0)],
         )]);
-        let schemas = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
+        let schemas = builtin_schema_seeds();
         let result = export_rust_source(&doc, &schemas);
         assert!(result.source.contains("Transform::from_translation"));
         assert!(result.source.contains("from_rotation_z(0.5)"));
@@ -516,7 +654,7 @@ mod tests {
                 "Center",
             )],
         )]);
-        let schemas = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
+        let schemas = builtin_schema_seeds();
         let result = export_rust_source(&doc, &schemas);
         assert!(result.source.contains("Sprite {"));
         assert!(result.source.contains("Color::srgba(1, 0, 0, 1)"));
@@ -548,7 +686,7 @@ mod tests {
                 "S",
                 vec![sprite_component("a.png", 1.0, 1.0, 1.0, 1.0, anchor)],
             )]);
-            let schemas = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
+            let schemas = builtin_schema_seeds();
             let result = export_rust_source(&doc, &schemas);
             assert!(
                 result.source.contains(&format!("anchor: {}", anchor)),
@@ -576,7 +714,7 @@ mod tests {
                 },
             ],
         )]);
-        let schemas = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
+        let schemas = builtin_schema_seeds();
         let result = export_rust_source(&doc, &schemas);
         // No mention of Visible or Locked
         assert!(!result.source.contains("Visible"));
@@ -590,7 +728,7 @@ mod tests {
             entity("p", "Parent", vec![name_component("Parent")]),
             child("c", "Child", "p", vec![name_component("Child")]),
         ]);
-        let schemas = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
+        let schemas = builtin_schema_seeds();
         let result = export_rust_source(&doc, &schemas);
         assert!(result.source.contains("add_child"));
         assert!(result.source.contains("ids[\"p\"]"));
@@ -600,8 +738,8 @@ mod tests {
     // §Scenario 9: User-defined game.* schema struct
     #[test]
     fn test_codegen_user_struct() {
-        let mut schemas = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
-        schemas.insert(ComponentSchema {
+        let mut schemas = builtin_schema_seeds();
+        schemas.push(ComponentSchema {
             // Use snake_case type_id (the correct convention)
             type_id: "game.player_health".to_string(),
             display_name: "PlayerHealth".to_string(),
@@ -685,8 +823,8 @@ mod tests {
     // §Scenario 12: snapshot — full output structure
     #[test]
     fn test_codegen_snapshot_full_output() {
-        let mut schemas = ComponentSchemaRegistry::with_builtin_seeds().unwrap();
-        schemas.insert(ComponentSchema {
+        let mut schemas = builtin_schema_seeds();
+        schemas.push(ComponentSchema {
             // Use snake_case type_id (the correct convention)
             type_id: "game.player_health".to_string(),
             display_name: "PlayerHealth".to_string(),

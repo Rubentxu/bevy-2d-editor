@@ -242,7 +242,7 @@ pub use scene_instance::{
 };
 pub use scene_instance_overrides::{OverrideIssue, ResyncReport};
 pub use scenes::{SceneInfo, SceneRegistry, SwitchResult};
-pub use schema::{ApplyBackPolicy, ApplyBackScope, ComponentTypeId};
+pub use schema::{ApplyBackPolicy, ComponentTypeId};
 pub use source_files::{SOURCES_DIR, SourceFile, SourceFileId};
 pub use tile_layer::{TileLayer, TileLayerId};
 pub use tileset::{
@@ -1650,19 +1650,16 @@ pub fn export_code(doc_json: &str) -> Result<JsValue, JsValue> {
 
 /// Helper: get a schema's JSON from the combined registry.
 fn get_schema_json(type_id: &str) -> Result<String, JsValue> {
-    let combined = schema::combined_registry();
-    let schema = combined
-        .get(type_id)
+    let schema = schema::get_schema(type_id)
         .ok_or_else(|| JsValue::from_str(&format!("Schema not found: {}", type_id)))?;
-    serde_json::to_string(schema).map_err(|e| JsValue::from_str(&e.to_string()))
+    serde_json::to_string(&schema).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Get the source location for a component schema type_id.
 /// Returns JSON string of SourceLocation or "null" if not found / not set.
 #[wasm_bindgen]
 pub fn find_source_location(type_id: &str) -> Result<String, JsValue> {
-    let registry = schema::combined_registry();
-    match registry.get(type_id) {
+    match schema::get_schema(type_id) {
         Some(schema) => {
             Ok(serde_json::to_string(&schema.source_location)
                 .unwrap_or_else(|_| "null".to_string()))
@@ -1779,7 +1776,7 @@ pub async fn delete_schema(type_id: &str) -> Result<(), JsValue> {
 #[wasm_bindgen]
 pub fn list_schemas() -> Result<JsValue, JsValue> {
     let combined = schema::combined_registry();
-    let type_ids: Vec<String> = combined.iter().map(|s| s.type_id.clone()).collect();
+    let type_ids: Vec<String> = combined.into_iter().map(|s| s.type_id).collect();
     serde_wasm_bindgen::to_value(&type_ids).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
@@ -1842,22 +1839,12 @@ pub fn create_scene_component(schema_json: &str) -> Result<JsValue, JsValue> {
 /// to clear the binding (downgrades SceneComponent → Simple).
 #[wasm_bindgen]
 pub fn bind_scene_to_schema(type_id: &str, scene_asset_id: Option<String>) -> Result<(), JsValue> {
-    // Read the current schema from whichever registry holds it (built-in
-    // or user), mutate it, and re-register via the user registry.
-    // Built-in schemas CAN be bound (this is how the editor augments
-    // built-ins with Scene Component metadata), but the resulting schema
-    // is registered as a user override.
-    let mut schema = if schema::is_builtin_type(type_id) {
-        schema::global_registry()
-            .get(type_id)
-            .ok_or_else(|| JsValue::from_str(&format!("Schema not found: {}", type_id)))?
-            .clone()
-    } else {
-        let user = schema::USER_SCHEMAS
-            .with(|r| r.borrow().get(type_id).cloned())
-            .ok_or_else(|| JsValue::from_str(&format!("Schema not found: {}", type_id)))?;
-        user
-    };
+    // Read the current schema from the combined (built-in + user) registry,
+    // mutate it, and re-register. The port impl allows overriding existing
+    // `editor.*` entries (H2.2 — fixes a pre-existing bug where this
+    // function would reject built-in overrides with CannotRegisterBuiltin).
+    let mut schema = schema::get_schema(type_id)
+        .ok_or_else(|| JsValue::from_str(&format!("Schema not found: {}", type_id)))?;
     match &scene_asset_id {
         Some(s) if !s.is_empty() => {
             schema.kind = schema::SchemaKind::SceneComponent;
@@ -1879,9 +1866,8 @@ pub fn list_scene_component_schemas() -> Result<JsValue, JsValue> {
     // must surface here too, or the Asset Browser never shows their
     // "Place (SceneComponent)" entry points.
     let schemas: Vec<schema::ComponentSchema> = schema::combined_registry()
-        .iter()
+        .into_iter()
         .filter(|s| s.kind == schema::SchemaKind::SceneComponent)
-        .cloned()
         .collect();
     let json = serde_json::to_string(&schemas)
         .map_err(|e| JsValue::from_str(&format!("Serialize error: {}", e)))?;
@@ -1897,7 +1883,7 @@ pub fn is_builtin_type(type_id: &str) -> bool {
 /// Combined registry size (built-ins + user).
 #[wasm_bindgen]
 pub fn combined_registry_size() -> usize {
-    schema::combined_registry().iter().count()
+    schema::combined_registry().len()
 }
 
 /// Return the full combined registry (built-ins + user) as a JSON array string.
@@ -1905,8 +1891,7 @@ pub fn combined_registry_size() -> usize {
 /// to the Ollama/OpenAI proxy endpoint.
 #[wasm_bindgen]
 pub fn get_combined_schemas_json() -> String {
-    let combined = schema::combined_registry();
-    let schemas: Vec<&schema::ComponentSchema> = combined.iter().collect();
+    let schemas = schema::combined_registry();
     serde_json::to_string(&schemas).unwrap_or_else(|_| "[]".to_string())
 }
 

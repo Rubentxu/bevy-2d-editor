@@ -8,6 +8,7 @@ pub mod adapters;
 pub mod extension;
 pub mod importer_registry;
 pub mod ports;
+pub mod registry;
 pub mod reimport;
 pub mod runtime_delta;
 pub mod session;
@@ -15,6 +16,7 @@ pub mod transaction;
 
 pub use adapters::in_memory::InMemoryProjectStore;
 pub use ports::project_store::{ProjectStore, StoreEntry, StoreError};
+pub use registry::UserSchemaRegistry;
 pub use runtime_delta::{ApplyBackPolicy, ApplyBackScope, RuntimeDelta};
 pub use session::{CacheEntry, DocumentSelection, EditorSession};
 // Re-export session and transaction types from editor_model (the model layer).

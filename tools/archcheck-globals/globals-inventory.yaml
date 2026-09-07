@@ -43,12 +43,6 @@ entries:
     owner: H2.3
     reason: "registry of loaded scenes; absorbed by EditorSession registry"
 
-  - name: USER_SCHEMAS
-    kind: thread_local
-    declared_at: crates/editor-bevy/src/schema.rs:419
-    owner: H2.2
-    reason: "registry of user-authored schemas; absorbed by EditorSession.schemas"
-
   - name: PREVIEW_METRICS
     kind: thread_local
     declared_at: crates/editor-bevy/src/preview_inspector.rs:60
@@ -211,6 +205,12 @@ entries:
     declared_at: crates/editor-model/src/ports.rs:324
     owner: H2.2
     reason: "importer registry cell; absorbed by EditorSession.importers"
+
+  - name: USER_SCHEMA_REGISTRY
+    kind: thread_local
+    declared_at: crates/editor-model/src/ports.rs:432
+    owner: H2.2
+    reason: "user-schema registry cell; absorbed by EditorSession.user_schemas"
 
   - name: C
     kind: static

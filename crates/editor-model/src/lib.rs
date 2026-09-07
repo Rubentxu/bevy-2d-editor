@@ -71,7 +71,8 @@ pub use scene_instance::{
     component_override_status_after_field_rename,
 };
 pub use schema::{
-    ComponentSchema, ComponentTypeId, Constraint, FieldDef, FieldType, SchemaKind, SourceLocation,
+    ApplyBackPolicy, ComponentSchema, ComponentTypeId, Constraint, FieldDef, FieldType,
+    SchemaError, SchemaKind, SourceLocation, is_builtin_type,
 };
 pub use session::{
     AppliedChangeMeta, AssetSessionState, ChangeSetSummary, HistoryScope, LogicSessionState,

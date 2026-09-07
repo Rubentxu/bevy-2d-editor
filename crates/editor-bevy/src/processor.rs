@@ -169,7 +169,7 @@ pub fn validate(doc: &SceneDocument, cmd: &Command) -> Result<(), CommandError> 
             entity_id, type_id, ..
         } => {
             find_entity(doc, entity_id)?;
-            if crate::schema::combined_registry().get(type_id).is_none() {
+            if crate::schema::get_schema(type_id).is_none() {
                 return Err(CommandError::UnknownSchema(type_id.clone()));
             }
         }
@@ -777,6 +777,17 @@ mod tests {
         }
     }
 
+    /// H2.2: initialise the user-schema port cell with the 6 built-ins.
+    /// Returns a handle so callers can add user schemas to the same registry.
+    ///
+    /// Used by every test that calls `crate::schema::*` (which routes
+    /// through the port cell).
+    fn init_user_schema_registry()
+    -> std::sync::Arc<std::sync::Mutex<dyn editor_model::ports::UserSchemaRegistryPort>> {
+        crate::schema::__test_only::register_builtins();
+        crate::schema::__test_only::handle()
+    }
+
     fn entity_with_components(id: &str, name: &str, components: Vec<ComponentInstance>) -> Entity {
         Entity {
             id: StableId::new(id),
@@ -886,6 +897,7 @@ mod tests {
 
     #[test]
     fn test_add_component_with_valid_schema() {
+        let _ = init_user_schema_registry();
         let mut doc = empty_doc();
         doc.entities
             .push(entity_with_components("ent_01", "Foo", vec![]));
@@ -901,6 +913,7 @@ mod tests {
 
     #[test]
     fn test_add_component_unknown_schema_rejected() {
+        let _ = init_user_schema_registry();
         let mut doc = empty_doc();
         doc.entities
             .push(entity_with_components("ent_01", "Foo", vec![]));
@@ -916,6 +929,7 @@ mod tests {
 
     #[test]
     fn test_add_component_preserves_unknown_fields() {
+        let _ = init_user_schema_registry();
         let mut doc = empty_doc();
         doc.entities
             .push(entity_with_components("ent_01", "Foo", vec![]));
@@ -1137,6 +1151,7 @@ mod tests {
 
     #[test]
     fn test_batch_atomic_rollback_on_failure() {
+        let _ = init_user_schema_registry();
         let mut doc = empty_doc();
         let cmd = Command::Batch {
             label: "test-batch".to_string(),
@@ -1264,6 +1279,7 @@ mod tests {
 
     #[test]
     fn test_failed_validation_leaves_doc_unchanged() {
+        let _ = init_user_schema_registry();
         let mut doc = empty_doc();
         doc.entities
             .push(entity_with_components("ent_01", "Foo", vec![]));

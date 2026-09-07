@@ -367,43 +367,88 @@ pub fn with_importer_registry() -> Option<Arc<Mutex<dyn ImporterRegistryPort>>> 
 // `SOURCE_FILE_REGISTRY`).
 //
 // ─────────────────────────────────────────────────────────────────────────────
-// UserSchemaRegistry (H2.2 — blocked on value-type unification)
+// UserSchemaRegistry (H2.2 — collapsed via port cell)
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // The H2.2 plan in `docs/architecture/state-ownership-matrix.md` calls for
 // collapsing the `USER_SCHEMAS` `thread_local!` in the editor-bevy schema module
 // into a port cell + `EditorSession.user_schemas` field, mirroring the
-// `EXTENSION_REGISTRY` / `IMPORTER_REGISTRY` / `EXTENSION_REGISTRY` pattern.
+// `EXTENSION_REGISTRY` / `IMPORTER_REGISTRY` pattern.
 //
-// That collapse is **blocked** on a pre-requisite refactor: the value
-// types for `ComponentSchema`, `FieldType`, `Constraint`, `FieldDef`,
-// `SourceLocation` and `SchemaError` currently exist in two divergent
-// shapes:
+// The value-type pre-requisite landed in this PR: `ComponentSchema`,
+// `FieldType`, `Constraint`, `FieldDef`, `SourceLocation`, `SchemaError`,
+// `SchemaKind` and `ApplyBackPolicy` now live canonically in
+// `editor_model::schema`, with the production-proven shapes. The legacy
+// `editor_model::schema` divergent set (Option-based `SourceLocation`,
+// tag-based `FieldType`, `Range`/`Step`/`Pattern`/`Required` constraints,
+// `location`/`description` fields on `FieldDef` and `ComponentSchema`)
+// has been removed.
 //
-// - `editor_model::schema` (310 lines, value-types-only, the intended
-//   canonical set per the comment at the top of that file).
-// - editor-bevy schema (912 lines, full registry + facades, used by
-//   the Bevy adapter and ~50 call sites).
-//
-// The port trait must reference `editor_model::schema::*` types (the Bevy
-// adapter cannot import `editor_application`, and `editor_application`
-// cannot import `editor_bevy` per H1.4). Until the value types are
-// unified under `editor_model::schema`, the `UserSchemaRegistry` port
-// trait cannot be defined cleanly.
-//
-// Once the value-type unification lands, the port trait will look like:
-//
-// ```ignore
-// pub trait UserSchemaRegistryPort: Send + Sync {
-//     fn register(&self, schema: ComponentSchema) -> Result<(), SchemaError>;
-//     fn unregister(&self, type_id: &str) -> Result<(), SchemaError>;
-//     fn is_builtin(&self, type_id: &str) -> bool;
-//     fn combined_view(&self) -> Vec<ComponentSchema>;
-//     fn get(&self, type_id: &str) -> Option<ComponentSchema>;
-// }
-// ```
-//
-// with the same cell + `register_*` / `with_*` accessors that the other
-// three port cells in this file use. See
-// `docs/architecture/state-ownership-matrix.md` for the migration PR
-// placeholder.
+// The port trait definition follows.
+
+use crate::schema::{ComponentSchema, SchemaError};
+
+/// User-defined component schema registry — H2.2.
+///
+/// Concrete implementations live in `editor_application::registry::user_schemas`
+/// (`UserSchemaRegistry`). The trait lives here so the editor-bevy adapter can
+/// call into the registry through the port cell without importing
+/// `editor_application` (per H1.4 dependency direction).
+///
+/// All mutation methods take `&mut self` (matching the
+/// `ExtensionRegistryPort` / `ImporterRegistryPort` pattern) so the
+/// concrete impl can use a plain `HashMap` and rely on the outer
+/// `Arc<Mutex<dyn UserSchemaRegistryPort>>` wrapper for thread safety.
+pub trait UserSchemaRegistryPort: Send + Sync {
+    /// Register a user-defined schema. Built-in `editor.*` schemas are rejected.
+    ///
+    /// SceneComponent schemas require a `bound_scene_asset_ref` (Hito 4
+    /// Order 7); missing bindings yield `SchemaError::MissingBoundSceneAsset`.
+    fn register(&mut self, schema: ComponentSchema) -> Result<(), SchemaError>;
+
+    /// Unregister a user-defined schema. Built-in `editor.*` schemas are rejected.
+    ///
+    /// Missing schemas are a no-op success.
+    fn unregister(&mut self, type_id: &str) -> Result<(), SchemaError>;
+
+    /// Returns true if the type_id is a built-in (starts with `editor.`).
+    fn is_builtin(&self, type_id: &str) -> bool;
+
+    /// Snapshot of all schemas (built-ins + user-defined) as owned values.
+    ///
+    /// Returned as `Vec<ComponentSchema>` (clones) so the caller is free
+    /// of lifetime coupling to the registry and Bevy facades can use it
+    /// without holding the registry mutex across the call.
+    fn combined_view(&self) -> Vec<ComponentSchema>;
+
+    /// Lookup by type_id.
+    fn get(&self, type_id: &str) -> Option<ComponentSchema>;
+}
+
+thread_local! {
+    /// The global user-schema registry — set at WASM startup via
+    /// [`register_user_schema_registry`]. Same ownership semantics as
+    /// `IMPORTER_REGISTRY` and `EXTENSION_REGISTRY`.
+    static USER_SCHEMA_REGISTRY: std::cell::RefCell<
+        Option<Arc<Mutex<dyn UserSchemaRegistryPort>>>,
+    > = const { std::cell::RefCell::new(None) };
+}
+
+/// Register the user-schema registry (call once at WASM startup).
+///
+/// Takes ownership of the `Arc<Mutex<dyn UserSchemaRegistryPort>>`. The
+/// registry stays alive as long as either the caller keeps its `Arc`
+/// clone alive OR this registration is held.
+pub fn register_user_schema_registry(registry: Arc<Mutex<dyn UserSchemaRegistryPort>>) {
+    USER_SCHEMA_REGISTRY.with(|cell| {
+        *cell.borrow_mut() = Some(registry);
+    });
+}
+
+/// Get a clone of the registered user-schema registry, or `None` if not yet registered.
+pub fn with_user_schema_registry() -> Option<Arc<Mutex<dyn UserSchemaRegistryPort>>> {
+    USER_SCHEMA_REGISTRY
+        .try_with(|cell| cell.borrow().clone())
+        .ok()
+        .flatten()
+}

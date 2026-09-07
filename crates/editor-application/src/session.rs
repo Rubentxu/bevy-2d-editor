@@ -21,6 +21,7 @@ use crate::RuntimeDelta;
 use crate::extension::ExtensionRegistry;
 use crate::importer_registry::ImporterRegistry;
 use crate::ports::project_store::ProjectStore;
+use crate::registry::UserSchemaRegistry;
 use editor_model::CausalityEdge;
 use editor_model::EditorSessionPort;
 use editor_model::PendingChangeSet;
@@ -29,6 +30,7 @@ use editor_model::StableId;
 use editor_model::logic_activation::{LogicActivationEvent, LogicActivationRing, ring_push};
 use editor_model::ports::ExtensionRegistryPort;
 use editor_model::ports::ImporterRegistryPort;
+use editor_model::ports::UserSchemaRegistryPort;
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -483,6 +485,8 @@ pub struct EditorSession {
     extension_registry: Arc<Mutex<dyn ExtensionRegistryPort>>,
     /// Importer registry (ADR-0040 step 3 + ADR-0041 — v0.93 external source importers).
     importer_registry: Arc<Mutex<dyn ImporterRegistryPort>>,
+    /// User-defined component schema registry (H2.2 — single-session composition root).
+    user_schemas: Arc<Mutex<dyn UserSchemaRegistryPort>>,
 }
 
 impl std::fmt::Debug for EditorSession {
@@ -549,6 +553,7 @@ impl EditorSession {
             ),
             extension_registry: Arc::new(Mutex::new(ExtensionRegistry::empty())),
             importer_registry: Arc::new(Mutex::new(ImporterRegistry::empty())),
+            user_schemas: Arc::new(Mutex::new(UserSchemaRegistry::new())),
         }
     }
 
@@ -557,7 +562,8 @@ impl EditorSession {
     /// This is the canonical production constructor. Built-in extensions
     /// (`builtin.logic-bricks.controllers`, `builtin.logic-recipes`,
     /// `builtin.scene-validator`) and built-in importers (Aseprite, LDtk,
-    /// Tiled) are pre-registered at composition time.
+    /// Tiled) are pre-registered at composition time. The user-schema
+    /// registry is seeded with the 6 built-in `editor.*` schemas.
     pub fn with_builtins(store: Arc<dyn ProjectStore>, clock: Arc<dyn Clock>) -> Self {
         Self {
             store,
@@ -577,6 +583,10 @@ impl EditorSession {
             ),
             extension_registry: Arc::new(Mutex::new(ExtensionRegistry::with_builtins())),
             importer_registry: Arc::new(Mutex::new(ImporterRegistry::with_builtins())),
+            user_schemas: Arc::new(Mutex::new(
+                UserSchemaRegistry::with_builtins()
+                    .expect("builtin schema seeds must succeed (all built-ins are Simple)"),
+            )),
         }
     }
 
@@ -608,6 +618,22 @@ impl EditorSession {
     /// Used by WASM exports that need to register/unregister importers.
     pub(crate) fn importer_registry_mut(&mut self) -> &mut Arc<Mutex<dyn ImporterRegistryPort>> {
         &mut self.importer_registry
+    }
+
+    /// Returns the user-schema registry accessor (shared).
+    ///
+    /// Returns `Arc<Mutex<dyn UserSchemaRegistryPort>>` so callers can hold
+    /// the lock across multiple calls without borrowing `&mut self`.
+    pub fn user_schemas(&self) -> Arc<Mutex<dyn UserSchemaRegistryPort>> {
+        Arc::clone(&self.user_schemas)
+    }
+
+    /// Returns a mutable reference to the user-schema registry.
+    ///
+    /// Used by the WASM composition root and tests.
+    #[allow(dead_code)]
+    pub(crate) fn user_schemas_mut(&mut self) -> &mut Arc<Mutex<dyn UserSchemaRegistryPort>> {
+        &mut self.user_schemas
     }
 
     // ─── Sub-state accessors (PR2a) ──────────────────────────────────────────

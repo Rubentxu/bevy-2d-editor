@@ -421,8 +421,7 @@ fn capture_tunable_baselines_internal(
 /// component types.
 fn is_eligible_for_apply_back(component_type_id: &str) -> bool {
     use crate::ApplyBackPolicy;
-    crate::schema::global_registry()
-        .get(component_type_id)
+    crate::schema::get_schema(component_type_id)
         .map(|schema| !matches!(schema.apply_back, ApplyBackPolicy::Never))
         .unwrap_or(true)
 }
