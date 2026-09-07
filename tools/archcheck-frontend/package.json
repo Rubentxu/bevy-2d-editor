@@ -1,0 +1,17 @@
+{
+  "name": "archcheck-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Frontend bridge boundary checker (H0.4 — frontend bridge access ratchet).",
+  "type": "module",
+  "scripts": {
+    "check": "tsx check.ts",
+    "test": "tsx check.test.ts",
+    "seed": "tsx check.ts --seed"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

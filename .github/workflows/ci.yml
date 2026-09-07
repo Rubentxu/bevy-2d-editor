@@ -264,6 +264,32 @@ jobs:
         working-directory: tools/archcheck-globals
         run: npm test
 
+  frontend-bridge:
+    name: Frontend bridge boundary ratchet
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: 'tools/archcheck-frontend/package-lock.json'
+
+      - name: Install archcheck-frontend tool
+        working-directory: tools/archcheck-frontend
+        run: npm ci
+
+      - name: Run archcheck-frontend assertions
+        working-directory: tools/archcheck-frontend
+        run: npm run check
+
+      - name: Run archcheck-frontend fixture tests
+        working-directory: tools/archcheck-frontend
+        run: npm test
+
   playwright-smoke:
     name: Playwright smoke cohort
     runs-on: ubuntu-latest
