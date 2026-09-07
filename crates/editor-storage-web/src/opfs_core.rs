@@ -530,4 +530,63 @@ mod tests {
         assert_eq!(entry.size, 7);
         assert_eq!(store.read("over.txt").unwrap(), b"updated");
     }
+
+    // ── Atomic-write contract tests (mirror-only; native path) ───────────
+
+    #[test]
+    fn test_opfs_core_atomic_write_enqueues_atomic_variant() {
+        let mut core = OpfsCore::new();
+        core.write_atomic("a.txt".into(), b"v1".to_vec(), 1000, true);
+        let pending = core.take_pending();
+        assert_eq!(pending.len(), 1);
+        match &pending[0] {
+            PendingOp::AtomicWrite { path, shadow, .. } => {
+                assert_eq!(path, "a.txt");
+                assert_eq!(shadow, "a.txt.tmp");
+            }
+            other => panic!("expected AtomicWrite, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_opfs_core_non_atomic_write_enqueues_plain_variant() {
+        let mut core = OpfsCore::new();
+        core.write_atomic("a.txt".into(), b"v1".to_vec(), 1000, false);
+        let pending = core.take_pending();
+        assert_eq!(pending.len(), 1);
+        assert!(matches!(pending[0], PendingOp::Write { .. }));
+    }
+
+    #[test]
+    fn test_opfs_core_atomic_overwrite_keeps_mirror_invariant() {
+        // Read-after-write invariant under atomic=true: mirror updates
+        // immediately, regardless of the pending variant.
+        let mut core = OpfsCore::new();
+        core.write_atomic("rt.txt".into(), b"first".to_vec(), 1000, true);
+        assert_eq!(core.read("rt.txt"), Some(&b"first"[..]));
+        core.write_atomic("rt.txt".into(), b"second".to_vec(), 2000, true);
+        assert_eq!(core.read("rt.txt"), Some(&b"second"[..]));
+        // Both writes show up as AtomicWrite in pending order.
+        let pending = core.take_pending();
+        assert_eq!(pending.len(), 2);
+        assert!(matches!(pending[0], PendingOp::AtomicWrite { .. }));
+        assert!(matches!(pending[1], PendingOp::AtomicWrite { .. }));
+    }
+
+    #[test]
+    fn test_opfs_core_atomic_mixed_with_delete_in_order() {
+        // Pending order is preserved across mixed variants. The flush
+        // path drains in FIFO order regardless of variant.
+        let mut core = OpfsCore::new();
+        core.write_atomic("a.txt".into(), b"1".to_vec(), 1000, true);
+        core.write_atomic("b.txt".into(), b"2".to_vec(), 1000, false);
+        core.delete("a.txt".into());
+        core.write_atomic("c.txt".into(), b"3".to_vec(), 1000, true);
+        let pending = core.take_pending();
+        assert_eq!(pending.len(), 4);
+        assert!(matches!(pending[0], PendingOp::AtomicWrite { .. }));
+        assert!(matches!(pending[1], PendingOp::Write { .. }));
+        assert!(matches!(pending[2], PendingOp::Delete { .. }));
+        assert!(matches!(pending[3], PendingOp::AtomicWrite { .. }));
+    }
 }
