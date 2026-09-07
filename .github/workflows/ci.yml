@@ -181,9 +181,13 @@ jobs:
         working-directory: tools/archcheck
         run: npm ci
 
-      - name: Run archcheck
+      - name: Run archcheck assertions
         working-directory: tools/archcheck
         run: npm run check
+
+      - name: Run archcheck fixture tests
+        working-directory: tools/archcheck
+        run: npm test
 
   playwright-smoke:
     name: Playwright smoke cohort

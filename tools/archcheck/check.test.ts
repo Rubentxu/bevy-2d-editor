@@ -2,7 +2,19 @@
 /**
  * Smoke checks for the archcheck assertion implementations. Verifies each
  * assertion reports a deterministic result given a fixture. Run with
- * `npm run test` inside tools/archcheck.
+ * `npm test` inside tools/archcheck.
+ *
+ * Fixture model:
+ *   The happy-path fixture mirrors the canonical bevy-2d-editor crate
+ *   layout (editor-bevy + editor-model + editor-application +
+ *   editor-protocol) plus a minimal frontend/src tree. Each negative
+ *   test case starts from the happy path and overrides the one file
+ *   that introduces the targeted violation.
+ *
+ * Wire-up assumption:
+ *   `check.ts` resolves the CWD argument against a real workspace;
+ *   `tmpRoot` has no `.git`, so `findRepoRoot` falls back to `tmpRoot`
+ *   and the assertion paths line up with what the fixtures create.
  */
 
 import { execSync } from "node:child_process";
@@ -60,115 +72,148 @@ function runArchCheckList(cwd: string): { code: number; stdout: string; stderr: 
   }
 }
 
+// ── Canonical happy-path fixture ─────────────────────────────────────────────
+
+function happyPathFixture(): void {
+  // editor-bevy: must exist + declare bevy = "0.19" (A1, A2)
+  mkdirSync(join(tmpRoot, "crates/editor-bevy/src"), { recursive: true });
+  writeFileSync(join(tmpRoot, "crates/editor-bevy/src/lib.rs"), "// bevy bridge\n");
+  writeFileSync(
+    join(tmpRoot, "crates/editor-bevy/Cargo.toml"),
+    '[dependencies]\nbevy = { version = "0.19", default-features = false, features = ["2d"] }\n',
+  );
+
+  // editor-model: pure, no bevy, owns the canonical LocalId (B1, B3, B4)
+  mkdirSync(join(tmpRoot, "crates/editor-model/src"), { recursive: true });
+  writeFileSync(
+    join(tmpRoot, "crates/editor-model/src/lib.rs"),
+    "// pure model\npub struct LocalId(String);\n",
+  );
+  writeFileSync(join(tmpRoot, "crates/editor-model/Cargo.toml"), '[dependencies]\nserde = "1"\n');
+
+  // editor-application: root must be pure (no wasm at root; wasm.rs excluded)
+  // (B2, B8). NOTE: avoid mentioning the forbidden token names in comments,
+  // because B2/B8 do not strip comments before matching.
+  mkdirSync(join(tmpRoot, "crates/editor-application/src"), { recursive: true });
+  writeFileSync(
+    join(tmpRoot, "crates/editor-application/src/lib.rs"),
+    "// application root, no platform imports\n",
+  );
+
+  // editor-protocol: pure protocol crate (B7, B8)
+  mkdirSync(join(tmpRoot, "crates/editor-protocol/src"), { recursive: true });
+  writeFileSync(
+    join(tmpRoot, "crates/editor-protocol/src/lib.rs"),
+    "// protocol messages\npub struct ChangeRequest;\n",
+  );
+  writeFileSync(
+    join(tmpRoot, "crates/editor-protocol/Cargo.toml"),
+    '[dependencies]\nserde = "1"\n',
+  );
+
+  // frontend/src: minimal set covering B5, B6, B9
+  mkdirSync(join(tmpRoot, "frontend/src"), { recursive: true });
+  writeFileSync(
+    join(tmpRoot, "frontend/src/ChangeWorkbenchPanel.tsx"),
+    "// definition file — must be skipped by B5\n" + "export function ChangeWorkbenchPanel() { return null; }\n",
+  );
+  writeFileSync(
+    join(tmpRoot, "frontend/src/BottomDock.tsx"),
+    "import { ChangeWorkbenchPanel } from \"./ChangeWorkbenchPanel\";\n" +
+      "export function BottomDock() { return <ChangeWorkbenchPanel />; }\n",
+  );
+  writeFileSync(
+    join(tmpRoot, "frontend/src/ApplyBackPanel.tsx"),
+    "// reads apply_back_eligible only\n" +
+      "export function ApplyBackPanel({ apply_back_eligible }: { apply_back_eligible: boolean }) {\n" +
+      "  return apply_back_eligible ? <div>apply</div> : null;\n" +
+      "}\n",
+  );
+  writeFileSync(
+    join(tmpRoot, "frontend/src/useSceneState.ts"),
+    "import { useState } from \"react\";\n" +
+      "export function useSceneState() {\n" +
+      "  const [scene, setScene] = useState(null);\n" +
+      "  return { scene, setScene };\n" +
+      "}\n",
+  );
+  writeFileSync(
+    join(tmpRoot, "frontend/src/scene-session.ts"),
+    "import { useState } from \"react\";\n" +
+      "export function useSceneSession() {\n" +
+      "  const [scene, setScene] = useState(null);\n" +
+      "  return { scene, setScene };\n" +
+      "}\n",
+  );
+  writeFileSync(
+    join(tmpRoot, "frontend/src/EditorGateway.tsx"),
+    "// WASM boundary — sanctioned to call setScene\n" +
+      "declare function setScene(s: unknown): void;\n" +
+      "export function EditorGateway() {\n" +
+      "  return null;\n" +
+      "}\n",
+  );
+  writeFileSync(
+    join(tmpRoot, "frontend/src/OtherComponent.tsx"),
+    "// unrelated component — must NOT call setScene\n" +
+      "export function OtherComponent() { return <div>other</div>; }\n",
+  );
+}
+
+// ── Test cases ──────────────────────────────────────────────────────────────
+
 const tests: TestCase[] = [
   {
-    name: "happy path: all 6 assertions pass",
+    name: "happy path: all 11 assertions pass",
     violationsExpected: 0,
+    fixture: happyPathFixture,
+  },
+  {
+    name: "A1: editor-bevy lib.rs missing",
+    violationsExpected: 1,
     fixture: () => {
-      // editor-core lib.rs + bevy 0.19
-      mkdirSync(join(tmpRoot, "crates/editor-core/src"), { recursive: true });
-      writeFileSync(join(tmpRoot, "crates/editor-core/src/lib.rs"), "// lib\n");
-      writeFileSync(
-        join(tmpRoot, "crates/editor-core/Cargo.toml"),
-        '[dependencies]\nbevy = { version = "0.19", default-features = false, features = ["2d"] }\n',
-      );
-      // editor-model: pure (no bevy)
-      mkdirSync(join(tmpRoot, "crates/editor-model/src"), { recursive: true });
-      writeFileSync(join(tmpRoot, "crates/editor-model/src/lib.rs"), "// pure model\npub struct LocalId(String);\n");
-      writeFileSync(join(tmpRoot, "crates/editor-model/Cargo.toml"), "[dependencies]\nserde = \"1\"\n");
-      // editor-application: no wasm imports at root level
-      mkdirSync(join(tmpRoot, "crates/editor-application/src"), { recursive: true });
-      writeFileSync(join(tmpRoot, "crates/editor-application/src/lib.rs"), "// app\n");
+      happyPathFixture();
+      rmSync(join(tmpRoot, "crates/editor-bevy/src/lib.rs"));
     },
   },
   {
-    name: "A1: editor-core lib.rs missing",
+    name: "A2: bevy version mismatch (0.18 instead of 0.19)",
     violationsExpected: 1,
     fixture: () => {
-      mkdirSync(join(tmpRoot, "crates/editor-core/src"), { recursive: true });
-      // lib.rs does not exist
+      happyPathFixture();
       writeFileSync(
-        join(tmpRoot, "crates/editor-core/Cargo.toml"),
-        '[dependencies]\nbevy = { version = "0.19" }\n',
-      );
-      mkdirSync(join(tmpRoot, "crates/editor-model/src"), { recursive: true });
-      writeFileSync(join(tmpRoot, "crates/editor-model/src/lib.rs"), "// pure\npub struct LocalId(String);\n");
-      writeFileSync(join(tmpRoot, "crates/editor-model/Cargo.toml"), "[dependencies]\n");
-      mkdirSync(join(tmpRoot, "crates/editor-application/src"), { recursive: true });
-      writeFileSync(join(tmpRoot, "crates/editor-application/src/lib.rs"), "// app\n");
-    },
-  },
-  {
-    name: "A2: bevy version mismatch",
-    violationsExpected: 1,
-    fixture: () => {
-      mkdirSync(join(tmpRoot, "crates/editor-core/src"), { recursive: true });
-      writeFileSync(join(tmpRoot, "crates/editor-core/src/lib.rs"), "// lib\n");
-      writeFileSync(
-        join(tmpRoot, "crates/editor-core/Cargo.toml"),
+        join(tmpRoot, "crates/editor-bevy/Cargo.toml"),
         '[dependencies]\nbevy = { version = "0.18" }\n',
       );
-      mkdirSync(join(tmpRoot, "crates/editor-model/src"), { recursive: true });
-      writeFileSync(join(tmpRoot, "crates/editor-model/src/lib.rs"), "// pure\npub struct LocalId(String);\n");
-      writeFileSync(join(tmpRoot, "crates/editor-model/Cargo.toml"), "[dependencies]\n");
-      mkdirSync(join(tmpRoot, "crates/editor-application/src"), { recursive: true });
-      writeFileSync(join(tmpRoot, "crates/editor-application/src/lib.rs"), "// app\n");
     },
   },
   {
     name: "B1: editor-model has bevy dependency (Cargo.toml)",
     violationsExpected: 1,
     fixture: () => {
-      mkdirSync(join(tmpRoot, "crates/editor-core/src"), { recursive: true });
-      writeFileSync(join(tmpRoot, "crates/editor-core/src/lib.rs"), "// lib\n");
-      writeFileSync(
-        join(tmpRoot, "crates/editor-core/Cargo.toml"),
-        '[dependencies]\nbevy = { version = "0.19" }\n',
-      );
-      mkdirSync(join(tmpRoot, "crates/editor-model/src"), { recursive: true });
-      writeFileSync(join(tmpRoot, "crates/editor-model/src/lib.rs"), "// model\npub struct LocalId(String);\n");
+      happyPathFixture();
       writeFileSync(
         join(tmpRoot, "crates/editor-model/Cargo.toml"),
-        "[dependencies]\nbevy = \"0.19\"\n",
+        '[dependencies]\nbevy = "0.19"\n',
       );
-      mkdirSync(join(tmpRoot, "crates/editor-application/src"), { recursive: true });
-      writeFileSync(join(tmpRoot, "crates/editor-application/src/lib.rs"), "// app\n");
     },
   },
   {
     name: "B1: editor-model has bevy:: in source",
     violationsExpected: 1,
     fixture: () => {
-      mkdirSync(join(tmpRoot, "crates/editor-core/src"), { recursive: true });
-      writeFileSync(join(tmpRoot, "crates/editor-core/src/lib.rs"), "// lib\n");
-      writeFileSync(
-        join(tmpRoot, "crates/editor-core/Cargo.toml"),
-        '[dependencies]\nbevy = { version = "0.19" }\n',
-      );
-      mkdirSync(join(tmpRoot, "crates/editor-model/src"), { recursive: true });
+      happyPathFixture();
       writeFileSync(
         join(tmpRoot, "crates/editor-model/src/lib.rs"),
         "use bevy::prelude::App;\npub struct LocalId(String);\n",
       );
-      writeFileSync(join(tmpRoot, "crates/editor-model/Cargo.toml"), "[dependencies]\n");
-      mkdirSync(join(tmpRoot, "crates/editor-application/src"), { recursive: true });
-      writeFileSync(join(tmpRoot, "crates/editor-application/src/lib.rs"), "// app\n");
     },
   },
   {
-    name: "B2: editor-application has wasm_bindgen at root",
+    name: "B2: editor-application root has wasm_bindgen",
     violationsExpected: 1,
     fixture: () => {
-      mkdirSync(join(tmpRoot, "crates/editor-core/src"), { recursive: true });
-      writeFileSync(join(tmpRoot, "crates/editor-core/src/lib.rs"), "// lib\n");
-      writeFileSync(
-        join(tmpRoot, "crates/editor-core/Cargo.toml"),
-        '[dependencies]\nbevy = { version = "0.19" }\n',
-      );
-      mkdirSync(join(tmpRoot, "crates/editor-model/src"), { recursive: true });
-      writeFileSync(join(tmpRoot, "crates/editor-model/src/lib.rs"), "// pure\npub struct LocalId(String);\n");
-      writeFileSync(join(tmpRoot, "crates/editor-model/Cargo.toml"), "[dependencies]\n");
-      mkdirSync(join(tmpRoot, "crates/editor-application/src"), { recursive: true });
+      happyPathFixture();
       writeFileSync(
         join(tmpRoot, "crates/editor-application/src/lib.rs"),
         "use wasm_bindgen::prelude::wasm_bindgen;\n",
@@ -176,65 +221,120 @@ const tests: TestCase[] = [
     },
   },
   {
-    name: "B3: editor-model imports editor_core",
+    name: "B3: editor-model imports editor_core in source",
     violationsExpected: 1,
     fixture: () => {
-      mkdirSync(join(tmpRoot, "crates/editor-core/src"), { recursive: true });
-      writeFileSync(join(tmpRoot, "crates/editor-core/src/lib.rs"), "// lib\n");
-      writeFileSync(
-        join(tmpRoot, "crates/editor-core/Cargo.toml"),
-        '[dependencies]\nbevy = { version = "0.19" }\n',
-      );
-      mkdirSync(join(tmpRoot, "crates/editor-model/src"), { recursive: true });
+      happyPathFixture();
       writeFileSync(
         join(tmpRoot, "crates/editor-model/src/lib.rs"),
         "use editor_core::SceneDocument;\npub struct LocalId(String);\n",
       );
-      writeFileSync(join(tmpRoot, "crates/editor-model/Cargo.toml"), "[dependencies]\n");
-      mkdirSync(join(tmpRoot, "crates/editor-application/src"), { recursive: true });
-      writeFileSync(join(tmpRoot, "crates/editor-application/src/lib.rs"), "// app\n");
     },
   },
   {
     name: "B3: editor-model Cargo.toml lists editor-core",
     violationsExpected: 1,
     fixture: () => {
-      mkdirSync(join(tmpRoot, "crates/editor-core/src"), { recursive: true });
-      writeFileSync(join(tmpRoot, "crates/editor-core/src/lib.rs"), "// lib\n");
-      writeFileSync(
-        join(tmpRoot, "crates/editor-core/Cargo.toml"),
-        '[dependencies]\nbevy = { version = "0.19" }\n',
-      );
-      mkdirSync(join(tmpRoot, "crates/editor-model/src"), { recursive: true });
-      writeFileSync(join(tmpRoot, "crates/editor-model/src/lib.rs"), "// pure\npub struct LocalId(String);\n");
+      happyPathFixture();
       writeFileSync(
         join(tmpRoot, "crates/editor-model/Cargo.toml"),
-        "[dependencies]\neditor-core = { path = \"../editor-core\" }\n",
+        '[dependencies]\neditor-core = { path = "../editor-bevy" }\n',
       );
-      mkdirSync(join(tmpRoot, "crates/editor-application/src"), { recursive: true });
-      writeFileSync(join(tmpRoot, "crates/editor-application/src/lib.rs"), "// app\n");
     },
   },
   {
     name: "B4: duplicate pub struct LocalId across crates",
     violationsExpected: 1,
     fixture: () => {
-      mkdirSync(join(tmpRoot, "crates/editor-core/src"), { recursive: true });
-      writeFileSync(join(tmpRoot, "crates/editor-core/src/lib.rs"), "// lib\n");
-      writeFileSync(
-        join(tmpRoot, "crates/editor-core/Cargo.toml"),
-        '[dependencies]\nbevy = { version = "0.19" }\n',
-      );
-      mkdirSync(join(tmpRoot, "crates/editor-model/src"), { recursive: true });
-      writeFileSync(
-        join(tmpRoot, "crates/editor-model/src/lib.rs"),
-        "// pure\npub struct LocalId(String);\n",
-      );
-      writeFileSync(join(tmpRoot, "crates/editor-model/Cargo.toml"), "[dependencies]\n");
-      mkdirSync(join(tmpRoot, "crates/editor-application/src"), { recursive: true });
+      happyPathFixture();
       writeFileSync(
         join(tmpRoot, "crates/editor-application/src/lib.rs"),
         "// app\npub struct LocalId(String);\n",
+      );
+    },
+  },
+  {
+    name: "B5: ChangeWorkbenchPanel imported outside BottomDock",
+    violationsExpected: 1,
+    fixture: () => {
+      happyPathFixture();
+      writeFileSync(
+        join(tmpRoot, "frontend/src/Sidebar.tsx"),
+        "import { ChangeWorkbenchPanel } from \"./ChangeWorkbenchPanel\";\n" +
+          "export function Sidebar() { return <ChangeWorkbenchPanel />; }\n",
+      );
+    },
+  },
+  {
+    name: "B5: ChangeWorkbenchPanel not imported in any BottomDock file",
+    violationsExpected: 1,
+    fixture: () => {
+      happyPathFixture();
+      rmSync(join(tmpRoot, "frontend/src/BottomDock.tsx"));
+    },
+  },
+  {
+    name: "B6: ApplyBackPanel references Bevy Entity identifier",
+    violationsExpected: 1,
+    fixture: () => {
+      happyPathFixture();
+      writeFileSync(
+        join(tmpRoot, "frontend/src/ApplyBackPanel.tsx"),
+        "// leaks Bevy Entity identifier\n" +
+          "import { Entity } from \"react\";\n" +
+          "export function ApplyBackPanel({ apply_back_eligible, entity }: { apply_back_eligible: boolean; entity: Entity }) {\n" +
+          "  return entity && apply_back_eligible ? <div>apply</div> : null;\n" +
+          "}\n",
+      );
+    },
+  },
+  {
+    name: "B7: editor-protocol Cargo.toml lists bevy",
+    violationsExpected: 1,
+    fixture: () => {
+      happyPathFixture();
+      writeFileSync(
+        join(tmpRoot, "crates/editor-protocol/Cargo.toml"),
+        '[dependencies]\nbevy = "0.19"\n',
+      );
+    },
+  },
+  {
+    name: "B7: editor-protocol src uses wasm_bindgen",
+    violationsExpected: 1,
+    fixture: () => {
+      happyPathFixture();
+      writeFileSync(
+        join(tmpRoot, "crates/editor-protocol/src/lib.rs"),
+        "use wasm_bindgen::prelude::wasm_bindgen;\npub struct ChangeRequest;\n",
+      );
+    },
+  },
+  {
+    name: "B8: editor-model has wasm_bindgen import",
+    violationsExpected: 1,
+    fixture: () => {
+      happyPathFixture();
+      writeFileSync(
+        join(tmpRoot, "crates/editor-model/src/lib.rs"),
+        "use wasm_bindgen::prelude::wasm_bindgen;\npub struct LocalId(String);\n",
+      );
+    },
+  },
+  {
+    name: "B9: setScene called outside sanctioned modules",
+    violationsExpected: 1,
+    fixture: () => {
+      happyPathFixture();
+      writeFileSync(
+        join(tmpRoot, "frontend/src/OtherComponent.tsx"),
+        "import { useState } from \"react\"\n" +
+          "// direct scene mutation — must route through scene-session\n" +
+          "export function OtherComponent() {\n" +
+          "  const [scene, setScene] = useState(null);\n" +
+          "  setScene({ entities: [] });\n" +
+          "  return null;\n" +
+          "}\n",
       );
     },
   },
@@ -244,6 +344,7 @@ let failed = 0;
 
 for (const t of tests) {
   rmSync(join(tmpRoot, "crates"), { recursive: true, force: true });
+  rmSync(join(tmpRoot, "frontend"), { recursive: true, force: true });
   t.fixture();
   const { code, stdout, stderr } = runArchCheck(tmpRoot);
   const violations = code === 0 ? 0 : 1;
@@ -258,57 +359,35 @@ for (const t of tests) {
   }
 }
 
-// ── List-mode tests ───────────────────────────────────────────────────────────
+// ── List-mode tests ─────────────────────────────────────────────────────────
 
-// Test: --list prints all 6 assertions
+const ALL_IDS = ["A1", "A2", "B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9"];
+
+// Test: --list prints all 11 assertion ids on a clean fixture
 {
   rmSync(join(tmpRoot, "crates"), { recursive: true, force: true });
-  mkdirSync(join(tmpRoot, "crates/editor-core/src"), { recursive: true });
-  writeFileSync(join(tmpRoot, "crates/editor-core/src/lib.rs"), "// lib\n");
-  writeFileSync(
-    join(tmpRoot, "crates/editor-core/Cargo.toml"),
-    '[dependencies]\nbevy = { version = "0.19" }\n',
-  );
-  mkdirSync(join(tmpRoot, "crates/editor-model/src"), { recursive: true });
-  writeFileSync(
-    join(tmpRoot, "crates/editor-model/src/lib.rs"),
-    "// pure\npub struct LocalId(String);\n",
-  );
-  writeFileSync(join(tmpRoot, "crates/editor-model/Cargo.toml"), "[dependencies]\n");
-  mkdirSync(join(tmpRoot, "crates/editor-application/src"), { recursive: true });
-  writeFileSync(join(tmpRoot, "crates/editor-application/src/lib.rs"), "// app\n");
+  rmSync(join(tmpRoot, "frontend"), { recursive: true, force: true });
+  happyPathFixture();
 
   const { code, stdout } = runArchCheckList(tmpRoot);
-  const expectedIds = ["A1", "A2", "B1", "B2", "B3", "B4"];
-  const missing = expectedIds.filter((id) => !stdout.includes(`] ${id} —`));
+  const missing = ALL_IDS.filter((id) => !stdout.includes(`] ${id} —`));
   if (code !== 0 || missing.length > 0) {
     failed += 1;
     process.stderr.write(
-      `FAIL --list: expected all 6 ids in output, missing: ${missing.join(", ")}\n` +
+      `FAIL --list clean: expected all 11 ids in output, missing: ${missing.join(", ")}\n` +
         `exit=${code}, stdout:\n${stdout}\n`,
     );
   } else {
-    process.stdout.write("PASS --list: prints all 6 assertion ids\n");
+    process.stdout.write("PASS --list clean: prints all 11 assertion ids\n");
   }
 }
 
-// Test: --list exit 1 when a violation exists
+// Test: --list exit 1 and shows FAIL when a single violation exists (A1)
 {
   rmSync(join(tmpRoot, "crates"), { recursive: true, force: true });
-  mkdirSync(join(tmpRoot, "crates/editor-core/src"), { recursive: true });
-  // lib.rs MISSING — A1 will fail
-  writeFileSync(
-    join(tmpRoot, "crates/editor-core/Cargo.toml"),
-    '[dependencies]\nbevy = { version = "0.19" }\n',
-  );
-  mkdirSync(join(tmpRoot, "crates/editor-model/src"), { recursive: true });
-  writeFileSync(
-    join(tmpRoot, "crates/editor-model/src/lib.rs"),
-    "// pure\npub struct LocalId(String);\n",
-  );
-  writeFileSync(join(tmpRoot, "crates/editor-model/Cargo.toml"), "[dependencies]\n");
-  mkdirSync(join(tmpRoot, "crates/editor-application/src"), { recursive: true });
-  writeFileSync(join(tmpRoot, "crates/editor-application/src/lib.rs"), "// app\n");
+  rmSync(join(tmpRoot, "frontend"), { recursive: true, force: true });
+  happyPathFixture();
+  rmSync(join(tmpRoot, "crates/editor-bevy/src/lib.rs"));
 
   const { code, stdout } = runArchCheckList(tmpRoot);
   const hasAFail = stdout.includes("[FAIL] A1");
@@ -319,7 +398,7 @@ for (const t of tests) {
         `exit=${code}, stdout:\n${stdout}\n`,
     );
   } else {
-    process.stdout.write("PASS --list: exit 1 and shows FAIL when violation exists\n");
+    process.stdout.write("PASS --list with violation: exit 1 and shows FAIL when violation exists\n");
   }
 }
 
