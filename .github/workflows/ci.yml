@@ -204,6 +204,40 @@ jobs:
         working-directory: tools/archcheck
         run: npm test
 
+  cargo-graph:
+    name: Cargo dep graph (cargo metadata)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and index
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates -> target
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: 'tools/archcheck-cargo/package-lock.json'
+
+      - name: Install archcheck-cargo tool
+        working-directory: tools/archcheck-cargo
+        run: npm ci
+
+      - name: Run archcheck-cargo assertions
+        working-directory: tools/archcheck-cargo
+        run: npm run check
+
+      - name: Run archcheck-cargo fixture tests
+        working-directory: tools/archcheck-cargo
+        run: npm test
+
   playwright-smoke:
     name: Playwright smoke cohort
     runs-on: ubuntu-latest
