@@ -361,7 +361,7 @@ pub fn with_importer_registry() -> Option<Arc<Mutex<dyn ImporterRegistryPort>>> 
 //
 // No additional port cell is needed for source files — the
 // `EditorSessionPort` already provides the canonical seam. The legacy
-// `thread_local! SOURCE_FILE_REGISTRY` in `editor_bevy::source_files`
+// `thread_local! SOURCE_FILE_REGISTRY` in the editor-bevy source_files module
 // duplicated the cache and is removed by this H2.2 slice. See
 // `docs/architecture/state-ownership-matrix.md` (H2.2 entry for
 // `SOURCE_FILE_REGISTRY`).
@@ -371,7 +371,7 @@ pub fn with_importer_registry() -> Option<Arc<Mutex<dyn ImporterRegistryPort>>> 
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // The H2.2 plan in `docs/architecture/state-ownership-matrix.md` calls for
-// collapsing the `USER_SCHEMAS` `thread_local!` in `editor-bevy::schema`
+// collapsing the `USER_SCHEMAS` `thread_local!` in the editor-bevy schema module
 // into a port cell + `EditorSession.user_schemas` field, mirroring the
 // `EXTENSION_REGISTRY` / `IMPORTER_REGISTRY` / `EXTENSION_REGISTRY` pattern.
 //
@@ -382,7 +382,7 @@ pub fn with_importer_registry() -> Option<Arc<Mutex<dyn ImporterRegistryPort>>> 
 //
 // - `editor_model::schema` (310 lines, value-types-only, the intended
 //   canonical set per the comment at the top of that file).
-// - `editor_bevy::schema` (912 lines, full registry + facades, used by
+// - editor-bevy schema (912 lines, full registry + facades, used by
 //   the Bevy adapter and ~50 call sites).
 //
 // The port trait must reference `editor_model::schema::*` types (the Bevy
