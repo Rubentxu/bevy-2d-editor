@@ -27,14 +27,11 @@ use wasm_bindgen::prelude::*;
 
 /// Typed value boundary for logic evaluator ports.
 /// NO `serde_json::Value` inside — this is the strict contract.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum PortValue {
-    Bool(bool),
-    Float(f32),
-    Vec2 { x: f32, y: f32 },
-    EntityRef(String),
-    Action(String),
-}
+///
+/// Canonical definition lives in `editor_model::runtime::PortValue` (beevy-free,
+/// stable across editor-bevy internals). Re-exported here for the existing
+/// `crate::logic_evaluator::PortValue` call sites.
+pub use editor_model::runtime::PortValue;
 
 /// Port specification for a single input or output port.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -1,96 +1,44 @@
 //! Actuator Output Bus — typed command bus for logic actuator results.
 //!
-//! Actuator nodes produce outputs (field=value pairs) that need to be applied
-//! back to Bevy entity components. This module provides:
-//! - `ActuatorOutput`: the typed output payload
-//! - `ACTUATOR_OUTPUT_BUS`: thread-local bus queue
-//! - `submit_actuator_output()`: called by actuator evaluators
-//! - `apply_actuator_outputs`: Bevy system that drains the bus and writes to components
+//! H2.5 Block A2: bus is now session-owned via `editor_model::ports::with_session_mut`.
+//! No thread-local cells remain. The session-owned `editor_model::runtime::ActuatorBus`
+//! replaces the previous private `thread_local! ACTUATOR_OUTPUT_BUS`.
+//!
+//! - `ActuatorOutput` / `ActuatorBus`: typed payload + FIFO queue (in editor_model::runtime)
+//! - `submit_actuator_output()`: called by actuator evaluators; pushes to session bus
+//! - `apply_actuator_outputs`: Bevy system that drains the session bus and writes to components
 
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::cell::RefCell;
 use std::collections::HashMap;
 
 use crate::logic_evaluator::PortValue;
+pub use editor_model::runtime::{ActuatorBus, ActuatorOutput};
 
-/// The output produced by an actuator node evaluation.
-/// Carries the entity identifier (as u64 bits), the target field name,
-/// and the typed value to write.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ActuatorOutput {
-    /// Bevy Entity encoded as u64 bits (from `Entity::to_bits()`).
-    pub entity_bits: u64,
-    /// The field name on the target component to write (e.g., "translation", "color").
-    pub field: String,
-    /// The typed value to write to the field.
-    pub value: PortValue,
-}
-
-/// Internal bus queue for actuator outputs.
-struct ActuatorBus {
-    pending: Vec<ActuatorOutput>,
-}
-
-impl ActuatorBus {
-    fn new() -> Self {
-        Self {
-            pending: Vec::new(),
-        }
-    }
-
-    fn submit(&mut self, output: ActuatorOutput) {
-        self.pending.push(output);
-    }
-
-    fn drain(&mut self) -> Vec<ActuatorOutput> {
-        std::mem::take(&mut self.pending)
-    }
-}
-
-// Thread-local actuator output bus — matches the codebase `COMMAND_BUS`/`EVENT_BUS` pattern.
-thread_local! {
-    static ACTUATOR_OUTPUT_BUS: RefCell<Option<ActuatorBus>> = const { RefCell::new(None) };
-}
-
-fn actuator_bus() {
-    ACTUATOR_OUTPUT_BUS.with(|b| {
-        if b.borrow().is_none() {
-            *b.borrow_mut() = Some(ActuatorBus::new());
-        }
-    });
-}
-
-/// Submit an actuator output to the thread-local bus.
+/// Submit an actuator output to the session-owned bus.
 ///
 /// Called by actuator evaluators during graph evaluation to queue a component write.
+/// Returns silently if no session is installed (e.g. tests that exercise the bus
+/// without booting the full editor).
 pub fn submit_actuator_output(entity: Entity, field: &str, value: PortValue) {
     let output = ActuatorOutput {
         entity_bits: entity.to_bits(),
         field: field.to_string(),
         value,
     };
-    actuator_bus();
-    ACTUATOR_OUTPUT_BUS.with(|b| {
-        if let Some(ref mut bus) = *b.borrow_mut() {
-            bus.submit(output);
-        }
+    editor_model::ports::with_session_mut(|s| {
+        s.runtime_actuator_outputs_mut().submit(output);
     });
 }
 
-/// Drain all pending actuator outputs from the thread-local bus.
+/// Drain all pending actuator outputs from the session-owned bus.
 ///
 /// Returns the collected outputs and leaves the bus empty.
 /// Call this from `apply_actuator_outputs` at the start of each frame.
+/// Returns `Vec::new()` if no session is installed.
 pub fn drain_actuator_outputs() -> Vec<ActuatorOutput> {
-    actuator_bus();
-    ACTUATOR_OUTPUT_BUS.with(|b| {
-        if let Some(ref mut bus) = *b.borrow_mut() {
-            bus.drain()
-        } else {
-            Vec::new()
-        }
-    })
+    editor_model::ports::with_session_mut(|s| s.runtime_actuator_outputs_mut().drain())
+        .unwrap_or_default()
 }
 
 /// Bevy system: drain the actuator output bus and write values back to entity components.
@@ -188,6 +136,116 @@ fn apply_single_output(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Arc, Mutex};
+
+    /// Minimal stand-in implementing just enough of `EditorSessionPort` to
+    /// drive `runtime_actuator_outputs_mut()` for the actuator bus tests.
+    ///
+    /// We cannot depend on `tests/support/mod.rs` from inside the lib (path
+    /// resolution fails). The real `EditorSession` and the integration tests
+    /// use the much fuller `FakeSession` harness; here we only need the
+    /// single trait method exercised by `submit_actuator_output`/`drain_actuator_outputs`.
+    struct MinimalSession {
+        bus: editor_model::runtime::ActuatorBus,
+    }
+
+    impl MinimalSession {
+        fn new() -> Self {
+            Self {
+                bus: editor_model::runtime::ActuatorBus::new(),
+            }
+        }
+    }
+
+    // Provide every `EditorSessionPort` method. Most are unused by the actuator
+    // bus path; these stubs panic if reached, so accidental regressions surface
+    // loudly. The only non-trivial one is `runtime_actuator_outputs_mut`.
+    impl editor_model::EditorSessionPort for MinimalSession {
+        fn scene_state_mut(&mut self, _: &str) -> &mut editor_model::SceneSessionState {
+            unimplemented!("MinimalSession: scene_state_mut not supported")
+        }
+        fn active_scene_mut(&mut self) -> &mut editor_model::SceneFocus {
+            unimplemented!("MinimalSession: active_scene_mut not supported")
+        }
+        fn active_asset_mut(&mut self) -> &mut editor_model::AssetFocus {
+            unimplemented!("MinimalSession: active_asset_mut not supported")
+        }
+        fn asset_state_mut(&mut self, _: &str) -> &mut editor_model::AssetSessionState {
+            unimplemented!("MinimalSession: asset_state_mut not supported")
+        }
+        fn logic_state_mut(&mut self, _: &str) -> &mut editor_model::LogicSessionState {
+            unimplemented!("MinimalSession: logic_state_mut not supported")
+        }
+        fn world_state_mut(&mut self, _: &str) -> &mut editor_model::WorldSessionState {
+            unimplemented!("MinimalSession: world_state_mut not supported")
+        }
+        fn tunable_baselines_mut(
+            &mut self,
+        ) -> &mut std::collections::BTreeMap<String, serde_json::Value> {
+            unimplemented!("MinimalSession: tunable_baselines_mut not supported")
+        }
+        fn runtime_delta_buffer_mut(&mut self) -> &mut std::collections::VecDeque<editor_model::RuntimeDelta> {
+            unimplemented!("MinimalSession: runtime_delta_buffer_mut not supported")
+        }
+        fn pending_causality_edges_mut(
+            &mut self,
+        ) -> &mut std::collections::BTreeMap<editor_model::StableId, Vec<editor_model::CausalityEdge>>
+        {
+            unimplemented!("MinimalSession: pending_causality_edges_mut not supported")
+        }
+        fn last_rebuild_cause_mut(&mut self) -> &mut Option<editor_model::RebuildCause> {
+            unimplemented!("MinimalSession: last_rebuild_cause_mut not supported")
+        }
+        fn preview_inspector_mut(&mut self) -> &mut editor_model::PreviewInspectorState {
+            unimplemented!("MinimalSession: preview_inspector_mut not supported")
+        }
+        fn source_files_mut(&mut self) -> &mut editor_model::SourceFilesCache {
+            unimplemented!("MinimalSession: source_files_mut not supported")
+        }
+        fn logic_activation_ring_mut(
+            &mut self,
+        ) -> &mut std::collections::VecDeque<editor_model::LogicActivationEvent> {
+            unimplemented!("MinimalSession: logic_activation_ring_mut not supported")
+        }
+        fn recent_change_sets_for(&self, _: &str) -> Vec<editor_model::ChangeSetSummary> {
+            unimplemented!("MinimalSession: recent_change_sets_for not supported")
+        }
+        fn all_recent_change_sets(&self) -> Vec<editor_model::ChangeSetSummary> {
+            unimplemented!("MinimalSession: all_recent_change_sets not supported")
+        }
+        fn active_document_path(&self) -> Option<&str> {
+            unimplemented!("MinimalSession: active_document_path not supported")
+        }
+        fn push_recent_change_set(&mut self, _: &str, _: editor_model::ChangeSetSummary) {
+            unimplemented!("MinimalSession: push_recent_change_set not supported")
+        }
+        fn runtime_command_bus_mut(&mut self) -> &mut editor_model::runtime::LinearBus {
+            unimplemented!("MinimalSession: runtime_command_bus_mut not supported")
+        }
+        fn runtime_event_bus_mut(&mut self) -> &mut editor_model::runtime::LinearBus {
+            unimplemented!("MinimalSession: runtime_event_bus_mut not supported")
+        }
+        fn runtime_actuator_outputs_mut(&mut self) -> &mut editor_model::runtime::ActuatorBus {
+            &mut self.bus
+        }
+        fn runtime_hot_reload_requests_mut(
+            &mut self,
+        ) -> &mut Vec<editor_model::runtime::HotReloadRequest> {
+            unimplemented!("MinimalSession: runtime_hot_reload_requests_mut not supported")
+        }
+        fn runtime_play_mode_request_mut(
+            &mut self,
+        ) -> &mut Option<editor_model::runtime::PlayModeRequest> {
+            unimplemented!("MinimalSession: runtime_play_mode_request_mut not supported")
+        }
+    }
+
+    fn install_fresh_session() {
+        let session = MinimalSession::new();
+        let arc: Arc<Mutex<dyn editor_model::EditorSessionPort>> =
+            Arc::new(Mutex::new(session));
+        editor_model::ports::register_editor_session(arc);
+    }
 
     // §T-apply1: drain_actuator_outputs returns submitted outputs
     #[test]
@@ -195,8 +253,7 @@ mod tests {
         use crate::logic_evaluator::PortValue;
         use bevy::prelude::Entity;
 
-        // Drain any pre-existing state
-        let _ = drain_actuator_outputs();
+        install_fresh_session();
 
         let entity = Entity::from_bits(42);
         submit_actuator_output(entity, "translation", PortValue::Vec2 { x: 5.0, y: 7.0 });
@@ -218,6 +275,8 @@ mod tests {
     fn test_bus_empty_after_drain() {
         use crate::logic_evaluator::PortValue;
         use bevy::prelude::Entity;
+
+        install_fresh_session();
 
         let entity = Entity::from_bits(1);
         submit_actuator_output(entity, "translation", PortValue::Vec2 { x: 1.0, y: 2.0 });
