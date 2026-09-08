@@ -44,12 +44,19 @@ async function clearWelcomeDismissed(page: Page): Promise<void> {
 
 test.describe("Defold-inspired welcome overlay (Phase E)", { tag: ["@full"] }, () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
+    // Phase 1: navigate to /?skip-welcome=1 so the welcome overlay doesn't
+    // block pointer events during WASM init (the overlay's OPFS hydration
+    // can race with the engine-bridge bridge installation otherwise).
     await page.goto("/?skip-welcome=1");
     await waitForEditorReady(page);
+    // Phase 2: clear OPFS so the overlay treats this as a "first visit".
     await clearWelcomeDismissed(page);
-    // Reload so the welcome-overlay re-reads OPFS fresh.
-    await page.reload();
+    // Phase 3: navigate to / (WITHOUT the skip-welcome query param) so the
+    // WelcomeOverlay re-reads OPFS with the cleared flag and renders.
+    // (Note: page.reload() preserves the ?skip-welcome=1 from Phase 1,
+    //  which would keep urlSkip=true and the overlay would never show —
+    //  use page.goto("/") instead.)
+    await page.goto("/");
     await waitForEditorReady(page);
   });
 
