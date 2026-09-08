@@ -3,7 +3,7 @@
 > **Cycle:** `p-28fce7028ac3c497/fix-git-friendly-roundtrip`
 > **Path:** A-min
 > **Sequence:** 397 → 398 (explore) → 399 (build) → 400 (verify) → 401 (release) → 402 (`archive.complete` event at seq 402)
-> **Tag:** `v0.110.9` (annotated, peeled to the archive commit — to be created)
+> **Tag:** `v0.110.9` (annotated, peeled to the archive commit `da0faac`)
 > **Phase:** Archive — **`status=CLOSED` (terminal, pending `archive.complete` transition)**
 > **Delivery:** local (single-commit direct push via primary checkout + sidecar docs commit)
 > **Closed at:** `2026-09-08T21:07:47.957132679Z` (concrete `updated_at` from cycle status refresh)
@@ -21,12 +21,12 @@
 | Path | A-min |
 | Branch | `main` |
 | Tag | `v0.110.9` (annotated: "fix(roundtrip): wire __rehydrateProjectStore + sample version fields + restore wasm build") |
-| Released SHA (HEAD / origin/main, pre-archive) | `9fa386f` (verify sidecar); cycle commit `a6262da` |
+| Released SHA (HEAD / origin/main, post-archive) | `525b0c4928fa18c6cd4f4014b576cca056ab5a56` (SHAs-update commit); cycle commit `a6262da`; archive commit `da0faac` |
 | Cycle commit (carries product diff) | `a6262da68224354cebaff3478437f72cffbfc2a6` |
 | Verify sidecar commit | `fa46341` (verify-report.md + verify-findings.json) |
 | Impl sidecar commit | `afe8976` (implementation-receipt.md) |
 | Release sidecar commit | `9fa386f` (release-report.md + release-receipt.json + merge-receipt.md) |
-| Archive commit (this commit) | pending — created by archive phase (lands this manifest + ROADMAP/evidence-map refresh) |
+| Archive commit | `da0faac4ac5c784db132d05ff0d45cf964e202ad` (lands `archive-manifest.md` + ROADMAP/evidence-map refresh) |
 | Base SHA | `01b0e5028e675e917a614a09c0da47c9fb0e1366` (v0.110.8 archive) |
 | Diff digest | `sha256:fix-git-friendly-roundtrip-a6262da-cycle-delta-204-17` (`+204/-17` across 9 files in cycle commit; cycle commit total `+564/-38` includes SDDK docs) |
 | Tests | 2/2 new (`git-friendly-roundtrip.spec.ts` was 0/2 pre-existing); 2/2 `load-sample-real-loader.spec.ts` regression; 871/871 rust unit tests pass |

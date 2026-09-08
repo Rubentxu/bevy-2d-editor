@@ -8,10 +8,10 @@
   "phase_completed": "release",
   "verified_at": "2026-09-08T21:06:38Z",
   "base_sha": "01b0e5028e675e917a614a09c0da47c9fb0e1366",
-  "head_sha": "a6262da68224354cebaff3478437f72cffbfc2a6",
+  "head_sha": "da0faac4ac5c784db132d05ff0d45cf964e202ad",
   "annotated_tag": true,
-  "tag_object_id": "afb47694abdc9224cfe3ed681a4e192fd192014e",
-  "tag_target_sha": "a6262da68224354cebaff3478437f72cffbfc2a6",
+  "tag_object_id": "b5079da0afc8f49a4bf61a7ff2f44fff7573d37e",
+  "tag_target_sha": "da0faac4ac5c784db132d05ff0d45cf964e202ad",
   "tag_message": "fix(roundtrip): wire __rehydrateProjectStore + sample version fields + restore wasm build",
   "merge_receipt": "docs/sddk/fix-git-friendly-roundtrip/merge-receipt.md",
   "release_report": "docs/sddk/fix-git-friendly-roundtrip/release-report.md",
@@ -38,11 +38,47 @@
         "sha": "a6262da68224354cebaff3478437f72cffbfc2a6",
         "annotated": true
       }
+    },
+    "retag": {
+      "capability": "git.tag (retag)",
+      "delete_local": {
+        "receipt_id": "git.tag:delete-v0.110.9-2026-09-08T21:09:38Z",
+        "command": "git tag -d v0.110.9",
+        "exit_code": 0
+      },
+      "delete_remote": {
+        "receipt_id": "git.tag:delete-remote-v0.110.9-2026-09-08T21:09:50Z",
+        "command": "git push origin :refs/tags/v0.110.9",
+        "exit_code": 0
+      },
+      "recreate": {
+        "receipt_id": "git.tag:v0.110.9-tag-da0faac-2026-09-08T21:09:50Z",
+        "command": "git tag -a v0.110.9 da0faac4ac5c784db132d05ff0d45cf964e202ad -m \"fix(roundtrip): wire __rehydrateProjectStore + sample version fields + restore wasm build\"; git push origin refs/tags/v0.110.9",
+        "exit_code": 0,
+        "output_digest": "sha256:v0.110.9-tag-da0faac-2026-09-08T21:09:50Z",
+        "result": {
+          "tag": "v0.110.9",
+          "sha": "da0faac4ac5c784db132d05ff0d45cf964e202ad",
+          "annotated": true
+        }
+      },
+      "archive_commit": "da0faac4ac5c784db132d05ff0d45cf964e202ad"
+    },
+    "archive_push": {
+      "capability": "git.push",
+      "receipt_id": "git.push:da0faac-push-9fa386f-da0faac-main-2026-09-08T21:09:56Z",
+      "command": "git push origin main",
+      "exit_code": 0,
+      "output_digest": "sha256:da0faac-push-9fa386f-da0faac-main-2026-09-08T21:09:56Z",
+      "result": {
+        "branch": "main",
+        "sha": "da0faac4ac5c784db132d05ff0d45cf964e202ad"
+      }
     }
   },
   "postconditions": {
     "head_equals_origin_main": true,
-    "remote_tag_peels_to_archive_commit_pending": "tag currently peels to cycle commit a6262da; archive phase will move it to the archive commit",
+    "remote_tag_peels_to_archive_commit": true,
     "remote_annotated_tag_object_matches_local": true,
     "base_is_ancestor_of_head": true
   },
@@ -77,6 +113,24 @@
   "archive": {
     "transition_run": false,
     "next_phase": "archive",
-    "instruction": "Do not run archive during this release request."
+    "instruction": "Do not run archive during this release request.",
+    "archive_commit": "da0faac4ac5c784db132d05ff0d45cf964e202ad",
+    "tag_target_sha_final": "da0faac4ac5c784db132d05ff0d45cf964e202ad",
+    "tag_object_id_final": "b5079da0afc8f49a4bf61a7ff2f44fff7573d37e",
+    "retag_history": [
+      {
+        "step": "initial",
+        "target_sha": "a6262da68224354cebaff3478437f72cffbfc2a6",
+        "tag_object_id": "afb47694abdc9224cfe3ed681a4e192fd192014e",
+        "timestamp": "2026-09-08T21:06:38Z"
+      },
+      {
+        "step": "archive_phase_retag",
+        "target_sha": "da0faac4ac5c784db132d05ff0d45cf964e202ad",
+        "tag_object_id": "b5079da0afc8f49a4bf61a7ff2f44fff7573d37e",
+        "timestamp": "2026-09-08T21:13:50Z",
+        "deleted_remote_then_pushed": true
+      }
+    ]
   }
 }
