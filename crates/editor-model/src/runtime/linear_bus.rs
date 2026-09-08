@@ -1,27 +1,18 @@
 //! Runtime coordination buses — pure (no Bevy, no WASM) types owned by
-//! `EditorSession`.
+//! EditorSession.
 //!
-//! These types live in `editor-model` so `editor-application` (which holds
-//! `EditorSession`) can own them without creating an
-//! `editor-application → editor-bevy` dependency edge.
+//! These types live in editor-model so editor-application (which holds
+//! EditorSession) can own them without creating an
+//! editor-application -> editor-bevy dependency edge.
 
 /// Fixed-capacity linear binary bus for command / event dispatch.
-///
-/// The buffer layout is:
-///
-/// ```text
-/// [u32 write_offset][u32 reserved][slot_0_type][slot_0_len][slot_0_payload]...
-/// ```
-///
-/// `write_offset` starts at 8 (past the two u32 header words). Slots are
-/// encoded as `(type: u16, len: u16, payload: [u8])`.
 #[derive(Debug, Clone)]
 pub struct LinearBus {
     buffer: Box<[u8]>,
 }
 
 impl LinearBus {
-    /// Construct a fresh bus with `BUS_CAPACITY` bytes pre-allocated.
+    /// Construct a fresh bus with BUS_CAPACITY bytes pre-allocated.
     pub fn new() -> Self {
         let mut buffer = vec![0u8; BUS_CAPACITY].into_boxed_slice();
         Self::set_write_offset(&mut buffer, 8);
@@ -38,19 +29,15 @@ impl LinearBus {
         self.buffer.len() as u32
     }
 
-    /// Read the current write offset from the first 4 bytes.
     fn get_write_offset(buf: &[u8]) -> usize {
         u32::from_le_bytes(buf[0..4].try_into().unwrap()) as usize
     }
 
-    /// Write the current write offset into the first 4 bytes.
     fn set_write_offset(buf: &mut [u8], offset: usize) {
         buf[0..4].copy_from_slice(&(offset as u32).to_le_bytes());
     }
 
     /// Drain all slots from the buffer, resetting the write offset to 8.
-    ///
-    /// Returns slots in FIFO order as `(event_type, payload)` pairs.
     pub fn drain(&mut self) -> Vec<(u16, Vec<u8>)> {
         let end = Self::get_write_offset(&self.buffer);
         Self::set_write_offset(&mut self.buffer, 8);
@@ -75,9 +62,7 @@ impl LinearBus {
         Self::set_write_offset(&mut self.buffer, 8);
     }
 
-    /// Write one slot into the bus.
-    ///
-    /// Returns `false` if the bus is full.
+    /// Write one slot into the bus. Returns false if the bus is full.
     pub fn write(&mut self, event_type: u16, payload: &[u8]) -> bool {
         let write_offset = Self::get_write_offset(&self.buffer);
         let slot_size = 4 + payload.len();

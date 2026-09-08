@@ -118,6 +118,25 @@ pub trait EditorSessionPort {
     /// Runtime deltas captured on `PlayModeExit`. Ring capped at 64.
     fn runtime_delta_buffer_mut(&mut self) -> &mut VecDeque<RuntimeDelta>;
 
+    // ─── H2.5 Block A — session-owned runtime buses ────────────────────────
+    // These replace the thread-local COMMAND_BUS, EVENT_BUS, ACTUATOR_OUTPUT_BUS,
+    // HOT_RELOAD_BUS, and PLAY_MODE_REQUEST in editor-bevy.
+
+    /// Mutable access to the command bus owned by EditorSession.
+    fn runtime_command_bus_mut(&mut self) -> &mut crate::runtime::LinearBus;
+
+    /// Mutable access to the event bus owned by EditorSession.
+    fn runtime_event_bus_mut(&mut self) -> &mut crate::runtime::LinearBus;
+
+    /// Mutable access to the actuator output bus owned by EditorSession.
+    fn runtime_actuator_outputs_mut(&mut self) -> &mut crate::runtime::ActuatorBus;
+
+    /// Drain all pending hot-reload requests.
+    fn runtime_hot_reload_requests_mut(&mut self) -> &mut Vec<crate::runtime::HotReloadRequest>;
+
+    /// Drain the pending play-mode request.
+    fn runtime_play_mode_request_mut(&mut self) -> &mut Option<crate::runtime::PlayModeRequest>;
+
     // Future v0.90 PRs add more methods:
     // - scene_state_mut(path) -> &mut SceneSessionState
     // - asset_state_mut(path) -> &mut AssetSessionState

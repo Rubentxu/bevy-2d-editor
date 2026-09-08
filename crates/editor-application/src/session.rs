@@ -31,6 +31,10 @@ use editor_model::logic_activation::{LogicActivationEvent, LogicActivationRing, 
 use editor_model::ports::ExtensionRegistryPort;
 use editor_model::ports::ImporterRegistryPort;
 use editor_model::ports::UserSchemaRegistryPort;
+// H2.5 Block A — runtime coordination types (ADR-0030)
+use editor_model::runtime::{
+    ActuatorBus, ActuatorOutput, HotReloadRequest, LinearBus, PlayModeRequest, PortValue,
+};
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -361,7 +365,9 @@ impl ChangeSetsSessionState {
 /// Session state for play-mode runtime data.
 ///
 /// Groups the runtime delta buffer (play-mode apply-back) with the tunable
-/// baselines captured on PlayModeEnter.
+/// baselines captured on PlayModeEnter. H2.5 Block A also owns the command
+/// bus, event bus, actuator output bus, and pending hot-reload/play-mode
+/// requests here so EditorSession (not thread-local) is the single owner.
 #[derive(Debug, Clone, Default)]
 pub struct RuntimeSessionState {
     /// Runtime delta buffer for play-mode apply-back (capped at RUNTIME_DELTA_BUFFER_CAP).
@@ -369,6 +375,16 @@ pub struct RuntimeSessionState {
     /// Baseline values for Tunable fields, captured on PlayModeEnter.
     /// Key = composite `"instance_id|component_type_id|field_path"`.
     pub tunable_baselines: BTreeMap<String, serde_json::Value>,
+    /// H2.5 Block A — command bus owned by the session (replaces COMMAND_BUS thread-local).
+    pub command_bus: LinearBus,
+    /// H2.5 Block A — event bus owned by the session (replaces EVENT_BUS thread-local).
+    pub event_bus: LinearBus,
+    /// H2.5 Block A — actuator output queue owned by the session.
+    pub actuator_outputs: ActuatorBus,
+    /// H2.5 Block A — pending hot-reload requests to process.
+    pub hot_reload_requests: Vec<HotReloadRequest>,
+    /// H2.5 Block A — pending play-mode request (enter/exit).
+    pub play_mode_request: Option<PlayModeRequest>,
 }
 
 impl RuntimeSessionState {
@@ -379,6 +395,11 @@ impl RuntimeSessionState {
                 crate::runtime_delta::RUNTIME_DELTA_BUFFER_CAP,
             ),
             tunable_baselines: BTreeMap::new(),
+            command_bus: LinearBus::new(),
+            event_bus: LinearBus::new(),
+            actuator_outputs: ActuatorBus::new(),
+            hot_reload_requests: Vec::new(),
+            play_mode_request: None,
         }
     }
 
@@ -417,6 +438,33 @@ impl RuntimeSessionState {
     /// Clear all tunable baselines.
     pub fn clear_tunable_baselines(&mut self) {
         self.tunable_baselines.clear();
+    }
+
+    // ─── H2.5 Block A — session-owned runtime buses ──────────────────────────
+
+    /// Returns a mutable reference to the command bus.
+    pub fn command_bus_mut(&mut self) -> &mut LinearBus {
+        &mut self.command_bus
+    }
+
+    /// Returns a mutable reference to the event bus.
+    pub fn event_bus_mut(&mut self) -> &mut LinearBus {
+        &mut self.event_bus
+    }
+
+    /// Returns a mutable reference to the actuator output bus.
+    pub fn actuator_outputs_mut(&mut self) -> &mut ActuatorBus {
+        &mut self.actuator_outputs
+    }
+
+    /// Drain and return all pending hot-reload requests.
+    pub fn drain_hot_reload_requests(&mut self) -> Vec<HotReloadRequest> {
+        std::mem::take(&mut self.hot_reload_requests)
+    }
+
+    /// Drain and return the pending play-mode request.
+    pub fn drain_play_mode_request(&mut self) -> Option<PlayModeRequest> {
+        self.play_mode_request.take()
     }
 }
 
@@ -1117,6 +1165,30 @@ impl EditorSessionPort for EditorSession {
 
     fn runtime_delta_buffer_mut(&mut self) -> &mut VecDeque<RuntimeDelta> {
         self.runtime.runtime_delta_buffer_mut()
+    }
+
+    fn runtime_command_bus_mut(&mut self) -> &mut editor_model::runtime::LinearBus {
+        self.runtime.command_bus_mut()
+    }
+
+    fn runtime_event_bus_mut(&mut self) -> &mut editor_model::runtime::LinearBus {
+        self.runtime.event_bus_mut()
+    }
+
+    fn runtime_actuator_outputs_mut(&mut self) -> &mut editor_model::runtime::ActuatorBus {
+        self.runtime.actuator_outputs_mut()
+    }
+
+    fn runtime_hot_reload_requests_mut(
+        &mut self,
+    ) -> &mut Vec<editor_model::runtime::HotReloadRequest> {
+        &mut self.runtime.hot_reload_requests
+    }
+
+    fn runtime_play_mode_request_mut(
+        &mut self,
+    ) -> &mut Option<editor_model::runtime::PlayModeRequest> {
+        &mut self.runtime.play_mode_request
     }
 
     fn scene_state_mut(&mut self, path: &str) -> &mut editor_model::SceneSessionState {

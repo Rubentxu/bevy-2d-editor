@@ -140,4 +140,6 @@ pub use world::{
 };
 
 // H2.5 Block A — runtime coordination types
-pub use runtime::{ActuatorBus, ActuatorOutput, HotReloadRequest, LinearBus, PlayModeRequest, PortValue};
+pub use runtime::{
+    ActuatorBus, ActuatorOutput, HotReloadRequest, LinearBus, PlayModeRequest, PortValue,
+};
