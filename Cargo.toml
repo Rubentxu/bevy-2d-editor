@@ -1,7 +1,7 @@
 [workspace]
 members = ["crates/editor-bevy", "crates/ai-proxy", "crates/editor-model", "crates/editor-application", "crates/editor-protocol", "crates/editor-storage-web", "crates/editor-wasm"]
 resolver = "2"
-version = "0.108.2"
+version = "0.108.3"
 
 # Profile configuration is inherited from ~/.cargo/config.toml
 # to share settings across all Rust projects and avoid redundant definitions.
