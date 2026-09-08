@@ -1,0 +1,16 @@
+{
+  "cycle": "p-28fce7028ac3c497/g1-step4-bj5-jump",
+  "phase": "verify",
+  "sequence": 244,
+  "path": "A-lite",
+  "debt": [],
+  "summary": {
+    "ponytail_markers": 0,
+    "clippy_warnings_new": 0,
+    "clippy_warnings_pre_existing_in_crate": 2,
+    "pre_existing_unused_imports": "none introduced by this cycle",
+    "pre_existing_unused_variables": "none introduced by this cycle"
+  },
+  "notes": "No `ponytail:` deferral comments added. No new clippy warnings. The 2 pre-existing warnings (`using clone on type PlayerController which implements Copy`) are in `tests/player_movement.rs` (lines 144-148) and were not touched by this cycle — the equivalent warning in `tests/jump.rs` was fixed inline. Pre-existing warnings in `editor-model` (unused imports/variables in `world_command.rs`) are also unrelated.",
+  "actions": "None — no debt introduced or surfaced."
+}

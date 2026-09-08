@@ -7,11 +7,13 @@
 
 pub mod collision;
 pub mod components;
+pub mod jump;
 pub mod loader;
 pub mod movement;
 
 pub use collision::{PICKUP_HITBOX_HALF, PickupCollisionPlugin, pickup_collision_system};
 pub use components::{EditorSpriteAsset, EnemyPatrol, Pickup, PlayerController, Visible};
+pub use jump::{JUMP_FRAME_DT, JumpPlugin, JumpState, jump_system};
 pub use loader::SpawnReport;
 pub use movement::{PlayerMovementPlugin, player_movement_system};
 
