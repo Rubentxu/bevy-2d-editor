@@ -1,0 +1,52 @@
+{
+  "cycle": "p-28fce7028ac3c497/load-sample-real-loader",
+  "path": "a-lite",
+  "phase": "verify",
+  "verdict": "PASS",
+  "subject": {
+    "base": "47117dfcfbc23965efffdefe3ed8403588908546",
+    "head": "47117dfcfbc23965efffdefe3ed8403588908546",
+    "diff_digest": null,
+    "cwd": "/var/home/rubentxu/Proyectos/rust/bevy-2d-editor/frontend",
+    "verified_at": "2026-09-08T19:22:00Z"
+  },
+  "gates": {
+    "tests-pass": "PASS",
+    "policy-compliant": "PASS",
+    "debt-severity-assigned": "PASS",
+    "debt-priority-assigned": "PASS"
+  },
+  "findings": [],
+  "issues_by_severity": { "critical": 0, "warning": 0, "suggestion": 0 },
+  "evidence": {
+    "tests": {
+      "command": "npx playwright test --config=playwright.config.ts tests/load-sample-real-loader.spec.ts tests/tutorial-walkthrough.spec.ts tests/tour-completed-persistence.spec.ts tests/e2e-game-creation.spec.ts --reporter=line",
+      "exit_code": 0,
+      "result": "14 passed (36.8s)"
+    },
+    "tsc": {
+      "command": "npx tsc --noEmit",
+      "exit_code": 0,
+      "result": "clean"
+    },
+    "eslint": {
+      "command": "npx eslint --max-warnings=0 src/services/sampleLoader.ts src/components/TutorialStepper.tsx tests/helpers/sample-loader.ts tests/load-sample-real-loader.spec.ts tests/e2e-game-creation.spec.ts tests/git-friendly-roundtrip.spec.ts",
+      "exit_code": 0,
+      "result": "clean"
+    },
+    "ponytail": {
+      "command": "grep -rnE '(#|//) ?ponytail:' <6 in-scope files>",
+      "exit_code": 1,
+      "result": "0 markers"
+    }
+  },
+  "confidence": "high",
+  "lenses_used": [],
+  "next_recommended": "sddk-debt-verify",
+  "unverified": [
+    "2 pre-existing failures in tests/git-friendly-roundtrip.spec.ts (verified pre-existing via git stash at 47117df by build phase; out of scope per orchestrator brief)",
+    "Production build (npm run build) not run; documented dev-only limitation per REQ-9",
+    "Full repo Playwright sweep (only 4 spec files run per orchestrator brief)",
+    "Architecture delta / C4-LikeC4 manifest (design declared not_applicable)"
+  ]
+}
