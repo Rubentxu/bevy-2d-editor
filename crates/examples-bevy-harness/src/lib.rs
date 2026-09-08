@@ -7,9 +7,11 @@
 
 pub mod components;
 pub mod loader;
+pub mod movement;
 
 pub use components::{EditorSpriteAsset, EnemyPatrol, PlayerController, Visible};
 pub use loader::SpawnReport;
+pub use movement::{PlayerMovementPlugin, player_movement_system};
 
 use bevy::prelude::*;
 use editor_model::scene_asset::SceneAssetDocument;
