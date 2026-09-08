@@ -43,11 +43,13 @@ import CommandPalette from "./CommandPalette";
 import CheatSheet from "./CheatSheet";
 import OnboardingBanner from "./OnboardingBanner";
 import WelcomeOverlay from "./WelcomeOverlay";
+import TutorialStepper from "./TutorialStepper";
 import { WelcomeDismissalProvider } from "./WelcomeDismissalContext";
 import Toasts from "./Toasts";
 import type { SceneHandlers } from "../hooks/useSceneHandlers";
 import type { SceneInfo } from "../hooks/useScenes";
 import type { ReactNode } from "react";
+import { useState } from "react";
 
 /**
  * Imperative surface required by AppShell — every setter and getter
@@ -158,6 +160,11 @@ export interface AppShellProps {
 }
 
 export function AppShell(props: AppShellProps) {
+  // tutorial-walkthrough cycle: tour state lives in AppShell so the
+  // stepper can close itself via the onClose callback (which sets
+  // tourOpen=false). Started by WelcomeOverlay's "Take the tour" CTA.
+  const [tourOpen, setTourOpen] = useState(false);
+
   const {
     handlers,
     editorMode,
@@ -545,8 +552,12 @@ export function AppShell(props: AppShellProps) {
           onOpenLogicEditor={handlers.handleOpenLogic}
         />
         <WelcomeOverlay
-          onTakeTour={() => setEditorMode("asset-authoring")}
+          onTakeTour={() => setTourOpen(true)}
           onSkip={() => undefined}
+        />
+        <TutorialStepper
+          open={tourOpen}
+          onClose={() => setTourOpen(false)}
         />
       </WelcomeDismissalProvider>
       <Toasts />
