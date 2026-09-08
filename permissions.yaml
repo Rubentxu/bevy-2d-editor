@@ -1,0 +1,15 @@
+permissions_registry_version: 1
+agents:
+  sddk-release:
+    phases:
+      - release
+    capabilities:
+      - git.inspect
+      - git.create_branch
+      - git.commit
+      - git.merge
+      - git.tag
+      - git.delete_branch
+      - git.push
+      - sddk:release.local_route
+      - sddk:release.main_branch_release

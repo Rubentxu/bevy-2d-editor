@@ -107,6 +107,10 @@ pub use editor_model;
 pub use editor_model::AssetSessionState;
 pub use editor_model::RebuildCause;
 pub use editor_model::WorldSessionState;
+// H2.5 Block A — runtime coordination types
+pub use editor_model::runtime::{
+    ActuatorBus, ActuatorOutput, HotReloadRequest, LinearBus, PlayModeRequest, PortValue,
+};
 
 // ─── FakeSession ─────────────────────────────────────────────────────────────
 
@@ -151,6 +155,12 @@ pub struct FakeSession {
     pub source_files: SourceFilesCache,
     pub logic_activation_ring: VecDeque<LogicActivationEvent>,
     pub recent_change_sets: BTreeMap<String, Vec<ChangeSetSummary>>,
+    // H2.5 Block A — session-owned runtime buses
+    pub command_bus: LinearBus,
+    pub event_bus: LinearBus,
+    pub actuator_outputs: ActuatorBus,
+    pub hot_reload_requests: Vec<HotReloadRequest>,
+    pub play_mode_request: Option<PlayModeRequest>,
 }
 
 impl FakeSession {
@@ -233,6 +243,26 @@ impl EditorSessionPort for FakeSession {
             .entry(scene_path.to_string())
             .or_insert_with(Vec::new)
             .push(summary);
+    }
+
+    fn runtime_command_bus_mut(&mut self) -> &mut LinearBus {
+        &mut self.command_bus
+    }
+
+    fn runtime_event_bus_mut(&mut self) -> &mut LinearBus {
+        &mut self.event_bus
+    }
+
+    fn runtime_actuator_outputs_mut(&mut self) -> &mut ActuatorBus {
+        &mut self.actuator_outputs
+    }
+
+    fn runtime_hot_reload_requests_mut(&mut self) -> &mut Vec<HotReloadRequest> {
+        &mut self.hot_reload_requests
+    }
+
+    fn runtime_play_mode_request_mut(&mut self) -> &mut Option<PlayModeRequest> {
+        &mut self.play_mode_request
     }
 }
 
@@ -318,5 +348,25 @@ impl EditorSessionPort for FakeSessionWithDefaults {
     }
     fn push_recent_change_set(&mut self, scene_path: &str, summary: ChangeSetSummary) {
         self.0.push_recent_change_set(scene_path, summary)
+    }
+
+    fn runtime_command_bus_mut(&mut self) -> &mut LinearBus {
+        self.0.runtime_command_bus_mut()
+    }
+
+    fn runtime_event_bus_mut(&mut self) -> &mut LinearBus {
+        self.0.runtime_event_bus_mut()
+    }
+
+    fn runtime_actuator_outputs_mut(&mut self) -> &mut ActuatorBus {
+        self.0.runtime_actuator_outputs_mut()
+    }
+
+    fn runtime_hot_reload_requests_mut(&mut self) -> &mut Vec<HotReloadRequest> {
+        self.0.runtime_hot_reload_requests_mut()
+    }
+
+    fn runtime_play_mode_request_mut(&mut self) -> &mut Option<PlayModeRequest> {
+        self.0.runtime_play_mode_request_mut()
     }
 }

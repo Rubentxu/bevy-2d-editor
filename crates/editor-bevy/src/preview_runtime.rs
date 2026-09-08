@@ -1077,12 +1077,18 @@ fn process_commands(
         command_id: "legacy_sprite_move".to_string(),
     });
 
-    let cmds = crate::COMMAND_BUS.with(|b| {
-        b.borrow_mut()
-            .as_mut()
-            .map(|bus| bus.drain())
-            .unwrap_or_default()
-    });
+    // H2.5 Block A: drain session-owned command bus via with_session_mut.
+    // Falls back to thread-local COMMAND_BUS for tests that don't use session.
+    let cmds = editor_model::ports::with_session_mut(|s| s.runtime_command_bus_mut().drain())
+        .unwrap_or_else(|| {
+            // Test fallback: read from thread-local COMMAND_BUS
+            crate::COMMAND_BUS.with(|b| {
+                b.borrow_mut()
+                    .as_mut()
+                    .map(|bus| bus.drain())
+                    .unwrap_or_default()
+            })
+        });
 
     if let Ok(mut transform) = sprites.single_mut() {
         for (cmd_type, payload) in cmds {
@@ -1111,36 +1117,74 @@ fn emit_events(
     mut fps_accum: Local<f32>,
     mut frame_count: Local<u32>,
 ) {
-    crate::EVENT_BUS.with(|b| {
-        if let Some(bus) = b.borrow_mut().as_mut() {
-            bus.reset();
+    // H2.5 Block A: try session-owned event bus first, then fall back to
+    // thread-local for backward compatibility with tests.
+    let using_session = editor_model::ports::with_session_mut(|s| {
+        let bus = s.runtime_event_bus_mut();
+        bus.reset();
 
-            if let Ok(transform) = sprites.single() {
-                let mut payload = [0u8; 8];
-                payload[0..4].copy_from_slice(&transform.translation.x.to_le_bytes());
-                payload[4..8].copy_from_slice(&transform.translation.y.to_le_bytes());
-                bus.write(EVT_SPRITE_POSITION, &payload);
-            }
-
-            *fps_accum += time.delta_secs();
-            *frame_count += 1;
-            if *fps_accum >= 0.5 {
-                let fps = *frame_count as f32 / *fps_accum;
-                let mut payload = [0u8; 4];
-                payload.copy_from_slice(&fps.to_le_bytes());
-                bus.write(EVT_FPS, &payload);
-                // runtime-preview-inspector: snapshot live metrics for the JS inspector.
-                let frame_time_ms = (*fps_accum * 1000.0) / (*frame_count as f32).max(1.0);
-                crate::preview_inspector::set_metrics(crate::preview_inspector::PreviewMetrics {
-                    fps,
-                    frame_time_ms,
-                    rebuild_count: crate::preview_inspector::get_metrics().rebuild_count,
-                });
-                *fps_accum = 0.0;
-                *frame_count = 0;
-            }
+        if let Ok(transform) = sprites.single() {
+            let mut payload = [0u8; 8];
+            payload[0..4].copy_from_slice(&transform.translation.x.to_le_bytes());
+            payload[4..8].copy_from_slice(&transform.translation.y.to_le_bytes());
+            bus.write(EVT_SPRITE_POSITION, &payload);
         }
-    });
+
+        *fps_accum += time.delta_secs();
+        *frame_count += 1;
+        if *fps_accum >= 0.5 {
+            let fps = *frame_count as f32 / *fps_accum;
+            let mut payload = [0u8; 4];
+            payload.copy_from_slice(&fps.to_le_bytes());
+            bus.write(EVT_FPS, &payload);
+            // runtime-preview-inspector: snapshot live metrics for the JS inspector.
+            let frame_time_ms = (*fps_accum * 1000.0) / (*frame_count as f32).max(1.0);
+            crate::preview_inspector::set_metrics(crate::preview_inspector::PreviewMetrics {
+                fps,
+                frame_time_ms,
+                rebuild_count: crate::preview_inspector::get_metrics().rebuild_count,
+            });
+            *fps_accum = 0.0;
+            *frame_count = 0;
+        }
+        true
+    })
+    .is_some();
+
+    // Fallback to thread-local EVENT_BUS for tests that don't have a session.
+    if !using_session {
+        crate::EVENT_BUS.with(|b| {
+            if let Some(ref mut bus) = *b.borrow_mut() {
+                bus.reset();
+
+                if let Ok(transform) = sprites.single() {
+                    let mut payload = [0u8; 8];
+                    payload[0..4].copy_from_slice(&transform.translation.x.to_le_bytes());
+                    payload[4..8].copy_from_slice(&transform.translation.y.to_le_bytes());
+                    let _ = bus.write(EVT_SPRITE_POSITION, &payload);
+                }
+
+                *fps_accum += time.delta_secs();
+                *frame_count += 1;
+                if *fps_accum >= 0.5 {
+                    let fps = *frame_count as f32 / *fps_accum;
+                    let mut payload = [0u8; 4];
+                    payload.copy_from_slice(&fps.to_le_bytes());
+                    let _ = bus.write(EVT_FPS, &payload);
+                    let frame_time_ms = (*fps_accum * 1000.0) / (*frame_count as f32).max(1.0);
+                    crate::preview_inspector::set_metrics(
+                        crate::preview_inspector::PreviewMetrics {
+                            fps,
+                            frame_time_ms,
+                            rebuild_count: crate::preview_inspector::get_metrics().rebuild_count,
+                        },
+                    );
+                    *fps_accum = 0.0;
+                    *frame_count = 0;
+                }
+            }
+        });
+    }
 
     on_frame_end();
 }

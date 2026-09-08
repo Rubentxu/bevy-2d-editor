@@ -1083,41 +1083,76 @@ pub use preview_runtime::start_engine;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Bus pointer accessors (used by engine-bridge.ts to build DataView over shared
-// memory). These are wasm32-only exports that the JS bridge calls via
-// `wasm.get_command_bus_ptr()` / `wasm.get_event_bus_ptr()`. They live here
-// (not in `preview_runtime.rs`) because they are 1-line thunks that must
-// remain reachable from the public API surface.
+// memory). H2.5 Block A: these now route through editor_model::ports::with_session_mut
+// to access the session-owned LinearBus. Falls back to thread-local for test safety.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Returns the pointer (offset into WebAssembly.Memory) of the command bus
-/// LinearBus buffer. Used by the JS engine-bridge to build a DataView for
-/// polling commands written by the host (move-sprite, etc.).
+/// LinearBus buffer. H2.5 Block A: routes through session-owned bus.
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn get_command_bus_ptr() -> u32 {
-    COMMAND_BUS.with(|b| b.borrow().as_ref().unwrap().ptr())
+    editor_model::ports::with_session_mut(|s| s.runtime_command_bus_mut().ptr()).unwrap_or_else(
+        || {
+            COMMAND_BUS.with(|b| {
+                b.borrow()
+                    .as_ref()
+                    .expect("COMMAND_BUS not initialized")
+                    .ptr()
+            })
+        },
+    )
 }
 
 /// Returns the byte length of the command bus LinearBus buffer.
+/// H2.5 Block A: routes through session-owned bus.
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn get_command_bus_len() -> u32 {
-    COMMAND_BUS.with(|b| b.borrow().as_ref().unwrap().len())
+    editor_model::ports::with_session_mut(|s| s.runtime_command_bus_mut().len()).unwrap_or_else(
+        || {
+            COMMAND_BUS.with(|b| {
+                b.borrow()
+                    .as_ref()
+                    .expect("COMMAND_BUS not initialized")
+                    .len()
+            })
+        },
+    )
 }
 
 /// Returns the pointer of the event bus LinearBus buffer (where the Bevy
-/// runtime writes sprite positions, FPS, etc.).
+/// runtime writes sprite positions, FPS, etc.). H2.5 Block A: routes through session-owned bus.
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn get_event_bus_ptr() -> u32 {
-    EVENT_BUS.with(|b| b.borrow().as_ref().unwrap().ptr())
+    editor_model::ports::with_session_mut(|s| s.runtime_event_bus_mut().ptr()).unwrap_or_else(
+        || {
+            EVENT_BUS.with(|b| {
+                b.borrow()
+                    .as_ref()
+                    .expect("EVENT_BUS not initialized")
+                    .ptr()
+            })
+        },
+    )
 }
 
 /// Returns the byte length of the event bus LinearBus buffer.
+/// H2.5 Block A: routes through session-owned bus.
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn get_event_bus_len() -> u32 {
-    EVENT_BUS.with(|b| b.borrow().as_ref().unwrap().len())
+    editor_model::ports::with_session_mut(|s| s.runtime_event_bus_mut().len()).unwrap_or_else(
+        || {
+            EVENT_BUS.with(|b| {
+                b.borrow()
+                    .as_ref()
+                    .expect("EVENT_BUS not initialized")
+                    .len()
+            })
+        },
+    )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

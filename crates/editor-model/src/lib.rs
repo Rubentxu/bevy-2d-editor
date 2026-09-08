@@ -27,6 +27,7 @@ pub mod pending_change_set;
 pub mod ports;
 pub mod project_metadata;
 pub mod rebuild_cause;
+pub mod runtime;
 pub mod runtime_delta;
 pub mod scene_asset;
 pub mod scene_asset_catalog;
@@ -136,4 +137,9 @@ pub use importer::{
 pub use world::{
     EntranceRef, LayoutPolicy, LinkDirection, StreamingPolicy, WorldCatalogEntry, WorldDocument,
     WorldId, WorldLevelRef, WorldLink, WorldLinkKind,
+};
+
+// H2.5 Block A — runtime coordination types
+pub use runtime::{
+    ActuatorBus, ActuatorOutput, HotReloadRequest, LinearBus, PlayModeRequest, PortValue,
 };
