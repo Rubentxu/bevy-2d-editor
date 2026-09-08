@@ -187,6 +187,110 @@ import { mkdirSync } from "node:fs";
   expect("real inventory loads", inv.entries.length > 0, `entries=${inv.entries.length}`);
 }
 
+// ── Ratchet parity: H2.5 Block D invariants ───────────────────────────────
+//
+// Block D landed: ACTUATOR_OUTPUT_BUS was migrated in Block A2 and removed
+// from the inventory `entries:` list. The ratchet must:
+//   1. Accept a code declaration that matches an inventory entry (no
+//      orphan, no new).
+//   2. Surface a NEW declaration only when a real thread_local/static
+//      appears in code without a corresponding inventory entry.
+//   3. Accept a retired entry: retired entries live in a separate list
+//      and the ratchet only walks `entries:`. A retired entry pointing
+//      to code that no longer declares that symbol is the canonical
+//      "migration completed" case and must NOT be reported as an orphan.
+
+{
+  // Case (1) — matched: code declares X, inventory has X at the same path.
+  const inv: Inventory = {
+    schema_version: 1,
+    entries: [
+      {
+        name: "STILL_THERE",
+        kind: "thread_local",
+        declared_at: "crates/x/src/lib.rs:5",
+        owner: "H2.5",
+        reason: "not yet migrated",
+      },
+    ],
+  };
+  const r = ratchet(
+    [{ name: "STILL_THERE", kind: "thread_local", file: "crates/x/src/lib.rs", line: 5 }],
+    inv,
+  );
+  expect(
+    "Block D ratchet: matched inventory entry does not surface as orphan or new",
+    r.orphanEntries.length === 0 && r.newDeclarations.length === 0,
+  );
+
+  // Case (2) — untracked: code declares X and Y, inventory has only X.
+  const r2 = ratchet(
+    [
+      { name: "STILL_THERE", kind: "thread_local", file: "crates/x/src/lib.rs", line: 5 },
+      { name: "UNTRACKED", kind: "thread_local", file: "crates/x/src/lib.rs", line: 12 },
+    ],
+    inv,
+  );
+  expect(
+    "Block D ratchet: untracked declaration is reported as new",
+    r2.newDeclarations.length === 1 && r2.newDeclarations[0]?.decl.name === "UNTRACKED",
+  );
+  expect(
+    "Block D ratchet: untracked declaration does not generate an orphan",
+    r2.orphanEntries.length === 0,
+  );
+
+  // Case (3) — orphan: inventory claims X exists at line 5 but code does
+  // not declare X. This is the H2.5 Block D "I forgot to remove the
+  // inventory entry when I migrated" failure mode and must be caught.
+  const inv3: Inventory = {
+    schema_version: 1,
+    entries: [
+      {
+        name: "GONE_FROM_CODE",
+        kind: "thread_local",
+        declared_at: "crates/x/src/lib.rs:5",
+        owner: "H2.5",
+        reason: "migrated but forgot to delete inventory entry",
+      },
+    ],
+  };
+  const r3 = ratchet([], inv3);
+  expect(
+    "Block D ratchet: orphan inventory entry (code removed, entry not deleted) is surfaced",
+    r3.orphanEntries.length === 1 && r3.orphanEntries[0]?.name === "GONE_FROM_CODE",
+  );
+  expect(
+    "Block D ratchet: orphan inventory entry does NOT generate a new declaration",
+    r3.newDeclarations.length === 0,
+  );
+
+  // Case (4) — name collision between an existing entry and a fresh
+  // declaration with the same name: the ratchet must match by name and
+  // not flag it as new (this protects against false positives when the
+  // same name is intentionally re-introduced after migration).
+  const inv4: Inventory = {
+    schema_version: 1,
+    entries: [
+      {
+        name: "REUSED_NAME",
+        kind: "thread_local",
+        declared_at: "crates/x/src/lib.rs:5",
+        owner: "H2.5",
+        reason: "previously retired, re-introduced intentionally",
+      },
+    ],
+  };
+  const r4 = ratchet(
+    [{ name: "REUSED_NAME", kind: "thread_local", file: "crates/x/src/lib.rs", line: 5 }],
+    inv4,
+  );
+  expect(
+    "Block D ratchet: re-introduced name matched against existing entry does not surface as new",
+    r4.newDeclarations.length === 0 && r4.orphanEntries.length === 0,
+  );
+}
+
 rmSync(tmpRoot, { recursive: true, force: true });
 
 if (failed.length > 0) {

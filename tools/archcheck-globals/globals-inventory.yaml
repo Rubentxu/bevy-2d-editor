@@ -58,12 +58,6 @@ entries:
     owner: H2.5
     reason: "play mode request queue; absorbed by EditorSession.play_mode"
 
-  - name: ACTUATOR_OUTPUT_BUS
-    kind: thread_local
-    declared_at: crates/editor-bevy/src/actuator_bus.rs:53
-    owner: H2.5
-    reason: "logic bricks actuator output bus; absorbed by EditorSession.actuators"
-
   - name: LOGIC_GRAPH_DOC
     kind: thread_local
     declared_at: crates/editor-bevy/src/logic_state.rs:21
@@ -187,10 +181,20 @@ entries:
     owner: H2.x
     reason: "OnceLock memoization of the OpenAI function-calling schema (function-local static); candidate to move into a non-static Lazy once the function-call surface stabilizes"
 
-# H2.4 retired entries — kept here for the next ledger sweep so the
-# archcheck can prove every Asset thread_local has been migrated to the
-# `EditorSession` composition root (ADR-0057).
+# Retired entries — kept here so the archcheck can prove every
+# previously-documented thread_local has been migrated to the
+# `EditorSession` composition root (ADR-0057). Entries are grouped
+# by the milestone that retired them.
 retired:
+  # H2.5 (runtime coordination) — Block A2 (commit 05cde01).
+  - name: ACTUATOR_OUTPUT_BUS
+    kind: thread_local
+    was_at: crates/editor-bevy/src/actuator_bus.rs:53
+    retired_in: H2.5
+    retirement_pr: h2-5-runtime-coordination-block-a2
+    replacement: "editor_model::runtime::ActuatorBus (accessed via editor_model::ports::with_session_mut)"
+
+  # H2.4 (asset family) — first sweep.
   - name: SCENE_ASSET_DOC
     kind: thread_local
     was_at: crates/editor-bevy/src/asset_state.rs:32

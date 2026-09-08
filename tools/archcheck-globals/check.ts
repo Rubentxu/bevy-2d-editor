@@ -153,7 +153,7 @@ export function writeInventory(path: string, inv: Inventory): void {
 
 export interface RatchetResult {
   newDeclarations: Array<{ decl: Declaration; existing: InventoryEntry | null }>;
-  orphanEntries: Array<{ entry: InventoryEntry }>;
+  orphanEntries: InventoryEntry[];
 }
 
 export function ratchet(decls: Declaration[], inv: Inventory): RatchetResult {

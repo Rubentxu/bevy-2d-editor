@@ -82,12 +82,21 @@ sanctioned ambient seam for `editor-bevy` Bevy systems. See H1.2 evidence.
 | `PREVIEW_PROVENANCE`  | editor-bevy  | `crates/editor-bevy/src/preview_inspector.rs:72` | rebuild_preview_world                        | preview inspector UI                             | transient  | `EditorSession.preview.provenance` | OPEN         |
 | `HOT_RELOAD_BUS`      | editor-bevy  | `crates/editor-bevy/src/hot_reload_state.rs:32` | file watcher callbacks                      | hot-reload scheduler                             | session    | `EditorSession.runtime.hot_reload` | OPEN         |
 | `PLAY_MODE_REQUEST`   | editor-bevy  | `crates/editor-bevy/src/hot_reload_state.rs:35` | frontend play/pause commands                 | runtime coordinator                              | session    | `EditorSession.runtime.play_mode`  | OPEN         |
-| `ACTUATOR_OUTPUT_BUS` | editor-bevy  | `crates/editor-bevy/src/actuator_bus.rs:53` | logic actuator nodes                           | preview systems, telemetry                       | session    | `EditorSession.runtime.actuators`  | OPEN         |
+| ~~`ACTUATOR_OUTPUT_BUS`~~ | editor-bevy | ~~`crates/editor-bevy/src/actuator_bus.rs:53`~~ | *retired* — folded into `editor_model::runtime::ActuatorBus`, accessed via `editor_model::ports::with_session_mut` | preview systems, telemetry | session | `editor_model::runtime::ActuatorBus` (via session port) | RETIRED (H2.5 Block A2) |
 | `KEYBOARD_STATE`      | editor-bevy  | `crates/editor-bevy/src/logic_evaluator.rs:1049` | Bevy keyboard events                       | logic sensor nodes                               | transient  | `Bevy Resource InputState`         | OPEN         |
 
 `KEYBOARD_STATE` migrates to a Bevy `Resource` because its lifetime is
 strictly bound to the Bevy world (input frames). The other H2.5 cells
 land in `EditorSession.runtime` / `EditorSession.preview`.
+
+**Progress (after H2.5 Block A2, v0.108.3)**: 1 of 9 retired
+(`ACTUATOR_OUTPUT_BUS`). The local `logic_evaluator::PortValue` enum
+was also canonicalized in Block A2 (now `pub use editor_model::runtime::PortValue`)
+but it was never an inventory entry because it was a module-local type,
+not a thread-local. Remaining 8 H2.5 cells: `COMMAND_BUS`, `EVENT_BUS`,
+`PREVIEW_METRICS`, `PREVIEW_MAPPING`, `PREVIEW_PROVENANCE`,
+`HOT_RELOAD_BUS`, `PLAY_MODE_REQUEST`, `KEYBOARD_STATE`. These are
+scheduled for follow-up H2.5 cycles (Block E+).
 
 ## H2.x — Catch-all / id minting / ai-proxy memoization
 
