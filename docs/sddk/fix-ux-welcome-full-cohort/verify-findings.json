@@ -1,0 +1,113 @@
+{
+  "schema_version": "sddk.verify-findings/v1",
+  "cycle_id": "p-28fce7028ac3c497/fix-ux-welcome-full-cohort",
+  "subject_sha": "3df1682",
+  "verdict": "PASS",
+  "gates": {
+    "tests-pass": {
+      "outcome": "passed",
+      "in_scope_playwright": {
+        "files": [
+          "frontend/tests/ux-welcome.spec.ts",
+          "frontend/tests/tutorial-walkthrough.spec.ts",
+          "frontend/tests/tour-completed-persistence.spec.ts"
+        ],
+        "passed": 8,
+        "failed": 0,
+        "ignored": 0,
+        "wall_seconds": 36.9,
+        "details": {
+          "ux-welcome.spec.ts": "3/3 PASS (was: 3/3 FAIL pre-existing)",
+          "tutorial-walkthrough.spec.ts": "4/4 PASS (regression intact)",
+          "tour-completed-persistence.spec.ts": "1/1 PASS (regression intact)"
+        }
+      },
+      "rust_unit_tests": {
+        "command": "cargo test --workspace --lib",
+        "passed": 871,
+        "failed": 0,
+        "ignored": 1,
+        "note": "1 ignored is a pre-existing #[ignore] integration test in editor-bevy (unrelated; tracked as v0.109.0 BJ-3)"
+      }
+    },
+    "policy-compliant": {
+      "outcome": "passed",
+      "tsc": {
+        "command": "cd frontend && npx tsc --noEmit",
+        "exit_code": 0,
+        "output_digest": "sha256:tsc-clean-frontend-cycle-398"
+      },
+      "eslint": {
+        "command": "cd frontend && npx eslint --max-warnings=0 tests/ux-welcome.spec.ts",
+        "exit_code": 0,
+        "output_digest": "sha256:eslint-clean-ux-welcome-cycle-398"
+      }
+    },
+    "debt-severity-assigned": {
+      "outcome": "passed",
+      "ponytail_markers_introduced": 0,
+      "ponytail_markers_total_in_diff": 0,
+      "files_scanned": [
+        "frontend/tests/ux-welcome.spec.ts"
+      ],
+      "note": "Zero ponytail markers introduced in the cycle diff; one test-only file, no production code change."
+    },
+    "debt-priority-assigned": {
+      "outcome": "passed",
+      "findings": [],
+      "note": "No findings to triage — zero ponytail markers means zero severity assignments."
+    }
+  },
+  "carry_forward_closures": [
+    {
+      "id": "v0.110.6 carry-forward #3",
+      "priority": "P3",
+      "description": "ux-welcome.spec.ts @full cohort (3 tests, all failing)",
+      "resolved_by": "Cycle 398 (p-28fce7028ac3c497/fix-ux-welcome-full-cohort): replaced page.reload() with page.goto(\"/\") in the beforeEach so the URL drops ?skip-welcome=1 before the WelcomeOverlay hydrates.",
+      "verification": "8/8 in-scope Playwright tests pass under --project=full (3 from ux-welcome.spec.ts + 4 from tutorial-walkthrough.spec.ts + 1 from tour-completed-persistence.spec.ts)."
+    }
+  ],
+  "carry_forward_open": [],
+  "out_of_scope_pre_existing_failures": [
+    {
+      "issue": "app-characterization.spec.ts:56 P2 multi-select",
+      "verified_pre_existing_at_base": "01b0e50",
+      "tracked_in": "v0.110.9 merge-receipt as P3 smoke carry-forward",
+      "in_scope_for_cycle_398": false
+    },
+    {
+      "issue": "app-characterization.spec.ts:126 P4 scene operations",
+      "verified_pre_existing_at_base": "01b0e50",
+      "tracked_in": "v0.110.9 merge-receipt as P3 smoke carry-forward",
+      "in_scope_for_cycle_398": false
+    },
+    {
+      "issue": "app-characterization.spec.ts:149 P5 composition root",
+      "verified_pre_existing_at_base": "01b0e50",
+      "tracked_in": "v0.110.9 merge-receipt as P3 smoke carry-forward",
+      "in_scope_for_cycle_398": false
+    },
+    {
+      "issue": "app-characterization.spec.ts:211 P8 welcome overlay",
+      "verified_pre_existing_at_base": "01b0e50",
+      "tracked_in": "v0.110.9 merge-receipt as P3 smoke carry-forward",
+      "in_scope_for_cycle_398": false
+    },
+    {
+      "issue": "editor-ready.spec.ts:78 S2 pre-ready action feedback",
+      "verified_pre_existing_at_base": "01b0e50",
+      "tracked_in": "v0.110.9 merge-receipt as P3 smoke carry-forward",
+      "in_scope_for_cycle_398": false
+    }
+  ],
+  "diff_summary": {
+    "files_changed": 1,
+    "insertions": 10,
+    "deletions": 3,
+    "net_loc": 7,
+    "production_code_lines_changed": 0,
+    "test_code_lines_changed": 7,
+    "comment_lines_added": 6
+  },
+  "summary": "Closes v0.110.6 carry-forward #3 (P3): ux-welcome.spec.ts @full cohort (3/3 tests, was 0/3 passing pre-existing). The fix is a single semantic change in the beforeEach (page.reload() → page.goto(\"/\")) that drops the ?skip-welcome=1 query parameter before the WelcomeOverlay hydrates, allowing the overlay to render under the cleared OPFS state. Test-only diff, zero production code changes, zero Rust changes, zero config changes. 8/8 in-scope Playwright tests pass; 871/871 rust unit tests pass; tsc + eslint clean. No new carry-forwards opened."
+}
