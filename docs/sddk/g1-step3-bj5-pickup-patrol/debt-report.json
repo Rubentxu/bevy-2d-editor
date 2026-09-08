@@ -1,0 +1,41 @@
+{
+  "cycle_id": "p-28fce7028ac3c497/g1-step3-bj5-pickup-patrol",
+  "cycle_name": "g1-step3-bj5-pickup-patrol",
+  "tag": "v0.109.3",
+  "report_date": "2026-09-08",
+  "debt_items": [
+    {
+      "id": "BJ-3",
+      "title": "UI-creation Playwright test for sample",
+      "description": "The G1 sample is loaded from filesystem in e2e-game-creation.spec.ts. The next G1 cycle should add a UI-creation test that authors the sample through the editor's UI (create scene assets, place instances, override fields, bind logic graph).",
+      "severity": "medium",
+      "priority": "P2",
+      "source": "v1.0-stabilization evidence-map §7 P1 second sub-deliverable",
+      "out_of_scope_for": "g1-step3-bj5-pickup-patrol (this cycle)",
+      "remediation_estimate": "1-2 days",
+      "blocks_v1": false
+    },
+    {
+      "id": "BJ-5",
+      "title": "Gameplay assertions (jump, patrol, pickup, contact-death)",
+      "description": "The harness intentionally does not implement gameplay logic (no movement system, no collision system). A Bevy-native game that uses this harness would add these systems; the witness only proves the JSON round-trips.",
+      "severity": "low",
+      "priority": "P3",
+      "source": "v1.0-stabilization evidence-map G1 description",
+      "resolution": "Partial: pickup collision closed in g1-step3-bj5-pickup-patrol (v0.109.3). PickupCollisionPlugin + pickup_collision_system in crates/examples-bevy-harness/src/collision.rs; Pickup marker in components.rs; loader attachment by Name=='Pickup'; 3 integration tests in tests/pickup_collision.rs (overlap despawn, far-away preserved, marker-only filter). 3/3 tests pass. Remaining BJ-5 sub-deliverables: enemy patrol, jump, contact-death logic-graph runtime.",
+      "resolved_at_sequence": 230,
+      "out_of_scope_for": "g1-step3-bj5-pickup-patrol (this cycle, partial scope)",
+      "remediation_estimate": "0.5 day per remaining sub-deliverable (enemy patrol, jump, contact-death)",
+      "blocks_v1": false
+    }
+  ],
+  "summary": {
+    "total_debt": 2,
+    "open_debt": 1,
+    "resolved_in_this_cycle": 1,
+    "blockers": 0,
+    "high_priority": 0,
+    "medium_priority": 1,
+    "low_priority": 0
+  }
+}
