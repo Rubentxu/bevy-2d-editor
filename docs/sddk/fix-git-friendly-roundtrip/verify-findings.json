@@ -1,0 +1,120 @@
+{
+  "cycle_id": "p-28fce7028ac3c497/fix-git-friendly-roundtrip",
+  "path": "A-min",
+  "phase": "verify",
+  "sequence": 400,
+  "base_sha": "01b0e5028e675e917a614a09c0da47c9fb0e1366",
+  "cycle_commit": "afe8976",
+  "verified_at": "2026-09-08T21:05:24Z",
+  "verdict": "PASSED",
+  "gates": {
+    "tests-pass": {
+      "outcome": "passed",
+      "evidence": {
+        "git-friendly-roundtrip": "2/2 passed (40.7s)",
+        "load-sample-real-loader": "2/2 passed (34.3s) — regression intact",
+        "rust-unit-tests": "871/871 passed"
+      },
+      "details": {
+        "git-friendly-roundtrip.spec.ts": [
+          {
+            "name": "project_json_round_trip_is_byte_identical",
+            "duration_s": 21.4,
+            "status": "pass",
+            "was_status": "fail (pre-existing at v0.110.8)"
+          },
+          {
+            "name": "every_opfs_file_is_parseable_json_with_version_field",
+            "duration_s": 16.9,
+            "status": "pass",
+            "was_status": "fail (pre-existing at v0.110.8)"
+          }
+        ],
+        "load-sample-real-loader.spec.ts": [
+          {
+            "name": "S1.1 production loader writes 9 canonical files to OPFS",
+            "duration_s": 17.7,
+            "status": "pass"
+          },
+          {
+            "name": "S1.2 production loader + load_project hydrates the engine",
+            "duration_s": 14.4,
+            "status": "pass"
+          }
+        ],
+        "rust-unit-tests": {
+          "editor-model": "414/414 (1 ignored)",
+          "editor-application": "313/313",
+          "editor-storage-web": "57/57",
+          "editor-bevy": "0/0 (no lib tests)",
+          "editor-protocol": "0/0 (no lib tests)",
+          "examples-bevy-harness": "2/2",
+          "editor-wasm": "0/0 (no lib tests)",
+          "total": "871/871"
+        }
+      }
+    },
+    "policy-compliant": {
+      "outcome": "passed",
+      "evidence": {
+        "tsc": "0 errors",
+        "eslint": "0 errors, 0 warnings",
+        "cargo-check": "0 errors (warnings only)",
+        "cargo-check-wasm32": "0 errors (warnings only)",
+        "commit-message-convention": "type(scope): subject — followed",
+        "rustdoc-on-public-apis": "OPFS_STORE, rehydrate_project_store, attach_importer_for_id all documented"
+      }
+    },
+    "debt-severity-assigned": {
+      "outcome": "passed",
+      "debt_entries": [
+        {
+          "id": "bevy-js-mutex-interleave",
+          "severity": "P2",
+          "location": "crates/editor-model/src/ports.rs:with_session_mut",
+          "description": "Bevy requestAnimationFrame interleaving with JS async calls can race the SESSION lock. Current fix: bounded try_lock spin-loop. Cleaner alternatives tracked (Bevy pause flag, RefCell<EditorSession> on wasm, message-passing runner)."
+        }
+      ],
+      "resolved_in_cycle": [
+        "5 pre-existing wasm-build blockers (E0382, E0063, lifetime, PLAY_MODE_REQUEST rename, duplicate importer registration) — RESOLVED"
+      ]
+    },
+    "debt-priority-assigned": {
+      "outcome": "passed",
+      "all_entries_have_priority": true,
+      "ledger_clean": true
+    }
+  },
+  "pre_existing_failures_documented": [
+    {
+      "test": "app-characterization.spec.ts:56 P2: multi-select with Ctrl+A and modifier clicks",
+      "severity": "P3",
+      "verified_at_base": "01b0e50 via git stash",
+      "carry_forward": "docs/v1.0-stabilization-evidence-map.md"
+    },
+    {
+      "test": "app-characterization.spec.ts:126 P4: scene operations",
+      "severity": "P3",
+      "verified_at_base": "01b0e50 via git stash",
+      "carry_forward": "docs/v1.0-stabilization-evidence-map.md"
+    },
+    {
+      "test": "app-characterization.spec.ts:149 P5: composition root - no direct workspace state",
+      "severity": "P3",
+      "verified_at_base": "01b0e50 via git stash",
+      "carry_forward": "docs/v1.0-stabilization-evidence-map.md"
+    },
+    {
+      "test": "app-characterization.spec.ts:211 P8: welcome overlay and onboarding dismissal",
+      "severity": "P3",
+      "verified_at_base": "01b0e50 via git stash",
+      "carry_forward": "docs/v1.0-stabilization-evidence-map.md"
+    },
+    {
+      "test": "editor-ready.spec.ts:78 S2: pre-ready action is rejected with observable feedback",
+      "severity": "P3",
+      "verified_at_base": "01b0e50 via git stash",
+      "carry_forward": "docs/v1.0-stabilization-evidence-map.md"
+    }
+  ]
+}
