@@ -2600,6 +2600,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "examples-bevy-harness"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "editor-model",
+ "serde_json",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

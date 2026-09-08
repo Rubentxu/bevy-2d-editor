@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/editor-bevy", "crates/ai-proxy", "crates/editor-model", "crates/editor-application", "crates/editor-protocol", "crates/editor-storage-web", "crates/editor-wasm"]
+members = ["crates/editor-bevy", "crates/ai-proxy", "crates/editor-model", "crates/editor-application", "crates/editor-protocol", "crates/editor-storage-web", "crates/editor-wasm", "crates/examples-bevy-harness"]
 resolver = "2"
 version = "0.108.9"
 

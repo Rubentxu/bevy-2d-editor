@@ -1,0 +1,70 @@
+{
+  "cycle_id": "p-28fce7028ac3c497/v1-g1-bevy-harness",
+  "cycle_name": "v1-g1-bevy-harness",
+  "tag": "v0.109.0",
+  "report_date": "2026-09-08",
+  "debt_items": [
+    {
+      "id": "BJ-3",
+      "title": "UI-creation Playwright test for sample",
+      "description": "The G1 sample is loaded from filesystem in e2e-game-creation.spec.ts. The next G1 cycle should add a UI-creation test that authors the sample through the editor's UI (create scene assets, place instances, override fields, bind logic graph).",
+      "severity": "medium",
+      "priority": "P2",
+      "source": "v1.0-stabilization evidence-map §7 P1 second sub-deliverable",
+      "out_of_scope_for": "v1-g1-bevy-harness (this cycle)",
+      "remediation_estimate": "1-2 days",
+      "blocks_v1": false
+    },
+    {
+      "id": "BJ-4",
+      "title": "Bevy play_mode runtime state assertions",
+      "description": "The harness proves entity structure (Name, Transform, components) but does not run the Bevy App / Schedule to verify play_mode semantics. A future cycle should add play_mode runtime tests (e.g. player movement, enemy patrol, pickup collision) using Bevy 0.19's Time and Input systems.",
+      "severity": "medium",
+      "priority": "P2",
+      "source": "v1.0-stabilization evidence-map §7 P1 fourth sub-deliverable",
+      "out_of_scope_for": "v1-g1-bevy-harness (this cycle)",
+      "remediation_estimate": "1-2 days",
+      "blocks_v1": false
+    },
+    {
+      "id": "BJ-5",
+      "title": "Gameplay assertions (jump, patrol, pickup)",
+      "description": "The harness intentionally does not implement gameplay logic (no movement system, no collision system). A Bevy-native game that uses this harness would add these systems; the witness only proves the JSON round-trips.",
+      "severity": "low",
+      "priority": "P3",
+      "source": "v1.0-stabilization evidence-map G1 description (gameplay not required, only structural correctness)",
+      "out_of_scope_for": "v1-g1-bevy-harness (this cycle, by spec FR-1 + non-goals)",
+      "remediation_estimate": "depends on Bevy-native game project",
+      "blocks_v1": false
+    },
+    {
+      "id": "BJ-1",
+      "title": "3 pre-existing logic_evaluator integration test failures",
+      "description": "test_submit_and_drain, test_entity_bits_preserved_in_bus, test_end_to_end_actuator_pipeline fail because submit_actuator_output requires session install. Block A2 bug, masked by Block H handoff. Carry-forward from Block I.",
+      "severity": "medium",
+      "priority": "P1",
+      "source": "Block I follow-up BJ-1",
+      "out_of_scope_for": "v1-g1-bevy-harness (this cycle)",
+      "remediation_estimate": "0.5 day",
+      "blocks_v1": false
+    },
+    {
+      "id": "BJ-2",
+      "title": "archcheck rule B1 + B2 false-positives",
+      "description": "bevy:: regex matches editor_bevy::command substrings in 7 doc-comment-only files. wasm_bindgen/web_sys match in 1 comment. All pre-existing. Carry-forward from Block I.",
+      "severity": "low",
+      "priority": "P2",
+      "source": "Block I follow-up BJ-2",
+      "out_of_scope_for": "v1-g1-bevy-harness (this cycle)",
+      "remediation_estimate": "0.5 day (regex refinement OR comment rewrite)",
+      "blocks_v1": false
+    }
+  ],
+  "summary": {
+    "total_debt": 5,
+    "blockers": 0,
+    "high_priority": 0,
+    "medium_priority": 3,
+    "low_priority": 2
+  }
+}

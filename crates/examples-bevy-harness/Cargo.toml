@@ -1,0 +1,20 @@
+[package]
+name = "examples-bevy-harness"
+version = "0.1.0"
+edition = "2024"
+description = "Bevy 2D runtime harness that consumes editor-authored scene asset JSON as a witness for the v1.0 canonical sample game (G1)."
+license = "MIT OR Apache-2.2"
+
+[lib]
+
+[dependencies]
+# Bevy 0.19 with 2D feature only (matches editor-bevy's configuration).
+bevy = { version = "0.19", default-features = false, features = ["2d"] }
+# editor-model supplies SceneAssetDocument, SceneInstance, ComponentInstance types.
+# No Bevy, no WASM, no JS — see crates/editor-model/Cargo.toml.
+editor-model = { path = "../editor-model" }
+serde_json = "1"
+
+[dev-dependencies]
+# The integration test does not pull in additional dev-deps; tests use std::fs and
+# the public API of the harness crate.
