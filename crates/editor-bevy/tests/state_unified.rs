@@ -98,6 +98,27 @@ impl EditorSessionPort for FakeSession {
             .or_insert_with(Vec::new)
             .push(summary);
     }
+    // H2.5 Block A — session-owned runtime buses (forwarded to fresh defaults;
+    // this test file does not exercise them).
+    fn runtime_command_bus_mut(&mut self) -> &mut editor_model::runtime::LinearBus {
+        unimplemented!()
+    }
+    fn runtime_event_bus_mut(&mut self) -> &mut editor_model::runtime::LinearBus {
+        unimplemented!()
+    }
+    fn runtime_actuator_outputs_mut(&mut self) -> &mut editor_model::runtime::ActuatorBus {
+        unimplemented!()
+    }
+    fn runtime_hot_reload_requests_mut(
+        &mut self,
+    ) -> &mut Vec<editor_model::runtime::HotReloadRequest> {
+        unimplemented!()
+    }
+    fn runtime_play_mode_request_mut(
+        &mut self,
+    ) -> &mut Option<editor_model::runtime::PlayModeRequest> {
+        unimplemented!()
+    }
 }
 
 fn fresh_session() {

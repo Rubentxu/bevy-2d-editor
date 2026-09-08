@@ -77,6 +77,26 @@ impl EditorSessionPort for FakeSession {
         None
     }
     fn push_recent_change_set(&mut self, _scene_path: &str, _summary: support::ChangeSetSummary) {}
+    // H2.5 Block A — session-owned runtime buses (delegated to inner).
+    fn runtime_command_bus_mut(&mut self) -> &mut editor_model::runtime::LinearBus {
+        self.inner.runtime_command_bus_mut()
+    }
+    fn runtime_event_bus_mut(&mut self) -> &mut editor_model::runtime::LinearBus {
+        self.inner.runtime_event_bus_mut()
+    }
+    fn runtime_actuator_outputs_mut(&mut self) -> &mut editor_model::runtime::ActuatorBus {
+        self.inner.runtime_actuator_outputs_mut()
+    }
+    fn runtime_hot_reload_requests_mut(
+        &mut self,
+    ) -> &mut Vec<editor_model::runtime::HotReloadRequest> {
+        self.inner.runtime_hot_reload_requests_mut()
+    }
+    fn runtime_play_mode_request_mut(
+        &mut self,
+    ) -> &mut Option<editor_model::runtime::PlayModeRequest> {
+        self.inner.runtime_play_mode_request_mut()
+    }
 }
 
 fn fresh_session() {

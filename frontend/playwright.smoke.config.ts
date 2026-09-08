@@ -5,25 +5,33 @@ import { defineConfig, devices } from "@playwright/test";
  * click". This is the contract the stabilization release-health gate
  * relies on.
  *
- * Runs the smallest subset of specs that exercises: app boot, dock
- * layout, engine readiness, and a primary navigation action. The cohort
- * MUST stay under 60 s on the CI runner; if it doesn't, the offending
- * spec must move out (not the gate must be loosened).
+ * Runs ONLY specs tagged `@smoke`. The cohort MUST stay under 60 s on
+ * the CI runner; if it doesn't, the offending spec must move out (not
+ * the gate must be loosened).
  *
- * Excluded tests:
- *   - capabilities-smoke.spec.ts → "clicking Code button reveals code
- *     editor container": currently intercepted by WelcomeOverlay in the
- *     cohort context; the full suite runs it.
+ * Specs that are NOT in this cohort:
+ *   - engine.spec.ts → tagged `@full`, runs in playwright.full.config.ts.
+ *     It is the workhorse of the release-health gate (20 cases covering
+ *     typed command system, operation log, OPFS persistence, schema
+ *     registry, UI hierarchy/inspector) and runs in ~1.2 m, exceeding
+ *     the 60 s smoke budget on its own.
+ *   - ux-dock.spec.ts, mode-context-bar.spec.ts, mode-headers.spec.ts →
+ *     tagged `@full`, run in playwright.full.config.ts.
+ *   - _check_scene_field.spec.ts → tagged `@domain`, runs in
+ *     playwright.domain.config.ts.
+ *
+ * History: pre-v0.108.9 listed the above specs by file name in
+ * testMatch, which silently coupled smoke budget to full-cohort runtime.
+ * The v0.108.9 fix moves to tag-driven selection so the budget is
+ * enforced structurally.
  */
 export default defineConfig({
   testDir: "./tests",
   testMatch: [
     "smoke.spec.ts",
-    "engine.spec.ts",
-    "_check_scene_field.spec.ts",
-    "mode-context-bar.spec.ts",
-    "mode-headers.spec.ts",
-    "ux-dock.spec.ts",
+    "app-characterization.spec.ts",
+    "capabilities-smoke.spec.ts",
+    "editor-ready.spec.ts",
   ],
   testIgnore: [
     "**/e2e/**",
