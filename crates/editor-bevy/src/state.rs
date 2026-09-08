@@ -11,7 +11,7 @@
 //!   plus ASSET_BODY_CACHE / RESYNC_REPORTS / VALIDATION_ISSUES per-path on
 //!   `AssetSessionState`).
 //! - [`logic_state`]: LOGIC_GRAPH_DOC, LOGIC_OPERATION_LOG
-//! - [`hot_reload_state`]: HOT_RELOAD_BUS, PLAY_MODE_REQUEST
+//! - [`hot_reload_state`]: HOT_RELOAD_BUS_FALLBACK, PLAY_MODE_REQUEST_FALLBACK
 
 pub use crate::asset_state::{
     clear_asset_catalog_warnings, get_asset_catalog_warnings, with_asset_body_cache,
@@ -19,7 +19,7 @@ pub use crate::asset_state::{
     with_asset_doc_and_log_mut, with_asset_doc_mut, with_asset_log, with_asset_log_mut,
 };
 pub use crate::hot_reload_state::{
-    HOT_RELOAD_BUS, HotReloadRequest, PLAY_MODE_REQUEST, PlayModeRequest,
+    HOT_RELOAD_BUS_FALLBACK, HotReloadRequest, PLAY_MODE_REQUEST_FALLBACK, PlayModeRequest,
 };
 pub use crate::logic_state::{
     with_binding_registry, with_binding_registry_mut, with_logic_graph, with_logic_graph_catalog,

@@ -31,7 +31,7 @@ use crate::instance_projection::{PreviewEntity, project_instances};
 use crate::logic_dispatch;
 use crate::logic_evaluator::{self, PortValue};
 use crate::state::{
-    HOT_RELOAD_BUS, HotReloadRequest, PLAY_MODE_REQUEST, PlayModeRequest, mark_dirty,
+    HOT_RELOAD_BUS_FALLBACK, HotReloadRequest, PLAY_MODE_REQUEST_FALLBACK, PlayModeRequest, mark_dirty,
     with_asset_body_cache_mut, with_logic_graph_mut,
 };
 use crate::{
@@ -185,7 +185,7 @@ pub fn start_engine(canvas_id: &str) {
         // (never running in parallel) and accepts the Transform/Sprite
         // mutable overlap with the scene-entity ParamSet below.
         .add_systems(Update, process_play_mode_request)
-        // process_hot_reload_requests drains the HOT_RELOAD_BUS each frame before rebuild
+        // process_hot_reload_requests drains the hot-reload bus (session first, FALLBACK otherwise) each frame before rebuild
         .add_systems(
             Update,
             process_hot_reload_requests.before(rebuild_preview_world),
@@ -338,7 +338,11 @@ fn process_play_mode_request(
     // ADR-0042: Query EditorComponent + SceneInstanceChild for tunable baseline capture.
     baseline_components: Query<(&EditorComponent, &SceneInstanceChild)>,
 ) {
-    let request = PLAY_MODE_REQUEST.with(|r| (*r.borrow()).clone());
+    // H2.5 Block G: dual-write read — session first, fallback to FALLBACK thread_local.
+    let request: Option<PlayModeRequest> = editor_model::ports::with_session_mut(|s| {
+        s.runtime_play_mode_request_mut().clone()
+    })
+    .unwrap_or_else(|| PLAY_MODE_REQUEST_FALLBACK.with(|r| (*r.borrow()).clone()));
 
     match request {
         Some(PlayModeRequest::Enter) => {
@@ -350,7 +354,14 @@ fn process_play_mode_request(
             // ADR-0042: Capture tunable baselines (component values at Enter time)
             capture_tunable_baselines_internal(&baseline_components);
             *play_mode = PlayMode::Playing;
-            PLAY_MODE_REQUEST.with(|r| *r.borrow_mut() = None);
+            // Clear via session first, fallback otherwise.
+            let cleared = editor_model::ports::with_session_mut(|s| {
+                *s.runtime_play_mode_request_mut() = None;
+                true
+            });
+            if cleared.unwrap_or(false) == false {
+                PLAY_MODE_REQUEST_FALLBACK.with(|r| *r.borrow_mut() = None);
+            }
         }
         Some(PlayModeRequest::Exit) => {
             // v0.90 PR1: compute runtime deltas BEFORE restoring transforms,
@@ -377,7 +388,14 @@ fn process_play_mode_request(
                 }
             }
             *play_mode = PlayMode::Edit;
-            PLAY_MODE_REQUEST.with(|r| *r.borrow_mut() = None);
+            // Clear via session first, fallback otherwise.
+            let cleared = editor_model::ports::with_session_mut(|s| {
+                *s.runtime_play_mode_request_mut() = None;
+                true
+            });
+            if cleared.unwrap_or(false) == false {
+                PLAY_MODE_REQUEST_FALLBACK.with(|r| *r.borrow_mut() = None);
+            }
         }
         None => {}
     }
@@ -598,20 +616,34 @@ where
 // process_hot_reload_requests
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Drains the HOT_RELOAD_BUS, de-duplicates by (variant, key), and dispatches:
+/// Drains the hot-reload bus (session first, FALLBACK otherwise), de-duplicates by (variant, key), and dispatches:
 /// - `Asset{asset_id}` → remove from the active-path asset body cache + mark dirty (H2.4; formerly `ASSET_BODY_CACHE` thread_local).
 /// - ForceReloadAll   → clear all caches + LOGIC_GRAPH_DOC=None + mark_dirty()
+///
+/// **H2.5 Block G**: dual-write — reads from
+/// `EditorSession.runtime.hot_reload_requests` first (via
+/// `with_session_mut`), falls back to `HOT_RELOAD_BUS_FALLBACK`
+/// (legacy test path).
 ///
 /// Runs in Update before rebuild_preview_world so stale data is purged
 /// before the next preview render.
 pub fn process_hot_reload_requests() {
     use std::collections::HashSet;
 
-    // Collect and clear bus atomically
-    let requests: Vec<HotReloadRequest> = HOT_RELOAD_BUS.with(|bus| {
-        let mut v = bus.borrow_mut();
-        std::mem::take(&mut *v)
-    });
+    // Collect and clear bus atomically. Session first, FALLBACK otherwise.
+    let requests: Vec<HotReloadRequest> = {
+        let via_session: Option<Vec<HotReloadRequest>> = editor_model::ports::with_session_mut(|s| {
+            std::mem::take(s.runtime_hot_reload_requests_mut())
+        });
+        if let Some(via) = via_session {
+            via
+        } else {
+            HOT_RELOAD_BUS_FALLBACK.with(|bus| {
+                let mut v = bus.borrow_mut();
+                std::mem::take(&mut *v)
+            })
+        }
+    };
 
     if requests.is_empty() {
         return;

@@ -270,7 +270,7 @@ pub struct TransformSnapshot {
 // crates/editor-core/src/state.rs. Re-exported here so existing
 // callers in lib.rs continue to work without modification.
 use crate::state::{
-    HOT_RELOAD_BUS, HotReloadRequest, LOGIC_OPERATION_LOG, PLAY_MODE_REQUEST, PlayModeRequest,
+    HOT_RELOAD_BUS_FALLBACK, HotReloadRequest, LOGIC_OPERATION_LOG, PLAY_MODE_REQUEST_FALLBACK, PlayModeRequest,
     SCENE_REGISTRY, clear_asset_catalog_warnings, get_asset_catalog_warnings, mark_dirty,
     with_asset_body_cache, with_asset_body_cache_mut, with_asset_catalog, with_asset_catalog_mut,
     with_asset_doc, with_asset_doc_and_log_mut, with_asset_doc_mut, with_asset_log,

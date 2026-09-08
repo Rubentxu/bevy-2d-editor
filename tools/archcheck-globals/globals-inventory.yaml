@@ -19,6 +19,18 @@ entries:
     owner: H2.5
     reason: "runtime event bus dual-write fallback; production code uses EditorSession.runtime.event_bus via with_session_mut. Kept for tests/non-session entrypoints; will close after parity tests prove full coverage. OPEN until §S-F parity tests pass without it."
 
+  - name: HOT_RELOAD_BUS_FALLBACK
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/hot_reload_state.rs:27
+    owner: H2.5
+    reason: "hot-reload request queue dual-write fallback; production code uses EditorSession.runtime.hot_reload_requests via with_session_mut. Kept for tests/non-session entrypoints; will close after parity tests prove full coverage. OPEN until §S-G parity tests pass without it."
+
+  - name: PLAY_MODE_REQUEST_FALLBACK
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/hot_reload_state.rs:35
+    owner: H2.5
+    reason: "play-mode request flag dual-write fallback; production code uses EditorSession.runtime.play_mode_request via with_session_mut. Kept for tests/non-session entrypoints; will close after parity tests prove full coverage. OPEN until §S-G parity tests pass without it."
+
 
 
 
@@ -46,18 +58,6 @@ entries:
     declared_at: crates/editor-bevy/src/preview_inspector.rs:86
     owner: H2.5
     reason: "fallback thread_local for EditorSession.preview_inspector.provenance when no session is installed; legacy test path"
-
-  - name: HOT_RELOAD_BUS
-    kind: thread_local
-    declared_at: crates/editor-bevy/src/hot_reload_state.rs:32
-    owner: H2.5
-    reason: "hot-reload request bus; absorbed by EditorSession.hot_reload"
-
-  - name: PLAY_MODE_REQUEST
-    kind: thread_local
-    declared_at: crates/editor-bevy/src/hot_reload_state.rs:35
-    owner: H2.5
-    reason: "play mode request queue; absorbed by EditorSession.play_mode"
 
   - name: LOGIC_GRAPH_DOC
     kind: thread_local
