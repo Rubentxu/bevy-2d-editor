@@ -77,9 +77,9 @@ sanctioned ambient seam for `editor-bevy` Bevy systems. See H1.2 evidence.
 |-----------------------|--------------|----------------------------------------------|--------------------------------------------------|--------------------------------------------------|------------|------------------------------------|--------------|
 | `COMMAND_BUS`         | editor-bevy  | `crates/editor-bevy/src/lib.rs:407`         | command entrypoints, hot-reload pipeline         | command dispatcher, telemetry                    | session    | `EditorSession.runtime.bus`        | OPEN         |
 | `EVENT_BUS`           | editor-bevy  | `crates/editor-bevy/src/lib.rs:408`         | domain events, command results                   | telemetry, dev tools, frontend subscribers       | session    | `EditorSession.runtime.events`     | OPEN         |
-| `PREVIEW_METRICS`     | editor-bevy  | `crates/editor-bevy/src/preview_inspector.rs:60` | preview frame tick, rebuild tracker          | preview inspector UI, telemetry                  | session    | `EditorSession.preview.metrics`    | OPEN         |
-| `PREVIEW_MAPPING`     | editor-bevy  | `crates/editor-bevy/src/preview_inspector.rs:68` | rebuild_preview_world                        | preview inspector UI                             | transient  | `EditorSession.preview.mapping`    | OPEN         |
-| `PREVIEW_PROVENANCE`  | editor-bevy  | `crates/editor-bevy/src/preview_inspector.rs:72` | rebuild_preview_world                        | preview inspector UI                             | transient  | `EditorSession.preview.provenance` | OPEN         |
+| ~~`PREVIEW_METRICS`~~ | editor-bevy | ~~`crates/editor-bevy/src/preview_inspector.rs:72`~~ | *retired* — folded into `editor_model::preview_inspector.metrics`, session-first with `PREVIEW_METRICS_FALLBACK` thread_local fallback (dual-write pattern, same as Block A2 ActuatorBus). | preview inspector UI, telemetry                  | session    | `editor_model::preview_inspector.metrics` (via session port) | RETIRED (H2.5 Block E) |
+| ~~`PREVIEW_MAPPING`~~ | editor-bevy | ~~`crates/editor-bevy/src/preview_inspector.rs:81`~~ | *retired* — folded into `editor_model::preview_inspector.mapping`, session-first with `PREVIEW_MAPPING_FALLBACK` thread_local fallback. | preview inspector UI                             | transient  | `editor_model::preview_inspector.mapping` (via session port) | RETIRED (H2.5 Block E) |
+| ~~`PREVIEW_PROVENANCE`~~ | editor-bevy | ~~`crates/editor-bevy/src/preview_inspector.rs:86`~~ | *retired* — folded into `editor_model::preview_inspector.provenance`, session-first with `PREVIEW_PROVENANCE_FALLBACK` thread_local fallback. | preview inspector UI                             | transient  | `editor_model::preview_inspector.provenance` (via session port) | RETIRED (H2.5 Block E) |
 | `HOT_RELOAD_BUS`      | editor-bevy  | `crates/editor-bevy/src/hot_reload_state.rs:32` | file watcher callbacks                      | hot-reload scheduler                             | session    | `EditorSession.runtime.hot_reload` | OPEN         |
 | `PLAY_MODE_REQUEST`   | editor-bevy  | `crates/editor-bevy/src/hot_reload_state.rs:35` | frontend play/pause commands                 | runtime coordinator                              | session    | `EditorSession.runtime.play_mode`  | OPEN         |
 | ~~`ACTUATOR_OUTPUT_BUS`~~ | editor-bevy | ~~`crates/editor-bevy/src/actuator_bus.rs:53`~~ | *retired* — folded into `editor_model::runtime::ActuatorBus`, accessed via `editor_model::ports::with_session_mut` | preview systems, telemetry | session | `editor_model::runtime::ActuatorBus` (via session port) | RETIRED (H2.5 Block A2) |
@@ -89,14 +89,17 @@ sanctioned ambient seam for `editor-bevy` Bevy systems. See H1.2 evidence.
 strictly bound to the Bevy world (input frames). The other H2.5 cells
 land in `EditorSession.runtime` / `EditorSession.preview`.
 
-**Progress (after H2.5 Block A2, v0.108.3)**: 1 of 9 retired
-(`ACTUATOR_OUTPUT_BUS`). The local `logic_evaluator::PortValue` enum
-was also canonicalized in Block A2 (now `pub use editor_model::runtime::PortValue`)
-but it was never an inventory entry because it was a module-local type,
-not a thread-local. Remaining 8 H2.5 cells: `COMMAND_BUS`, `EVENT_BUS`,
-`PREVIEW_METRICS`, `PREVIEW_MAPPING`, `PREVIEW_PROVENANCE`,
+**Progress (after H2.5 Block E, v0.108.5)**: 4 of 9 retired
+(`ACTUATOR_OUTPUT_BUS` in Block A2; `PREVIEW_METRICS`, `PREVIEW_MAPPING`,
+`PREVIEW_PROVENANCE` in Block E — all migrated via session-first
+dual-write with renamed `*_FALLBACK` thread_locals). The local
+`logic_evaluator::PortValue` enum was also canonicalized in Block A2
+(now `pub use editor_model::runtime::PortValue`) but it was never an
+inventory entry because it was a module-local type, not a
+thread-local. Remaining 5 H2.5 cells: `COMMAND_BUS`, `EVENT_BUS`,
 `HOT_RELOAD_BUS`, `PLAY_MODE_REQUEST`, `KEYBOARD_STATE`. These are
-scheduled for follow-up H2.5 cycles (Block E+).
+scheduled for follow-up H2.5 cycles (Block F = runtime buses,
+Block G = hot-reload + play-mode, Block H = Bevy input `KEYBOARD_STATE`).
 
 ## H2.x — Catch-all / id minting / ai-proxy memoization
 

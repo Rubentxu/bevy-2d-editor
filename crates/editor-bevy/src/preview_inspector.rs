@@ -51,25 +51,39 @@ pub struct PreviewProvenance {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Thread-locals (single-threaded WASM surface)
+// Thread-locals (fallback for tests without an EditorSession)
 // ─────────────────────────────────────────────────────────────────────────────
+//
+// H2.5 Block E: these thread_locals are now the FALLBACK path for the
+// session-owned `EditorSession.preview_inspector.{metrics, mapping,
+// provenance}` fields. The canonical owner is the session (per
+// ADR-0052). Production callers go through the session first; this
+// thread_local only serves legacy tests that don't install a session.
+//
+// Pattern precedent: Block A2 ActuatorBus, v0.90 PR2
+// `record_rebuild_cause` / `stamp_provenance`. See
+// `docs/architecture/state-ownership-matrix.md` § H2.5 for the
+// migration ledger.
 
 thread_local! {
-    /// Live preview metrics. Updated by `emit_events` (FPS) and
-    /// `rebuild_preview_world` (rebuild_count).
-    static PREVIEW_METRICS: RefCell<PreviewMetrics> = const { RefCell::new(PreviewMetrics {
+    /// Live preview metrics fallback. Updated by `emit_events` (FPS) and
+    /// `rebuild_preview_world` (rebuild_count) when no session is
+    /// installed. Production path is `EditorSession.preview_inspector.metrics`.
+    static PREVIEW_METRICS_FALLBACK: RefCell<PreviewMetrics> = const { RefCell::new(PreviewMetrics {
         fps: 0.0,
         frame_time_ms: 0.0,
         rebuild_count: 0,
     }) };
 
-    /// Per-instance preview mapping list. Replaced atomically on each
-    /// `rebuild_preview_world` call.
-    static PREVIEW_MAPPING: RefCell<Vec<PreviewMappingEntry>> = const { RefCell::new(Vec::new()) };
+    /// Per-instance preview mapping list fallback. Replaced atomically on
+    /// each `rebuild_preview_world` call when no session is installed.
+    /// Production path is `EditorSession.preview_inspector.mapping`.
+    static PREVIEW_MAPPING_FALLBACK: RefCell<Vec<PreviewMappingEntry>> = const { RefCell::new(Vec::new()) };
 
-    /// Per-instance provenance details. Replaced atomically on each
-    /// `rebuild_preview_world` call.
-    static PREVIEW_PROVENANCE: RefCell<BTreeMap<StableId, PreviewProvenance>> =
+    /// Per-instance provenance details fallback. Replaced atomically on
+    /// each `rebuild_preview_world` call when no session is installed.
+    /// Production path is `EditorSession.preview_inspector.provenance`.
+    static PREVIEW_PROVENANCE_FALLBACK: RefCell<BTreeMap<StableId, PreviewProvenance>> =
         const { RefCell::new(BTreeMap::new()) };
 
     // v0.90 PR2: `LAST_REBUILD_CAUSE` and `PENDING_CAUSALITY_EDGES` thread_locals
@@ -81,13 +95,41 @@ thread_local! {
 }
 
 /// Replace the live preview metrics. Called by `emit_events` and on rebuild.
+///
+/// H2.5 Block E: writes through `editor_model::ports::with_session_mut`
+/// to `EditorSession::preview_inspector.metrics`. Falls back to
+/// `PREVIEW_METRICS_FALLBACK` when no session is installed (legacy
+/// tests). Returns silently if both paths are unavailable.
 pub fn set_metrics(metrics: PreviewMetrics) {
-    PREVIEW_METRICS.with(|m| *m.borrow_mut() = metrics);
+    let payload = serde_json::to_value(&metrics)
+        .expect("PreviewMetrics serializes (round-trip tested)");
+    let written = editor_model::ports::with_session_mut(|sess| {
+        sess.preview_inspector_mut().metrics = payload;
+    })
+    .is_some();
+    if !written {
+        PREVIEW_METRICS_FALLBACK.with(|m| *m.borrow_mut() = metrics);
+    }
 }
 
 /// Increment the rebuild counter and return the new value.
+///
+/// H2.5 Block E: reads+mutates `EditorSession::preview_inspector.metrics`
+/// via the session; falls back to `PREVIEW_METRICS_FALLBACK` when no
+/// session is installed.
 pub fn increment_rebuild_count() -> u32 {
-    PREVIEW_METRICS.with(|m| {
+    let via_session = editor_model::ports::with_session_mut(|sess| {
+        let pi = sess.preview_inspector_mut();
+        let mut m: PreviewMetrics = serde_json::from_value(pi.metrics.clone()).unwrap_or_default();
+        m.rebuild_count = m.rebuild_count.saturating_add(1);
+        pi.metrics = serde_json::to_value(&m)
+            .expect("PreviewMetrics serializes (round-trip tested)");
+        m.rebuild_count
+    });
+    if let Some(n) = via_session {
+        return n;
+    }
+    PREVIEW_METRICS_FALLBACK.with(|m| {
         let mut m = m.borrow_mut();
         m.rebuild_count = m.rebuild_count.saturating_add(1);
         m.rebuild_count
@@ -95,30 +137,103 @@ pub fn increment_rebuild_count() -> u32 {
 }
 
 /// Replace the live preview mapping list.
+///
+/// H2.5 Block E: writes through `editor_model::ports::with_session_mut`
+/// to `EditorSession::preview_inspector.mapping`. Falls back to
+/// `PREVIEW_MAPPING_FALLBACK` when no session is installed.
 pub fn set_mapping(entries: Vec<PreviewMappingEntry>) {
-    PREVIEW_MAPPING.with(|m| *m.borrow_mut() = entries);
+    let payload: Vec<serde_json::Value> = entries
+        .iter()
+        .map(|e| serde_json::to_value(e).expect("PreviewMappingEntry serializes"))
+        .collect();
+    let written = editor_model::ports::with_session_mut(|sess| {
+        sess.preview_inspector_mut().mapping = payload;
+    })
+    .is_some();
+    if !written {
+        PREVIEW_MAPPING_FALLBACK.with(|m| *m.borrow_mut() = entries);
+    }
 }
 
 /// Replace the live preview provenance map.
+///
+/// H2.5 Block E: writes through `editor_model::ports::with_session_mut`
+/// to `EditorSession::preview_inspector.provenance`. Falls back to
+/// `PREVIEW_PROVENANCE_FALLBACK` when no session is installed.
 pub fn set_provenance(entries: BTreeMap<StableId, PreviewProvenance>) {
-    PREVIEW_PROVENANCE.with(|p| *p.borrow_mut() = entries);
+    let payload: std::collections::BTreeMap<String, serde_json::Value> = entries
+        .iter()
+        .map(|(k, v)| {
+            (
+                k.as_str().to_string(),
+                serde_json::to_value(v).expect("PreviewProvenance serializes"),
+            )
+        })
+        .collect();
+    let written = editor_model::ports::with_session_mut(|sess| {
+        sess.preview_inspector_mut().provenance = payload;
+    })
+    .is_some();
+    if !written {
+        PREVIEW_PROVENANCE_FALLBACK.with(|p| *p.borrow_mut() = entries);
+    }
 }
 
 /// Read the live preview metrics (cloned).
+///
+/// H2.5 Block E: reads from `EditorSession::preview_inspector.metrics`
+/// when a session is installed; falls back to
+/// `PREVIEW_METRICS_FALLBACK` otherwise. Returns `Default::default()`
+/// if the session metric cannot be deserialized (treat as empty).
 pub fn get_metrics() -> PreviewMetrics {
-    PREVIEW_METRICS.with(|m| m.borrow().clone())
+    if let Some(v) = editor_model::ports::with_session_mut(|sess| {
+        sess.preview_inspector_mut().metrics.clone()
+    }) {
+        return serde_json::from_value(v).unwrap_or_default();
+    }
+    PREVIEW_METRICS_FALLBACK.with(|m| m.borrow().clone())
 }
 
 /// Read the live preview mapping (cloned).
+///
+/// H2.5 Block E: reads from `EditorSession::preview_inspector.mapping`
+/// when a session is installed; falls back to
+/// `PREVIEW_MAPPING_FALLBACK` otherwise. Entries that fail
+/// deserialization are skipped (preserves the others).
 pub fn get_mapping() -> Vec<PreviewMappingEntry> {
-    PREVIEW_MAPPING.with(|m| m.borrow().clone())
+    if let Some(arr) = editor_model::ports::with_session_mut(|sess| {
+        sess.preview_inspector_mut().mapping.clone()
+    }) {
+        return arr
+            .into_iter()
+            .filter_map(|v| serde_json::from_value(v).ok())
+            .collect();
+    }
+    PREVIEW_MAPPING_FALLBACK.with(|m| m.borrow().clone())
 }
 
 /// Read the live preview provenance for a single `StableId`. Returns `None` if
 /// no entry is found.
+///
+/// H2.5 Block E: reads from
+/// `EditorSession::preview_inspector.provenance[stable_id]` when a
+/// session is installed; falls back to `PREVIEW_PROVENANCE_FALLBACK`
+/// otherwise. The session map is keyed by the inner `String` of
+/// `StableId` (ADR-0049 Phase 1); the conversion is safe because both
+/// `editor_model::StableId` and `editor_core::StableId` wrap the same
+/// `String`.
 pub fn get_provenance(stable_id: &str) -> Option<PreviewProvenance> {
-    let sid = StableId::new(stable_id);
-    PREVIEW_PROVENANCE.with(|p| p.borrow().get(&sid).cloned())
+    let sid_str = stable_id.to_string();
+    if let Some(map) = editor_model::ports::with_session_mut(|sess| {
+        sess.preview_inspector_mut().provenance.clone()
+    }) {
+        return map
+            .get(&sid_str)
+            .and_then(|v| serde_json::from_value(v.clone()).ok());
+    }
+    PREVIEW_PROVENANCE_FALLBACK.with(|p| {
+        p.borrow().get(&StableId::new(stable_id)).cloned()
+    })
 }
 
 // ─── §6 RebuildCause (v0.90 PR2: migrated to EditorSession via EditorSessionPort) ──
@@ -174,6 +289,9 @@ pub fn stamp_provenance(stable_id: StableId, edge: crate::CausalityEdge) {
 /// `editor_model::StableId`; the existing `PREVIEW_PROVENANCE` map keys are
 /// `document::StableId` (the editor-core mirror). The conversion via `.0` is
 /// safe because the inner `String` representation is identical.
+///
+/// H2.5 Block E: writes through `set_provenance` so the dual-write
+/// fallback path applies (session-first, then `PREVIEW_PROVENANCE_FALLBACK`).
 pub fn apply_pending_causality_edges() {
     // Drain the pending map from the session.
     let pending_map: BTreeMap<editor_model::StableId, Vec<crate::CausalityEdge>> =
@@ -183,18 +301,40 @@ pub fn apply_pending_causality_edges() {
             Some(m) => m,
             None => return,
         };
-    // Apply edges to provenance entries.
-    if !pending_map.is_empty() {
-        PREVIEW_PROVENANCE.with(|prov| {
-            let mut prov_map = prov.borrow_mut();
-            for (model_sid, edges) in pending_map {
-                let sid: StableId = model_sid.into();
-                if let Some(entry) = prov_map.get_mut(&sid) {
-                    entry.causality_edges.extend(edges);
-                }
-            }
-        });
+    // Apply edges to provenance entries, then write back via set_provenance
+    // (which respects the session-first/fallback dual-write contract).
+    if pending_map.is_empty() {
+        return;
     }
+    // Read current provenance (session-first, fallback via the getters above).
+    let mut current = get_provenance_map_for_internal_write();
+    for (model_sid, edges) in pending_map {
+        let sid: StableId = model_sid.into();
+        if let Some(entry) = current.get_mut(&sid) {
+            entry.causality_edges.extend(edges);
+        }
+    }
+    set_provenance(current);
+}
+
+/// Internal helper for `apply_pending_causality_edges`: read the full
+/// provenance map directly (without re-serializing through JSON),
+/// preferring the session when installed and falling back to
+/// `PREVIEW_PROVENANCE_FALLBACK`. Mirrors `get_provenance` but returns
+/// the whole map instead of a single entry.
+fn get_provenance_map_for_internal_write() -> BTreeMap<StableId, PreviewProvenance> {
+    if let Some(map) = editor_model::ports::with_session_mut(|sess| {
+        sess.preview_inspector_mut().provenance.clone()
+    }) {
+        let mut out = BTreeMap::new();
+        for (k, v) in map {
+            if let Ok(entry) = serde_json::from_value::<PreviewProvenance>(v) {
+                out.insert(StableId::new(k), entry);
+            }
+        }
+        return out;
+    }
+    PREVIEW_PROVENANCE_FALLBACK.with(|p| p.borrow().clone())
 }
 
 #[cfg(test)]

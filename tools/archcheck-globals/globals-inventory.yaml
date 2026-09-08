@@ -28,23 +28,24 @@ entries:
     owner: H2.3
     reason: "registry of loaded scenes; absorbed by EditorSession registry"
 
-  - name: PREVIEW_METRICS
-    kind: thread_local
-    declared_at: crates/editor-bevy/src/preview_inspector.rs:60
-    owner: H2.5
-    reason: "runtime preview metrics; absorbed by preview subsystem state"
-
-  - name: PREVIEW_MAPPING
-    kind: thread_local
-    declared_at: crates/editor-bevy/src/preview_inspector.rs:68
-    owner: H2.5
-    reason: "StableId -> PreviewEntity mapping; absorbed by preview subsystem state"
-
-  - name: PREVIEW_PROVENANCE
+  # H2.5 Block E fallback thread_locals (kept for legacy tests without session).
+  - name: PREVIEW_METRICS_FALLBACK
     kind: thread_local
     declared_at: crates/editor-bevy/src/preview_inspector.rs:72
     owner: H2.5
-    reason: "preview provenance; absorbed by preview subsystem state"
+    reason: "fallback thread_local for EditorSession.preview_inspector.metrics when no session is installed; legacy test path"
+
+  - name: PREVIEW_MAPPING_FALLBACK
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/preview_inspector.rs:81
+    owner: H2.5
+    reason: "fallback thread_local for EditorSession.preview_inspector.mapping when no session is installed; legacy test path"
+
+  - name: PREVIEW_PROVENANCE_FALLBACK
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/preview_inspector.rs:86
+    owner: H2.5
+    reason: "fallback thread_local for EditorSession.preview_inspector.provenance when no session is installed; legacy test path"
 
   - name: HOT_RELOAD_BUS
     kind: thread_local
@@ -193,6 +194,26 @@ retired:
     retired_in: H2.5
     retirement_pr: h2-5-runtime-coordination-block-a2
     replacement: "editor_model::runtime::ActuatorBus (accessed via editor_model::ports::with_session_mut)"
+
+  # H2.5 (preview inspector) — Block E (this cycle).
+  - name: PREVIEW_METRICS
+    kind: thread_local
+    was_at: crates/editor-bevy/src/preview_inspector.rs:60
+    retired_in: H2.5
+    retirement_pr: h2-5-runtime-coordination-block-e
+    replacement: "editor_model::preview_inspector.metrics (via session port); PREVIEW_METRICS_FALLBACK thread_local kept for legacy tests"
+  - name: PREVIEW_MAPPING
+    kind: thread_local
+    was_at: crates/editor-bevy/src/preview_inspector.rs:68
+    retired_in: H2.5
+    retirement_pr: h2-5-runtime-coordination-block-e
+    replacement: "editor_model::preview_inspector.mapping (via session port); PREVIEW_MAPPING_FALLBACK thread_local kept for legacy tests"
+  - name: PREVIEW_PROVENANCE
+    kind: thread_local
+    was_at: crates/editor-bevy/src/preview_inspector.rs:72
+    retired_in: H2.5
+    retirement_pr: h2-5-runtime-coordination-block-e
+    replacement: "editor_model::preview_inspector.provenance (via session port); PREVIEW_PROVENANCE_FALLBACK thread_local kept for legacy tests"
 
   # H2.4 (asset family) — first sweep.
   - name: SCENE_ASSET_DOC
