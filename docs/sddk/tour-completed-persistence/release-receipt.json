@@ -1,0 +1,103 @@
+{
+  "schema_version": "sddk.release-receipt/v1",
+  "cycle_id": "p-28fce7028ac3c497/tour-completed-persistence",
+  "change": "tour-completed-persistence",
+  "path": "A-min",
+  "route": "local",
+  "tag": "v0.110.7",
+  "phase_completed": "release",
+  "verified_at": "2026-09-08T18:24:25Z",
+  "base_sha": "95462846ee01b0d1c085613335916df609e6cc05",
+  "cycle_commit_sha": "3bb63c2ee7ab0b6328f9eb790144da5cfe02a049",
+  "head_sha": "3bb63c2ee7ab0b6328f9eb790144da5cfe02a049",
+  "head_sha_meaning": "candidate cycle commit bound by verify-report and debt-report; the cycle's product diff lives here. The current local HEAD (7302e97) is a docs sidecar commit that lands the post-amend implementation-receipt and is a strict descendant of the cycle commit (the tag points at the parent of HEAD).",
+  "published_head_sha": "7302e979c5cfedbcb3f6d36bb30b0e7d2882e885",
+  "annotated_tag": true,
+  "tag_object_id": "1f7c7085f4345d7c7557e10b4ae6d4d5a930f90e",
+  "tag_target_sha": "3bb63c2ee7ab0b6328f9eb790144da5cfe02a049",
+  "tag_message": "feat(tour): persist 'tour completed' so WelcomeOverlay greys out the button after Finish",
+  "merge_receipt": "docs/sddk/tour-completed-persistence/merge-receipt.md",
+  "merge_receipt_sha256": "14b245db26838924b3673761b01de01d07d500b5136dca3c9b5c6b6f0cf6d14b",
+  "release_report": "docs/sddk/tour-completed-persistence/release-report.md",
+  "git_effects": {
+    "push": {
+      "capability": "git.push",
+      "receipt_id": "git.push:43f209f0acbbe08b512bc6401c3c5451a24912b540f1784de987b7b1677df4e3",
+      "command": "git push origin main",
+      "exit_code": 0,
+      "output_digest": "sha256:43f209f0acbbe08b512bc6401c3c5451a24912b540f1784de987b7b1677df4e3",
+      "result": {
+        "branch": "main",
+        "sha": "7302e979c5cfedbcb3f6d36bb30b0e7d2882e885"
+      }
+    },
+    "tag": {
+      "capability": "git.tag",
+      "receipt_id": "git.tag:4ced8edbfce42e0fd59e75969e9d5d00e973547aa7ed662ca293af63e6825e70",
+      "command": "git tag -a v0.110.7 3bb63c2ee7ab0b6328f9eb790144da5cfe02a049 -m \"feat(tour): persist 'tour completed' so WelcomeOverlay greys out the button after Finish\"; git push origin refs/tags/v0.110.7",
+      "exit_code": 0,
+      "output_digest": "sha256:4ced8edbfce42e0fd59e75969e9d5d00e973547aa7ed662ca293af63e6825e70",
+      "result": {
+        "tag": "v0.110.7",
+        "sha": "3bb63c2ee7ab0b6328f9eb790144da5cfe02a049",
+        "annotated": true
+      }
+    }
+  },
+  "postconditions": {
+    "head_equals_origin_main": true,
+    "head_sha": "7302e979c5cfedbcb3f6d36bb30b0e7d2882e885",
+    "remote_tag_peels_to_cycle_commit": true,
+    "remote_tag_peels_to_head": false,
+    "remote_tag_peels_to_head_note": "Per repository pattern (cycle commit + docs commit ahead on main), the annotated release tag points at the cycle commit 3bb63c2, not at the current HEAD/origin/main 7302e97. The current HEAD is a docs sidecar that lands the post-amend implementation-receipt; the cycle's product diff is the commit at HEAD~1. The verify-report, debt-report, and this release-receipt.json all bind to 3bb63c2, so the tag is placed there to keep the SHA trees consistent with what the receipts claim.",
+    "remote_annotated_tag_object_matches_local": true,
+    "cycle_commit_ancestor_of_head": true,
+    "base_is_ancestor_of_cycle_commit": true,
+    "base_is_ancestor_of_head": true
+  },
+  "verification": {
+    "path": "docs/sddk/tour-completed-persistence/verification-report.md",
+    "sha256": "f3c9516b75d5faeaad7196e7d4d6d28670ebe0f0ce159576f6d4e631c0cc6e98",
+    "subject_sha": "3bb63c2ee7ab0b6328f9eb790144da5cfe02a049",
+    "verdict": "PASS_WITH_WARNINGS",
+    "new_tests": "2/2 passed",
+    "tutorial_walkthrough_regression": "8/8 passed",
+    "ux_welcome_full_regression": "0/3 pre-existing failures reproduced at base 9546284; not introduced by this cycle"
+  },
+  "debt": {
+    "path": "docs/sddk/tour-completed-persistence/debt-report.json",
+    "sha256": "8427e437da24442e2ac874b5502c2abe4e122a5c781fac9d460ac6afe429e8a8",
+    "subject_sha": "3bb63c2ee7ab0b6328f9eb790144da5cfe02a049",
+    "verdict": "PASS",
+    "introduced_findings": 0,
+    "clusters_completed": ["coupling", "overeng"]
+  },
+  "implementation_receipt": {
+    "path": "docs/sddk/tour-completed-persistence/implementation-receipt.md",
+    "sha256": "d7dff6dde31c550e821aea2e72f7efa521494626bdc5166319e2adb2d5b3dd5c",
+    "bound_cycle_commit": "3bb63c2ee7ab0b6328f9eb790144da5cfe02a049"
+  },
+  "inventory": {
+    "path": "/home/rubentxu/.local/share/sddk/projects/p-28fce7028ac3c497/cycle-artifacts/p-28fce7028ac3c497/tour-completed-persistence/inventory.json",
+    "sha256": "82873d87a8acbb20941208d5fa8d1b181b4488ac408c3e6b35682ded18e5f339",
+    "unavailable_reason": null,
+    "note": "inventory.json was generated during verify against the pre-amend subject SHA (ab521e2) using comparison=stage-and-working-tree-vs-head. The cycle's product diff (5 files / +244/-5) is stable between ab521e2 and 3bb63c2 (the amend only touched a 2-line JSDoc comment in tour-completed-persistence.spec.ts). The 62 inventory 'added' entries are unrelated untracked docs/sddk/* sibling-cycle documents and are out of scope."
+  },
+  "summary": "Persists the 'guided tutorial walkthrough completed' flag to OPFS (.bevy/tour-flags.json, localStorage fallback) and uses it to grey out the WelcomeOverlay 'Take the tour' button after the user finishes the tour; closes the v0.110.6 P1 UX carry-forward #2.",
+  "files_changed": [
+    "frontend/src/services/tour.ts",
+    "frontend/src/components/TutorialStepper.tsx",
+    "frontend/src/components/WelcomeOverlay.tsx",
+    "frontend/src/styles.css",
+    "frontend/tests/tour-completed-persistence.spec.ts"
+  ],
+  "tests_passing": 2,
+  "tests_failed": 0,
+  "diff_digest": "sha256:3075980dfd3632d2f94728f1703699651aefa0b3edd95633bd8612d1fb813d80",
+  "blockers": [],
+  "archive": {
+    "transition_run": false,
+    "next_phase": "archive",
+    "instruction": "Do not run archive during this release request."
+  }
+}

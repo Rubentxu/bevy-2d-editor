@@ -1,0 +1,134 @@
+{
+  "schema_version": "1.1.0",
+  "contract_version": "debt-gate/v1",
+  "report_id": "debt-p-28fce7028ac3c497-tour-completed-persistence-3bb63c2",
+  "generated_at": "2026-09-08T20:19:30+02:00",
+  "cycle": {
+    "cycle_id": "p-28fce7028ac3c497/tour-completed-persistence",
+    "change_name": "tour-completed-persistence",
+    "path": "A-min",
+    "remediation_round": 0
+  },
+  "subject": {
+    "branch": "main",
+    "base_commit": "95462846ee01b0d1c085613335916df609e6cc05",
+    "head_commit": "3bb63c2ee7ab0b6328f9eb790144da5cfe02a049",
+    "diff_digest": "3075980dfd3632d2f94728f1703699651aefa0b3edd95633bd8612d1fb813d80",
+    "working_tree_head": "7302e979c5cfedbcb3f6d36bb30b0e7d2882e885"
+  },
+  "verify_evidence": {
+    "path": "docs/sddk/tour-completed-persistence/verification-report.md",
+    "sha256": "f3c9516b75d5faeaad7196e7d4d6d28670ebe0f0ce159576f6d4e631c0cc6e98",
+    "subject_sha": "3bb63c2ee7ab0b6328f9eb790144da5cfe02a049",
+    "verdict": "PASS_WITH_WARNINGS"
+  },
+  "coverage": {
+    "required_clusters": ["coupling", "overeng"],
+    "completed_clusters": ["coupling", "overeng"],
+    "failed_clusters": []
+  },
+  "cluster_runs": [
+    {
+      "cluster": "coupling",
+      "status": "completed",
+      "attempts": 1,
+      "analyzer": {
+        "name": "sddk-debt-coupling-cluster",
+        "version": "debt-gate/v1"
+      },
+      "subject_sha": "3bb63c2ee7ab0b6328f9eb790144da5cfe02a049",
+      "started_at": "2026-09-08T20:19:30+02:00",
+      "finished_at": "2026-09-08T20:19:31+02:00",
+      "scope": {
+        "effective_depth": "smoke",
+        "changed_paths": [
+          "frontend/src/services/tour.ts",
+          "frontend/src/components/TutorialStepper.tsx",
+          "frontend/src/components/WelcomeOverlay.tsx",
+          "frontend/src/styles.css",
+          "frontend/tests/tour-completed-persistence.spec.ts"
+        ]
+      },
+      "findings": [],
+      "errors": []
+    },
+    {
+      "cluster": "overeng",
+      "status": "completed",
+      "attempts": 1,
+      "analyzer": {
+        "name": "sddk-debt-overeng-cluster",
+        "version": "debt-gate/v1"
+      },
+      "subject_sha": "3bb63c2ee7ab0b6328f9eb790144da5cfe02a049",
+      "started_at": "2026-09-08T20:19:31+02:00",
+      "finished_at": "2026-09-08T20:19:32+02:00",
+      "scope": {
+        "effective_depth": "smoke",
+        "changed_paths": [
+          "frontend/src/services/tour.ts",
+          "frontend/src/components/TutorialStepper.tsx",
+          "frontend/src/components/WelcomeOverlay.tsx",
+          "frontend/src/styles.css",
+          "frontend/tests/tour-completed-persistence.spec.ts"
+        ]
+      },
+      "findings": [],
+      "errors": []
+    }
+  ],
+  "findings": [],
+  "summary": {
+    "total": 0,
+    "by_severity": {
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 0
+    },
+    "by_confidence": {
+      "high": 0,
+      "medium": 0,
+      "low": 0
+    },
+    "by_attribution": {
+      "introduced": 0,
+      "pre_existing": 0,
+      "unknown": 0
+    },
+    "by_cluster": {
+      "coupling": 0,
+      "overeng": 0
+    }
+  },
+  "decision": {
+    "verdict": "PASS",
+    "re_iterate_from": "none",
+    "reasons": [
+      {
+        "rule": "no-warning-or-blocking-condition",
+        "finding_fingerprints": [],
+        "explanation": "Zero introduced findings across the two required A-min clusters (coupling, overeng). The cycle is bounded UI persistence plumbing: one new single-purpose service (services/tour.ts, +51 LOC) mirroring the existing services/onboarding.ts shape, two mount sites (TutorialStepper.handleFinish awaits markTourCompleted, +11/-1; WelcomeOverlay reads readTourCompletedSync and renders the disabled-state button variant, +61/-2), one CSS rule (+9 LOC), and one Playwright spec (+114 LOC). No new module-level dependency edges: services/tour.ts imports only the existing opfs-bridge adapter; TutorialStepper.tsx imports only the new sibling service via the same pattern OnboardingBanner uses for services/onboarding. No circular dependency, no shared mutable state, no new global registries, no premature abstraction, no CMS-shaped data structure, no speculative generality, no gold-plating. The introduced asymmetry between services/tour.ts:isTourCompleted() (localStorage-only) and the WelcomeOverlay sync reader (OPFS-first) is acknowledged in verify-report.md §Suggestions as a future-cycle cleanup; it is a deliberate scope choice that does not change production behaviour because the production reader is the OPFS-aware WelcomeOverlay path."
+      }
+    ],
+    "fail_closed": true
+  },
+  "waivers": [],
+  "follow_up": [],
+  "artifact_paths": {
+    "json": "docs/sddk/tour-completed-persistence/debt-report.json",
+    "markdown": "docs/sddk/tour-completed-persistence/debt-report.md"
+  },
+  "runtime_handoff": {
+    "status": "specification_only",
+    "desired_artifact_kind": "debt-report",
+    "desired_gate": "debt-approved",
+    "note": "No debt-specific CLI transition is declared by this documentation change. The verdict PASS makes this cycle eligible to proceed to sddk-release."
+  },
+  "notes": [
+    "Subject SHA binding: this gate binds to the cycle commit 3bb63c2 (post-amend). The docs commit 7302e97 added the implementation-receipt.md sidecar after the cycle commit and updated the receipt's recorded SHA to 3bb63c2; the cycle code scope is unchanged between 3bb63c2 and 7302e97 (0 production-line diff), so coupling/overeng analysis at 3bb63c2 is equivalent at 7302e97.",
+    "The verify-phase W1 warning about a (cycle 382) JSDoc pointer in tour-completed-persistence.spec.ts:2 was raised against the pre-amend form (ab521e2) of the cycle commit. The cycle commit 3bb63c2 was amended to drop the cycle-pointer line (only difference between ab521e2 and 3bb63c2 is a 2-line comment edit in the spec file). At the subject SHA bound by this gate (3bb63c2) the offending pattern no longer exists in the source tree; the warning is reproduced here verbatim from verification-report.md §Issues but excluded from the debt cluster finding set because (a) it does not classify as a coupling/overeng issue, (b) it is policy-compliant lens territory (documentation-discipline), and (c) it is vacuous against the post-amend subject SHA.",
+    "Pre-existing 3/3 failures in tests/ux-welcome.spec.ts @full cohort were confirmed against the unmodified base 9546284 by stash reproduction (per implementation-receipt.md §REQ-8). They are out of debt-cluster scope (test regression, not debt attribution) and tracked as ROADMAP P3 follow-up; they do not influence this gate's verdict.",
+    "Verify phase verdict PASS_WITH_WARNINGS is preserved here unchanged: the verifier raised one low-severity doc-discipline warning (W1, vacuous post-amend) and one pre-existing test regression (revealed debt, not introduced); debt-cluster scope reports zero findings of any severity and the gate verdict resolves to PASS by absence of introduced blockers."
+  ]
+}
