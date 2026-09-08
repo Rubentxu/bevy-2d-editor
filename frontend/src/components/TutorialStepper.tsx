@@ -26,14 +26,17 @@
  *
  * Bridge contract:
  *   window.__loadSampleProject(id: string) → Promise<{ok: boolean}>
- *   Mounted/unmounted with the stepper. Today this is a stub that
- *   returns {ok:true} after a 100ms delay; the real implementation
- *   (fetch + OPFS write + engine reload) lands in a follow-up cycle.
+ *   Mounted/unmounted with the stepper. On step 1 the bridge calls
+ *   `services/sampleLoader.mountPlatformerMinimal()` which fetches the
+ *   canonical `examples/platformer-minimal/` files from the Vite
+ *   dev-server and writes them to OPFS, then invokes
+ *   `window.load_project()` to hydrate the engine's in-memory mirror.
  */
 
 import { useEffect, useState } from "react";
 import { useWelcomeDismissal } from "./WelcomeDismissalContext";
 import { markTourCompleted } from "../services/tour";
+import { mountPlatformerMinimal } from "../services/sampleLoader";
 
 export interface TutorialStep {
   readonly id: number;
@@ -97,11 +100,25 @@ export default function TutorialStepper({ open, onClose }: Props) {
     type Loader = (id: string) => Promise<{ ok: boolean; error?: string }>;
     const w = window as unknown as { __loadSampleProject?: Loader };
     w.__loadSampleProject = async (id: string) => {
-      // eslint-disable-next-line no-console
-      console.info(`[TutorialStepper] Loading sample project: ${id}`);
-      // Simulate async work. Real implementation lands in a follow-up
-      // cycle (fetch + OPFS write + engine reload).
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      if (id !== "platformer-minimal") {
+        return { ok: false, error: `Unknown sample id: ${id}` };
+      }
+      const mountResult = await mountPlatformerMinimal();
+      if (!mountResult.ok) {
+        return { ok: false, error: mountResult.errors.join("; ") };
+      }
+      try {
+        await (
+          window as unknown as { load_project?: () => Promise<void> }
+        ).load_project?.();
+      } catch (e) {
+        return {
+          ok: false,
+          error: `engine reload failed: ${
+            e instanceof Error ? e.message : String(e)
+          }`,
+        };
+      }
       return { ok: true };
     };
     return () => {

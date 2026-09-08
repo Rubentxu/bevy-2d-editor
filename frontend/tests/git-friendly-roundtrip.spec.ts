@@ -20,77 +20,18 @@
  */
 
 import { test, expect } from "@playwright/test";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { waitForEditorReady } from "./helpers/waitForEditorReady";
-
-const SAMPLE_DIR = path.resolve(
-  import.meta.dirname,
-  "..",
-  "..",
-  "examples",
-  "platformer-minimal",
-);
-
-const OPFS_FILES: Array<{ opfsPath: string; localPath: string }> = [
-  { opfsPath: "project.json", localPath: "project.json" },
-  {
-    opfsPath: "schemas/game.PlayerController.schema.json",
-    localPath: "schemas/game.PlayerController.schema.json",
-  },
-  {
-    opfsPath: "schemas/game.EnemyPatrol.schema.json",
-    localPath: "schemas/game.EnemyPatrol.schema.json",
-  },
-  { opfsPath: "scenes/main.scene.json", localPath: "scenes/main.scene.json" },
-  {
-    opfsPath: "assets/characters/player.asset.json",
-    localPath: "scene-assets/characters/player.actor.json",
-  },
-  {
-    opfsPath: "assets/characters/enemy.asset.json",
-    localPath: "scene-assets/characters/enemy.actor.json",
-  },
-  {
-    opfsPath: "assets/environment/ground.asset.json",
-    localPath: "scene-assets/environment/ground.fragment.json",
-  },
-  {
-    opfsPath: "assets/effects/pickup.asset.json",
-    localPath: "scene-assets/effects/pickup.actor.json",
-  },
-  {
-    opfsPath: "logic_graphs/contact-death.logic.json",
-    localPath: "logic-graphs/contact-death.logic.json",
-  },
-];
-
-async function mountSample(page: import("@playwright/test").Page) {
-  for (const { opfsPath, localPath } of OPFS_FILES) {
-    const absolute = path.join(SAMPLE_DIR, localPath);
-    const contents = await readFile(absolute, "utf-8");
-    const result = await page.evaluate(
-      async ({ p, c }) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const r = await (window as any).opfs_save_file(p, c);
-        return r;
-      },
-      { p: opfsPath, c: contents },
-    );
-    if (!result || result.error) {
-      throw new Error(
-        `opfs_save_file failed for ${opfsPath}: ${result?.error ?? "no result"}`,
-      );
-    }
-  }
-}
+import {
+  mountSampleInOpfs,
+  OPFS_FILES,
+} from "./helpers/sample-loader";
 
 test.describe("G2 — Git-friendly round-trip", { tag: ["@full"] }, () => {
   test("project_json_round_trip_is_byte_identical", async ({ page }) => {
     await page.goto("/");
     await waitForEditorReady(page);
 
-    await mountSample(page);
+    await mountSampleInOpfs(page);
     await page.waitForFunction(
       () => typeof (window as any).load_project === "function",
       undefined,
@@ -144,7 +85,7 @@ test.describe("G2 — Git-friendly round-trip", { tag: ["@full"] }, () => {
     await page.goto("/");
     await waitForEditorReady(page);
 
-    await mountSample(page);
+    await mountSampleInOpfs(page);
 
     const failures: string[] = [];
 
