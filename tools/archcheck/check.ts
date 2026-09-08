@@ -195,7 +195,11 @@ const ASSERTIONS: Assertion[] = [
       "crates/editor-model/Cargo.toml has no `bevy` dependency line",
     run() {
       const modelSrc = join(root, "crates/editor-model/src");
-      assertNoRegexInDir(modelSrc, /bevy::/, this.description, true);
+      // Negative lookbehind `(?<![-_])` excludes crate-name substrings
+      // like `editor_bevy::` and `editor-bevy::` (which are legitimate
+      // doc-comment cross-references to the editor-bevy crate, not
+      // real `bevy::` imports).
+      assertNoRegexInDir(modelSrc, /(?<![-_])bevy::/, this.description, true);
       const modelCargo = join(root, "crates/editor-model/Cargo.toml");
       assertNoDependency(modelCargo, "bevy", this.description);
     },

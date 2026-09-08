@@ -1702,6 +1702,8 @@ mod integration_tests {
     // §T3: Bus push/drain roundtrip
     #[test]
     fn test_submit_and_drain() {
+        crate::actuator_bus::test_helpers::install_fresh_session();
+
         // Drain any pre-existing entries first
         let _ = drain_actuator_outputs();
 
@@ -2024,6 +2026,8 @@ mod integration_tests {
     // §T11: submit and drain with entity bits preserved
     #[test]
     fn test_entity_bits_preserved_in_bus() {
+        crate::actuator_bus::test_helpers::install_fresh_session();
+
         let _ = drain_actuator_outputs();
 
         let entity = bevy::prelude::Entity::from_bits(777);
@@ -2039,6 +2043,8 @@ mod integration_tests {
     #[test]
     fn test_end_to_end_actuator_pipeline() {
         use crate::actuator_bus::drain_actuator_outputs;
+
+        crate::actuator_bus::test_helpers::install_fresh_session();
 
         let _ = drain_actuator_outputs();
 

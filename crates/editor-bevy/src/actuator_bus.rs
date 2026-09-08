@@ -134,32 +134,42 @@ fn apply_single_output(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+pub(crate) mod test_helpers {
+    //! Shared test scaffolding for actuator-bus integration tests.
+    //!
+    //! `MinimalSession` + `install_fresh_session` were originally inside
+    //! `actuator_bus::tests`. They are reused by
+    //! `logic_evaluator::integration_tests` for the three legacy
+    //! actuator-bus tests (`test_submit_and_drain`,
+    //! `test_entity_bits_preserved_in_bus`,
+    //! `test_end_to_end_actuator_pipeline`) which Block A2 left
+    //! without a session install — meaning
+    //! `submit_actuator_output` is a no-op and the subsequent
+    //! `drain_actuator_outputs` returns an empty `Vec`. The tests
+    //! panic on length assertions until the session is installed.
+    //!
+    //! Block J exposes this scaffolding at `pub(crate)` so the legacy
+    //! tests in `logic_evaluator.rs` can call `install_fresh_session()`
+    //! without re-implementing the trait.
+
     use std::sync::{Arc, Mutex};
 
-    /// Minimal stand-in implementing just enough of `EditorSessionPort` to
-    /// drive `runtime_actuator_outputs_mut()` for the actuator bus tests.
-    ///
-    /// We cannot depend on `tests/support/mod.rs` from inside the lib (path
-    /// resolution fails). The real `EditorSession` and the integration tests
-    /// use the much fuller `FakeSession` harness; here we only need the
-    /// single trait method exercised by `submit_actuator_output`/`drain_actuator_outputs`.
-    struct MinimalSession {
-        bus: editor_model::runtime::ActuatorBus,
+    /// Minimal stand-in implementing just enough of `EditorSessionPort`
+    /// to drive `runtime_actuator_outputs_mut()` for the actuator bus
+    /// tests. Most methods `unimplemented!()`; only the actuator
+    /// outputs accessor is functional.
+    pub(crate) struct MinimalSession {
+        pub(crate) bus: editor_model::runtime::ActuatorBus,
     }
 
     impl MinimalSession {
-        fn new() -> Self {
+        pub(crate) fn new() -> Self {
             Self {
                 bus: editor_model::runtime::ActuatorBus::new(),
             }
         }
     }
 
-    // Provide every `EditorSessionPort` method. Most are unused by the actuator
-    // bus path; these stubs panic if reached, so accidental regressions surface
-    // loudly. The only non-trivial one is `runtime_actuator_outputs_mut`.
     impl editor_model::EditorSessionPort for MinimalSession {
         fn scene_state_mut(&mut self, _: &str) -> &mut editor_model::SceneSessionState {
             unimplemented!("MinimalSession: scene_state_mut not supported")
@@ -179,13 +189,11 @@ mod tests {
         fn world_state_mut(&mut self, _: &str) -> &mut editor_model::WorldSessionState {
             unimplemented!("MinimalSession: world_state_mut not supported")
         }
-        fn tunable_baselines_mut(
-            &mut self,
-        ) -> &mut std::collections::BTreeMap<String, serde_json::Value> {
+        fn tunable_baselines_mut(&mut self) -> &mut std::collections::BTreeMap<String, serde_json::Value> {
             unimplemented!("MinimalSession: tunable_baselines_mut not supported")
         }
-        fn runtime_delta_buffer_mut(&mut self) -> &mut std::collections::VecDeque<editor_model::RuntimeDelta> {
-            unimplemented!("MinimalSession: runtime_delta_buffer_mut not supported")
+        fn last_rebuild_cause_mut(&mut self) -> &mut Option<editor_model::RebuildCause> {
+            unimplemented!("MinimalSession: last_rebuild_cause_mut not supported")
         }
         fn pending_causality_edges_mut(
             &mut self,
@@ -193,8 +201,10 @@ mod tests {
         {
             unimplemented!("MinimalSession: pending_causality_edges_mut not supported")
         }
-        fn last_rebuild_cause_mut(&mut self) -> &mut Option<editor_model::RebuildCause> {
-            unimplemented!("MinimalSession: last_rebuild_cause_mut not supported")
+        fn runtime_delta_buffer_mut(
+            &mut self,
+        ) -> &mut std::collections::VecDeque<editor_model::RuntimeDelta> {
+            unimplemented!("MinimalSession: runtime_delta_buffer_mut not supported")
         }
         fn preview_inspector_mut(&mut self) -> &mut editor_model::PreviewInspectorState {
             unimplemented!("MinimalSession: preview_inspector_mut not supported")
@@ -240,12 +250,22 @@ mod tests {
         }
     }
 
-    fn install_fresh_session() {
+    /// Install a fresh `MinimalSession` as the editor's active session.
+    /// Used by integration tests that exercise the actuator bus without
+    /// booting the full editor (no scene, no asset state — just the
+    /// actuator-output FIFO queue).
+    pub(crate) fn install_fresh_session() {
         let session = MinimalSession::new();
         let arc: Arc<Mutex<dyn editor_model::EditorSessionPort>> =
             Arc::new(Mutex::new(session));
         editor_model::ports::register_editor_session(arc);
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::test_helpers::install_fresh_session;
+    use super::*;
 
     // §T-apply1: drain_actuator_outputs returns submitted outputs
     #[test]

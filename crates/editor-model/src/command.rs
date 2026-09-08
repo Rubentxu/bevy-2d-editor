@@ -296,9 +296,9 @@ impl From<serde_json::Error> for CommandError {
 fn current_timestamp_ms() -> u64 {
     #[cfg(target_arch = "wasm32")]
     {
-        // wasm-bindgen provides js_sys::Date::now() but we keep the core lib
-        // portable. The default 0 is fine for tests; production callers can
-        // set the timestamp explicitly.
+        // The WASM bridge provides a date function but we keep the
+        // core lib portable. The default 0 is fine for tests; production
+        // callers can set the timestamp explicitly.
         0
     }
     #[cfg(not(target_arch = "wasm32"))]
