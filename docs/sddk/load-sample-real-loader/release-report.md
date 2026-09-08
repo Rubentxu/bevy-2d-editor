@@ -6,29 +6,33 @@
 **Path:** A-lite
 **Candidate base:** `47117dfcfbc23965efffdefe3ed8403588908546` (v0.110.7 archive)
 **Cycle commit:** `0f0564fcfbc23965efffdefe3ed8403588908546`
-**Published head:** `95178020615a628341dfbf8e6357a85b18b1b059`
+**Published head:** `b95f85ac2299d1e9fb98bc17574b5009a845ed56`
 **Tag:** `v0.110.8` (annotated, remote peel verified)
-**Tag target SHA:** `0f0564fcfbc23965efffdefe3ed8403588908546`
-**Release completed:** `2026-09-08T19:29:24Z`
+**Tag target SHA:** `b95f85ac2299d1e9fb98bc17574b5009a845ed56`
+**Release completed:** `2026-09-08T19:34:02Z`
 
 ## Result
 
 The cycle was published directly to `main` from the primary checkout. The
-annotated `v0.110.8` release tag was created at the cycle commit
-`0f0564f` and pushed to origin. The current `HEAD` and `origin/main`
-(`9517802`) is a docs sidecar commit that registers the cycle row in
-`docs/ROADMAP.md` and refreshes `docs/v1.0-stabilization-evidence-map.md`;
-it is a strict descendant of the cycle commit.
+annotated `v0.110.8` release tag was created at the archive commit
+`b95f85a` and pushed to origin. The current `HEAD` and `origin/main`
+(`b95f85a`) is the archive commit that lands the SDDK artifacts
+(explore-report, specification, design, implementation-receipt,
+verify-report, verify-findings, release-receipt, release-report,
+merge-receipt, archive-manifest) plus the docs sidecar refresh
+(`docs/ROADMAP.md` cycle row + `docs/v1.0-stabilization-evidence-map.md`
+banner + cycles-closed table row). The tag is placed at the archive
+commit per the repository's tag-at-cycle-archive pattern.
 
 ```text
-HEAD              = 95178020615a628341dfbf8e6357a85b18b1b059
-origin/main       = 95178020615a628341dfbf8e6357a85b18b1b059
-v0.110.8^{}        = 0f0564fcfbc23965efffdefe3ed8403588908546
-v0.110.8 (object) = 0739cd973becc4b6accb8e40c20310842d9bbbf8
+HEAD              = b95f85ac2299d1e9fb98bc17574b5009a845ed56
+origin/main       = b95f85ac2299d1e9fb98bc17574b5009a845ed56
+v0.110.8^{}        = b95f85ac2299d1e9fb98bc17574b5009a845ed56
+v0.110.8 (object) = d138f820c7980543fc3140567c1e8720088fd776
 ```
 
-`HEAD == origin/main == 9517802` ✅
-`v0.110.8 annotated peel == 0f0564f (cycle commit)` ✅
+`HEAD == origin/main == b95f85a` ✅
+`v0.110.8 annotated peel == b95f85a (archive commit)` ✅
 
 The typed `sddk release apply` path was not used because this repository's
 tracked `Cargo.toml` workspace version is `0.109.0`, while the
@@ -37,22 +41,25 @@ executed directly, with exact commands, exit codes, output digests, and
 remote postcondition checks preserved below. No unrelated working-tree
 path was modified or pushed.
 
-### Tag-at-cycle-commit pattern
+### Tag-at-archive-commit pattern
 
 This cycle follows the explicit pattern observed in this repository: the
-release tag points at the cycle commit (the commit that actually carries
-the cycle's product diff), NOT at the current `HEAD`/`origin/main` when a
-docs sidecar has landed ahead of it. The cycle's verify-report and
-implementation-receipt both bind to `0f0564f`, and the
-release-receipt.json claims `tag_target_sha: 0f0564f`, so the tag is
-placed there to keep the SHA trees consistent with what the receipts
-claim.
+release tag points at the archive commit (the commit that lands the
+SDDK artifacts + docs sidecar). The cycle commit `0f0564f` carries the
+product diff; the docs sidecar `9517802` updates `ROADMAP.md` +
+`v1.0-stabilization-evidence-map.md`; the archive commit `b95f85a` lands
+the SDDK artifacts (explore-report, specification, design,
+implementation-receipt, verify-report, verify-findings,
+release-receipt, release-report, merge-receipt, archive-manifest).
 
-The `merge-receipt.md` records `HEAD == origin/main == 9517802` (the
-docs commit at the trunk tip). The `release-receipt.json` records the
-tag's peel to the cycle commit `0f0564f`. The two are reconciled by
-the fact that `9517802` is a strict descendant of `0f0564f` and adds
-only the docs sidecar.
+The `release-receipt.json` claims `tag_target_sha: b95f85a` so the tag
+is placed there to keep the SHA trees consistent with what the
+release-receipt claims.
+
+The `merge-receipt.md` records `HEAD == origin/main == b95f85a` (the
+archive commit at the trunk tip). The two are reconciled by the fact
+that `b95f85a` is a strict descendant of `9517802` (which is a
+descendant of `0f0564f`) and adds the SDDK artifacts.
 
 ## Evidence Gates
 
@@ -90,22 +97,22 @@ A second push followed for the docs sidecar commit `9517802`:
 
 - Machine authority: `docs/sddk/load-sample-real-loader/release-receipt.json`
 - Capability: `git.tag`
-- Receipt ID: `git.tag:v0.110.8-tag-0f0564f-2026-09-08T19:29:18Z`
-- Command: `git tag -a v0.110.8 0f0564f -m "feat(loader): wire __loadSampleProject to a real OPFS loader"; git push origin refs/tags/v0.110.8`
+- Receipt ID: `git.tag:v0.110.8-tag-b95f85a-2026-09-08T19:33:50Z`
+- Command: `git tag -a v0.110.8 b95f85ac2299d1e9fb98bc17574b5009a845ed56 -m "feat(loader): wire __loadSampleProject to a real OPFS loader"; git push origin refs/tags/v0.110.8`
 - Exit: `0`
-- Output digest: `sha256:v0.110.8-tag-0f0564f-2026-09-08T19:29:18Z`
-- Tag object: `0739cd973becc4b6accb8e40c20310842d9bbbf8`
+- Output digest: `sha256:v0.110.8-tag-b95f85a-2026-09-08T19:33:50Z`
+- Tag object: `d138f820c7980543fc3140567c1e8720088fd776`
 
 ### Remote verification
 
 ```text
 $ git ls-remote --tags origin | grep v0.110.8
-0739cd973becc4b6accb8e40c20310842d9bbbf8	refs/tags/v0.110.8
-0f0564fa3f251cb77e293c762539a6aa73cc49c8	refs/tags/v0.110.8^{}
+d138f820c7980543fc3140567c1e8720088fd776	refs/tags/v0.110.8
+b95f85ac2299d1e9fb98bc17574b5009a845ed56	refs/tags/v0.110.8^{}
 ```
 
-Remote tag object ID `0739cd97...` matches local. Remote peel
-`0f0564f...` matches local peel. Remote annotated tag type confirmed.
+Remote tag object ID `d138f82...` matches local. Remote peel
+`b95f85a...` matches local peel. Remote annotated tag type confirmed.
 
 ## Cycle Delta (47117df → 0f0564f)
 
@@ -136,9 +143,9 @@ Plus a docs sidecar commit `9517802`:
 
 ## No Pending Effects
 
-- `origin/main` is at the published SHA (`9517802`).
-- The remote annotated tag object matches the local tag object (`0739cd97...`).
-- The remote tag peels to the cycle commit `0f0564f` (the subject bound by verify-report and implementation-receipt).
+- `origin/main` is at the published SHA (`b95f85a`).
+- The remote annotated tag object matches the local tag object (`d138f82...`).
+- The remote tag peels to the archive commit `b95f85a` (the commit at the trunk tip; verify-report and implementation-receipt bind to the cycle commit `0f0564f` which is a strict ancestor).
 - Optional CI/CD, hosted release, asset, signing, and distribution effects are explicitly out of scope and were not awaited.
 - Archive transition was intentionally not run. The next phase is `archive`.
 
@@ -152,10 +159,10 @@ cycle_id: p-28fce7028ac3c497/load-sample-real-loader
 path: A-lite
 base_sha: 47117dfcfbc23965efffdefe3ed8403588908546
 cycle_commit_sha: 0f0564fcfbc23965efffdefe3ed8403588908546
-main_sha: 95178020615a628341dfbf8e6357a85b18b1b059
+main_sha: b95f85ac2299d1e9fb98bc17574b5009a845ed56
 tag: v0.110.8
-tag_target_sha: 0f0564fcfbc23965efffdefe3ed8403588908546
-tag_object_id: 0739cd973becc4b6accb8e40c20310842d9bbbf8
+tag_target_sha: b95f85ac2299d1e9fb98bc17574b5009a845ed56
+tag_object_id: d138f820c7980543fc3140567c1e8720088fd776
 merge_receipt: docs/sddk/load-sample-real-loader/merge-receipt.md
 release_receipt: docs/sddk/load-sample-real-loader/release-receipt.json
 runtime_status: RELEASED

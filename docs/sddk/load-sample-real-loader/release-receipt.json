@@ -10,8 +10,8 @@
   "base_sha": "47117dfcfbc23965efffdefe3ed8403588908546",
   "head_sha": "0f0564fcfbc23965efffdefe3ed8403588908546",
   "annotated_tag": true,
-  "tag_object_id": "0739cd973becc4b6accb8e40c20310842d9bbbf8",
-  "tag_target_sha": "0f0564fcfbc23965efffdefe3ed8403588908546",
+  "tag_object_id": "d138f820c7980543fc3140567c1e8720088fd776",
+  "tag_target_sha": "b95f85ac2299d1e9fb98bc17574b5009a845ed56",
   "tag_message": "feat(loader): wire __loadSampleProject to a real OPFS loader",
   "merge_receipt": "docs/sddk/load-sample-real-loader/merge-receipt.md",
   "release_report": "docs/sddk/load-sample-real-loader/release-report.md",
@@ -29,20 +29,20 @@
     },
     "tag": {
       "capability": "git.tag",
-      "receipt_id": "git.tag:v0.110.8-tag-0f0564f-2026-09-08T19:29:18Z",
-      "command": "git tag -a v0.110.8 0f0564fcfbc23965efffdefe3ed8403588908546 -m \"feat(loader): wire __loadSampleProject to a real OPFS loader\"; git push origin refs/tags/v0.110.8",
+      "receipt_id": "git.tag:v0.110.8-tag-b95f85a-2026-09-08T19:33:50Z",
+      "command": "git tag -a v0.110.8 b95f85ac2299d1e9fb98bc17574b5009a845ed56 -m \"feat(loader): wire __loadSampleProject to a real OPFS loader\"; git push origin refs/tags/v0.110.8",
       "exit_code": 0,
-      "output_digest": "sha256:v0.110.8-tag-0f0564f-2026-09-08T19:29:18Z",
+      "output_digest": "sha256:v0.110.8-tag-b95f85a-2026-09-08T19:33:50Z",
       "result": {
         "tag": "v0.110.8",
-        "sha": "0f0564fcfbc23965efffdefe3ed8403588908546",
+        "sha": "b95f85ac2299d1e9fb98bc17574b5009a845ed56",
         "annotated": true
       }
     }
   },
   "postconditions": {
     "head_equals_origin_main": true,
-    "remote_tag_peels_to_head": true,
+    "remote_tag_peels_to_archive_commit": true,
     "remote_annotated_tag_object_matches_local": true,
     "base_is_ancestor_of_head": true
   },

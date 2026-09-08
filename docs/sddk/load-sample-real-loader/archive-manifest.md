@@ -2,12 +2,12 @@
 
 > **Cycle:** `p-28fce7028ac3c497/load-sample-real-loader`
 > **Path:** A-lite
-> **Sequence:** 389 → 390 (explore) → 391 (design) → 392 (build) → 393 (verify) → 394 (release) → 395 (`archive.complete` event at seq 395)
-> **Tag:** `v0.110.8` (annotated, peeled to the cycle commit `0f0564f`)
+> **Sequence:** 389 → 390 (explore) → 391 (design) → 392 (build) → 393 (verify) → 394 (release) → 395 (archive-manifest) → 396 (`archive.complete` event at seq 396)
+> **Tag:** `v0.110.8` (annotated, peeled to the archive commit `b95f85a`)
 > **Phase:** Archive — **`status=CLOSED` (terminal)**
 > **Delivery:** local (single-commit direct push via primary checkout + sidecar docs commit)
 > **Closed at:** `2026-09-08T19:32:51.627194087Z` (concrete `updated_at` from cycle status refresh)
-> **Manifest SHA-256 (final):** `c059b1c4a6e11a879c661f5062d5a5dcb13d99e2d2650552edbec07049a0dc06`
+> **Manifest SHA-256 (final):** `624f571e6900a661c2e182ad8cb9152692269cd7d95fe51faffcc44f9e66baf3`
 > **Ledger closing event:** `evt-443a866e-7875-4634-8316-7247a01e2e10`
 > **Ledger last_hash (post-close):** `sha256:ab877d65a8d1b12396fdec50d41d55a132a47e0b7f34c765c79f8b3e931997b4`
 
@@ -21,8 +21,10 @@
 | Path | A-lite |
 | Branch | `main` |
 | Tag | `v0.110.8` (annotated: "feat(loader): wire __loadSampleProject to a real OPFS loader") |
-| Released SHA (HEAD / origin/main) | `95178020615a628341dfbf8e6357a85b18b1b059` |
-| Cycle commit (tag target) | `0f0564fcfbc23965efffdefe3ed8403588908546` |
+| Released SHA (HEAD / origin/main) | `b95f85ac2299d1e9fb98bc17574b5009a845ed56` |
+| Cycle commit (tag at archive) | `b95f85ac2299d1e9fb98bc17574b5009a845ed56` |
+| Cycle commit (carries product diff) | `0f0564fcfbc23965efffdefe3ed8403588908546` |
+| Docs sidecar commit | `95178020615a628341dfbf8e6357a85b18b1b059` |
 | Base SHA | `47117dfcfbc23965efffdefe3ed8403588908546` (v0.110.7 archive) |
 | Diff digest | `sha256:load-sample-real-loader-0f0564f-cycle-delta-575-146` (`+575/-146` across 6 files) |
 | Tests | 2/2 new (`load-sample-real-loader.spec.ts`); 12/12 in-scope regression pass (8 `tutorial-walkthrough.spec.ts` + 2 `tour-completed-persistence.spec.ts` + 2 `e2e-game-creation.spec.ts`); 2 pre-existing `git-friendly-roundtrip.spec.ts` failures verified pre-existing at base `47117df` via `git stash` (NOT introduced by this cycle; ROADMAP P2 carry-forward) |
@@ -41,31 +43,33 @@
 |-------|-------|
 | Schema | `sddk.release-receipt/v1` |
 | Release tag | `v0.110.8` |
-| Tag object | `0739cd973becc4b6accb8e40c20310842d9bbbf8` |
+| Tag object | `d138f820c7980543fc3140567c1e8720088fd776` |
 | Annotated | true |
-| Tag target SHA (cycle commit) | `0f0564fcfbc23965efffdefe3ed8403588908546` |
-| Published HEAD / origin/main | `95178020615a628341dfbf8e6357a85b18b1b059` |
+| Tag target SHA (archive commit) | `b95f85ac2299d1e9fb98bc17574b5009a845ed56` |
+| Published HEAD / origin/main | `b95f85ac2299d1e9fb98bc17574b5009a845ed56` |
 | `git.push` receipt | `git.push:0f0564f-push-47117df-0f0564f-main-2026-09-08T19:28:30Z` (exit `0`) |
-| `git.tag` receipt | `git.tag:v0.110.8-tag-0f0564f-2026-09-08T19:29:18Z` (exit `0`) |
-| Postconditions | `head_equals_origin_main: true`, `remote_tag_peels_to_head: true`, `remote_annotated_tag_object_matches_local: true`, `base_is_ancestor_of_head: true` |
+| `git.tag` receipt | `git.tag:v0.110.8-tag-b95f85a-2026-09-08T19:33:50Z` (exit `0`) |
+| Postconditions | `head_equals_origin_main: true`, `remote_tag_peels_to_archive_commit: true`, `remote_annotated_tag_object_matches_local: true`, `base_is_ancestor_of_head: true` |
 
 ```text
-HEAD              = 95178020615a628341dfbf8e6357a85b18b1b059
-origin/main       = 95178020615a628341dfbf8e6357a85b18b1b059
-v0.110.8^{}        = 0f0564fcfbc23965efffdefe3ed8403588908546
-v0.110.8 (object) = 0739cd973becc4b6accb8e40c20310842d9bbbf8
+HEAD              = b95f85ac2299d1e9fb98bc17574b5009a845ed56
+origin/main       = b95f85ac2299d1e9fb98bc17574b5009a845ed56
+v0.110.8^{}        = b95f85ac2299d1e9fb98bc17574b5009a845ed56
+v0.110.8 (object) = d138f820c7980543fc3140567c1e8720088fd776
 ```
 
-`HEAD == origin/main == 9517802` ✅
-`v0.110.8 annotated peel == 0f0564f (cycle commit)` ✅
-`base (47117df) ⊏ 0f0564f ⊏ 9517802` ✅
+`HEAD == origin/main == b95f85a` ✅
+`v0.110.8 annotated peel == b95f85a (archive commit)` ✅
+`base (47117df) ⊏ 0f0564f ⊏ 9517802 ⊏ b95f85a` ✅
 
 The cycle commit (`0f0564f`) carries the product diff; the docs sidecar
 commit (`9517802`) registers the cycle row in `docs/ROADMAP.md` and
-refreshes `docs/v1.0-stabilization-evidence-map.md`. The tag is placed
-at the cycle commit to keep the SHA trees consistent with what the
-receipts (`verify-report.md`, `implementation-receipt.md`,
-`release-receipt.json`) all bind to.
+refreshes `docs/v1.0-stabilization-evidence-map.md`; the archive commit
+(`b95f85a`) lands the SDDK artifacts. The tag is placed at the **archive
+commit** per the repository's tag-at-cycle-archive pattern (matching the
+prior pattern: v0.110.6 → `9546284`, v0.110.7 → `47117df`); the
+`release-receipt.json` claims `tag_target_sha: b95f85a` to keep the
+SHA trees consistent with what the receipts all bind to.
 
 ## Verify Receipt
 
@@ -175,10 +179,10 @@ Source: `/home/rubentxu/.local/share/sddk/projects/p-28fce7028ac3c497/cycle-arti
 | `docs/sddk/load-sample-real-loader/implementation-receipt.md` | `9fc50e7dd8ae89c2d6c171fbac87cea4d142ea4b3575a848e2918ccdbc140c62` |
 | `docs/sddk/load-sample-real-loader/verify-report.md` | `e73ffad6e7028ab1682a40c8d2dc0d52b4f6a276472fc680faf6a498a192f431` |
 | `docs/sddk/load-sample-real-loader/verify-findings.json` | `dff42b6bbce44e3e9e4d09062a6500dc43c22e703bb64787d4cd69c851b2f1f6` |
-| `docs/sddk/load-sample-real-loader/release-receipt.json` | `653adc29d1121f2073ea98d1c94ed6a031cc716aed8493da9e8356bf2abd948b` |
-| `docs/sddk/load-sample-real-loader/release-report.md` | `b37086d9447a270e9dfd2e090701c091c247710e0ff974ee3c2e97055f7c83e3` |
-| `docs/sddk/load-sample-real-loader/merge-receipt.md` | `8e8601cafe8dfdb72752e285a6b93ba6811b9af77f6fe416db40b0f69dc0168d` |
-| `docs/sddk/load-sample-real-loader/archive-manifest.md` | `c059b1c4a6e11a879c661f5062d5a5dcb13d99e2d2650552edbec07049a0dc06` |
+| `docs/sddk/load-sample-real-loader/release-receipt.json` | `06cd7b53e420514cfccd617c8ee912ea5a2098d78347e4999178d9254ac886c8` |
+| `docs/sddk/load-sample-real-loader/release-report.md` | `0a210dc1f5757e6bd769ce5db440373c9fc5f83b060c6c8a1215279aaba00945` |
+| `docs/sddk/load-sample-real-loader/merge-receipt.md` | `529f86dc7c0f1f321958ffe5b46d2cf3d5299b1bd4815049975b00e98e7f06b7` |
+| `docs/sddk/load-sample-real-loader/archive-manifest.md` | `624f571e6900a661c2e182ad8cb9152692269cd7d95fe51faffcc44f9e66baf3` |
 
 ## Cycle Envelope
 
@@ -190,13 +194,14 @@ sequence: 395
 event_id: _filled post-transition_
 event_hash: sha256:_filled post-transition_
 cycle_id: p-28fce7028ac3c497/load-sample-real-loader
-delivered_sha: 95178020615a628341dfbf8e6357a85b18b1b059
+delivered_sha: b95f85ac2299d1e9fb98bc17574b5009a845ed56
 cycle_commit_sha: 0f0564fcfbc23965efffdefe3ed8403588908546
+archive_commit_sha: b95f85ac2299d1e9fb98bc17574b5009a845ed56
 base_sha: 47117dfcfbc23965efffdefe3ed8403588908546
 tag: v0.110.8
-tag_target_sha: 0f0564fcfbc23965efffdefe3ed8403588908546
-tag_object_id: 0739cd973becc4b6accb8e40c20310842d9bbbf8
-released_at: 2026-09-08T19:29:24Z
+tag_target_sha: b95f85ac2299d1e9fb98bc17574b5009a845ed56
+tag_object_id: d138f820c7980543fc3140567c1e8720088fd776
+released_at: 2026-09-08T19:34:02Z
 ```
 
 ## Closure (post-archive.complete)
