@@ -1082,7 +1082,7 @@ fn process_commands(
     let cmds = editor_model::ports::with_session_mut(|s| s.runtime_command_bus_mut().drain())
         .unwrap_or_else(|| {
             // Test fallback: read from thread-local COMMAND_BUS
-            crate::COMMAND_BUS.with(|b| {
+            crate::COMMAND_BUS_FALLBACK.with(|b| {
                 b.borrow_mut()
                     .as_mut()
                     .map(|bus| bus.drain())
@@ -1153,7 +1153,7 @@ fn emit_events(
 
     // Fallback to thread-local EVENT_BUS for tests that don't have a session.
     if !using_session {
-        crate::EVENT_BUS.with(|b| {
+        crate::EVENT_BUS_FALLBACK.with(|b| {
             if let Some(ref mut bus) = *b.borrow_mut() {
                 bus.reset();
 

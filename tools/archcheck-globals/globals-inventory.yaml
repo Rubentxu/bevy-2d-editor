@@ -7,17 +7,17 @@ entries:
     owner: H1.4
     reason: "feature-gated atomic for the dual-dispatch gate; removed when the runtime toggle closes"
 
-  - name: COMMAND_BUS
+  - name: COMMAND_BUS_FALLBACK
     kind: thread_local
-    declared_at: crates/editor-bevy/src/lib.rs:407
+    declared_at: crates/editor-bevy/src/lib.rs:365
     owner: H2.5
-    reason: "runtime coordination bus; absorbed into EditorSession/TransactionKernel"
+    reason: "runtime command bus dual-write fallback; production code uses EditorSession.runtime.command_bus via with_session_mut. Kept for tests/non-session entrypoints; will close after parity tests prove full coverage. OPEN until §S-F parity tests pass without it."
 
-  - name: EVENT_BUS
+  - name: EVENT_BUS_FALLBACK
     kind: thread_local
-    declared_at: crates/editor-bevy/src/lib.rs:408
+    declared_at: crates/editor-bevy/src/lib.rs:375
     owner: H2.5
-    reason: "runtime coordination bus; absorbed into EditorSession/TransactionKernel"
+    reason: "runtime event bus dual-write fallback; production code uses EditorSession.runtime.event_bus via with_session_mut. Kept for tests/non-session entrypoints; will close after parity tests prove full coverage. OPEN until §S-F parity tests pass without it."
 
 
 

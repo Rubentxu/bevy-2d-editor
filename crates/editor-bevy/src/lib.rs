@@ -318,7 +318,6 @@ const CMD_MOVE_SPRITE: u16 = 1;
 const EVT_SPRITE_POSITION: u16 = 1;
 const EVT_FPS: u16 = 2;
 
-const BUS_CAPACITY: usize = 65536;
 
 /// Default scene JSON matching the original spike: green sprite at origin.
 const DEFAULT_SCENE_JSON: &str = r#"{
@@ -356,81 +355,40 @@ const DEFAULT_SCENE_JSON: &str = r#"{
 }"#;
 
 thread_local! {
-    pub(crate) static COMMAND_BUS: RefCell<Option<LinearBus>> = const { RefCell::new(None) };
-    pub(crate) static EVENT_BUS: RefCell<Option<LinearBus>> = const { RefCell::new(None) };
+    /// Fallback for the session-owned runtime command bus.
+    ///
+    /// The canonical owner is `EditorSession::runtime_command_bus`
+    /// (reached via `editor_model::ports::with_session_mut`).
+    /// H2.5 Block A established the session-first path for the four
+    /// `get_*_bus_ptr/len` WASM exports. H2.5 Block F renames this
+    /// thread_local to make the dual-write fallback role explicit.
+    pub(crate) static COMMAND_BUS_FALLBACK: RefCell<Option<editor_model::runtime::LinearBus>> =
+        const { RefCell::new(None) };
+
+    /// Fallback for the session-owned runtime event bus.
+    ///
+    /// The canonical owner is `EditorSession::runtime_event_bus`
+    /// (reached via `editor_model::ports::with_session_mut`).
+    /// H2.5 Block A established the session-first path. H2.5 Block F
+    /// renames this thread_local to make the dual-write fallback role
+    /// explicit.
+    pub(crate) static EVENT_BUS_FALLBACK: RefCell<Option<editor_model::runtime::LinearBus>> =
+        const { RefCell::new(None) };
 }
 
-struct LinearBus {
-    buffer: Box<[u8]>,
-}
-
-impl LinearBus {
-    fn new() -> Self {
-        let mut buffer = vec![0u8; BUS_CAPACITY].into_boxed_slice();
-        Self::set_write_offset(&mut buffer, 8);
-        Self { buffer }
-    }
-
-    fn ptr(&self) -> u32 {
-        self.buffer.as_ptr() as u32
-    }
-
-    fn len(&self) -> u32 {
-        self.buffer.len() as u32
-    }
-
-    fn get_write_offset(buf: &[u8]) -> usize {
-        u32::from_le_bytes(buf[0..4].try_into().unwrap()) as usize
-    }
-
-    fn set_write_offset(buf: &mut [u8], offset: usize) {
-        buf[0..4].copy_from_slice(&(offset as u32).to_le_bytes());
-    }
-
-    fn drain(&mut self) -> Vec<(u16, Vec<u8>)> {
-        let end = Self::get_write_offset(&self.buffer);
-        Self::set_write_offset(&mut self.buffer, 8);
-        let mut result = Vec::new();
-        let mut pos = 8;
-        while pos + 4 <= end && pos + 4 <= self.buffer.len() {
-            let cmd_type = u16::from_le_bytes(self.buffer[pos..pos + 2].try_into().unwrap());
-            let payload_len =
-                u16::from_le_bytes(self.buffer[pos + 2..pos + 4].try_into().unwrap()) as usize;
-            if pos + 4 + payload_len > self.buffer.len() {
-                break;
-            }
-            let payload = self.buffer[pos + 4..pos + 4 + payload_len].to_vec();
-            result.push((cmd_type, payload));
-            pos += 4 + payload_len;
-        }
-        result
-    }
-
-    fn reset(&mut self) {
-        Self::set_write_offset(&mut self.buffer, 8);
-    }
-
-    fn write(&mut self, event_type: u16, payload: &[u8]) -> bool {
-        let write_offset = Self::get_write_offset(&self.buffer);
-        let slot_size = 4 + payload.len();
-        if write_offset + slot_size > self.buffer.len() {
-            return false;
-        }
-        self.buffer[write_offset..write_offset + 2].copy_from_slice(&event_type.to_le_bytes());
-        self.buffer[write_offset + 2..write_offset + 4]
-            .copy_from_slice(&(payload.len() as u16).to_le_bytes());
-        self.buffer[write_offset + 4..write_offset + 4 + payload.len()].copy_from_slice(payload);
-        Self::set_write_offset(&mut self.buffer, write_offset + slot_size);
-        true
-    }
-}
+// `LinearBus` was moved to `editor_model::runtime::LinearBus` in
+// v0.90 PR5 and is now the canonical type. The previously-duplicated
+// local struct was removed in H2.5 Block F. The renamed
+// `COMMAND_BUS_FALLBACK` / `EVENT_BUS_FALLBACK` thread_locals
+// (above) now hold `editor_model::runtime::LinearBus` instances for
+// legacy tests that don't install a session.
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn create_buses() {
     console_error_panic_hook::set_once();
-    COMMAND_BUS.with(|b| *b.borrow_mut() = Some(LinearBus::new()));
-    EVENT_BUS.with(|b| *b.borrow_mut() = Some(LinearBus::new()));
+    COMMAND_BUS_FALLBACK.with(|b| *b.borrow_mut() = Some(editor_model::runtime::LinearBus::new()));
+    EVENT_BUS_FALLBACK.with(|b| *b.borrow_mut() = Some(editor_model::runtime::LinearBus::new()));
     web_sys::console::log_1(&"[editor-core] Buses created".into());
 }
 
@@ -1094,10 +1052,10 @@ pub use preview_runtime::start_engine;
 pub fn get_command_bus_ptr() -> u32 {
     editor_model::ports::with_session_mut(|s| s.runtime_command_bus_mut().ptr()).unwrap_or_else(
         || {
-            COMMAND_BUS.with(|b| {
+            COMMAND_BUS_FALLBACK.with(|b| {
                 b.borrow()
                     .as_ref()
-                    .expect("COMMAND_BUS not initialized")
+                    .expect("COMMAND_BUS_FALLBACK not initialized")
                     .ptr()
             })
         },
@@ -1111,10 +1069,10 @@ pub fn get_command_bus_ptr() -> u32 {
 pub fn get_command_bus_len() -> u32 {
     editor_model::ports::with_session_mut(|s| s.runtime_command_bus_mut().len()).unwrap_or_else(
         || {
-            COMMAND_BUS.with(|b| {
+            COMMAND_BUS_FALLBACK.with(|b| {
                 b.borrow()
                     .as_ref()
-                    .expect("COMMAND_BUS not initialized")
+                    .expect("COMMAND_BUS_FALLBACK not initialized")
                     .len()
             })
         },
@@ -1128,10 +1086,10 @@ pub fn get_command_bus_len() -> u32 {
 pub fn get_event_bus_ptr() -> u32 {
     editor_model::ports::with_session_mut(|s| s.runtime_event_bus_mut().ptr()).unwrap_or_else(
         || {
-            EVENT_BUS.with(|b| {
+            EVENT_BUS_FALLBACK.with(|b| {
                 b.borrow()
                     .as_ref()
-                    .expect("EVENT_BUS not initialized")
+                    .expect("EVENT_BUS_FALLBACK not initialized")
                     .ptr()
             })
         },
@@ -1145,10 +1103,10 @@ pub fn get_event_bus_ptr() -> u32 {
 pub fn get_event_bus_len() -> u32 {
     editor_model::ports::with_session_mut(|s| s.runtime_event_bus_mut().len()).unwrap_or_else(
         || {
-            EVENT_BUS.with(|b| {
+            EVENT_BUS_FALLBACK.with(|b| {
                 b.borrow()
                     .as_ref()
-                    .expect("EVENT_BUS not initialized")
+                    .expect("EVENT_BUS_FALLBACK not initialized")
                     .len()
             })
         },
