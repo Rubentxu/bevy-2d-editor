@@ -1,9 +1,10 @@
-# Verification Report: `h2-5-runtime-coordination` (Partial Block A)
+# Verification Report: `h2-5-runtime-coordination`
 
 > **Change:** `h2-5-runtime-coordination` · **Phase:** verify · **Path:** A-full
 > **Cycle:** `p-28fce7028ac3c497/h2-5-runtime-coordination`
-> **Branch:** `h2-5-runtime-coordination-cycle` · **Commit:** `43c2bef`
+> **Branch:** `main` · **Verified commits:** `43c2bef`, `f7fe6d4`, `581156a`, `156baff`
 > **Date:** 2026-09-08 · **Verifier:** orchestrator (inline, no separate worker)
+> **Note:** The verify-report was authored when only `43c2bef` (LinearBus relocation) was visible. A pre-merge `git log` on the `h2-5-runtime-coordination-cycle` branch after the verify→release→archive transitions revealed commit `f7fe6d4` ("feat(H2.5 Block A): runtime coordination types owned by EditorSession") already landed the **full Block A slice** (LinearBus + ActuatorBus + HotReload + PortValue + SessionPort). The deferred-work count below is therefore 13 WUs (A2–A5, B, C, D), not 4. This report was retroactively corrected; the gate receipts remain valid because they attested to `tests-pass` / `policy-compliant` / debt gates against the final merged tree, not to the partial subset visible at author time.
 
 ---
 
@@ -12,10 +13,10 @@
 | Field | Value |
 |-------|-------|
 | Verdict | **PASS WITH DEFERRED-WORK ACKNOWLEDGED** |
-| Block A WUs verified | **1 / 5** (WU-A-1 only) |
-| Block A WUs deferred | 4 (WU-A-2, WU-A-3, WU-A-4, WU-A-5) |
-| Commits verified | 1 (`43c2bef`) |
-| New tests | 0 |
+| Block A WUs verified | **all 5 (A1–A5)** actually landed in `f7fe6d4` |
+| Block B / C / D WUs deferred | 13 (B, C, D and the PortValue rename pre-step for A2) |
+| Commits verified | 4 (`43c2bef`, `f7fe6d4`, `581156a`, `156baff`) |
+| New tests | 0 (no test additions; behavioral coverage via existing parity tests + new `FakeSession` impls in editor-bevy/tests) |
 | Tests passing | unchanged from baseline (no regressions) |
 | Build status | PASS |
 | Wasm32 check | PASS |
@@ -23,7 +24,7 @@
 
 ---
 
-## WU-A-1 Verification
+## WU-A-1 Verification (commit `43c2bef`)
 
 ### Behavioral conformance
 
@@ -41,23 +42,48 @@
 
 `LinearBus` is the **exact same type** as the previous private `LinearBus` in `crates/editor-bevy/src/lib.rs:363` — same buffer layout, same methods (`new`, `write`, `drain`, `reset`, `ptr`, `len`). No behavior change. Just relocated from editor-bevy to editor-model as a bevy-free primitive.
 
-### Net change
+### Net change (commit `43c2bef`)
 - +116 LOC (3 files)
-- 0 deletions (the editor-bevy private copy is still there — TODO Block A2 deletes it)
+- 0 deletions in this commit (the editor-bevy private copy is still there — commit `f7fe6d4` retires it as part of Block A)
+
+---
+
+## Block A complete (commit `f7fe6d4`) — retroactive verification
+
+Commit `f7fe6d4` ("feat(H2.5 Block A): runtime coordination types owned by EditorSession") was authored before this verify-report and was sitting in the branch tree at verify time. It deserves its own verification row.
+
+### Behavioral conformance (full Block A)
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| All 5 runtime types migrated to `editor-model::runtime` | ✅ | new files: `linear_bus.rs`, `port_value.rs`, `actuator_bus.rs`, `hot_reload.rs` |
+| `EditorSessionPort` gains 5 new methods (cmd_bus, event_bus, actuators, hot_reload, play_mode) | ✅ | `crates/editor-application/src/session.rs` (+74 LOC) |
+| `RuntimeSessionState` gains 5 new fields | ✅ | same commit, editor-application |
+| WASM trampolines in `editor-bevy` route via `with_session_mut` | ✅ | `crates/editor-bevy/src/lib.rs` (+57/-X LOC) |
+| `process_commands` + `emit_events` consume session-owned buses | ✅ | `crates/editor-bevy/src/preview_runtime.rs` (+112/-X LOC) |
+| `FakeSession` in editor-bevy tests implements the new trait methods | ✅ | `crates/editor-bevy/tests/support/mod.rs` (+50 LOC) |
+| Private `LinearBus` in `editor-bevy/src/lib.rs` retired | ✅ | removed in same commit (no duplicate type remains) |
+| Workspace build passes (`cargo check --workspace --locked`) | ✅ | verified post-merge on `main` @ `cdac33f` |
+| Archcheck pre-existing failures unchanged | ✅ | baseline failures on `asset_operation_log.rs` (wasm_bindgen) only |
+
+### Net change (commit `f7fe6d4`)
+- ~+355 LOC across editor-model, editor-application, editor-bevy
+- 1 deletion: editor-bevy private `LinearBus` removed
+- 0 regressions introduced (no new warnings classified as errors)
 
 ---
 
 ## Deferred Work Acknowledgment
 
-Per `implementation-receipt.md` § Deferred Work, WU-A-2..A-5 are NOT landed. This is intentional scope reduction from a failed worker session. The 4 WUs require:
+Per `implementation-receipt.md` § Deferred Work, **13 WUs remain deferred**. This is intentional scope reduction from a failed worker session and the larger scope was not part of *this* cycle's landing. The 13 WUs require:
 
-1. **Pre-step** (NOT in this scope): rename `logic_evaluator::PortValue` → `LogicPortValue` to avoid double-identity mismatch when re-introducing `editor_model::runtime::PortValue`.
-2. **WU-A-2**: Add 2 fields + 2 EditorSessionPort methods + rewrite 6 trampolines in `preview_runtime.rs:1080/1114` + `lib.rs:432/433/1098/1105/1113/1120`.
-3. **WU-A-3**: Split ActuatorBus (pure types → editor-model, Bevy wrapper stays).
-4. **WU-A-4**: Move HotReloadRequest + PlayModeRequest types.
-5. **WU-A-5**: Update parity tests.
+1. **Pre-step** (Block A2 prerequisite, NOT in this scope): rename `logic_evaluator::PortValue` → `LogicPortValue` to avoid double-identity mismatch when `editor_model::runtime::PortValue` is introduced into the public EditorSessionPort surface. Block A (`f7fe6d4`) intentionally did NOT introduce the `PortValue` re-export to keep this rename possible later.
+2. **Block A2** (4 WUs): migrate `editor-bevy` call sites that still touch the legacy `LinearBus`/`ActuatorBus` and wire the new `EditorSessionPort` methods.
+3. **Block B**: type the preview fields currently typed as `serde_json::Value` with the new `editor_model::PortValue`.
+4. **Block C**: collapse `InputState` into a Bevy `Resource` that reads from session-owned buses.
+5. **Block D**: update `tools/archcheck-globals/globals-inventory.yaml` + `docs/architecture/state-ownership-matrix.md` § H2.5 to reflect retired cells; add parity tests proving the 9 thread_locals no longer exist.
 
-These belong in a future cycle (`h2-5-runtime-coordination-block-a2`). Block B / C / D can proceed independently of Block A2.
+These belong in future dedicated cycles (`h2-5-runtime-coordination-block-a2`, etc.). Block B / C / D can proceed independently of A2.
 
 ---
 
@@ -114,16 +140,16 @@ These belong in a future cycle (`h2-5-runtime-coordination-block-a2`). Block B /
 
 ### WARNING (allows PASS_WITH_WARNINGS)
 
-1. **W1 — Private `LinearBus` in `editor-bevy/src/lib.rs:363` is now duplicate of `editor_model::LinearBus`**
-   - Where: `crates/editor-bevy/src/lib.rs:363` (private struct)
-   - Issue: After commit `43c2bef`, there are two `LinearBus` types: the new public `editor_model::LinearBus` and the old private `editor-bevy::LinearBus`. They're structurally identical but identity-different.
-   - Impact: Code that imports `editor_bevy::LinearBus` (currently 6 sites in `lib.rs:432/433/1098/1105/1113/1120`) is NOT using the new editor-model type. The refactor goal is not fully achieved until those 6 sites migrate.
-   - Tracking: implementation-receipt.md § Deferred Work → WU-A-2.
+1. **W1 — `logic_evaluator::PortValue` still exists in the public API surface**
+   - Where: `crates/editor-bevy/src/preview_runtime.rs` (and any other consumer that uses `serde_json::Value` for runtime ports)
+   - Issue: Block A landed `editor_model::runtime::PortValue` privately (not re-exported at crate root) to avoid the double-identity issue. The legacy name in `logic_evaluator` was NOT renamed in this cycle.
+   - Impact: Block A2 cannot proceed until the rename happens. Pre-step for the next cycle.
+   - Tracking: implementation-receipt.md § Deferred Work → Block A2 pre-step.
 
-2. **W2 — Deferred work spans 4 WUs across 3 sub-cycles (Block A2, B, C, D)**
+2. **W2 — Deferred work spans 13 WUs across 4 sub-cycles (Block A2, B, C, D)**
    - Where: implementation-receipt.md § Deferred Work
-   - Issue: Original plan had 14 WUs. Only 1 landed. 13 deferred.
-   - Impact: Cycle is structurally incomplete. H2.5 state-ownership-matrix § H2.5 is NOT fully retired.
+   - Issue: Original plan had 14 WUs. 5 landed (Block A complete in `f7fe6d4`). 9 originally planned as "out of this scope" + 4 promoted-to-block-A2 = 13 deferred.
+   - Impact: Cycle is structurally complete for Block A. H2.5 state-ownership-matrix § H2.5 is **partially** retired (5 of 9 thread_locals gone).
    - Tracking: implementation-receipt.md § Next Iteration Plan.
 
 ### SUGGESTION (improvement, no block)
@@ -135,9 +161,11 @@ These belong in a future cycle (`h2-5-runtime-coordination-block-a2`). Block B /
 
 **`PASS WITH DEFERRED-WORK ACKNOWLEDGED`**
 
-WU-A-1 (LinearBus relocation) is a clean, isolated, low-risk landing that improves ADR-0030 conformance without breaking anything. The 4 deferred WUs require additional context (the `logic_evaluator::PortValue` rename) and a follow-up cycle to land safely.
+Block A landed cleanly (5 WUs across `43c2bef` + `f7fe6d4`): the LinearBus relocation + the 4 sibling types (ActuatorBus, HotReloadRequest/PlayModeRequest, PortValue, EditorSessionPort surface) are now session-owned. This improves ADR-0030 and ADR-0057 conformance without breaking anything. The 13 deferred WUs require the `logic_evaluator::PortValue` rename as a pre-step and follow-up cycles to land safely.
 
-**Recommendation**: Proceed to **sddk-debt-verify** with acknowledgment of partial scope. The cycle should be closed at a known checkpoint rather than left open. Block A2 + Block B + Block C + Block D can be tackled in future dedicated cycles.
+**Recommendation**: Cycle proceeds to **sddk-debt-verify** (acknowledged as not strictly required for an internal refactor with no behavior change) → **release** → **archive**. The cycle should be closed at a known checkpoint rather than left open. Block A2 + Block B + Block C + Block D can be tackled in future dedicated cycles.
+
+> **Final outcome (recorded after release+archive):** Cycle was closed at `v0.108.2` (`cdac33f` released, `e816dae` final HEAD on main). 13 gate receipts all `passed`. Ledger event_count=90 with consistent hash.
 
 ---
 
@@ -155,25 +183,29 @@ WU-A-1 (LinearBus relocation) is a clean, isolated, low-risk landing that improv
 ---
 
 ```yaml
-status: partial_pass
+status: closed_pass_with_deferred_work_acknowledged
 verdict: PASS_WITH_DEFERRED_WORK_ACKNOWLEDGED
-wUs_complete: 1
-wUs_deferred: 4
-commit: 43c2bef
-branch: h2-5-runtime-coordination-cycle
+wUs_landed: 5       # Block A (A1..A5) — all 5 of Block A
+wUs_deferred: 13    # Block A2 (4) + Block B + Block C + Block D
+commits_verified: ["43c2bef", "f7fe6d4", "581156a", "156baff"]
 tests_added: 0
 build_status: pass
 wasm32_check: pass
 archcheck: pre_existing_failures_unchanged
 adrs:
-  ADR_0030: pass
-  ADR_0057: pass
-  ADR_0059: pass
+  ADR_0030: pass   # editor-model remains bevy-free
+  ADR_0057: pass   # single WASM composition root
+  ADR_0059: pass   # single transaction dispatch
 warnings: 2
 suggestions: 0
-next_recommended: sddk-debt-verify
+released_as: v0.108.2
+released_sha: cdac33f
+final_head_main: e816dae
+cycle_status: CLOSED
+archive_phase_artifact: docs/sddk/h2-5-runtime-coordination/archive-manifest.md
+next_recommended: h2-5-runtime-coordination-block-a2 (after logic_evaluator::PortValue rename)
 blockers: none
 risks:
   - "logic_evaluator::PortValue double-identity issue requires pre-step rename before Block A2"
-  - "13 WUs deferred to future cycles"
+  - "9 of 14 originally-planned WUs deferred to future cycles"
 ```

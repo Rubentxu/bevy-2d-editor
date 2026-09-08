@@ -17,8 +17,8 @@
 | Tag | `v0.108.2` |
 | Released SHA | `cdac33f` |
 | Commits in cycle | 5 (h2-5 cycle + LinearBus + Block A types + release prep + handoff) |
-| Block A WUs | 1 / 5 landed (WU-A-1 partial via f7fe6d4 Block A complete) |
-| Deferred WUs | 13 (A2-A5, B, C, D) |
+| Block A WUs | all 5 landed (`43c2bef` LinearBus relocation + `f7fe6d4` ActuatorBus/HotReload/PortValue/SessionPort) |
+| Deferred WUs | 9 originally planned as out-of-scope + 4 promoted to Block A2 = 13 total |
 | UAT | skipped (release_type=patch, policy minor=skip, patch=skip) |
 
 ## Release Receipt

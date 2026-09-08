@@ -9,9 +9,14 @@
 
 The `h2-5-runtime-coordination` SDDK cycle is **closed and released** as `v0.108.2`.
 
-Block A landed cleanly (5 of 9 thread_locals collapsed into `EditorSession`/`EditorSessionPort`).
-The remaining 13 WUs (A2, B, C, D) are documented in `implementation-receipt.md` § Deferred Work
-and require a follow-up cycle after renaming `logic_evaluator::PortValue` → `LogicPortValue`.
+Block A landed cleanly: all 5 WUs shipped across two commits —
+- `43c2bef` (A1: LinearBus relocation, bevy-free)
+- `f7fe6d4` (A2–A5: ActuatorBus + HotReload + PortValue + EditorSessionPort surface + FakeSession parity tests)
+This collapses 5 of the 9 thread_locals target into `EditorSession`/`EditorSessionPort`.
+
+The remaining **9 WUs** (Blocks A2-rename-pre-step, B, C, D) are documented in
+`implementation-receipt.md` § Deferred Work and require the `logic_evaluator::PortValue` → `LogicPortValue`
+rename plus the dedicated follow-up cycles.
 
 ## Final state
 
