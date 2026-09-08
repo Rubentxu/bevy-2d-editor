@@ -13,6 +13,7 @@ import type { LogicGraphCatalogEntry } from "../services/logic-graphs";
 import ThumbnailCell from "./ThumbnailCell";
 import PromptDialog from "./PromptDialog";
 import ConfirmDialog from "./ConfirmDialog";
+import ImportDialog from "./ImportDialog";
 import { bridge, callBridge, callBridgeSync } from "../services/bridge-call";
 
 interface Props {
@@ -299,24 +300,67 @@ export default function ProjectAssetBrowser({
 
   // CP-5 — keyboard-accessible asset import trigger.
   // The file picker is the *entry point* for the asset import flow
-  // (Aseprite / LDtk / Tiled / generic JSON). Once the user picks a
-  // file, a separate cycle wires the full ImportDialog (currently
-  // orphaned in the codebase). For now the handler acknowledges the
-  // selection, captures the File for upstream wiring, and logs a
-  // console marker — this is the keyboard-accessible trigger that
-  // CP-5 requires.
+  // (Aseprite / LDtk / Tiled / generic JSON). On file pick, we open the
+  // <ImportDialog /> which handles importers, destination, conflicts,
+  // and ChangeWorkbench routing. The dialog is the one that reads
+  // the actual file bytes (via document.querySelector inside it) and
+  // calls the typed bridge (`importExternalSource`).
   const handleImportAssetFile = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
+    (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
       // eslint-disable-next-line no-console
       console.info(
         `[ProjectAssetBrowser] Asset import triggered from keyboard: name=${file.name}`,
       );
-      // Future-work marker: a separate cycle will pass `file` to the
-      // general <ImportDialog /> with the Aseprite/LDtk/Tiled importers.
+      setImportDialogOpen(true);
+      // Reset the input so picking the same file again re-triggers onChange.
       if (assetFileInputRef.current) {
         assetFileInputRef.current.value = "";
+      }
+    },
+    [],
+  );
+
+  // Callback for the dialog's onImported hook — refresh the asset catalog
+  // so the new entry appears immediately. Today the catalog is refreshed
+  // by a separate fetch in `useSceneAssets`; we just bump a local refresh
+  // tick by reloading via the existing `refresh()` flow. We don't have
+  // direct access to the refresh fn here (it's owned by the parent), so
+  // we dispatch a custom event the parent hook can listen for. This is
+  // intentionally minimal — the dialog's `onImported` is the integration
+  // point; if the parent doesn't listen, the user can manually refresh.
+  const handleImportDialogImported = useCallback(
+    (resourceRef: string) => {
+      // eslint-disable-next-line no-console
+      console.info(
+        `[ProjectAssetBrowser] Import dialog completed: resource=${resourceRef}`,
+      );
+      window.dispatchEvent(
+        new CustomEvent("bevy-2d-editor:asset-imported", {
+          detail: { resourceRef },
+        }),
+      );
+    },
+    [],
+  );
+
+  // Callback for the dialog's onShowChangeWorkbench hook — switch the
+  // bottom dock to the Workbench tab via the test bridge. The bridge
+  // is exposed by <BottomDock /> (mirrors the __setEditorMode pattern
+  // in useEditorWorkspaceController).
+  const handleShowChangeWorkbench = useCallback(
+    (_changeSetId?: string) => {
+      type Setter = (tab: string) => void;
+      const setter = (window as unknown as { __setActiveBottomTab?: Setter })
+        .__setActiveBottomTab;
+      if (typeof setter === "function") {
+        setter("workbench");
+      } else {
+        // eslint-disable-next-line no-console
+        console.warn(
+          "[ProjectAssetBrowser] window.__setActiveBottomTab not available; cannot route conflict to Change Workbench.",
+        );
       }
     },
     [],
@@ -795,6 +839,17 @@ export default function ProjectAssetBrowser({
           onCancel={() => setPlaceSceneComponentAlert(null)}
         />
       )}
+
+      {/* import-dialog-wiring cycle: full <ImportDialog /> for the
+          Aseprite / LDtk / Tiled asset import flow. Opens when the
+          user picks a file via the `import-asset-btn` trigger; closes
+          on success / conflict / error / Escape / click-outside. */}
+      <ImportDialog
+        isOpen={importDialogOpen}
+        onClose={() => setImportDialogOpen(false)}
+        onImported={handleImportDialogImported}
+        onShowChangeWorkbench={handleShowChangeWorkbench}
+      />
     </div>
   );
 }

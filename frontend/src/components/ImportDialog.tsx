@@ -193,6 +193,8 @@ export default function ImportDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="import-dialog-title"
+        data-testid="import-dialog"
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           if (e.key === "Escape" && state.phase !== "importing") {

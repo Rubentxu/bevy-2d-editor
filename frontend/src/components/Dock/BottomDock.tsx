@@ -12,7 +12,7 @@
  * when a future swap returns `bottom` to its original slot.
  */
 
-import { useState, type DragEvent } from "react";
+import { useEffect, useState, type DragEvent } from "react";
 import ConsoleTab from "../ConsoleTab";
 import OutputTab from "../OutputTab";
 import ProblemsTab from "../ProblemsTab";
@@ -78,6 +78,21 @@ export default function BottomDock({
   onSourceNavigate,
 }: Props) {
   const [activeTab, setActiveTab] = useState<BottomDockTab>("console");
+
+  // import-dialog-wiring cycle: expose a test bridge so external
+  // callers (notably <ImportDialog />'s onShowChangeWorkbench) can
+  // switch the active tab. Mirrors the window.__setEditorMode pattern
+  // in useEditorWorkspaceController. Only mounted when the dock is
+  // visible to avoid leaking a stale reference when the dock is
+  // detached.
+  useEffect(() => {
+    type Setter = (tab: BottomDockTab) => void;
+    const w = window as unknown as { __setActiveBottomTab?: Setter };
+    w.__setActiveBottomTab = (tab: BottomDockTab) => setActiveTab(tab);
+    return () => {
+      delete w.__setActiveBottomTab;
+    };
+  }, []);
 
   // v0.82 P1: stamp the canonical bottom-panel id rather than the legacy
   // `bottom-${activeTab}` shape. The `panelRegions` model treats the
