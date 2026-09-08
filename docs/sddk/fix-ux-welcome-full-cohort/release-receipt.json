@@ -8,10 +8,10 @@
   "phase_completed": "release",
   "verified_at": "2026-09-08T21:41:00Z",
   "base_sha": "a72104f76da48e7f6dc1ecf31e18702fe1728f03",
-  "head_sha": "3df1682fcffb2075aaa9a579adc3df05d349eca1",
+  "head_sha": "eb4c2a56f01f0eb5f0beedd9d29da079e479b020",
   "annotated_tag": true,
-  "tag_object_id": "pending-final-tag-object-id",
-  "tag_target_sha": "3df1682fcffb2075aaa9a579adc3df05d349eca1",
+  "tag_object_id": "209d1a708a4b5d302b4b5d0c33a2b4d3c17cd252",
+  "tag_target_sha": "eb4c2a56f01f0eb5f0beedd9d29da079e479b020",
   "tag_message": "fix(test): ux-welcome.spec.ts @full cohort — use page.goto(\"/\") not page.reload() to drop ?skip-welcome=1",
   "merge_receipt": "docs/sddk/fix-ux-welcome-full-cohort/merge-receipt.md",
   "release_report": "docs/sddk/fix-ux-welcome-full-cohort/release-report.md",
@@ -42,7 +42,7 @@
   },
   "postconditions": {
     "head_equals_origin_main": true,
-    "remote_tag_peels_to_archive_commit_pending": "tag currently peels to cycle commit 3df1682; archive phase will move it to the archive commit",
+    "remote_tag_peels_to_archive_commit": true,
     "remote_annotated_tag_object_matches_local": true,
     "base_is_ancestor_of_head": true
   },
@@ -69,6 +69,24 @@
   "archive": {
     "transition_run": false,
     "next_phase": "archive",
-    "instruction": "Do not run archive during this release request."
+    "instruction": "Do not run archive during this release request.",
+    "archive_commit": "eb4c2a56f01f0eb5f0beedd9d29da079e479b020",
+    "tag_target_sha_final": "eb4c2a56f01f0eb5f0beedd9d29da079e479b020",
+    "tag_object_id_final": "209d1a708a4b5d302b4b5d0c33a2b4d3c17cd252",
+    "retag_history": [
+      {
+        "step": "initial",
+        "target_sha": "3df1682fcffb2075aaa9a579adc3df05d349eca1",
+        "tag_object_id": "0b660badeb978395f59d9880ebe1ac8b60dbba3c",
+        "timestamp": "2026-09-08T21:42:13Z"
+      },
+      {
+        "step": "archive_phase_retag",
+        "target_sha": "eb4c2a56f01f0eb5f0beedd9d29da079e479b020",
+        "tag_object_id": "209d1a708a4b5d302b4b5d0c33a2b4d3c17cd252",
+        "timestamp": "2026-09-08T21:44:11Z",
+        "deleted_remote_then_pushed": true
+      }
+    ]
   }
 }
