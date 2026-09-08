@@ -33,6 +33,7 @@
 
 import { useEffect, useState } from "react";
 import { useWelcomeDismissal } from "./WelcomeDismissalContext";
+import { markTourCompleted } from "../services/tour";
 
 export interface TutorialStep {
   readonly id: number;
@@ -161,6 +162,15 @@ export default function TutorialStepper({ open, onClose }: Props) {
     }
   };
 
+  const handleFinish = async () => {
+    // Persist "tour completed" so the WelcomeOverlay's "Take the tour"
+    // button greys out for subsequent sessions. Best-effort: if OPFS
+    // or localStorage are both unavailable the user will simply take
+    // the tour again next time, which is harmless.
+    await markTourCompleted();
+    onClose();
+  };
+
   return (
     <section
       className="tour-stepper"
@@ -199,7 +209,7 @@ export default function TutorialStepper({ open, onClose }: Props) {
           <button
             type="button"
             className="primary"
-            onClick={onClose}
+            onClick={handleFinish}
             data-testid="tour-finish-btn"
             aria-label="Finish the tour"
           >

@@ -30,6 +30,7 @@ const FLAGS_PATH = "welcome-dismissed.json";
 
 interface WelcomeState {
   dismissed: boolean;
+  tourCompleted?: boolean;
 }
 
 /** Synchronous check — gates first render before any async work. */
@@ -74,6 +75,46 @@ async function setWelcomeDismissed(value: boolean): Promise<void> {
   } catch {
     // OPFS unavailable in some test runners — silently skip.
   }
+}
+
+/** Synchronous reader for the `.bevy/tour-flags.json` flag written by
+ * `services/tour.ts`. Mirrors the OPFS-first pattern of the welcome
+ * dismissal reader so the first render of the overlay can grey out
+ * the "Take the tour" button when needed. */
+async function readTourCompletedSync(): Promise<boolean> {
+  try {
+    if (
+      typeof navigator !== "undefined" &&
+      navigator.storage &&
+      navigator.storage.getDirectory
+    ) {
+      const root = await navigator.storage.getDirectory();
+      const dir = await root.getDirectoryHandle("bevy-2d-editor", {
+        create: false,
+      });
+      // TOUR_FLAGS_PATH is a nested OPFS path (".bevy/tour-flags.json")
+      // — the parent directory `.bevy` and the leaf file must each be
+      // looked up independently, mirroring how services/tour.ts writes
+      // them via opfsSaveFile.
+      const nested = await dir.getDirectoryHandle(".bevy", { create: false });
+      const file = await nested.getFileHandle("tour-flags.json");
+      const blob = await file.getFile();
+      const text = await blob.text();
+      const parsed = JSON.parse(text) as {
+        completed?: boolean;
+      };
+      return parsed.completed === true;
+    }
+  } catch {
+    // Fall through.
+  }
+  // localStorage fallback (matches services/tour.ts write).
+  if (typeof localStorage !== "undefined") {
+    return (
+      localStorage.getItem("bevy-2d-editor:tour-completed") === "1"
+    );
+  }
+  return false;
 }
 
 const WORKFLOW_CARDS: {
@@ -123,6 +164,9 @@ export default function WelcomeOverlay({ onTakeTour, onSkip }: Props) {
   // Permanent dismissal — initialized synchronously from OPFS so the very first
   // render is already gated (no flash before the async useEffect fires).
   const [permanentDismissal, setPermanentDismissal] = useState(false);
+  // Tutorial walkthrough completed — when true, the "Take the tour"
+  // button is rendered in a disabled "Tour already taken" state.
+  const [tourCompleted, setTourCompleted] = useState(false);
   // Synchronous URL-driven skip — the useEffect path also reads it, but the
   // synchronous guard below ensures the very first render returns null
   // when the URL explicitly opts out, so tests and smoke cohorts that
@@ -157,8 +201,12 @@ export default function WelcomeOverlay({ onTakeTour, onSkip }: Props) {
         return;
       }
       // First visit (or no prior choice): fall through to async OPFS check.
-      isWelcomeDismissed().then((wasDismissed) => {
+      Promise.all([
+        isWelcomeDismissed(),
+        readTourCompletedSync(),
+      ]).then(([wasDismissed, hasTourCompleted]) => {
         if (cancelled) return;
+        setTourCompleted(hasTourCompleted);
         setHydrated(true);
         reportWelcomeShouldShow({
           shouldShow: !wasDismissed && !skip,
@@ -263,11 +311,18 @@ export default function WelcomeOverlay({ onTakeTour, onSkip }: Props) {
             </button>
             <button
               type="button"
-              className="welcome-overlay-button primary"
-              onClick={handleTakeTour}
+              className={
+                tourCompleted
+                  ? "welcome-overlay-button primary welcome-overlay-button--completed"
+                  : "welcome-overlay-button primary"
+              }
+              onClick={tourCompleted ? undefined : handleTakeTour}
+              disabled={tourCompleted}
+              aria-disabled={tourCompleted}
+              data-tour-completed={tourCompleted ? "true" : "false"}
               data-testid="welcome-tour-btn"
             >
-              Take the tour
+              {tourCompleted ? "✓ Tour already taken" : "Take the tour"}
             </button>
           </div>
         </footer>

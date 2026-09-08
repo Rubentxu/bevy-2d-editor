@@ -4485,6 +4485,15 @@ button.status-segment:last-of-type,
   color: var(--color-ink);
 }
 
+.welcome-overlay-button--completed,
+.welcome-overlay-button--completed:hover {
+  background: var(--color-surface);
+  color: var(--color-ink-muted);
+  border: 1px dashed var(--color-ink-muted);
+  cursor: not-allowed;
+  font-weight: 400;
+}
+
 /* ── Global Search (v0.81 Tier 1) ────────────────────────────────────────── */
 .search-tab {
   display: flex;
