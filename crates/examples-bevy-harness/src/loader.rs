@@ -9,7 +9,7 @@ use bevy::prelude::*;
 use editor_model::scene_asset::SceneAssetDocument;
 use serde_json::Value;
 
-use crate::components::{EditorSpriteAsset, EnemyPatrol, PlayerController, Visible};
+use crate::components::{EditorSpriteAsset, EnemyPatrol, Pickup, PlayerController, Visible};
 
 /// Result of translating one scene asset into a Bevy world.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -108,7 +108,7 @@ impl SpawnFromDoc {
             .name
             .unwrap_or_else(|| Name::new(fallback_name.to_string()));
         let transform = self.transform.unwrap_or_default();
-        let mut entity = world.spawn((name, transform));
+        let mut entity = world.spawn((name.clone(), transform));
         if let Some(sprite) = self.sprite {
             entity.insert(sprite);
         }
@@ -123,6 +123,13 @@ impl SpawnFromDoc {
         }
         if let Some(enemy) = self.enemy {
             entity.insert(enemy);
+        }
+        // Heuristic: any entity named "Pickup" gets the `Pickup`
+        // marker so the collision system can find it. The sample
+        // does not yet declare a `game.Pickup` schema, so we use the
+        // editor.Name component as the discriminator.
+        if name.as_str() == "Pickup" {
+            entity.insert(Pickup);
         }
     }
 }

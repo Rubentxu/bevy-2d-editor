@@ -5,11 +5,13 @@
 //! `docs/sddk/v1-g1-bevy-harness/{explore-report,spec}.md` for the
 //! design rationale and scope.
 
+pub mod collision;
 pub mod components;
 pub mod loader;
 pub mod movement;
 
-pub use components::{EditorSpriteAsset, EnemyPatrol, PlayerController, Visible};
+pub use collision::{PICKUP_HITBOX_HALF, PickupCollisionPlugin, pickup_collision_system};
+pub use components::{EditorSpriteAsset, EnemyPatrol, Pickup, PlayerController, Visible};
 pub use loader::SpawnReport;
 pub use movement::{PlayerMovementPlugin, player_movement_system};
 

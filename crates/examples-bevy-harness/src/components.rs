@@ -66,3 +66,14 @@ impl Default for Visible {
 /// server + image loader, which is out of scope for this witness).
 #[derive(Debug, Component, Clone, PartialEq, Eq, Default)]
 pub struct EditorSpriteAsset(pub String);
+
+/// Marker component for entities representing a collectible pickup.
+///
+/// The sample uses a heuristic (`editor.Name == "Pickup"`) to attach
+/// this marker; future versions may declare a `game.Pickup` schema
+/// with fields (e.g. score value, respawn timer).
+///
+/// See `crates/examples-bevy-harness/src/collision.rs` for the
+/// runtime system that despawns pickups on player overlap.
+#[derive(Debug, Component, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Pickup;
