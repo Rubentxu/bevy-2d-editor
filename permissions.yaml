@@ -1,27 +1,15 @@
 permissions_registry_version: 1
 agents:
   sddk-release:
-    sddk:worktree: allow
-    sddk:git: allow
-    sddk:release: allow
-sddk:worktree:
-  scope: .
-  allow:
-    - read
-    - write
-    - commit
-    - tag
-    - push
-sddk:git:
-  scope: .
-  allow:
-    - branch_create
-    - branch_delete
-    - branch_checkout
-    - remote_push
-    - annotated_tag_create
-sddk:release:
-  scope: .
-  allow:
-    - local_route
-    - main_branch_release
+    phases:
+      - release
+    capabilities:
+      - git.inspect
+      - git.create_branch
+      - git.commit
+      - git.merge
+      - git.tag
+      - git.delete_branch
+      - git.push
+      - sddk:release.local_route
+      - sddk:release.main_branch_release
