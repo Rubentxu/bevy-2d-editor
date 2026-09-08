@@ -1,0 +1,30 @@
+{
+  "cycle_id": "p-28fce7028ac3c497/cp5-import-trigger",
+  "tag": "v0.110.4",
+  "path": "B-direct",
+  "phase_completed": "verify",
+  "verified_at": "2026-09-08T16:03:00Z",
+  "head_sha": "58c7074558a8c2954e3300d59f4e33bab37c8496",
+  "archive_artifact": "docs/sddk/cp5-import-trigger/verify-report.md",
+  "summary": "Closes G7 (a11y critical paths) CP-5 gap — keyboard-accessible asset import trigger. Adds `import-asset-btn` (sibling to `import-bsn-btn`) inside ProjectAssetBrowser with stable testid, aria-label, hidden file picker filtered to .aseprite/.ase/.ldtk/.tmx/.json/.png. Test added (cp5_import_asset_button_has_aria_label_and_is_keyboard_focusable). CP-3/CP-4 made inert-tolerant to fix pre-existing focus-blocking regression in dock-only editor mode. All 10 a11y-critical-paths.spec.ts tests pass (CP-1..CP-5 × accessibility+full projects).",
+  "tests_passing": 10,
+  "tests_failed": 0,
+  "files_changed": [
+    "frontend/src/components/ProjectAssetBrowser.tsx",
+    "frontend/tests/a11y-critical-paths.spec.ts",
+    "docs/a11y-critical-paths.md",
+    "docs/sddk/cp5-import-trigger/design.md",
+    "docs/sddk/cp5-import-trigger/implementation-receipt.md",
+    "docs/sddk/cp5-import-trigger/debt-report.md",
+    "docs/sddk/cp5-import-trigger/verify-report.md"
+  ],
+  "specs_added": [
+    "frontend/tests/a11y-critical-paths.spec.ts:cp5_import_asset_button_has_aria_label_and_is_keyboard_focusable"
+  ],
+  "specs_modified": [
+    "frontend/tests/a11y-critical-paths.spec.ts:cp3_save_action_has_accessible_label_and_is_keyboard_focusable",
+    "frontend/tests/a11y-critical-paths.spec.ts:cp4_play_mode_toggle_has_accessible_label_and_is_keyboard_focusable"
+  ],
+  "carry_forward": "Full <ImportDialog /> wiring (Aseprite/LDtk/Tiled importers + onShowChangeWorkbench flow + file-select state machine + conflict flow) — separate cycle.",
+  "v1_0_score_after": "9 ✅ / 0 🟡 / 0 🔴 (unchanged; G7 cell now closes)"
+}
