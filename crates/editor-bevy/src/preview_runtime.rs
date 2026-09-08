@@ -223,7 +223,7 @@ pub fn start_engine(canvas_id: &str) {
         // Play-mode sensor systems — run before logic evaluation
         .add_systems(
             Update,
-            logic_evaluator::update_keyboard_state
+            crate::keyboard_state::update_keyboard_state
                 .run_if(in_play_mode)
                 .before(logic_dispatch::dispatch_dirty_bindings),
         )

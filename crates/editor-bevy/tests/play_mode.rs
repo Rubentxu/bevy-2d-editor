@@ -1,15 +1,16 @@
 //! Integration tests for play mode (build-and-run-loop).
 //!
-//! Tests KEYBOARD_STATE population from ButtonInput.
+//! Tests KEYBOARD_STATE_FALLBACK population from ButtonInput (H2.5 Block H:
+//! renamed from KEYBOARD_STATE; canonical owner is Bevy Resource InputState).
 
 use bevy::prelude::*;
 use editor_bevy::PlayMode;
-use editor_bevy::logic_evaluator::{KEYBOARD_STATE, update_keyboard_state};
+use editor_bevy::keyboard_state::{KEYBOARD_STATE_FALLBACK, update_keyboard_state};
 
-/// System that populates KEYBOARD_STATE and immediately asserts — runs in same
+/// System that populates KEYBOARD_STATE_FALLBACK and immediately asserts — runs in same
 /// test app so thread-local state is guaranteed shared.
 fn populate_and_assert(keys: Res<ButtonInput<KeyCode>>) {
-    KEYBOARD_STATE.with(|state| {
+    KEYBOARD_STATE_FALLBACK.with(|state| {
         let mut held = state.borrow_mut();
         held.clear();
         for key in keys.get_pressed() {
@@ -18,25 +19,25 @@ fn populate_and_assert(keys: Res<ButtonInput<KeyCode>>) {
         // Assert inside the system — any assertion failure prints a useful message
         assert!(
             held.contains("KeyW"),
-            "KEYBOARD_STATE should contain KeyW, got {:?}",
+            "KEYBOARD_STATE_FALLBACK should contain KeyW, got {:?}",
             held
         );
         assert!(
             held.contains("Space"),
-            "KEYBOARD_STATE should contain Space"
+            "KEYBOARD_STATE_FALLBACK should contain Space"
         );
         assert!(
             held.contains("ArrowUp"),
-            "KEYBOARD_STATE should contain ArrowUp"
+            "KEYBOARD_STATE_FALLBACK should contain ArrowUp"
         );
         assert!(
             !held.contains("ArrowDown"),
-            "KEYBOARD_STATE should not contain ArrowDown"
+            "KEYBOARD_STATE_FALLBACK should not contain ArrowDown"
         );
     });
 }
 
-// §T1: update_keyboard_state populates KEYBOARD_STATE from pressed keys
+// §T1: update_keyboard_state populates KEYBOARD_STATE_FALLBACK from pressed keys
 #[test]
 fn test_update_keyboard_state_populates_from_button_input() {
     let mut app = App::new();
@@ -59,7 +60,7 @@ fn test_update_keyboard_state_clears_released_keys() {
     {
         let mut app = App::new();
         fn frame1_assert(keys: Res<ButtonInput<KeyCode>>) {
-            KEYBOARD_STATE.with(|state| {
+            KEYBOARD_STATE_FALLBACK.with(|state| {
                 let mut held = state.borrow_mut();
                 held.clear();
                 for key in keys.get_pressed() {
@@ -90,7 +91,7 @@ fn test_update_keyboard_state_clears_released_keys() {
     {
         let mut app = App::new();
         fn frame2_assert(keys: Res<ButtonInput<KeyCode>>) {
-            KEYBOARD_STATE.with(|state| {
+            KEYBOARD_STATE_FALLBACK.with(|state| {
                 let mut held = state.borrow_mut();
                 held.clear();
                 for key in keys.get_pressed() {
@@ -117,7 +118,7 @@ fn test_update_keyboard_state_clears_released_keys() {
     }
 }
 
-// §T3: KEYBOARD_STATE is empty when no keys are pressed
+// §T3: KEYBOARD_STATE_FALLBACK is empty when no keys are pressed
 #[test]
 fn test_update_keyboard_state_empty_when_no_keys_pressed() {
     let mut app = App::new();
@@ -128,16 +129,16 @@ fn test_update_keyboard_state_empty_when_no_keys_pressed() {
 
     app.update();
 
-    KEYBOARD_STATE.with(|state| {
+    KEYBOARD_STATE_FALLBACK.with(|state| {
         let held = state.borrow();
         assert!(held.is_empty(), "expected empty, got {:?}", held);
     });
 }
 
-// §T4: KEYBOARD_STATE not updated in edit mode (COUP-NEW-01 regression test).
+// §T4: KEYBOARD_STATE_FALLBACK not updated in edit mode (COUP-NEW-01 regression test).
 // Ensures update_keyboard_state is gated by run_if(in_play_mode).
 // In edit mode, the system must NOT call clear()/insert() — verified by checking
-// that pressing a key while in edit mode does NOT add it to KEYBOARD_STATE.
+// that pressing a key while in edit mode does NOT add it to KEYBOARD_STATE_FALLBACK.
 #[test]
 fn test_keyboard_state_not_updated_in_edit_mode() {
     let mut app = App::new();
@@ -154,7 +155,7 @@ fn test_keyboard_state_not_updated_in_edit_mode() {
     app.update();
 
     // KEYBOARD_STATE should remain empty (system never ran)
-    KEYBOARD_STATE.with(|state| {
+    KEYBOARD_STATE_FALLBACK.with(|state| {
         let held = state.borrow();
         assert!(
             held.is_empty(),

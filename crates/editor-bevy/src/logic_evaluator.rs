@@ -617,7 +617,8 @@ fn seed_builtin_evaluators(registry: &mut LogicNodeRegistry) {
 
     // sensor.key_pressed
     // Reads field_values["key"]; emits Action when key is held (runtime keyboard state
-    // fed via KEYBOARD_STATE thread-local updated by Bevy systems before evaluation).
+    // fed via KEYBOARD_STATE_FALLBACK thread-local, dual-written from Bevy Resource
+    // InputState by `crate::keyboard_state::update_keyboard_state` before evaluation).
     registry.register_builtin(
         Box::new(KeyPressedEvaluator),
         NodeDescriptor {
@@ -885,7 +886,10 @@ impl NodeEvaluator for KeyPressedEvaluator {
             .unwrap_or("Space");
 
         // Check the shared keyboard state; emit Action("pressed") when key is held.
-        let is_pressed = KEYBOARD_STATE.with(|state| state.borrow().contains(key));
+        // H2.5 Block H: reads from KEYBOARD_STATE_FALLBACK (dual-write canonical owner
+        // is Bevy Resource InputState in `crate::keyboard_state`).
+        let is_pressed = crate::keyboard_state::KEYBOARD_STATE_FALLBACK
+            .with(|state| state.borrow().contains(key));
         if is_pressed {
             vec![PortValue::Action("pressed".to_string())]
         } else {
@@ -1040,35 +1044,19 @@ impl NodeEvaluator for EmitSignalEvaluator {
 // Sensor runtime state thread-locals
 // ─────────────────────────────────────────────────────────────────────────────
 
-thread_local! {
-    /// Set of currently held key names (e.g. "Space", "KeyW").
-    /// Updated by Bevy keyboard input system before logic evaluation.
-    pub static KEYBOARD_STATE: RefCell<std::collections::HashSet<String>> = RefCell::new(std::collections::HashSet::new());
-
-    // COLLISION_STATE and PROXIMITY_STATE thread-locals were removed in OE-NEW-05
-    // (2026-07-18) — same dead-pipeline pattern as the deleted mouse pipeline
-    // (CRIT-01+02, commit 80f7a60). No Bevy system was populating them, and the
-    // CollisionEvaluator / ProximityEvaluator already documented headless-default
-    // fallback behavior. If a future Bevy collision/proximity integration ships,
-    // re-introduce them via a real `update_collision_state` / `update_proximity_state`
-    // Bevy system (not a thread-local-only stub).
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Bevy systems — update sensor runtime state
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Populates KEYBOARD_STATE from Bevy's ButtonInput<KeyCode>.
-pub fn update_keyboard_state(keys: Res<ButtonInput<KeyCode>>) {
-    KEYBOARD_STATE.with(|state| {
-        let mut held = state.borrow_mut();
-        held.clear();
-        for key in keys.get_pressed() {
-            // format!("{:?}", KeyCode::KeyW) → "KeyW" (matches KeyboardEvent.code)
-            held.insert(format!("{:?}", key));
-        }
-    });
-}
+// Note: KEYBOARD_STATE thread_local was moved to `crate::keyboard_state`
+// in H2.5 Block H (v0.108.8). It is now renamed to KEYBOARD_STATE_FALLBACK
+// and dual-written from a Bevy system in `keyboard_state::update_keyboard_state`.
+// The `KeyPressedEvaluator` reads from the FALLBACK thread_local (no
+// NodeEvaluator trait change).
+//
+// COLLISION_STATE and PROXIMITY_STATE thread-locals were removed in OE-NEW-05
+// (2026-07-18) — same dead-pipeline pattern as the deleted mouse pipeline
+// (CRIT-01+02, commit 80f7a60). No Bevy system was populating them, and the
+// CollisionEvaluator / ProximityEvaluator already documented headless-default
+// fallback behavior. If a future Bevy collision/proximity integration ships,
+// re-introduce them via a real `update_collision_state` / `update_proximity_state`
+// Bevy system (not a thread-local-only stub).
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Phase 4: WASM exports (wasm32 only)

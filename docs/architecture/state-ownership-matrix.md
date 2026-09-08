@@ -83,17 +83,15 @@ sanctioned ambient seam for `editor-bevy` Bevy systems. See H1.2 evidence.
 | ~~`HOT_RELOAD_BUS`~~  | editor-bevy | ~~`crates/editor-bevy/src/hot_reload_state.rs:32`~~ | *retired* — renamed to `HOT_RELOAD_BUS_FALLBACK` and used only as dual-write fallback for `EditorSession.runtime.hot_reload_requests` (Block G). Production code uses `editor_model::ports::with_session_mut(|s| s.runtime_hot_reload_requests_mut().push(...))`. | hot-reload scheduler | session | `EditorSession.runtime.hot_reload_requests` (via session port) | RETIRED (H2.5 Block G) |
 | ~~`PLAY_MODE_REQUEST`~~ | editor-bevy | ~~`crates/editor-bevy/src/hot_reload_state.rs:35`~~ | *retired* — renamed to `PLAY_MODE_REQUEST_FALLBACK` and used only as dual-write fallback for `EditorSession.runtime.play_mode_request` (Block G). Production code uses `editor_model::ports::with_session_mut(|s| *s.runtime_play_mode_request_mut() = ...)`. | runtime coordinator | session | `EditorSession.runtime.play_mode_request` (via session port) | RETIRED (H2.5 Block G) |
 | ~~`ACTUATOR_OUTPUT_BUS`~~ | editor-bevy | ~~`crates/editor-bevy/src/actuator_bus.rs:53`~~ | *retired* — folded into `editor_model::runtime::ActuatorBus`, accessed via `editor_model::ports::with_session_mut` | preview systems, telemetry | session | `editor_model::runtime::ActuatorBus` (via session port) | RETIRED (H2.5 Block A2) |
-| `KEYBOARD_STATE`      | editor-bevy  | `crates/editor-bevy/src/logic_evaluator.rs:1049` | Bevy keyboard events                       | logic sensor nodes                               | transient  | `Bevy Resource InputState`         | OPEN         |
+| ~~`KEYBOARD_STATE`~~  | editor-bevy | ~~`crates/editor-bevy/src/logic_evaluator.rs:1049`~~ | *retired* — moved to `crates/editor-bevy/src/keyboard_state.rs` and renamed to `KEYBOARD_STATE_FALLBACK` (dual-write fallback for legacy `KeyPressedEvaluator`). Canonical owner is the new Bevy `Resource InputState`, populated by `keyboard_state::update_keyboard_state` each frame (Block H). | logic sensor nodes | transient | `Bevy Resource InputState` (in `crate::keyboard_state`) | RETIRED (H2.5 Block H) |
 
-`KEYBOARD_STATE` migrates to a Bevy `Resource` because its lifetime is
-strictly bound to the Bevy world (input frames). The other H2.5 cells
-land in `EditorSession.runtime` / `EditorSession.preview`.
-
-**Progress (after H2.5 Block G, v0.108.7)**: 8 of 9 retired
+**Progress (after H2.5 Block H, v0.108.8)**: 9 of 9 retired — **H2.5 COMPLETE**
 (`ACTUATOR_OUTPUT_BUS` in Block A2; `PREVIEW_METRICS`, `PREVIEW_MAPPING`,
 `PREVIEW_PROVENANCE` in Block E; `COMMAND_BUS`, `EVENT_BUS` in Block F;
-`HOT_RELOAD_BUS`, `PLAY_MODE_REQUEST` in Block G — all migrated via
-session-first dual-write with renamed `*_FALLBACK` thread_locals).
+`HOT_RELOAD_BUS`, `PLAY_MODE_REQUEST` in Block G; `KEYBOARD_STATE` in
+Block H — all migrated via session-first dual-write with renamed
+`*_FALLBACK` thread_locals, except `KEYBOARD_STATE` which migrated to a
+Bevy `Resource InputState`).
 The local `logic_evaluator::PortValue` enum was also canonicalized
 in Block A2 (now `pub use editor_model::runtime::PortValue`) but it
 was never an inventory entry because it was a module-local type,
@@ -102,9 +100,11 @@ not a thread-local. Block F also deleted the duplicated local
 `editor_model::runtime::LinearBus`. Block G extended
 `editor_model::runtime::{HotReloadRequest, PlayModeRequest}` from
 struct stubs to full enums matching the legacy thread_local
-semantics (3-variant and 2-variant).
-Remaining 1 H2.5 cell: `KEYBOARD_STATE` (Block H planned —
-Bevy `Resource InputState`).
+semantics (3-variant and 2-variant). Block H added the new Bevy
+`Resource InputState` (lifetime-bound to the Bevy world, the only
+H2.5 cell that targets a Bevy Resource instead of EditorSession).
+H2.5 milestone complete — forward work is H2.x / H3.x per
+`MASTER_ROADMAP.md`.
 
 ## H2.x — Catch-all / id minting / ai-proxy memoization
 

@@ -29,6 +29,7 @@ mod dynamic_scene;
 pub mod hot_reload_state;
 pub mod importer;
 pub mod instance_projection;
+pub mod keyboard_state;
 mod lock_utils;
 pub mod logic_command;
 pub mod logic_dispatch;

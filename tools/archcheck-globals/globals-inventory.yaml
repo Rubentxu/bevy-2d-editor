@@ -59,6 +59,12 @@ entries:
     owner: H2.5
     reason: "fallback thread_local for EditorSession.preview_inspector.provenance when no session is installed; legacy test path"
 
+  - name: KEYBOARD_STATE_FALLBACK
+    kind: thread_local
+    declared_at: crates/editor-bevy/src/keyboard_state.rs:53
+    owner: H2.5
+    reason: "keyboard state dual-write fallback; production code writes to Bevy Resource InputState via keyboard_state::update_keyboard_state. Kept for legacy consumer path (KeyPressedEvaluator) — no NodeEvaluator trait change. OPEN until §S-H parity tests prove Resource path covers all consumers."
+
   - name: LOGIC_GRAPH_DOC
     kind: thread_local
     declared_at: crates/editor-bevy/src/logic_state.rs:21
@@ -106,12 +112,6 @@ entries:
     declared_at: crates/editor-bevy/src/logic_evaluator.rs:230
     owner: H2.4
     reason: "logic graph asset registry; absorbed by EditorSession.graph_registry"
-
-  - name: KEYBOARD_STATE
-    kind: thread_local
-    declared_at: crates/editor-bevy/src/logic_evaluator.rs:1049
-    owner: H2.5
-    reason: "runtime sensor state for input-driven logic nodes; absorbed by preview subsystem"
 
   - name: WORLD_DOC
     kind: thread_local
