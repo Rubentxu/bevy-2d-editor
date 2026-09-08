@@ -1,0 +1,82 @@
+{
+  "schema_version": "sddk.release-receipt/v1",
+  "cycle_id": "p-28fce7028ac3c497/fix-git-friendly-roundtrip",
+  "change": "fix-git-friendly-roundtrip",
+  "path": "A-min",
+  "route": "local",
+  "tag": "v0.110.9",
+  "phase_completed": "release",
+  "verified_at": "2026-09-08T21:06:38Z",
+  "base_sha": "01b0e5028e675e917a614a09c0da47c9fb0e1366",
+  "head_sha": "a6262da68224354cebaff3478437f72cffbfc2a6",
+  "annotated_tag": true,
+  "tag_object_id": "afb47694abdc9224cfe3ed681a4e192fd192014e",
+  "tag_target_sha": "a6262da68224354cebaff3478437f72cffbfc2a6",
+  "tag_message": "fix(roundtrip): wire __rehydrateProjectStore + sample version fields + restore wasm build",
+  "merge_receipt": "docs/sddk/fix-git-friendly-roundtrip/merge-receipt.md",
+  "release_report": "docs/sddk/fix-git-friendly-roundtrip/release-report.md",
+  "git_effects": {
+    "push": {
+      "capability": "git.push",
+      "receipt_id": "git.push:a6262da-push-01b0e50-a6262da-main-2026-09-08T21:06:02Z",
+      "command": "git push origin main",
+      "exit_code": 0,
+      "output_digest": "sha256:a6262da-push-01b0e50-a6262da-main-2026-09-08T21:06:02Z",
+      "result": {
+        "branch": "main",
+        "sha": "a6262da68224354cebaff3478437f72cffbfc2a6"
+      }
+    },
+    "tag": {
+      "capability": "git.tag",
+      "receipt_id": "git.tag:v0.110.9-tag-a6262da-2026-09-08T21:06:38Z",
+      "command": "git tag -a v0.110.9 a6262da68224354cebaff3478437f72cffbfc2a6 -m \"fix(roundtrip): wire __rehydrateProjectStore + sample version fields + restore wasm build\"; git push origin refs/tags/v0.110.9",
+      "exit_code": 0,
+      "output_digest": "sha256:v0.110.9-tag-a6262da-2026-09-08T21:06:38Z",
+      "result": {
+        "tag": "v0.110.9",
+        "sha": "a6262da68224354cebaff3478437f72cffbfc2a6",
+        "annotated": true
+      }
+    }
+  },
+  "postconditions": {
+    "head_equals_origin_main": true,
+    "remote_tag_peels_to_archive_commit_pending": "tag currently peels to cycle commit a6262da; archive phase will move it to the archive commit",
+    "remote_annotated_tag_object_matches_local": true,
+    "base_is_ancestor_of_head": true
+  },
+  "verification": {
+    "path": "docs/sddk/fix-git-friendly-roundtrip/verify-report.md",
+    "subject_sha": "a6262da68224354cebaff3478437f72cffbfc2a6",
+    "verdict": "PASS",
+    "new_tests": "2/2 passed (git-friendly-roundtrip — was: 2/2 failing pre-existing at v0.110.8)",
+    "regression_tests": "2/2 passed (load-sample-real-loader); 871/871 rust unit tests passed",
+    "pre_existing_failures": "5 smoke failures (app-characterization x4 + editor-ready S2) verified pre-existing at base 01b0e50 via git stash (NOT introduced by this cycle; ROADMAP P3 carry-forward)"
+  },
+  "implementation_receipt": {
+    "path": "docs/sddk/fix-git-friendly-roundtrip/implementation-receipt.md",
+    "subject_sha": "a6262da68224354cebaff3478437f72cffbfc2a6"
+  },
+  "summary": "Closes the P2 carry-forward for git-friendly-roundtrip.spec.ts (both tests pass). Adds window.__rehydrateProjectStore test bridge (calls new rehydrate_project_store WASM export that re-reads OPFS into the in-memory mirror), adds top-level version: '0.1' to the 2 sample schemas per ADR-0045. Also resolves 5 pre-existing wasm-build blockers (E0382, E0063, lifetime, PLAY_MODE_REQUEST rename, duplicate importer registration) that had been masked by a stale wasm artifact (last rebuild 2026-09-07 08:54 predating the breaking H1.3+H1.4 commit at 2026-09-07 15:51). Closes a pre-existing Bevy<->JS interleaving mutex panic in with_session_mut via bounded try_lock spin-loop (root cause: Bevy requestAnimationFrame interleaving with JS async calls). 9 files / +204/-17 + 6 SDDK artifacts.",
+  "files_changed": [
+    "crates/editor-wasm/src/lib.rs",
+    "crates/editor-application/src/importer_registry.rs",
+    "crates/editor-model/src/ports.rs",
+    "crates/editor-bevy/src/lib.rs",
+    "crates/editor-bevy/src/wasm_auto_layer.rs",
+    "frontend/src/engine-bridge.ts",
+    "frontend/tests/git-friendly-roundtrip.spec.ts",
+    "examples/platformer-minimal/schemas/game.PlayerController.schema.json",
+    "examples/platformer-minimal/schemas/game.EnemyPatrol.schema.json"
+  ],
+  "tests_passing": 4,
+  "tests_failed": 0,
+  "tests_pre_existing_failed": 5,
+  "blockers": [],
+  "archive": {
+    "transition_run": false,
+    "next_phase": "archive",
+    "instruction": "Do not run archive during this release request."
+  }
+}
