@@ -184,7 +184,24 @@ pub fn with_session_mut<R, F: FnOnce(&mut dyn EditorSessionPort) -> R>(f: F) -> 
         .try_with(|cell| {
             cell.borrow()
                 .as_ref()
-                .and_then(|arc| arc.lock().ok().map(|mut g| f(&mut *g)))
+                .and_then(|arc| {
+                    // Use try_lock to avoid recursive-mutex panic when Bevy
+                    // systems hold the session lock during a JS-driven
+                    // async call (load_project etc.). On contention we
+                    // yield (spin) briefly to give Bevy a chance to release
+                    // before bailing. Spinning is safe because wasm is
+                    // single-threaded — no other thread can grab the lock
+                    // between our try_lock attempts.
+                    for _ in 0..10000 {
+                        if let Some(mut g) = arc.try_lock().ok() {
+                            return Some(f(&mut *g));
+                        }
+                        // hint the scheduler; in wasm this is essentially
+                        // a no-op but keeps semantics correct on hosts.
+                        std::hint::spin_loop();
+                    }
+                    None
+                })
         })
         .ok()
         .flatten()
@@ -316,6 +333,22 @@ pub trait ImporterRegistryPort: Send + Sync {
     /// Used by the transaction kernel's permission gate — it only needs to
     /// verify the importer is known, not that it has an active implementation.
     fn is_registered(&self, id: &str) -> bool;
+
+    /// Attach an importer implementation to an already-registered descriptor.
+    ///
+    /// Used by the WASM composition root (`editor_wasm::compose_builtin_importers`)
+    /// to thread Bevy-backed `Importer` impls into a registry that has
+    /// already been seeded with descriptors only (by
+    /// `ImporterRegistry::with_builtins` via `EditorSession::with_builtins`).
+    /// Idempotent: overwrites any previous implementation under the same id.
+    ///
+    /// Returns `Err(ImporterError::NotFound)` if no descriptor is registered
+    /// for `id`.
+    fn attach_importer_for_id(
+        &mut self,
+        id: &str,
+        importer: std::sync::Arc<dyn crate::importer::Importer>,
+    ) -> Result<(), ImporterError>;
 }
 
 thread_local! {

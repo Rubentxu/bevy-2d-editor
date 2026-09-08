@@ -1,4 +1,5 @@
 {
+  "version": "0.1",
   "type_id": "game.PlayerController",
   "display_name": "Player Controller",
   "kind": "simple",

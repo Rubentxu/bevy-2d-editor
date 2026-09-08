@@ -32,6 +32,12 @@ test.describe("G2 — Git-friendly round-trip", { tag: ["@full"] }, () => {
     await waitForEditorReady(page);
 
     await mountSampleInOpfs(page);
+    // mountSampleInOpfs writes to raw OPFS via `window.opfs_save_file`,
+    // which bypasses the engine's in-memory mirror. Re-hydrate the mirror
+    // so `load_project` below sees the freshly-written project.json.
+    await page.evaluate(async () => {
+      await (window as any).__rehydrateProjectStore?.();
+    });
     await page.waitForFunction(
       () => typeof (window as any).load_project === "function",
       undefined,

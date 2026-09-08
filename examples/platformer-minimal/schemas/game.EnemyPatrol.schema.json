@@ -1,4 +1,5 @@
 {
+  "version": "0.1",
   "type_id": "game.EnemyPatrol",
   "display_name": "Enemy Patrol",
   "kind": "simple",

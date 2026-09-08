@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;
 
-use editor_bevy::hot_reload_state::{PLAY_MODE_REQUEST, PlayModeRequest};
+use editor_bevy::hot_reload_state::{PLAY_MODE_REQUEST_FALLBACK, PlayModeRequest};
 use editor_model::PendingChangeSet;
 use editor_model::PendingChangeSetSummary;
 use editor_model::ports::register_project_store;
@@ -38,6 +38,15 @@ use crate::clock::SysClock;
 // no ambient mutable store.
 
 static SESSION: OnceLock<Arc<Mutex<EditorSession>>> = OnceLock::new();
+
+/// Concrete `OpfsProjectStore` retained at WASM startup so that test bridges
+/// can re-hydrate it on demand (`rehydrate_project_store` below).
+///
+/// We keep the concrete type instead of routing rehydrate through the trait
+/// object because `ProjectStore` doesn't expose `hydrate()` (the mirror is
+/// an implementation detail of `OpfsProjectStore`). Test-only; not used by
+/// any production code path.
+static OPFS_STORE: OnceLock<Arc<OpfsProjectStore>> = OnceLock::new();
 
 /// Set the global EditorSession. Called once from init_project_store().
 /// Panics if called more than once.
@@ -356,7 +365,7 @@ pub fn enter_play_mode() -> Result<(), JsValue> {
     guard.snapshot_tunable_baselines(baselines);
 
     // Signal Bevy to enter play mode (processed on next animation frame).
-    PLAY_MODE_REQUEST.with(|r| *r.borrow_mut() = Some(PlayModeRequest::Enter));
+    PLAY_MODE_REQUEST_FALLBACK.with(|r| *r.borrow_mut() = Some(PlayModeRequest::Enter));
 
     Ok(())
 }
@@ -364,7 +373,7 @@ pub fn enter_play_mode() -> Result<(), JsValue> {
 /// Exit play mode: set PlayModeRequest to trigger transform restore.
 #[wasm_bindgen]
 pub fn exit_play_mode() -> Result<(), JsValue> {
-    PLAY_MODE_REQUEST.with(|r| *r.borrow_mut() = Some(PlayModeRequest::Exit));
+    PLAY_MODE_REQUEST_FALLBACK.with(|r| *r.borrow_mut() = Some(PlayModeRequest::Exit));
     Ok(())
 }
 
@@ -837,14 +846,19 @@ pub async fn init_project_store() -> Result<(), JsValue> {
         .hydrate()
         .await
         .map_err(|e| JsValue::from_str(&format!("Failed to hydrate project store: {}", e)))?;
-    let store_arc: Arc<dyn editor_model::ports::ProjectStore> = Arc::new(store);
+    let store_arc: Arc<OpfsProjectStore> = Arc::new(store);
     register_project_store(store_arc.clone());
+    // Retain a concrete reference for the test-only rehydrate bridge
+    // (`rehydrate_project_store` below). Setting is idempotent across
+    // HMR/dev-server reloads — keep the first one to avoid trampling
+    // any in-flight state.
+    let _ = OPFS_STORE.set(store_arc.clone());
 
     // Create the session and register it globally for workbench WASM exports.
     // Re-init is safe: the existing session (if any) is reused to avoid losing
     // pending ChangeSets across HMR/dev-server reloads.
     let session = Arc::new(Mutex::new(EditorSession::with_builtins(
-        store_arc,
+        store_arc as Arc<dyn editor_model::ports::ProjectStore>,
         Arc::new(SysClock::new()) as Arc<dyn Clock>,
     )));
     set_session_impl(session.clone());
@@ -899,6 +913,33 @@ pub async fn init_project_store() -> Result<(), JsValue> {
     Ok(())
 }
 
+/// Re-hydrate the in-memory project-store mirror from current OPFS state.
+///
+/// Test-only bridge: when a test writes raw OPFS via `window.opfs_save_file`
+/// (bypassing the engine's `js_save_file` mirror write), the engine's
+/// `load_project`/`js_exists`/`js_load_file` calls — which read from the
+/// mirror — see stale or empty data. Calling `rehydrate_project_store`
+/// after such a write re-reads OPFS into the mirror, restoring engine
+/// visibility of the freshly-written files.
+///
+/// Idempotent: safe to call multiple times in succession. Each call lists
+/// all paths under the OPFS root, classifies orphans, and overwrites mirror
+/// entries from current bytes.
+///
+/// Returns an error string if `init_project_store` was not called first
+/// or if the underlying hydrate step fails (e.g., OPFS unavailable).
+#[wasm_bindgen]
+pub async fn rehydrate_project_store() -> Result<(), JsValue> {
+    let store = OPFS_STORE
+        .get()
+        .ok_or_else(|| JsValue::from_str("Project store not initialized; call init_project_store first"))?;
+    store
+        .hydrate()
+        .await
+        .map_err(|e| JsValue::from_str(&format!("Failed to rehydrate project store: {}", e)))?;
+    Ok(())
+}
+
 /// Compose the built-in `Importer` implementations from `editor_bevy`
 /// into the session's `ImporterRegistry`.
 ///
@@ -920,35 +961,50 @@ fn compose_builtin_importers(session: &Arc<Mutex<EditorSession>>) -> Result<(), 
         .lock()
         .map_err(|e| JsValue::from_str(&format!("Registry lock poisoned: {}", e)))?;
 
-    // Aseprite
-    let aseprite = AsepriteImporter::new();
-    let aseprite_desc = aseprite.descriptor();
-    registry
-        .register(
-            aseprite_desc,
-            std::sync::Arc::new(aseprite) as std::sync::Arc<dyn Importer>,
-        )
-        .map_err(|e| JsValue::from_str(&format!("builtin.aseprite register failed: {}", e)))?;
+    // The descriptors (builtin.aseprite / builtin.ldtk / builtin.tiled) are
+    // already pre-registered by `EditorSession::with_builtins` →
+    // `ImporterRegistry::with_builtins`. The WASM composition root's job
+    // is to attach the concrete Bevy-backed `Importer` impls so the
+    // registry is fully wired. Without this guard the descriptor step
+    // hits `DuplicateId` and `init_project_store` fails.
+    let attach_aseprite = AsepriteImporter::new();
+    let attach_aseprite_arc = Arc::new(attach_aseprite) as Arc<dyn Importer>;
+    if registry.is_registered("builtin.aseprite") {
+        registry
+            .attach_importer_for_id("builtin.aseprite", attach_aseprite_arc)
+            .map_err(|e| JsValue::from_str(&format!("builtin.aseprite attach failed: {}", e)))?;
+    } else {
+        let desc = attach_aseprite_arc.descriptor();
+        registry
+            .register(desc, attach_aseprite_arc)
+            .map_err(|e| JsValue::from_str(&format!("builtin.aseprite register failed: {}", e)))?;
+    }
 
-    // LDtk
-    let ldtk = LdtkImporter::new();
-    let ldtk_desc = ldtk.descriptor();
-    registry
-        .register(
-            ldtk_desc,
-            std::sync::Arc::new(ldtk) as std::sync::Arc<dyn Importer>,
-        )
-        .map_err(|e| JsValue::from_str(&format!("builtin.ldtk register failed: {}", e)))?;
+    let attach_ldtk = LdtkImporter::new();
+    let attach_ldtk_arc = Arc::new(attach_ldtk) as Arc<dyn Importer>;
+    if registry.is_registered("builtin.ldtk") {
+        registry
+            .attach_importer_for_id("builtin.ldtk", attach_ldtk_arc)
+            .map_err(|e| JsValue::from_str(&format!("builtin.ldtk attach failed: {}", e)))?;
+    } else {
+        let desc = attach_ldtk_arc.descriptor();
+        registry
+            .register(desc, attach_ldtk_arc)
+            .map_err(|e| JsValue::from_str(&format!("builtin.ldtk register failed: {}", e)))?;
+    }
 
-    // Tiled
-    let tiled = TiledImporter::new();
-    let tiled_desc = tiled.descriptor();
-    registry
-        .register(
-            tiled_desc,
-            std::sync::Arc::new(tiled) as std::sync::Arc<dyn Importer>,
-        )
-        .map_err(|e| JsValue::from_str(&format!("builtin.tiled register failed: {}", e)))?;
+    let attach_tiled = TiledImporter::new();
+    let attach_tiled_arc = Arc::new(attach_tiled) as Arc<dyn Importer>;
+    if registry.is_registered("builtin.tiled") {
+        registry
+            .attach_importer_for_id("builtin.tiled", attach_tiled_arc)
+            .map_err(|e| JsValue::from_str(&format!("builtin.tiled attach failed: {}", e)))?;
+    } else {
+        let desc = attach_tiled_arc.descriptor();
+        registry
+            .register(desc, attach_tiled_arc)
+            .map_err(|e| JsValue::from_str(&format!("builtin.tiled register failed: {}", e)))?;
+    }
 
     Ok(())
 }

@@ -148,6 +148,13 @@ export async function initEngine(
   (window as any).get_combined_schemas_json = () =>
     wasm.get_combined_schemas_json();
   (window as any).load_project = () => wasm.load_project();
+  // Test-only bridge: re-hydrate the in-memory project-store mirror from
+  // current OPFS state. Required after tests write raw OPFS via
+  // `window.opfs_save_file` (bypassing the engine's mirror-write path)
+  // and before calling `load_project`/etc. so the engine sees the
+  // freshly-written files. See `editor-wasm/src/lib.rs:rehydrate_project_store`.
+  (window as any).__rehydrateProjectStore = () =>
+    wasm.rehydrate_project_store();
   // Hito 7 — SceneComponent authoring (PR2): expose the
   // `bind_scene_to_schema`, `create_scene_component`, and
   // `list_scene_component_schemas` WASM exports so the schema authoring panel

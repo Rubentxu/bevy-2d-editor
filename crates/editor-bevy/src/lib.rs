@@ -1997,10 +1997,14 @@ pub async fn discard_scene_changes(id: &str) -> Result<(), JsValue> {
     with_registry_mut(|r| r.store_to(id, doc.clone(), log.clone()));
 
     if current_id.as_deref() == Some(id) {
+        // Clone doc before moving it into replace_active_doc so the
+        // session mutation below can still call doc.clone() for
+        // focus_with_log (E0382 fix: borrow of moved value).
+        let doc_for_session = doc.clone();
         scene_session::replace_active_doc(doc);
         editor_model::ports::with_session_mut(|s| {
             s.active_scene_mut()
-                .focus_with_log(doc.clone(), log.clone());
+                .focus_with_log(doc_for_session, log.clone());
         });
     }
 
@@ -2105,6 +2109,7 @@ pub async fn load_project() -> Result<(), JsValue> {
                             name: scene_name.clone(),
                             entities: Vec::new(),
                             instances: BTreeMap::new(),
+                            extension_data: BTreeMap::new(),
                         }
                     });
                     let log = OperationLog::new_const();

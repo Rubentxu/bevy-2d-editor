@@ -95,8 +95,15 @@ pub fn regenerate_auto_layer_wasm(asset_ref: &str, layer_id: &str) -> Result<Str
     // Fetch the updated doc and sync to asset_body_cache and the focused
     // asset (H2.4: both live on `EditorSession.active_asset` /
     // `EditorSession.asset_states[_active]`).
-    let updated_doc = crate::asset_state::with_asset_doc(|doc_opt| doc_opt.clone())
-        .ok_or_else(|| JsValue::from_str("No asset open — asset doc was not set"))?;
+    let updated_doc = crate::asset_state::with_asset_doc(|doc_opt| {
+        // E0382/lifetime fix: clone the owned value out of the borrow
+        // (the closure's &SceneAssetDocument only lives for the call;
+        // we need an owned SceneAssetDocument that outlives the closure).
+        // SceneAssetDocument is Clone but not Copy, so use .map(|d| d.clone())
+        // instead of .cloned().
+        doc_opt.map(|d| d.clone())
+    })
+    .ok_or_else(|| JsValue::from_str("No asset open — asset doc was not set"))?;
 
     // Update asset_body_cache
     with_asset_body_cache_mut(|cache| {

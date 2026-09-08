@@ -145,6 +145,27 @@ impl ImporterRegistry {
         Ok(handle)
     }
 
+    /// Attach an importer implementation to an already-registered descriptor.
+    ///
+    /// Used by the WASM composition root (`editor_wasm::compose_builtin_importers`)
+    /// to thread Bevy-backed `Importer` impls into a registry that has
+    /// already been seeded with descriptors only (by
+    /// `ImporterRegistry::with_builtins` via `EditorSession::with_builtins`).
+    /// Idempotent: overwrites any previous implementation under the same id.
+    ///
+    /// Returns `NotFound` if no descriptor is registered for `id`.
+    pub fn attach_importer_for_id(
+        &mut self,
+        id: &str,
+        importer: Arc<dyn Importer>,
+    ) -> Result<(), ImporterError> {
+        if !self.descriptors.contains_key(id) {
+            return Err(ImporterError::NotFound(id.to_string()));
+        }
+        self.importers.insert(id.to_string(), importer);
+        Ok(())
+    }
+
     /// Returns the number of registered importers.
     pub fn len(&self) -> usize {
         self.descriptors.len()
@@ -240,6 +261,14 @@ impl ImporterRegistryPort for ImporterRegistry {
     /// implementation handle.
     fn is_registered(&self, id: &str) -> bool {
         self.descriptors.contains_key(id)
+    }
+
+    fn attach_importer_for_id(
+        &mut self,
+        id: &str,
+        importer: Arc<dyn Importer>,
+    ) -> Result<(), ImporterError> {
+        ImporterRegistry::attach_importer_for_id(self, id, importer)
     }
 }
 
