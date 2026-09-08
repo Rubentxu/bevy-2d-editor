@@ -47,6 +47,22 @@ impl Default for EnemyPatrol {
     }
 }
 
+/// Per-entity patrol direction. Holds `+1.0` (right) or `-1.0` (left).
+///
+/// The harness attaches this to entities named `"Enemy"` via a
+/// loader-level heuristic (mirrors the `Pickup` marker pattern from
+/// G1-step3). The patrol system flips the value at the
+/// `±patrol_range` boundary. Future cycles may declare a
+/// `game.EnemyPatrol` schema field for the initial direction.
+#[derive(Debug, Component, Clone, Copy, PartialEq)]
+pub struct EnemyDirection(pub f32);
+
+impl Default for EnemyDirection {
+    fn default() -> Self {
+        Self(1.0) // start moving right
+    }
+}
+
 /// Bevy mirror of `editor.Visible` (`{ "visible": bool }`).
 ///
 /// The harness uses a tuple-struct rather than a single bool field

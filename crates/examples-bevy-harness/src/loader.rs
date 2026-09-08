@@ -9,7 +9,7 @@ use bevy::prelude::*;
 use editor_model::scene_asset::SceneAssetDocument;
 use serde_json::Value;
 
-use crate::components::{EditorSpriteAsset, EnemyPatrol, Pickup, PlayerController, Visible};
+use crate::components::{EditorSpriteAsset, EnemyDirection, EnemyPatrol, Pickup, PlayerController, Visible};
 
 /// Result of translating one scene asset into a Bevy world.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -130,6 +130,12 @@ impl SpawnFromDoc {
         // editor.Name component as the discriminator.
         if name.as_str() == "Pickup" {
             entity.insert(Pickup);
+        }
+        // Heuristic: any entity named "Enemy" gets an `EnemyDirection`
+        // starting at +1.0 (moving right). The patrol system flips it
+        // at the boundary. Mirrors the Pickup pattern.
+        if name.as_str() == "Enemy" {
+            entity.insert(EnemyDirection::default());
         }
     }
 }
