@@ -129,6 +129,29 @@ impl OpfsCore {
             })
             .collect()
     }
+
+    /// Pure function: split a list of OPFS paths into (orphans, real).
+    ///
+    /// Orphans are paths ending in `.tmp` — these are atomic-write
+    /// shadows left behind by a crash mid-write. The hydrate path
+    /// deletes them before reading real files.
+    ///
+    /// This function is `pub` (visible to unit tests) so the orphan-detection
+    /// contract can be exercised on native targets where the wasm32 JS
+    /// imports are not available. It is not part of the public API.
+    #[doc(hidden)]
+    pub fn classify_paths(paths: Vec<String>) -> (Vec<String>, Vec<String>) {
+        let mut orphans = Vec::new();
+        let mut real = Vec::new();
+        for path in paths {
+            if path.ends_with(".tmp") {
+                orphans.push(path);
+            } else {
+                real.push(path);
+            }
+        }
+        (orphans, real)
+    }
 }
 
 impl Default for OpfsCore {
@@ -224,19 +247,21 @@ impl OpfsProjectStore {
             .await
             .map_err(|e| format!("hydrate: list failed: {}", e))?;
 
-        for path in paths {
-            // Recovery step: any orphan `<path>.tmp` shadow left by a crash
-            // mid-atomic-write is deleted before the mirror is populated.
-            // Without this, a fresh load could surface stale staging bytes
-            // via `read` if the real `<path>` happened to be absent too.
-            if path.ends_with(".tmp") {
-                // Best-effort: failures here are logged via the bridge error
-                // but do not abort hydration — the next flush will retry.
-                if let Err(e) = delete_op(&path).await {
-                    eprintln!("hydrate: failed to remove orphan shadow {}: {}", path, e);
-                }
-                continue;
+        // Pure decision: separate orphan `.tmp` shadows from real files.
+        // Extracted as a method so the orphan-detection contract is
+        // unit-testable on native targets (the IO above is wasm32-only).
+        let (to_delete, to_read) = OpfsCore::classify_paths(paths);
+
+        // Recovery step: delete orphan shadows first so any subsequent
+        // `read` call cannot accidentally surface stale staging bytes
+        // if the real `<path>` happened to be absent too. Best-effort:
+        // failures are logged but do not abort hydration.
+        for path in to_delete {
+            if let Err(e) = delete_op(&path).await {
+                eprintln!("hydrate: failed to remove orphan shadow {}: {}", path, e);
             }
+        }
+        for path in to_read {
             let bytes: Vec<u8> = match read_op(&path).await {
                 Ok(b) => b,
                 Err(_) => {
@@ -588,5 +613,93 @@ mod tests {
         assert!(matches!(pending[1], PendingOp::Write { .. }));
         assert!(matches!(pending[2], PendingOp::Delete { .. }));
         assert!(matches!(pending[3], PendingOp::AtomicWrite { .. }));
+    }
+
+    // -----------------------------------------------------------------------
+    // Cycle `g5-crash-recovery` (v0.110.2): orphan-detection contract.
+    // The `classify_paths` helper is the pure decision step that the
+    // wasm32 hydrate() uses to separate orphan `.tmp` shadows from real
+    // files. These tests prove the contract on native targets.
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_opfs_core_classify_paths_splits_orphan_shadows_from_real_files() {
+        // Real files and orphan `.tmp` shadows mixed in OPFS list output.
+        let paths = vec![
+            "project.json".to_string(),
+            "project.json.tmp".to_string(),
+            "scenes/level_1.json".to_string(),
+            "scenes/level_1.json.tmp".to_string(),
+            "scenes/level_2.json".to_string(),
+        ];
+
+        let (orphans, real) = OpfsCore::classify_paths(paths);
+
+        assert_eq!(orphans, vec![
+            "project.json.tmp".to_string(),
+            "scenes/level_1.json.tmp".to_string(),
+        ]);
+        assert_eq!(real, vec![
+            "project.json".to_string(),
+            "scenes/level_1.json".to_string(),
+            "scenes/level_2.json".to_string(),
+        ]);
+    }
+
+    #[test]
+    fn test_opfs_core_classify_paths_empty_input_returns_empty_split() {
+        let (orphans, real) = OpfsCore::classify_paths(vec![]);
+        assert!(orphans.is_empty());
+        assert!(real.is_empty());
+    }
+
+    #[test]
+    fn test_opfs_core_classify_paths_all_orphans() {
+        // Crashed mid-write on multiple files: every path is a shadow.
+        let paths = vec![
+            "a.txt.tmp".to_string(),
+            "b.txt.tmp".to_string(),
+            "subdir/c.txt.tmp".to_string(),
+        ];
+        let (orphans, real) = OpfsCore::classify_paths(paths);
+        assert_eq!(orphans.len(), 3);
+        assert!(real.is_empty());
+    }
+
+    #[test]
+    fn test_opfs_core_classify_paths_no_orphans() {
+        // Normal cold start: no leftover shadows from previous crashes.
+        let paths = vec![
+            "project.json".to_string(),
+            "scenes/level_1.json".to_string(),
+        ];
+        let (orphans, real) = OpfsCore::classify_paths(paths);
+        assert!(orphans.is_empty());
+        assert_eq!(real.len(), 2);
+    }
+
+    #[test]
+    fn test_opfs_core_classify_paths_does_not_treat_tmp_midfix_as_orphan() {
+        // A legitimate file named `something.tmp.json` (no, but a file
+        // ending with `.json.tmp` should be caught). Verify that the
+        // heuristic is purely suffix-based: a path ending in exactly
+        // `.tmp` is an orphan, anything else is real.
+        let paths = vec![
+            "foo.tmp".to_string(),         // orphan (shadow for `foo`)
+            "foo.json.tmp".to_string(),    // orphan (shadow for `foo.json`)
+            "foo.json".to_string(),        // real
+            "foo.tmp.bak".to_string(),     // real (does NOT end in `.tmp`)
+            ".tmp".to_string(),            // orphan (edge: bare `.tmp`)
+        ];
+        let (orphans, real) = OpfsCore::classify_paths(paths);
+        assert_eq!(orphans, vec![
+            "foo.tmp".to_string(),
+            "foo.json.tmp".to_string(),
+            ".tmp".to_string(),
+        ]);
+        assert_eq!(real, vec![
+            "foo.json".to_string(),
+            "foo.tmp.bak".to_string(),
+        ]);
     }
 }
