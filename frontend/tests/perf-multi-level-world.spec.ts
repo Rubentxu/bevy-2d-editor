@@ -3,7 +3,7 @@
  *
  * Per `docs/sddk/g6-performance-corpus/specification.md` §3.3:
  *
- *   - Build a 50-scene world (outside the budget).
+ *   - Build a 16-scene world (MAX_SCENES = 16; 1 default + 15 created).
  *   - Switch 5 times.
  *   - Measure average switch latency.
  *
@@ -29,14 +29,14 @@ const SPEC: PerfBudgetSpec = {
   hardMs: 1500,
 };
 
-const SCENE_COUNT = 50;
-const TARGETS = ["scene_25", "scene_01", "scene_49", "scene_12", "scene_37"];
+const SCENE_COUNT = 15; // MAX_SCENES = 16 (1 default + 15 created).
+const TARGETS = ["scene_08", "scene_01", "scene_14", "scene_05", "scene_11"];
 
 test.describe(
   "perf — multi-level world navigation",
   { tag: ["@performance", "@full"] },
   () => {
-    test(`5 scene switches across a ${SCENE_COUNT}-scene world within avg budget`, async ({
+    test(`5 scene switches across a 16-scene world within avg budget`, async ({
       page,
     }) => {
       await page.goto("/");

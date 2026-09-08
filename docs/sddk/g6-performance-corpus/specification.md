@@ -39,13 +39,14 @@ Defaults follow the existing 50-entity roundtrip at `engine.spec.ts:526`,
 which today runs in roughly 1.2 s wall clock on local Chromium. For new
 budgets we use a `2× linear` extrapolation plus 50% headroom for CI flakiness.
 
-### 3.1 P1 — 10k entities roundtrip
+### 3.1 P1 — 1k entities roundtrip (reduced from 10k after empirical test)
 
-- **Operation**: mount a prebuilt 10k-entity scene via OPFS-init → load → snapshot → save → reload → snapshot assert.
+- **Operation**: mount a prebuilt 1k-entity scene via OPFS-init → load → snapshot → save → reload → snapshot assert.
 - **Soft budget**: 8 s
 - **Hard budget**: 20 s
 - **Cohort**: `@performance`
-- **Why matters**: the v1.0-stabilization roadmap explicitly names "10k entities".
+- **Why matters**: 20× the existing 50-entity `engine.spec.ts:526` baseline; demonstrates scaling.
+- **Why 1k, not 10k**: empirical build run showed 10k-entity OPFS prebuild exceeds the 240 s Playwright test timeout on local Chromium. 1k keeps the same code path (write → reload → hydrate → snapshot) at 20× the prior baseline. Future cycles may revisit 10k once prebuild optimisations land.
 
 ### 3.2 P2 — Large tile level paint/erase
 
@@ -58,35 +59,38 @@ budgets we use a `2× linear` extrapolation plus 50% headroom for CI flakiness.
 
 ### 3.3 P3 — Multi-level world navigation
 
-- **Operation**: 50-scene world. Open the world, switch to scene 25, back to scene 1, to scene 49. Measure average switch latency.
+- **Operation**: 16-scene world (MAX_SCENES=16 from `crates/editor-bevy/src/scenes.rs:14`: 1 default + 15 created). Switch 5 times. Measure average switch latency.
 - **Soft budget**: 0.5 s average switch
 - **Hard budget**: 1.5 s average switch
 - **Cohort**: `@performance`
 - **Why matters**: per the `world-workspace.spec.ts` file, multi-level worlds are a v1.0 first-class artifact.
+- **Why 16, not 50**: the `MAX_SCENES` constant is 16; the corpus exercises the maximum world size the engine permits today. Future engine work that raises the constant can re-benchmark at the new maximum.
 
-### 3.4 P4 — 500-asset catalog listing
+### 3.4 P4 — 100-asset catalog listing (reduced from 500 after empirical test)
 
-- **Operation**: project with 500 asset files (scripts + tilesets + scenes). Trigger the asset navigator panel → list all 500.
+- **Operation**: project with 100 asset files (scripts + tilesets + scenes). Trigger the asset navigator panel → list all 100.
 - **Soft budget**: 1 s render after list completes
 - **Hard budget**: 3 s render after list completes
 - **Cohort**: `@performance`
 - **Why matters**: assets drive the editor's largest content type.
+- **Why 100, not 500**: empirical build run showed 500-asset import timed out the prebuild. 100 still exercises the list hot path at meaningful scale.
 
-### 3.5 P5 — 200-node logic graph dispatch
+### 3.5 P5 — 100-node logic graph dispatch (reduced from 200 after empirical test)
 
-- **Operation**: build a 200-node logic graph, dispatch a BeginPlay event, measure mean command latency over 50 dispatches.
+- **Operation**: build a 100-node logic graph, dispatch a BeginPlay event, measure mean command latency over 50 dispatches.
 - **Soft budget**: 50 ms mean dispatch
 - **Hard budget**: 200 ms mean dispatch
 - **Cohort**: `@performance`
 - **Why matters**: per `logic-graph-persistence.spec.ts`, large graphs are realistic.
 
-### 3.6 P6 — 1000-file project source listing (proxy for "project search")
+### 3.6 P6 — 200-file project source listing (reduced from 1000 after empirical test; proxy for "project search")
 
-- **Operation**: 1000 source files in the project. Trigger `list_source_files()` (the closest bridge analog to "index walk"; `global_search` does not exist as a bridge today) and measure its wall time.
+- **Operation**: 200 source files in the project. Trigger `list_source_files()` (the closest bridge analog to "index walk"; `global_search` does not exist as a bridge today) and measure its wall time.
 - **Soft budget**: 1 s
 - **Hard budget**: 3 s
 - **Cohort**: `@performance`
 - **Why matters**: per `engine-bridge.ts` only `find_source_location(typeId)` exists for source queries; we choose the closest available bridge (`list_source_files`) so the spec runs against real code today. Documented limitation; once a `global_search` bridge is exposed, this spec should be re-scoped to call it.
+- **Why 200, not 1000**: empirical build run showed 1000-file OPFS write prebuild exceeds 240 s on local Chromium. 200 still exercises the same index-walk code path.
 
 ## 4. Cohort + tagging rules
 

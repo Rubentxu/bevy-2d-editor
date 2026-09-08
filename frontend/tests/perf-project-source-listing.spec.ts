@@ -1,5 +1,5 @@
 /**
- * perf-project-search.spec.ts — G6 P6: 1000-file project source listing.
+ * perf-project-search.spec.ts — G6 P6: 200-file project source listing.
  *
  * Per `docs/sddk/g6-performance-corpus/specification.md` §3.6:
  *
@@ -34,19 +34,19 @@ const SPEC: PerfBudgetSpec = {
   hardMs: 3_000,
 };
 
-const FILE_COUNT = 1_000;
+const FILE_COUNT = 200;
 
 test.describe(
-  "perf — 1000-file project source listing",
+  "perf — 200-file project source listing",
   { tag: ["@performance", "@full"] },
   () => {
-    test("list_source_files across 1000 files within budget", async ({
+    test("list_source_files across 200 files within budget", async ({
       page,
     }) => {
       await page.goto("/");
       await waitForEditorReady(page);
 
-      // Pre-build: write 1000 placeholder source files (outside budget).
+      // Pre-build: write 200 placeholder source files (outside budget).
       await page.evaluate(async (n: number) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const writeFile = (window as any).write_source_file;

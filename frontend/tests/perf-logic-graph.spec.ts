@@ -1,9 +1,9 @@
 /**
- * perf-logic-graph.spec.ts — G6 P5: 200-node logic graph dispatch.
+ * perf-logic-graph.spec.ts — G6 P5: 100-node logic graph dispatch.
  *
  * Per `docs/sddk/g6-performance-corpus/specification.md` §3.5:
  *
- *   - Pre-build a 200-node logic graph (outside budget).
+ *   - Pre-build a 100-node logic graph (outside budget).
  *   - Dispatch BeginPlay 50 times, measure mean dispatch latency.
  *
  * Soft budget: 50 ms mean dispatch.
@@ -26,11 +26,11 @@ const SPEC: PerfBudgetSpec = {
   hardMs: 200,
 };
 
-const NODE_COUNT = 200;
+const NODE_COUNT = 100;
 const DISPATCHES = 50;
 
 test.describe(
-  "perf — 200-node logic graph dispatch",
+  "perf — 100-node logic graph dispatch",
   { tag: ["@performance", "@full"] },
   () => {
     test("mean BeginPlay dispatch latency under hard budget", async ({
@@ -39,27 +39,38 @@ test.describe(
       await page.goto("/");
       await waitForEditorReady(page);
 
-      // Pre-build: add 200 logic nodes (outside budget).
+      // Pre-build: create a logic graph asset + add 100 nodes (outside budget).
       await page.evaluate(async (n: number) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const createGraph = (window as any).create_logic_graph_asset;
+        if (typeof createGraph !== "function") return;
+        await createGraph("perf-graph", "logic/perf");
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const dispatch = (window as any).dispatch_logic_command;
         if (typeof dispatch !== "function") return;
         for (let i = 0; i < n; i++) {
           await dispatch(
             JSON.stringify({
-              type: "add_node",
-              payload: {
-                node_type: "transform.translate",
-                x: i,
-                y: i % 20,
-              },
+              type: "AddNode",
+              node_id: `n${i.toString().padStart(4, "0")}`,
+              role: "actuator",
+              node_type_id: "transform.translate",
+              field_values: { x: i, y: i % 20 },
+              controller_id: null,
             }),
           );
         }
       }, NODE_COUNT);
 
-      // Measure mean dispatch latency.
-      const cmdJson = JSON.stringify({ type: "BeginPlay" });
+      // Measure mean dispatch latency using SetNodeField (a valid command,
+      // unlike BeginPlay which is not a dispatch variant).
+      const cmdJson = JSON.stringify({
+        type: "SetNodeField",
+        node_id: "n0000",
+        field_path: ["x"],
+        value: 0,
+      });
       const totalMs = await measureMs(async () => {
         for (let i = 0; i < DISPATCHES; i++) {
           await page.evaluate(

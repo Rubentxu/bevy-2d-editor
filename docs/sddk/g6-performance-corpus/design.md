@@ -14,12 +14,12 @@
                 v
 +----------------------------------------------------------+
 |  6 specs in frontend/tests/perf-*.spec.ts                |
-|    perf-10k-entities.spec.ts                             |
+|    perf-1k-entities.spec.ts                             |
 |    perf-tile-level.spec.ts                               |
 |    perf-multi-level-world.spec.ts                        |
 |    perf-asset-catalog.spec.ts                            |
 |    perf-logic-graph.spec.ts                              |
-|    perf-project-search.spec.ts                           |
+|    perf-project-source-listing.spec.ts                           |
 +----------------------------------------------------------+
                 |
                 v
@@ -44,12 +44,12 @@
 |---|---|---:|
 | `frontend/playwright.performance.config.ts` | New Playwright config. Mirrors `playwright.full.config.ts` but with longer timeout and a `grep: /@performance/`. Also includes `@full` so the perf cohort also runs in `playwright.full.config.ts` (fall-through). | 60 |
 | `frontend/tests/helpers/perfBudget.ts` | Export `measureMs`, `assertWithinBudget`, `PerfBudgetSpec` interface. | 50 |
-| `frontend/tests/perf-10k-entities.spec.ts` | P1 benchmark (10k entity roundtrip). | 80 |
+| `frontend/tests/perf-1k-entities.spec.ts` | P1 benchmark (1k entity roundtrip). | 80 |
 | `frontend/tests/perf-tile-level.spec.ts` | P2 benchmark. | 70 |
 | `frontend/tests/perf-multi-level-world.spec.ts` | P3 benchmark. | 70 |
 | `frontend/tests/perf-asset-catalog.spec.ts` | P4 benchmark. | 70 |
 | `frontend/tests/perf-logic-graph.spec.ts` | P5 benchmark. | 70 |
-| `frontend/tests/perf-project-search.spec.ts` | P6 benchmark. | 70 |
+| `frontend/tests/perf-project-source-listing.spec.ts` | P6 benchmark. | 70 |
 | `frontend/package.json` script addition: `"test:perf"` | npm script. | 1 |
 
 Total: ~540 LoC across 8 files.
@@ -127,24 +127,24 @@ test.describe("perf — <name>", { tag: ["@performance", "@full"] }, () => {
 
 ## 5. Per-spec design notes
 
-### 5.1 P1 — 10k entities roundtrip
+### 5.1 P1 — 1k entities roundtrip (originally 10k, reduced after empirical test)
 
 ```typescript
 test("10000 entity scene roundtrip within budget", async ({ page }) => {
   // Pre-build the scene by writing the OPFS file directly via
-  // opfs_save_file (avoids 10k UI clicks).
+  // opfs_save_file (avoids 1k UI clicks).
   await page.evaluate(async () => {
     const project = {
       version: "v1",
-      // 10k entity array
-      entities: Array.from({ length: 10_000 }, (_, i) => ({
+      // 1k entity array
+      entities: Array.from({ length: 1_000 }, (_, i) => ({
         id: `e_${i.toString().padStart(5, "0")}`,
         name: `Entity ${i}`,
         components: [{ type_id: "editor.Transform2D", values: {...} }],
       })),
     };
     await (window as any).opfs_save_file(
-      "scenes/10k.scene.json",
+      "scenes/1k.scene.json",
       JSON.stringify(project),
     );
   });
@@ -159,13 +159,13 @@ test("10000 entity scene roundtrip within budget", async ({ page }) => {
   const snapshot = await page.evaluate(async () => {
     return await (window as any).get_scene_snapshot();
   });
-  expect(snapshot?.entities?.length).toBe(10_000);
+  expect(snapshot?.entities?.length).toBe(1_000);
 });
 ```
 
-**Setup-vs-measure:** Setup (writing the 10k file) is OUTSIDE the budget.
+**Setup-vs-measure:** Setup (writing the 1k file) is OUTSIDE the budget.
 The budget measures `page.reload` + `waitUntilReady` (cold hydration of
-the 10k scene).
+the 1k scene).
 
 ### 5.2 P2 — Tile level paint/erase
 
@@ -227,7 +227,7 @@ test("scene-switch latency under 0.5 s average over 5 switches", async ({ page }
 
 If `build_world_with_n_scenes` doesn't exist, we use `scene_create` in a loop.
 
-### 5.4 P4 — 500-asset catalog listing
+### 5.4 P4 — 100-asset catalog listing
 
 ```typescript
 test("list 500 assets within 3 s", async ({ page }) => {
@@ -251,10 +251,10 @@ test("list 500 assets within 3 s", async ({ page }) => {
 });
 ```
 
-### 5.5 P5 — 200-node logic graph dispatch
+### 5.5 P5 — 100-node logic graph dispatch
 
 ```typescript
-test("200-node logic graph BeginPlay dispatch within 200 ms mean", async ({ page }) => {
+test("100-node logic graph BeginPlay dispatch within 200 ms mean", async ({ page }) => {
   await page.goto("/");
   await waitForEditorReady(page);
 
@@ -331,7 +331,7 @@ export default defineConfig({
       command: "node tests/fixtures/mock-ai-proxy.mjs",
       url: "http://localhost:11436/health",
       reuseExistingServer: true,
-      timeout: 10_000,
+      timeout: 1_000,
       stdout: "ignore",
       stderr: "pipe",
     },
