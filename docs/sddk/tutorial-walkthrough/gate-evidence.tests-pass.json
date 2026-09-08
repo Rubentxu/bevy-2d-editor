@@ -1,0 +1,48 @@
+{
+  "gate": "tests-pass",
+  "transition": "phase.verify.complete.a-min",
+  "outcome": "passed",
+  "evaluator": "sddk.cli",
+  "actor": "sddk",
+  "timestamp": "2026-09-08T17:31:00+02:00",
+  "subject": {
+    "base": "72d9c4a8bda3f3d317ae1a17ef9a27ca98dd9633",
+    "head": "c23d84e6cb1b180d317b74a7f71271152055f6e6",
+    "cwd": "/var/home/rubentxu/Proyectos/rust/bevy-2d-editor"
+  },
+  "evidence": {
+    "argv": ["npx", "playwright", "test", "--config=playwright.config.ts", "tests/tutorial-walkthrough.spec.ts"],
+    "exit_code": 0,
+    "output_digest": null,
+    "tests": {
+      "tutorial-walkthrough": "8/8 passed (4 scenarios x @accessibility + @full)",
+      "import-dialog-regression": "8/8 passed",
+      "ux-welcome-regression": "3/3 @accessibility passed; 3/3 @full pre-existing at base 72d9c4a (verified by checkout reproduction)"
+    },
+    "commands": [
+      {
+        "argv": ["npx", "playwright", "test", "--config=playwright.config.ts", "tests/tutorial-walkthrough.spec.ts"],
+        "exit_code": 0,
+        "observation": "8 passed (35.1 s)"
+      },
+      {
+        "argv": ["npx", "tsc", "--noEmit", "-p", "."],
+        "exit_code": 0,
+        "observation": "clean"
+      },
+      {
+        "argv": ["npx", "eslint", "--max-warnings=0", "src/components/TutorialStepper.tsx", "src/components/AppShell.tsx"],
+        "exit_code": 0,
+        "observation": "clean"
+      },
+      {
+        "argv": ["npx", "eslint", "--max-warnings=0", "tests/tutorial-walkthrough.spec.ts"],
+        "exit_code": 0,
+        "observation": "clean"
+      }
+    ]
+  },
+  "report_path": "docs/sddk/tutorial-walkthrough/verification-report.md",
+  "findings_path": "docs/sddk/tutorial-walkthrough/verify-findings.json",
+  "notes": "Gate evidence recorded as sidecar JSON because the runtime has no active cycle snapshot for project p-28fce7028ac3c497 (runtime reported 'no active cycle found'). The runtime's `sddk cycle evaluate-gate` requires a live cycle record; this artifact documents the evidence independently so the gate evaluation can be re-issued once the cycle is started or resumed."
+}

@@ -1,0 +1,85 @@
+{
+  "$schema": "sddk.verify-findings/v1",
+  "cycle_id": "p-28fce7028ac3c497/tutorial-walkthrough",
+  "path": "a-min",
+  "subject": {
+    "base": "72d9c4a8bda3f3d317ae1a17ef9a27ca98dd9633",
+    "head": "c23d84e6cb1b180d317b74a7f71271152055f6e6",
+    "diff_digest": null,
+    "cwd": "/var/home/rubentxu/Proyectos/rust/bevy-2d-editor",
+    "verified_at": "2026-09-08T17:30:00+02:00"
+  },
+  "lenses": [
+    {
+      "lens_id": "tests-pass",
+      "status": "pass",
+      "findings": [],
+      "evidence_gaps": []
+    },
+    {
+      "lens_id": "policy-compliant",
+      "status": "pass",
+      "findings": [
+        {
+          "finding_id": "sha256(doc-cycle-prefix-001)",
+          "rule_id": "documentation-discipline-cycle-prefix",
+          "subject": {
+            "base": "72d9c4a8bda3f3d317ae1a17ef9a27ca98dd9633",
+            "head": "c23d84e6cb1b180d317b74a7f71271152055f6e6",
+            "diff_digest": null
+          },
+          "location": {
+            "path": "frontend/src/components/AppShell.tsx",
+            "start_line": 163,
+            "end_line": 165,
+            "symbol": "AppShell.tourOpen"
+          },
+          "classification": "warning",
+          "severity": "low",
+          "confidence": "high",
+          "production_reachable": "no",
+          "evidence": [
+            {
+              "kind": "source",
+              "observation": "Comment prefix 'tutorial-walkthrough cycle:' attaches a cycle name to an otherwise behaviour-explaining comment. Per verify.md §3.b the cycle name is allowed as secondary context when the comment's primary content documents behavior; the remaining 3 lines explain why state lives in AppShell and how the close callback flows. Classified as warning, not blocking.",
+              "command": "git diff 72d9c4a..c23d84e -- frontend/src/components/AppShell.tsx | grep -E '^\\+.*cycle'",
+              "exit_code": 0,
+              "output_digest": null
+            }
+          ],
+          "exemption": null,
+          "owner_phase": "apply"
+        }
+      ],
+      "evidence_gaps": []
+    },
+    {
+      "lens_id": "debt-severity-assigned",
+      "status": "pass",
+      "findings": [],
+      "evidence_gaps": [],
+      "notes": "No production debt introduced by this cycle. The cycle is UI plumbing only (1 new component, 1 wired hook, 1 test file, +51 lines of CSS). The future-work items (real __loadSampleProject backend wire-up, optional tour-completion persistence) are out-of-scope and noted in the implementation-receipt.md 'Open Items / Follow-ups' section, not as in-scope debt. No open debt blocks this cycle."
+    },
+    {
+      "lens_id": "debt-priority-assigned",
+      "status": "pass",
+      "findings": [],
+      "evidence_gaps": [],
+      "notes": "Pre-existing debt observed: 3/3 ux-welcome.spec.ts @full cohort tests fail at base commit 72d9c4a (verified by checkout test). The failures are caused by the test's own `?skip-welcome=1` URL flow combined with the OPFS-clear-then-reload pattern; the cycle under review did not introduce or modify those tests, and the same 3 failures occur against the unmodified base. Tracked as ROADMAP P3 follow-up (separate cycle required). Confirmed pre-existing — does NOT block this cycle's verdict."
+    }
+  ],
+  "regression_observations": [
+    {
+      "scope": "frontend/tests/ux-welcome.spec.ts @full cohort",
+      "result": "3/3 fail",
+      "pre_existing": true,
+      "evidence": "Ran `git checkout 72d9c4a -- frontend/` and re-ran `npx playwright test --config=playwright.config.ts tests/ux-welcome.spec.ts --grep=\"@full\"`: same 3 failures reproduced against the unmodified base. Cycle does not touch ux-welcome.spec.ts nor WelcomeOverlay.tsx. Tracked as pre-existing, not regression."
+    }
+  ],
+  "summary": {
+    "critical": 0,
+    "warning": 1,
+    "suggestion": 0,
+    "blocking_defect": 0
+  }
+}

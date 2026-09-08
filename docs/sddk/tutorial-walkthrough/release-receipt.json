@@ -1,0 +1,87 @@
+{
+  "schema_version": "sddk.release-receipt/v1",
+  "cycle_id": "p-28fce7028ac3c497/tutorial-walkthrough",
+  "change": "tutorial-walkthrough",
+  "path": "A-min",
+  "route": "local",
+  "tag": "v0.110.6",
+  "phase_completed": "release",
+  "verified_at": "2026-09-08T17:48:19Z",
+  "base_sha": "72d9c4a8bda3f3d317ae1a17ef9a27ca98dd9633",
+  "head_sha": "c23d84e6cb1b180d317b74a7f71271152055f6e6",
+  "annotated_tag": true,
+  "tag_object_id": "a8d444c47cf141bdf3ea79531db2e84f3cf8facc",
+  "tag_target_sha": "c23d84e6cb1b180d317b74a7f71271152055f6e6",
+  "tag_message": "feat: guided tutorial walkthrough",
+  "merge_receipt": "docs/sddk/tutorial-walkthrough/merge-receipt.md",
+  "merge_receipt_sha256": "e4d65ebf5372b41befb731deb74fbd49411460636c720fbd1f069b1491d47ccd",
+  "release_report": "docs/sddk/tutorial-walkthrough/release-report.md",
+  "git_effects": {
+    "push": {
+      "capability": "git.push",
+      "receipt_id": "git.push:0bebdee874245efba9f6a3570f745b9937423ce581cb6dd5fde15e84bd44afd8",
+      "command": "git push origin c23d84e6cb1b180d317b74a7f71271152055f6e6:refs/heads/main",
+      "exit_code": 0,
+      "output_digest": "sha256:0bebdee874245efba9f6a3570f745b9937423ce581cb6dd5fde15e84bd44afd8",
+      "result": {
+        "branch": "main",
+        "sha": "c23d84e6cb1b180d317b74a7f71271152055f6e6"
+      }
+    },
+    "tag": {
+      "capability": "git.tag",
+      "receipt_id": "git.tag:1df18e7ff8f015874c0fbd4015fb5394d7e197df9e99bfa6abdd92cb57ea14ae",
+      "command": "git tag -a v0.110.6 c23d84e6cb1b180d317b74a7f71271152055f6e6 -m \"feat: guided tutorial walkthrough\"; git push origin refs/tags/v0.110.6",
+      "exit_code": 0,
+      "output_digest": "sha256:1df18e7ff8f015874c0fbd4015fb5394d7e197df9e99bfa6abdd92cb57ea14ae",
+      "result": {
+        "tag": "v0.110.6",
+        "sha": "c23d84e6cb1b180d317b74a7f71271152055f6e6",
+        "annotated": true
+      }
+    }
+  },
+  "postconditions": {
+    "head_equals_origin_main": true,
+    "remote_tag_peels_to_head": true,
+    "remote_annotated_tag_object_matches_local": true,
+    "base_is_ancestor_of_head": true
+  },
+  "verification": {
+    "path": "docs/sddk/tutorial-walkthrough/verification-report.md",
+    "sha256": "116fd361b6ed2a18d388f6c4c8dca2b64d45148de63daaa6c1621b4c9d70f26a",
+    "subject_sha": "c23d84e6cb1b180d317b74a7f71271152055f6e6",
+    "verdict": "PASS_WITH_WARNINGS",
+    "new_tests": "8/8 passed",
+    "import_dialog_regression": "8/8 passed",
+    "ux_welcome_accessibility_regression": "3/3 passed",
+    "ux_welcome_full_regression": "3/3 pre-existing failures reproduced at base 72d9c4a"
+  },
+  "debt": {
+    "path": "docs/sddk/tutorial-walkthrough/debt-report.json",
+    "sha256": "cf23ee4fce90e46dd8ab318ffc6caf923a2d43dd2e8edf745f04ebd68ce4826d",
+    "subject_sha": "c23d84e6cb1b180d317b74a7f71271152055f6e6",
+    "verdict": "PASS",
+    "introduced_findings": 0
+  },
+  "inventory": {
+    "path": "/home/rubentxu/.local/share/sddk/projects/p-28fce7028ac3c497/cycle-artifacts/p-28fce7028ac3c497/inventory.json",
+    "sha256": "cdcdb6a912f0d5a21a1ca999bb7376168039d5449aef1e3691dbcace895d16b7",
+    "unavailable_reason": null
+  },
+  "summary": "Publishes TutorialStepper and wires the WelcomeOverlay Take the tour action to a five-step guided walkthrough, with eight passing Playwright scenarios, clean TypeScript and ESLint gates, and a passing A-min debt gate.",
+  "files_changed": [
+    "frontend/src/components/TutorialStepper.tsx",
+    "frontend/src/components/AppShell.tsx",
+    "frontend/src/styles.css",
+    "frontend/tests/tutorial-walkthrough.spec.ts"
+  ],
+  "tests_passing": 8,
+  "tests_failed": 0,
+  "blockers": [],
+  "archive": {
+    "transition_run": false,
+    "next_phase": "archive",
+    "instruction": "Do not run archive during this release request."
+  }
+}

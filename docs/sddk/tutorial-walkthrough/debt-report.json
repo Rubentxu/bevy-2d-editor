@@ -1,0 +1,129 @@
+{
+  "schema_version": "1.1.0",
+  "contract_version": "debt-gate/v1",
+  "report_id": "debt-p-28fce7028ac3c497-tutorial-walkthrough-c23d84e",
+  "generated_at": "2026-09-08T17:38:00+02:00",
+  "cycle": {
+    "cycle_id": "p-28fce7028ac3c497/tutorial-walkthrough",
+    "change_name": "tutorial-walkthrough",
+    "path": "A-min",
+    "remediation_round": 0
+  },
+  "subject": {
+    "branch": "main",
+    "base_commit": "72d9c4a8bda3f3d317ae1a17ef9a27ca98dd9633",
+    "head_commit": "c23d84e6cb1b180d317b74a7f71271152055f6e6",
+    "diff_digest": "cbc5ffdba033aa7caf2caffe0fe26e76c652e7c34418503adb240dfd9a084621"
+  },
+  "verify_evidence": {
+    "path": "docs/sddk/tutorial-walkthrough/verification-report.md",
+    "sha256": "116fd361b6ed2a18d388f6c4c8dca2b64d45148de63daaa6c1621b4c9d70f26a",
+    "subject_sha": "c23d84e6cb1b180d317b74a7f71271152055f6e6",
+    "verdict": "PASS_WITH_WARNINGS"
+  },
+  "coverage": {
+    "required_clusters": ["coupling", "overeng"],
+    "completed_clusters": ["coupling", "overeng"],
+    "failed_clusters": []
+  },
+  "cluster_runs": [
+    {
+      "cluster": "coupling",
+      "status": "completed",
+      "attempts": 1,
+      "analyzer": {
+        "name": "sddk-debt-coupling-cluster",
+        "version": "debt-gate/v1"
+      },
+      "subject_sha": "c23d84e6cb1b180d317b74a7f71271152055f6e6",
+      "started_at": "2026-09-08T17:38:00+02:00",
+      "finished_at": "2026-09-08T17:38:01+02:00",
+      "scope": {
+        "effective_depth": "smoke",
+        "changed_paths": [
+          "frontend/src/components/TutorialStepper.tsx",
+          "frontend/src/components/AppShell.tsx",
+          "frontend/src/styles.css",
+          "frontend/tests/tutorial-walkthrough.spec.ts"
+        ]
+      },
+      "findings": [],
+      "errors": []
+    },
+    {
+      "cluster": "overeng",
+      "status": "completed",
+      "attempts": 1,
+      "analyzer": {
+        "name": "sddk-debt-overeng-cluster",
+        "version": "debt-gate/v1"
+      },
+      "subject_sha": "c23d84e6cb1b180d317b74a7f71271152055f6e6",
+      "started_at": "2026-09-08T17:38:01+02:00",
+      "finished_at": "2026-09-08T17:38:02+02:00",
+      "scope": {
+        "effective_depth": "smoke",
+        "changed_paths": [
+          "frontend/src/components/TutorialStepper.tsx",
+          "frontend/src/components/AppShell.tsx",
+          "frontend/src/styles.css",
+          "frontend/tests/tutorial-walkthrough.spec.ts"
+        ]
+      },
+      "findings": [],
+      "errors": []
+    }
+  ],
+  "findings": [],
+  "summary": {
+    "total": 0,
+    "by_severity": {
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 0
+    },
+    "by_confidence": {
+      "high": 0,
+      "medium": 0,
+      "low": 0
+    },
+    "by_attribution": {
+      "introduced": 0,
+      "pre_existing": 0,
+      "unknown": 0
+    },
+    "by_cluster": {
+      "coupling": 0,
+      "overeng": 0
+    }
+  },
+  "decision": {
+    "verdict": "PASS",
+    "re_iterate_from": "none",
+    "reasons": [
+      {
+        "rule": "no-warning-or-blocking-condition",
+        "finding_fingerprints": [],
+        "explanation": "Zero introduced findings across the two required A-min clusters (coupling, overeng). Zero pre-existing HIGH/CRITICAL blockers. The cycle is bounded UI plumbing: one new single-purpose component (TutorialStepper, +221 LOC), one mount site in AppShell (+9/-2), one CSS block (+51 LOC), and one Playwright spec (+137 LOC). New dependencies are zero; the stepper reuses the existing useWelcomeDismissal context and the existing window.__setEditorMode test bridge, and installs a new window.__loadSampleProject bridge that is documented as a test seam (spec REQ-8) rather than a production satisfier. No coupling violations (no new module-level imports, no new layer crossing, no shared mutable state). No overengineering (no premature abstraction, no CMS-shaped data structures, no speculative generality)."
+      }
+    ],
+    "fail_closed": true
+  },
+  "waivers": [],
+  "follow_up": [],
+  "artifact_paths": {
+    "json": "docs/sddk/tutorial-walkthrough/debt-report.json",
+    "markdown": "docs/sddk/tutorial-walkthrough/debt-report.md"
+  },
+  "runtime_handoff": {
+    "status": "specification_only",
+    "desired_artifact_kind": "debt-report",
+    "desired_gate": "debt-approved",
+    "note": "No debt-specific CLI transition is declared by this documentation change. The verdict PASS makes this cycle eligible to proceed to sddk-release."
+  },
+  "notes": [
+    "The verify phase recorded a single low-severity warning (W1) about a 'tutorial-walkthrough cycle:' comment prefix on a behaviour-documenting block in AppShell.tsx:163. This is a documentation-discipline observation from the policy-compliant lens, not a debt-cluster finding; per verify.md §3.b it is non-blocking because the comment's primary content explains behavior. It is reproduced here verbatim from verify-findings.json but excluded from the debt cluster finding set because (a) it does not classify as a coupling/overeng issue and (b) it does not appear as a Common Finding in the verify-phase debt-attribution lenses.",
+    "Pre-existing 3/3 failures in tests/ux-welcome.spec.ts @full cohort were confirmed against the unmodified base 72d9c4a by checkout reproduction. They are outside the debt-cluster scope (test regression, not debt attribution) and are tracked as ROADMAP P3 follow-up; they do not influence this gate's verdict."
+  ]
+}
