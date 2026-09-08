@@ -10,6 +10,7 @@ import {
   opfsSaveFile,
 } from "./opfs-bridge";
 import { subscribe as subscribeHotReload } from "./services/hot-reload";
+import { getEditorMode } from "./editorModeBridge";
 
 const CMD_MOVE_SPRITE = 1;
 const EVT_SPRITE_POSITION = 1;
@@ -305,6 +306,13 @@ export async function initEngine(
     wasm.scene_rename(id, newName);
   (window as any).list_scenes_extended = () => wasm.list_scenes_extended();
   (window as any).get_current_scene_id = () => wasm.get_current_scene_id();
+
+  // ── Test bridges ─────────────────────────────────────────────────────────
+  // Reader for editorMode — P5 of app-characterization.spec.ts asserts the
+  // composition-root boundary by reading this getter. Writer side lives in
+  // useEditorWorkspaceController.bindTestHooks (which mutates React state
+  // and notifies the shared editorModeBridge module).
+  (window as any).__getEditorMode = (): string => getEditorMode();
 
   // ── Source File CRUD (PR2 code-editor-foundation) ───────────────────────────
   (window as any).list_source_files = () => wasm.list_source_files();

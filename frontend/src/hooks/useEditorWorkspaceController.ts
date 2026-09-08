@@ -36,6 +36,7 @@ import type {
   TopologyIssue,
 } from "../services/EditorGateway";
 import { workspaceCommands } from "../commands/catalog";
+import { setEditorMode as setEditorModeForBridge } from "../editorModeBridge";
 
 export interface WorkspaceController {
   // Mode
@@ -175,7 +176,12 @@ export function useEditorWorkspaceController(
     if (typeof window === "undefined") return;
     (
       window as unknown as { __setEditorMode?: (mode: EditorMode) => void }
-    ).__setEditorMode = (mode: EditorMode) => setEditorMode(mode);
+    ).__setEditorMode = (mode: EditorMode) => {
+      setEditorMode(mode);
+      // Keep the test-bridge reader in sync — window.__getEditorMode
+      // (declared by engine-bridge.ts) reads from this shared module.
+      setEditorModeForBridge(mode);
+    };
     (
       window as unknown as {
         __setSelectedEntityId?: (id: string | null) => void;

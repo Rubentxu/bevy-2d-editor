@@ -17,6 +17,8 @@
  */
 
 import { test, expect, Page } from "@playwright/test";
+import { waitForEditorReady } from "./helpers/waitForEditorReady";
+import { clearWelcomeDismissed } from "./helpers/welcome-state";
 
 const WASM_LOAD_TIMEOUT = 120_000;
 
@@ -80,9 +82,15 @@ test.describe("App.tsx characterization", { tag: ["@smoke", "@app"] }, () => {
     // Wait for hierarchy to render
     await page.waitForTimeout(1000);
 
-    // Test controller selection API
+    // Test controller selection API. The selection seam is exposed via
+    // window.__setSelectedEntityId (declared in
+    // useEditorWorkspaceController.bindTestHooks). This is the real
+    // selection bridge — there is no phantom `__selectEntity` window
+    // export. Modifier-aware click + range select logic lives in the
+    // workspace controller's selectEntity() handler; tests in
+    // schema-authoring.spec.ts exercise that path directly.
     const hasSelectionController = await page.evaluate(
-      () => typeof (window as any).__selectEntity === "function"
+      () => typeof (window as any).__setSelectedEntityId === "function"
     );
     expect(hasSelectionController).toBe(true);
   });
@@ -130,12 +138,16 @@ test.describe("App.tsx characterization", { tag: ["@smoke", "@app"] }, () => {
       { timeout: WASM_LOAD_TIMEOUT },
     );
 
-    // Verify scene operations are available
+    // Snake_case — matches the wasm_bindgen convention declared in
+    // engine-bridge.ts (scene_create / scene_switch / scene_delete) and
+    // tests/multi-scene.spec.ts. Do NOT introduce camelCase aliases
+    // (`sceneCreate`/`sceneSwitch`/`sceneDelete`) — those don't exist on
+    // window and have never been wired.
     const hasSceneOps = await page.evaluate(
       () =>
-        typeof (window as any).sceneCreate === "function" &&
-        typeof (window as any).sceneSwitch === "function" &&
-        typeof (window as any).sceneDelete === "function"
+        typeof (window as any).scene_create === "function" &&
+        typeof (window as any).scene_switch === "function" &&
+        typeof (window as any).scene_delete === "function"
     );
     expect(hasSceneOps).toBe(true);
   });
@@ -209,35 +221,37 @@ test.describe("App.tsx characterization", { tag: ["@smoke", "@app"] }, () => {
    * Verifies welcome overlay appears and can be dismissed.
    */
   test("P8: welcome overlay and onboarding dismissal", async ({ page }) => {
-    // Start with fresh context (no welcome dismissal)
-    const context = await browser.newContext();
-    const welcomePage = await context.newPage();
-
-    await welcomePage.goto("/");
-    await welcomePage.waitForFunction(
-      () => (window as any).__bevyEngineStarted === true,
-      { timeout: WASM_LOAD_TIMEOUT },
-    );
+    // 3-phase first-visit setup (same pattern as ux-welcome.spec.ts):
+    //   1. Warm up with ?skip-welcome=1 so the welcome overlay's OPFS
+    //      hydration doesn't race with the engine-bridge bridge install.
+    //   2. Clear OPFS so the overlay treats this as a "first visit".
+    //   3. Navigate to / (WITHOUT skip-welcome) so the overlay re-reads
+    //      OPFS with the cleared flag and renders.
+    // NB: page.reload() preserves ?skip-welcome=1, so use page.goto("/").
+    await page.goto("/?skip-welcome=1");
+    await waitForEditorReady(page);
+    await clearWelcomeDismissed(page);
+    await page.goto("/");
+    await waitForEditorReady(page);
 
     // Welcome overlay should appear
-    const welcomeVisible = await welcomePage
+    const welcomeVisible = await page
       .locator('[data-testid="welcome-overlay"]')
-      .isVisible()
+      .isVisible({ timeout: 5_000 })
       .catch(() => false);
 
     // If welcome appears, dismiss it
     if (welcomeVisible) {
-      await welcomePage
-        .click('[data-testid="welcome-dismiss"]')
+      await page
+        .locator('[data-testid="welcome-dismiss"]')
+        .click({ timeout: 5_000 })
         .catch(() => {});
     }
 
     // After dismissal, editor should be usable
-    const editorReady = await welcomePage.evaluate(
+    const editorReady = await page.evaluate(
       () => (window as any).__bevyEngineStarted === true
     );
     expect(editorReady).toBe(true);
-
-    await context.close();
   });
 });
