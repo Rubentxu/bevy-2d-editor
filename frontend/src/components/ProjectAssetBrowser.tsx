@@ -69,6 +69,7 @@ export default function ProjectAssetBrowser({
   );
 
   const bsnFileInputRef = useRef<HTMLInputElement>(null);
+  const assetFileInputRef = useRef<HTMLInputElement>(null);
 
   // Hito 7 (scene-component-authoring-ux PR2): for each asset row, surface
   // "Place Instance (SceneComponent)" when a registered SceneComponent schema
@@ -296,6 +297,31 @@ export default function ProjectAssetBrowser({
     }
   }, []);
 
+  // CP-5 — keyboard-accessible asset import trigger.
+  // The file picker is the *entry point* for the asset import flow
+  // (Aseprite / LDtk / Tiled / generic JSON). Once the user picks a
+  // file, a separate cycle wires the full ImportDialog (currently
+  // orphaned in the codebase). For now the handler acknowledges the
+  // selection, captures the File for upstream wiring, and logs a
+  // console marker — this is the keyboard-accessible trigger that
+  // CP-5 requires.
+  const handleImportAssetFile = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      // eslint-disable-next-line no-console
+      console.info(
+        `[ProjectAssetBrowser] Asset import triggered from keyboard: name=${file.name}`,
+      );
+      // Future-work marker: a separate cycle will pass `file` to the
+      // general <ImportDialog /> with the Aseprite/LDtk/Tiled importers.
+      if (assetFileInputRef.current) {
+        assetFileInputRef.current.value = "";
+      }
+    },
+    [],
+  );
+
   const handlePlaceInstance = useCallback(async (assetId: string) => {
     setPlaceDialogAssetId(assetId);
   }, []);
@@ -407,6 +433,15 @@ export default function ProjectAssetBrowser({
         >
           Import .bsn
         </button>
+        <button
+          onClick={() => assetFileInputRef.current?.click()}
+          data-testid="import-asset-btn"
+          className="secondary"
+          aria-label="Import asset"
+          title="Import an asset file (Aseprite, LDtk, Tiled, JSON)"
+        >
+          Import asset
+        </button>
         <input
           ref={bsnFileInputRef}
           type="file"
@@ -414,6 +449,14 @@ export default function ProjectAssetBrowser({
           style={{ display: "none" }}
           onChange={handleImportBsn}
           data-testid="bsn-file-input"
+        />
+        <input
+          ref={assetFileInputRef}
+          type="file"
+          accept=".aseprite,.ase,.ldtk,.tmx,.json,.png"
+          style={{ display: "none" }}
+          onChange={handleImportAssetFile}
+          data-testid="asset-file-input"
         />
       </div>
 

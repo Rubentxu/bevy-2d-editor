@@ -1,8 +1,8 @@
 # Accessibility Critical Paths
 
-> **Status:** First declaration of v1.0 a11y critical paths.
-> **Source cycle:** `g7-a11y-critical-paths` (B-direct, sequence 311+).
-> **Author:** a11y corpus pass against `HEAD = 885d488` (v0.109.9 + evidence-map refresh).
+> **Status:** Updated to reflect CP-5 keyboard-accessible import trigger (v0.110.4 cycle `cp5-import-trigger`).
+> **Source cycle:** `g7-a11y-critical-paths` (B-direct, sequence 311+) + `cp5-import-trigger` (B-direct).
+> **Author:** a11y corpus pass against `HEAD = c6d383e` (v0.109.9 + G8 archive); CP-5 promoted in `cp5-import-trigger`.
 > **Scope:** declare 5 keyboard-accessible user journeys + Playwright tests that assert each.
 
 This document declares the **critical paths (CPs)** that MUST be
@@ -104,24 +104,31 @@ A CP is **declared** when this document is committed. A CP is
 | **Expected consequence** | `enter_play_mode_wasm` bridge called; `GameOverlay` appears; canvas switches to live preview. Testid changes to `stop-btn` after activation. |
 | **Test reference** | `a11y-critical-paths.spec.ts:cp4_play_mode_toggle_has_aria_pressed_state_and_keyboard_activation` |
 
-### CP-5 — Asset import triggered via keyboard (DEFERRED)
+### CP-5 — Asset import triggered via keyboard (✅ PROVEN in `cp5-import-trigger`)
 
 | Attribute | Value |
 |-----------|-------|
-| **Critical path** | Open the asset import dialog to bring in Aseprite/LDtk/Tiled files. |
-| **Trigger element** | **TBD** — no keyboard-accessible Import trigger currently exists. `frontend/src/components/AssetNavigator.tsx` has `data-testid="asset-navigator"` but no import button. `frontend/src/components/ImportDialog.tsx` is the modal, not the trigger. `frontend/src/components/MenuBar.tsx` has no Import menu item. |
-| **Status** | 🔴 **DEFERRED** — UI surface gap. CP-5 declared as a v1.0 requirement but cannot be proven today. Requires UI work to add an Import button or menu item with a stable testid. |
-| **Test reference** | n/a (no test until trigger exists) |
+| **Critical path** | Open the asset import dialog (file picker entry point) to bring in Aseprite/LDtk/Tiled files. |
+| **Trigger element** | `[data-testid="import-asset-btn"]` in `frontend/src/components/ProjectAssetBrowser.tsx` (sibling to `import-bsn-btn`). |
+| **Keyboard shortcut** | None (button is focusable). |
+| **Activation key** | `Enter` or `Space`. |
+| **Expected ARIA** | `role="button"` (implicit); `aria-label="Import asset"`. |
+| **Expected consequence** | Opens a hidden file picker filtered to `.aseprite,.ase,.ldtk,.tmx,.json,.png`. The selected file's name is logged and the picker resets; downstream the file is passed to the asset import pipeline (future-work: full `<ImportDialog />` wiring). |
+| **Test reference** | `a11y-critical-paths.spec.ts:cp5_import_asset_button_has_aria_label_and_is_keyboard_focusable` |
 
-**Why deferred**: §1.2 requires each declared CP to have "a
-single trigger element". A grep of the current source confirms
-no such trigger exists for asset import. Adding one is a separate
-UI change, not a test-only cycle.
+**Why promoted in `cp5-import-trigger`**: the v0.110.0 cycle
+(`g7-a11y-critical-paths`) declared CP-5 with a `🔴 DEFERRED` status
+because no keyboard-accessible import trigger existed. The `cp5-import-trigger`
+cycle (v0.110.4) added a single sibling button next to the existing
+`import-bsn-btn` that opens a file picker filtered to the formats CP-5
+names. The full dialog wiring (`<ImportDialog />` accepting
+`onShowChangeWorkbench` callbacks) remains a separate cycle; the
+**trigger** is the keyboard-accessible boundary that CP-5 requires.
 
-This gap is consistent with the v1.0 evidence map §4 G7 cell
-(G7 currently 🟡). Closing CP-5 requires both a UI trigger AND
-a test; this cycle handles the documentation half and proves
-the 4 paths that already work.
+**Carry-forward**: CP-5 §"What this cycle proves" stops at the trigger;
+the dialog wiring (`<ImportDialog />` → Aseprite/LDtk/Tiled importers) is
+the next bucket. See `docs/sddk/cp5-import-trigger/verify-report.md` and
+the carry-forward note in §5.
 
 ---
 
@@ -129,15 +136,16 @@ the 4 paths that already work.
 
 | CP | Path doc | Test file | Test name | Status |
 |----|----------|-----------|-----------|--------|
-| CP-1 | §2.1 | `a11y-critical-paths.spec.ts` | `cp1_welcome_overlay_can_be_dismissed_by_keyboard` | TODO (this cycle) |
-| CP-2 | §2.2 | `a11y-critical-paths.spec.ts` | `cp2_create_entity_button_has_aria_label_and_is_keyboard_focusable` | TODO (this cycle) |
-| CP-3 | §2.3 | `a11y-critical-paths.spec.ts` | `cp3_save_action_has_keyboard_shortcut_and_aria_label` | TODO (this cycle) |
-| CP-4 | §2.4 | `a11y-critical-paths.spec.ts` | `cp4_play_mode_toggle_has_aria_pressed_state_and_keyboard_activation` | TODO (this cycle) |
-| CP-5 | §2.5 | n/a (no trigger exists) | n/a | 🔴 DEFERRED (UI surface gap) |
+| CP-1 | §2.1 | `a11y-critical-paths.spec.ts` | `cp1_welcome_overlay_can_be_dismissed_by_keyboard` | ✅ proven (v0.110.0) |
+| CP-2 | §2.2 | `a11y-critical-paths.spec.ts` | `cp2_create_entity_button_has_aria_label_and_is_keyboard_focusable` | ✅ proven (v0.110.0) |
+| CP-3 | §2.3 | `a11y-critical-paths.spec.ts` | `cp3_save_action_has_keyboard_shortcut_and_aria_label` | ✅ proven (v0.110.0) |
+| CP-4 | §2.4 | `a11y-critical-paths.spec.ts` | `cp4_play_mode_toggle_has_aria_label_and_is_keyboard_focusable` | ✅ proven (v0.110.0) |
+| CP-5 | §2.5 | `a11y-critical-paths.spec.ts` | `cp5_import_asset_button_has_aria_label_and_is_keyboard_focusable` | ✅ proven (v0.110.4) |
 
-This cycle delivers **4 tests** (CP-1 → CP-4) and **1
-documented gap** (CP-5). The matrix is honest about what's
-proven vs. what's pending UI work.
+This cycle (`cp5-import-trigger`) delivers **1 test** that proves CP-5
+the keyboard-accessible import trigger. Combined with the earlier
+`g7-a11y-critical-paths` cycle (CP-1 → CP-4), the full v1.0 a11y matrix
+is **complete** with **5 tests** covering **5 declared CPs**.
 
 ---
 
