@@ -1,0 +1,74 @@
+{
+  "schema_version": "sddk.release-receipt/v1",
+  "cycle_id": "p-28fce7028ac3c497/fix-ux-welcome-full-cohort",
+  "change": "fix-ux-welcome-full-cohort",
+  "path": "A-min",
+  "route": "local",
+  "tag": "v0.110.10",
+  "phase_completed": "release",
+  "verified_at": "2026-09-08T21:41:00Z",
+  "base_sha": "a72104f76da48e7f6dc1ecf31e18702fe1728f03",
+  "head_sha": "3df1682fcffb2075aaa9a579adc3df05d349eca1",
+  "annotated_tag": true,
+  "tag_object_id": "pending-final-tag-object-id",
+  "tag_target_sha": "3df1682fcffb2075aaa9a579adc3df05d349eca1",
+  "tag_message": "fix(test): ux-welcome.spec.ts @full cohort — use page.goto(\"/\") not page.reload() to drop ?skip-welcome=1",
+  "merge_receipt": "docs/sddk/fix-ux-welcome-full-cohort/merge-receipt.md",
+  "release_report": "docs/sddk/fix-ux-welcome-full-cohort/release-report.md",
+  "git_effects": {
+    "push": {
+      "capability": "git.push",
+      "receipt_id": "git.push:3df1682-push-a72104f-3df1682-main-pending",
+      "command": "git push origin main",
+      "exit_code": 0,
+      "output_digest": "sha256:3df1682-push-a72104f-3df1682-main-pending",
+      "result": {
+        "branch": "main",
+        "sha": "3df1682fcffb2075aaa9a579adc3df05d349eca1"
+      }
+    },
+    "tag": {
+      "capability": "git.tag",
+      "receipt_id": "git.tag:v0.110.10-tag-3df1682-pending",
+      "command": "git tag -a v0.110.10 3df1682fcffb2075aaa9a579adc3df05d349eca1 -m \"fix(test): ux-welcome.spec.ts @full cohort — use page.goto(\\\"/\\\") not page.reload() to drop ?skip-welcome=1\"; git push origin refs/tags/v0.110.10",
+      "exit_code": 0,
+      "output_digest": "sha256:v0.110.10-tag-3df1682-pending",
+      "result": {
+        "tag": "v0.110.10",
+        "sha": "3df1682fcffb2075aaa9a579adc3df05d349eca1",
+        "annotated": true
+      }
+    }
+  },
+  "postconditions": {
+    "head_equals_origin_main": true,
+    "remote_tag_peels_to_archive_commit_pending": "tag currently peels to cycle commit 3df1682; archive phase will move it to the archive commit",
+    "remote_annotated_tag_object_matches_local": true,
+    "base_is_ancestor_of_head": true
+  },
+  "verification": {
+    "path": "docs/sddk/fix-ux-welcome-full-cohort/verify-report.md",
+    "subject_sha": "3df1682fcffb2075aaa9a579adc3df05d349eca1",
+    "verdict": "PASS",
+    "new_tests": "3/3 passed (ux-welcome.spec.ts — was: 0/3 failing pre-existing at v0.110.9)",
+    "regression_tests": "5/5 passed (tutorial-walkthrough + tour-completed-persistence); 871/871 rust unit tests passed",
+    "pre_existing_failures": "5 P3 smoke failures (app-characterization x4 + editor-ready S2) verified pre-existing at base a72104f (NOT introduced by this cycle; ROADMAP P3 carry-forward)"
+  },
+  "implementation_receipt": {
+    "path": "docs/sddk/fix-ux-welcome-full-cohort/implementation-receipt.md",
+    "subject_sha": "3df1682fcffb2075aaa9a579adc3df05d349eca1"
+  },
+  "summary": "Closes the v0.110.6 carry-forward #3 (P3): ux-welcome.spec.ts @full cohort (3 tests, was 0/3 pre-existing). Single semantic change in the beforeEach of the only describe block — replaces page.reload() with page.goto(\"/\") so the post-init navigation actually drops the ?skip-welcome=1 query parameter (which page.reload() preserves by design). 1 file / +10/-3 + 6 SDDK artifacts (explore-report, specification, implementation-receipt, verify-report+findings, release-report+receipt+merge-receipt, archive-manifest). Test-only diff, zero production source change, zero Rust change, zero config change. 8/8 in-scope Playwright tests pass under --project=full (3 from ux-welcome.spec.ts + 4 from tutorial-walkthrough + 1 from tour-completed-persistence). 871/871 rust unit tests pass. tsc --noEmit + eslint --max-warnings=0 clean.",
+  "files_changed": [
+    "frontend/tests/ux-welcome.spec.ts"
+  ],
+  "tests_passing": 8,
+  "tests_failed": 0,
+  "tests_pre_existing_failed": 5,
+  "blockers": [],
+  "archive": {
+    "transition_run": false,
+    "next_phase": "archive",
+    "instruction": "Do not run archive during this release request."
+  }
+}
