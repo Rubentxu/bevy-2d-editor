@@ -14,7 +14,7 @@ import { defineConfig, devices } from "@playwright/test";
  */
 export default defineConfig({
   testDir: "./tests",
-  testMatch: ["ux-a11y.spec.ts"],
+  testMatch: ["ux-a11y.spec.ts", "a11y-critical-paths.spec.ts"],
   timeout: 120_000,
   expect: { timeout: 60_000 },
   fullyParallel: false,
