@@ -1,0 +1,12 @@
+{
+  "cycle_id": "p-28fce7028ac3c497/import-dialog-wiring",
+  "tag": "v0.110.5",
+  "target_branch": "main",
+  "merge_source_sha": "ada72443fa5f3a07c6080f38a6ef7eb2d5c01001",
+  "merge_strategy": "fast-forward (linear history; main was rebased to base before cycle start)",
+  "conflict_resolution": "none",
+  "merged_at": "2026-09-08T16:52:00Z",
+  "post_merge_head_sha": "ada72443fa5f3a07c6080f38a6ef7eb2d5c01001",
+  "merged_by": "jcode-j",
+  "notes": "import-dialog-wiring cycle ran linear to main. Three commits in this cycle: feat(import-dialog) (build), docs(sddk) implementation-receipt, docs(sddk) verify + debt reports. main was at 8a13533 when the cycle started (cp5-import-trigger archive); HEAD ends at ada72443. FF merge. No conflicts. Remote pushed."
+}
