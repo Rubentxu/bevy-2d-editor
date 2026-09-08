@@ -1,0 +1,15 @@
+{
+  "cycle": "p-28fce7028ac3c497/g2-git-friendly-roundtrip",
+  "phase": "verify",
+  "sequence": 282,
+  "path": "A-min",
+  "debt": [],
+  "summary": {
+    "ponytail_markers": 0,
+    "tsc_errors_new": 0,
+    "playwright_specs_added": 2,
+    "playwright_specs_pass_static_check": 2
+  },
+  "notes": "No `ponytail:` deferral comments added. No new TypeScript errors. The two new Playwright tests are registered in the @full cohort and compile cleanly under `npx tsc --noEmit -p .`.",
+  "actions": "None — no debt introduced or surfaced."
+}
