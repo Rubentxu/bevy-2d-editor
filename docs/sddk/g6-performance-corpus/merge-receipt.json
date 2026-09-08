@@ -1,0 +1,12 @@
+{
+  "cycle_id": "p-28fce7028ac3c497/g6-performance-corpus",
+  "tag": "v0.110.3",
+  "target_branch": "main",
+  "merge_source_sha": "8d25ebc232ef324baa3e5d587652aed8670bb36a",
+  "merge_strategy": "fast-forward (linear history; main was rebased to base before cycle start)",
+  "conflict_resolution": "none",
+  "merged_at": "2026-09-08T15:33:00Z",
+  "post_merge_head_sha": "8d25ebc232ef324baa3e5d587652aed8670bb36a",
+  "merged_by": "jcode-j",
+  "notes": "G6 cycle ran linear to main. Two commits in this cycle: ddd0305 (build), 8d25ebc (verify + empirical budgets). main was at 721e25e when the cycle started; HEAD ends at 8d25ebc. FF merge. No conflicts."
+}

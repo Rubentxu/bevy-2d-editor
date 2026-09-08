@@ -1,0 +1,33 @@
+{
+  "cycle_id": "p-28fce7028ac3c497/g6-performance-corpus",
+  "tag": "v0.110.3",
+  "path": "A-lite",
+  "phase_completed": "verify",
+  "verified_at": "2026-09-08T15:30:00Z",
+  "head_sha": "8d25ebc232ef324baa3e5d587652aed8670bb36a",
+  "archive_artifact": "docs/sddk/g6-performance-corpus/verify-report.md",
+  "summary": "Closes G6 — last Red gate of v1.0-stabilization. Adds perf cohort + 6 specs + helper. All 6 specs pass under hard budgets; 3 emit soft-budget warnings as quantitative regression baselines.",
+  "tests_passing": 6,
+  "tests_failed": 0,
+  "soft_warnings_emitted": 3,
+  "specs_added": [
+    "frontend/tests/perf-1k-entities.spec.ts",
+    "frontend/tests/perf-tile-level.spec.ts",
+    "frontend/tests/perf-multi-level-world.spec.ts",
+    "frontend/tests/perf-asset-catalog.spec.ts",
+    "frontend/tests/perf-logic-graph.spec.ts",
+    "frontend/tests/perf-project-source-listing.spec.ts"
+  ],
+  "helper_added": "frontend/tests/helpers/perfBudget.ts",
+  "cohort_config_added": "frontend/playwright.performance.config.ts",
+  "npm_script_added": "frontend/package.json (test:perf)",
+  "verified_metrics": {
+    "P1_1k_entities_hydrate_ms": 1928,
+    "P2_tile_paint_200_ms": 14591,
+    "P2_tile_erase_200_ms": 14506,
+    "P3_multi_level_switch_mean_ms": 223,
+    "P5_logic_graph_dispatch_mean_ms": 71,
+    "P4_asset_catalog": "pass",
+    "P6_source_listing": "pass"
+  }
+}
