@@ -2,11 +2,11 @@
   "cycle_id": "p-28fce7028ac3c497/cp5-import-trigger",
   "tag": "v0.110.4",
   "target_branch": "main",
-  "merge_source_sha": "58c7074558a8c2954e3300d59f4e33bab37c8496",
+  "merge_source_sha": "ad8f96bfc32b8e293f76cf80c200d3c54f64e576",
   "merge_strategy": "fast-forward (linear history; main was rebased to base before cycle start)",
   "conflict_resolution": "none",
   "merged_at": "2026-09-08T16:03:00Z",
-  "post_merge_head_sha": "58c7074558a8c2954e3300d59f4e33bab37c8496",
+  "post_merge_head_sha": "ad8f96bfc32b8e293f76cf80c200d3c54f64e576",
   "merged_by": "jcode-j",
   "notes": "cp5-import-trigger cycle ran linear to main. Three commits in this cycle: 763ee04 (build: UI + tests + docs), 3df3469 (implementation-receipt), 58c7074 (test: CP-3/CP-4 inert-tolerant + describe title). main was at 25ffa7d when the cycle started (G6 archive); HEAD ends at 58c7074. FF merge. No conflicts. Remote pushed (25ffa7d..58c7074)."
 }

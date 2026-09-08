@@ -4,7 +4,7 @@
   "path": "B-direct",
   "phase_completed": "verify",
   "verified_at": "2026-09-08T16:03:00Z",
-  "head_sha": "58c7074558a8c2954e3300d59f4e33bab37c8496",
+  "head_sha": "ad8f96bfc32b8e293f76cf80c200d3c54f64e576",
   "archive_artifact": "docs/sddk/cp5-import-trigger/verify-report.md",
   "summary": "Closes G7 (a11y critical paths) CP-5 gap — keyboard-accessible asset import trigger. Adds `import-asset-btn` (sibling to `import-bsn-btn`) inside ProjectAssetBrowser with stable testid, aria-label, hidden file picker filtered to .aseprite/.ase/.ldtk/.tmx/.json/.png. Test added (cp5_import_asset_button_has_aria_label_and_is_keyboard_focusable). CP-3/CP-4 made inert-tolerant to fix pre-existing focus-blocking regression in dock-only editor mode. All 10 a11y-critical-paths.spec.ts tests pass (CP-1..CP-5 × accessibility+full projects).",
   "tests_passing": 10,
