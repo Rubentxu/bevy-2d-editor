@@ -22,6 +22,8 @@ pub use editor_model::transaction::{
     ResourceRef, TransactionKernel, ValidationReport,
 };
 
+use editor_model::command::{Command, CommandError};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Extension permission checking (ADR-0040 — v0.92)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -251,6 +253,91 @@ where
     Ok(())
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Resource derivation from real ops (H0.02 — ADR-0040)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Resource identity used when the ops themselves do not carry a scene id.
+///
+/// ADR-0040 manifests gate permission by resource *kind* (the kernel maps
+/// kind → area/scope), so scene ops derived from a pending ChangeSet all
+/// refer to the scene document the ChangeWorkbench operates on.
+pub const SCENE_DOC_REF: &str = "active-scene";
+
+/// Derive the [`ResourceRef`] set affected by the given commands.
+///
+/// Used to build the resource list of a pending ChangeSet so the plugin
+/// permission check runs against the real approved operations (H0.02 AC#2)
+/// instead of an empty temporary ChangeSet, which bypassed the gate.
+///
+/// Fail-closed: a command kind without a sanctioned mapping is an error.
+/// New `Command` variants must extend this mapper before plugins can
+/// propose them through the approval flow.
+pub fn derive_change_set_resources(
+    commands: &[Command],
+) -> Result<Vec<ResourceRef>, CommandError> {
+    fn scene_resource() -> ResourceRef {
+        ResourceRef::Scene(SCENE_DOC_REF.to_string())
+    }
+
+    fn fail_closed(kind: &str) -> CommandError {
+        CommandError::Unsupported(format!(
+            "command kind has no sanctioned permission mapping (H0.02): {kind}"
+        ))
+    }
+
+    fn visit(
+        cmd: &Command,
+        out: &mut Vec<ResourceRef>,
+    ) -> Result<(), CommandError> {
+        match cmd {
+            // No mutation — nothing to gate.
+            Command::Noop {} => Ok(()),
+            // Scene document mutations.
+            Command::CreateEntity { .. }
+            | Command::DeleteEntity { .. }
+            | Command::AddComponent { .. }
+            | Command::RemoveComponent { .. }
+            | Command::SetComponentField { .. }
+            | Command::SetComponentFieldOnMultiple { .. }
+            | Command::ReparentEntity { .. }
+            | Command::RenameEntity { .. }
+            | Command::PlaceInstance { .. }
+            | Command::RemoveInstance { .. }
+            | Command::ReplaceInstanceAsset { .. }
+            | Command::UpsertOverride { .. }
+            | Command::RevertOverride { .. } => {
+                let r = scene_resource();
+                if !out.contains(&r) {
+                    out.push(r);
+                }
+                Ok(())
+            }
+            // Batch mutates whatever its children mutate.
+            Command::Batch { commands, .. } => {
+                for c in commands {
+                    visit(c, out)?;
+                }
+                Ok(())
+            }
+            // No sanctioned mapping yet: fail closed rather than letting an
+            // unknown mutation surface skip the permission gate.
+            Command::CreateSceneComponent { .. } => Err(fail_closed("CreateSceneComponent")),
+            Command::UpdateSceneComponentFields { .. } => {
+                Err(fail_closed("UpdateSceneComponentFields"))
+            }
+            Command::BindSceneToSchema { .. } => Err(fail_closed("BindSceneToSchema")),
+            Command::World(_) => Err(fail_closed("World")),
+        }
+    }
+
+    let mut resources = Vec::new();
+    for c in commands {
+        visit(c, &mut resources)?;
+    }
+    Ok(resources)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -381,5 +468,127 @@ mod tests {
         cs.add_resource("scene", "test.json");
         let err = transaction_kernel_check_importer_permission(&cs).unwrap_err();
         assert!(matches!(err, KernelError::PermissionDenied { .. }));
+    }
+
+    // ─── Resource derivation from real ops (H0.02) ──────────────────────────────
+
+    /// A representative scene-mutating command used across derivation tests.
+    fn scene_write_command() -> Command {
+        Command::SetComponentField {
+            entity_id: editor_model::StableId::new("e1"),
+            type_id: "Transform".into(),
+            field_path: "translation.x".into(),
+            value: serde_json::json!(1.0),
+        }
+    }
+
+    #[test]
+    fn derive_resources_maps_scene_mutations_to_scene_resource() {
+        let resources =
+            derive_change_set_resources(&[scene_write_command()]).expect("scene ops must map");
+        assert_eq!(resources, vec![ResourceRef::Scene(SCENE_DOC_REF.into())]);
+    }
+
+    #[test]
+    fn derive_resources_recurses_batch_and_skips_noop() {
+        let cmds = vec![
+            Command::Noop {},
+            Command::Batch {
+                label: "b".into(),
+                commands: vec![scene_write_command(), scene_write_command()],
+            },
+        ];
+        let resources = derive_change_set_resources(&cmds).expect("batch must map");
+        // One scene resource total: Noop mutates nothing, duplicates dedup.
+        assert_eq!(resources, vec![ResourceRef::Scene(SCENE_DOC_REF.into())]);
+    }
+
+    #[test]
+    fn derive_resources_fail_closed_for_unmapped_command_kinds() {
+        // Plugin approval must not proceed when a command kind has no
+        // sanctioned resource mapping yet (fail-closed per H0.02).
+        let world = Command::World(editor_model::world_command::WorldCommand::WorldCreate {
+            name: "w".into(),
+            layout_policy: editor_model::world::LayoutPolicy::Free,
+        });
+        let err = derive_change_set_resources(&[world]).unwrap_err();
+        assert!(matches!(err, CommandError::Unsupported(_)));
+    }
+
+    #[test]
+    fn plugin_permission_denied_for_extension_without_commands_permission() {
+        // H0.02 AC#1: a plugin WITHOUT Commands permission proposing a scene
+        // write must be denied, with the check seeing the resources derived
+        // from the real ops (not an empty temporary ChangeSet).
+        let registry: Arc<Mutex<dyn ExtensionRegistryPort>> = make_test_registry();
+        let _ = register_extension_registry(Arc::clone(&registry));
+
+        let mut cs: ChangeSet<Command> = ChangeSet::new(
+            "cs9".into(),
+            ChangeOrigin::Plugin,
+            "extension:builtin.logic-recipes".into(),
+            "recipe proposes scene mutation".into(),
+        );
+        cs.ops.push(scene_write_command());
+        for r in derive_change_set_resources(&cs.ops).expect("scene op must map") {
+            cs.add_resource_ref(r);
+        }
+
+        let err = transaction_kernel_check_plugin_permission(&cs).unwrap_err();
+        match err {
+            KernelError::PermissionDenied {
+                area, scope_needed, ..
+            } => {
+                assert_eq!(area, "Commands");
+                assert_eq!(scope_needed, "Propose");
+            }
+            other => panic!("expected PermissionDenied, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn plugin_permission_allowed_for_extension_with_commands_permission_and_real_ops() {
+        // Positive control: same derived resources, extension WITH
+        // Commands/Propose passes the check.
+        let registry: Arc<Mutex<dyn ExtensionRegistryPort>> = make_test_registry();
+        let _ = register_extension_registry(Arc::clone(&registry));
+
+        let mut cs: ChangeSet<Command> = ChangeSet::new(
+            "cs10".into(),
+            ChangeOrigin::Plugin,
+            "extension:builtin.logic-bricks.controllers".into(),
+            "controller proposes scene mutation".into(),
+        );
+        cs.ops.push(scene_write_command());
+        for r in derive_change_set_resources(&cs.ops).expect("scene op must map") {
+            cs.add_resource_ref(r);
+        }
+
+        assert!(transaction_kernel_check_plugin_permission(&cs).is_ok());
+    }
+
+    #[test]
+    fn plugin_permission_check_rejection_is_pure() {
+        // H0.02 AC#3 (kernel side): a denied check must be a pure verdict —
+        // evaluating it repeatedly yields the same denial and mutates nothing.
+        let registry: Arc<Mutex<dyn ExtensionRegistryPort>> = make_test_registry();
+        let _ = register_extension_registry(Arc::clone(&registry));
+
+        let mut cs: ChangeSet<Command> = ChangeSet::new(
+            "cs11".into(),
+            ChangeOrigin::Plugin,
+            "extension:builtin.logic-recipes".into(),
+            "repeat denial".into(),
+        );
+        cs.ops.push(scene_write_command());
+        for r in derive_change_set_resources(&cs.ops).expect("scene op must map") {
+            cs.add_resource_ref(r);
+        }
+
+        for _ in 0..3 {
+            let err = transaction_kernel_check_plugin_permission(&cs).unwrap_err();
+            assert!(matches!(err, KernelError::PermissionDenied { .. }));
+        }
+        assert_eq!(cs.ops.len(), 1);
     }
 }
