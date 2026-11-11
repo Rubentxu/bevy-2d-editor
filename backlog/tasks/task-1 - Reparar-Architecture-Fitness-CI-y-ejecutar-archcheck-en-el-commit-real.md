@@ -1,10 +1,10 @@
 ---
 id: TASK-1
 title: Reparar Architecture Fitness CI y ejecutar archcheck en el commit real
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-11T20:12:00Z'
-updated_date: '2026-11-11T20:21:00Z'
+updated_date: '2026-11-11T21:09:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -34,7 +34,7 @@ Clave de migración: H0.01 (sin ID preasignado).
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 El workflow usa cache: npm con cache-dependency-path válido (o elimina caché) y Node soportado.
-- [ ] #2 En un push/PR del mismo commit se observa el paso archcheck ejecutado y su resultado; no skip.
+- [x] #2 En un push/PR del mismo commit se observa el paso archcheck ejecutado y su resultado; no skip.
 - [ ] #3 Un cambio intencionado que viola una regla existente hace fallar el checker en una prueba aislada.
 <!-- AC:END -->
 
@@ -43,3 +43,9 @@ Clave de migración: H0.01 (sin ID preasignado).
 <!-- SECTION:NOTES:BEGIN -->
 Caracterización: los fallos rojos por setup-node (8-sep 10:xx, runs 34214722114/34216843023) ya quedaron resueltos en el trabajo de ese día; runs green en main desde 22:17 8-sep (34285151827→34285949052) y en PRs dependabot (16-sep). Workflow actual ya cumple AC#1: node 22 + cache npm con cache-dependency-path tools/archcheck/package-lock.json existente. Evidencia local AC#3: npm ci && npm run check (all assertions pass) && npm test (fixtures de violación B9 + --list exit 1). AC#2 se verificará con el run archcheck de este PR.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+H0.01 cerrado con evidencia real. El problema original (rojo por setup-node) ya había sido resuelto el 8-sep; esta tarea verificó el contrato completo: AC1 workflow (node 22 + cache npm con cache-dependency-path válido) por inspección y runs green; AC2 run 43100038561 del PR #199 sobre su propio commit — job 'archcheck assertions' SUCCESS con TODOS los pasos ejecutados (Setup Node, Install deps, Run archcheck, fixture tests) sin skips; AC3 fixtures de violación intencionada (B9 + --list exit 1) en npm test local. Evidencia adicional: run 43099097132 (PR #200) confirma los mismos pasos ejecutados en otro commit. Workflows archcheck.yml y archcheck-frontend verificados por CI en cada PR del ciclo.
+<!-- SECTION:FINAL_SUMMARY:END -->
