@@ -325,6 +325,14 @@ impl<O: Debug + Clone> ChangeSet<O> {
         self.resources.push(r);
     }
 
+    /// Add an already-built resource reference.
+    ///
+    /// Used by callers that derive resources from real operations
+    /// (see `derive_change_set_resources`) instead of (kind, path) pairs.
+    pub fn add_resource_ref(&mut self, r: ResourceRef) {
+        self.resources.push(r);
+    }
+
     /// Set the approval policy.
     pub fn set_approval(&mut self, policy: ApprovalPolicy) {
         self.approval = policy;

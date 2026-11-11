@@ -444,6 +444,10 @@ export async function initEngine(
   (window as any).get_change_set_summaries = () =>
     wasm.get_change_set_summaries();
 
+  // ── Extension ChangeSet submission (ADR-0040) ────────────────────────────
+  (window as any).submit_plugin_change_set = (extensionId: string, changeSetJson: string) =>
+    wasm.submit_plugin_change_set_wasm(extensionId, changeSetJson);
+
   // ── World Workspace WASM exports (ADR-0037) ───────────────────────────────
   (window as any).create_world_wasm = (name: string) =>
     wasm.create_world_wasm(name);

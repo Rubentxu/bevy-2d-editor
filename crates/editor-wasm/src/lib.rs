@@ -167,62 +167,97 @@ pub fn approve_selected_ops(change_id: &str, indices_json: &str) -> Result<Strin
     approve_selected_ops_impl(&change_id, &indices)
 }
 
+/// Restore the full pending ChangeSet unchanged (used on pre-dispatch
+/// rejections so the user can inspect and retry without losing ops).
+fn restore_full_pending_change_set(change_id: &str, cs: &PendingChangeSet) {
+    let _ = with_pending_change_sets_mut(|map| {
+        map.insert(change_id.to_string(), cs.clone());
+    });
+}
+
 /// Internal implementation of approve_selected_ops.
 ///
 /// Locks are taken only to extract the ChangeSet and re-insert remaining ops on
 /// failure; the dispatch loop itself runs without holding the session lock to
 /// avoid contention with other WASM exports.
 fn approve_selected_ops_impl(change_id: &str, indices: &[usize]) -> Result<String, JsValue> {
+    use editor_model::transaction::ChangeSet;
+
     // Extract the ChangeSet from the registry (lock released after this scope).
     let cs = with_pending_change_sets_mut(|map| map.remove(change_id))?
         .ok_or_else(|| JsValue::from_str(&format!("ChangeSet not found: {}", change_id)))?;
 
-    // ADR-0040 v0.92: Check extension permissions before dispatching any op.
-    // This only runs for Plugin-origin ChangeSets (Human/Agent are no-ops).
-    // Note: cs.origin is a String (not ChangeOrigin enum) because PendingChangeSet
-    // is serde JSON. We compare as strings.
+    // Parse the selected ops up front: a malformed op must fail the approval
+    // BEFORE any dispatch or permission decision, leaving the pending
+    // ChangeSet intact (H0.02 AC#3).
+    let mut commands: Vec<Command> = Vec::with_capacity(indices.len());
+    for &idx in indices {
+        let op_json = cs.ops.get(idx).ok_or_else(|| {
+            restore_full_pending_change_set(change_id, &cs);
+            JsValue::from_str(&format!(
+                "Op index {} out of bounds (max {})",
+                idx,
+                cs.ops.len().saturating_sub(1)
+            ))
+        })?;
+
+        let command: Command = serde_json::from_value(op_json.clone()).map_err(|e| {
+            restore_full_pending_change_set(change_id, &cs);
+            JsValue::from_str(&format!("Invalid op JSON at index {}: {}", idx, e))
+        })?;
+        commands.push(command);
+    }
+
+    // ADR-0040 v0.92 + H0.02: check extension permissions against the
+    // resources derived from the REAL approved ops. The previous temporary
+    // ChangeSet carried no ops, so `resources()` was empty and every Plugin
+    // ChangeSet passed the gate (bypass).
     if cs.origin == "Plugin" {
-        use editor_application::transaction::transaction_kernel_check_plugin_permission;
-        // Build a temporary ChangeSet for the permission check
-        let temp_cs: editor_model::transaction::ChangeSet<serde_json::Value> =
-            editor_model::transaction::ChangeSet::new(
-                cs.id.clone(),
-                editor_model::transaction::ChangeOrigin::Plugin,
-                cs.actor.clone(),
-                cs.rationale.clone(),
-            );
-        transaction_kernel_check_plugin_permission(&temp_cs)
-            .map_err(|e| JsValue::from_str(&format!("Permission denied: {}", e)))?;
+        use editor_application::transaction::{
+            derive_change_set_resources, transaction_kernel_check_plugin_permission,
+        };
+        let resources =
+            derive_change_set_resources(&commands).map_err(|e| {
+                restore_full_pending_change_set(change_id, &cs);
+                JsValue::from_str(&format!("Unsupported plugin op: {}", e))
+            })?;
+
+        let mut temp_cs: ChangeSet<serde_json::Value> = ChangeSet::new(
+            cs.id.clone(),
+            editor_model::transaction::ChangeOrigin::Plugin,
+            cs.actor.clone(),
+            cs.rationale.clone(),
+        );
+        for r in resources {
+            temp_cs.add_resource_ref(r);
+        }
+
+        if let Err(e) = transaction_kernel_check_plugin_permission(&temp_cs) {
+            // H0.02 AC#3: a denied approval must not consume the pending
+            // ChangeSet — restore it unchanged and mutate nothing.
+            restore_full_pending_change_set(change_id, &cs);
+            return Err(JsValue::from_str(&format!("Permission denied: {}", e)));
+        }
     }
 
     // ADR-0040 step 3 + ADR-0041 v0.93: Check importer permissions.
     // This only runs for Importer-origin ChangeSets (Human/Agent/Plugin are no-ops).
     if cs.origin == "Importer" {
         use editor_application::transaction::transaction_kernel_check_importer_permission;
-        let temp_cs: editor_model::transaction::ChangeSet<serde_json::Value> =
-            editor_model::transaction::ChangeSet::new(
-                cs.id.clone(),
-                editor_model::transaction::ChangeOrigin::Importer,
-                cs.actor.clone(),
-                cs.rationale.clone(),
-            );
-        transaction_kernel_check_importer_permission(&temp_cs)
-            .map_err(|e| JsValue::from_str(&format!("Permission denied: {}", e)))?;
+        let temp_cs: ChangeSet<serde_json::Value> = ChangeSet::new(
+            cs.id.clone(),
+            editor_model::transaction::ChangeOrigin::Importer,
+            cs.actor.clone(),
+            cs.rationale.clone(),
+        );
+        if let Err(e) = transaction_kernel_check_importer_permission(&temp_cs) {
+            restore_full_pending_change_set(change_id, &cs);
+            return Err(JsValue::from_str(&format!("Permission denied: {}", e)));
+        }
     }
 
     let mut applied_count = 0;
-    for &idx in indices {
-        let op_json = cs.ops.get(idx).ok_or_else(|| {
-            JsValue::from_str(&format!(
-                "Op index {} out of bounds (max {})",
-                idx,
-                cs.ops.len() - 1
-            ))
-        })?;
-
-        let command: Command = serde_json::from_value(op_json.clone())
-            .map_err(|e| JsValue::from_str(&format!("Invalid op JSON at index {}: {}", idx, e)))?;
-
+    for command in commands {
         let envelope = CommandEnvelope {
             command,
             metadata: CommandMetadata {
@@ -234,8 +269,11 @@ fn approve_selected_ops_impl(change_id: &str, indices: &[usize]) -> Result<Strin
 
         if let Err(e) = dispatch_command_via_kernel(envelope) {
             // Re-insert remaining ops so the user can retry.
-            let remaining_indices: Vec<usize> =
-                (0..cs.ops.len()).filter(|i| !indices.contains(i)).collect();
+            let applied_index_set: std::collections::HashSet<usize> =
+                indices.iter().take(applied_count).copied().collect();
+            let remaining_indices: Vec<usize> = (0..cs.ops.len())
+                .filter(|i| !applied_index_set.contains(i))
+                .collect();
             let remaining_ops: Vec<serde_json::Value> = remaining_indices
                 .iter()
                 .filter_map(|&i| cs.ops.get(i).cloned())
