@@ -109,9 +109,7 @@ export async function mountPlatformerMinimal(): Promise<MountResult> {
   }
   for (const { opfsPath, localPath } of OPFS_FILES) {
     try {
-      const resp = await fetch(
-        `/examples/platformer-minimal/${localPath}`,
-      );
+      const resp = await fetch(`/examples/platformer-minimal/${localPath}`);
       if (!resp.ok) {
         errors.push(`${localPath}: HTTP ${resp.status}`);
         continue;
@@ -124,7 +122,9 @@ export async function mountPlatformerMinimal(): Promise<MountResult> {
         written += 1;
       }
     } catch (e) {
-      errors.push(`${localPath}: ${e instanceof Error ? e.message : String(e)}`);
+      errors.push(
+        `${localPath}: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
   }
   return { ok: errors.length === 0, written, errors };

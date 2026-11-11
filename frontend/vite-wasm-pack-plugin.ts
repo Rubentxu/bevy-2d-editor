@@ -7,7 +7,10 @@ import { fileURLToPath } from "url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const PROJECT_ROOT = resolve(__dirname, "..");
-const CRATE_DIR = resolve(PROJECT_ROOT, "crates/editor-core");
+// The WASM crate was renamed editor-core → editor-wasm; the stale path made
+// `exec` spawn with a nonexistent cwd, failing every dev-server start with
+// `spawn /bin/sh ENOENT` (TASK-47: the CI smoke cohort never recovered).
+const CRATE_DIR = resolve(PROJECT_ROOT, "crates/editor-wasm");
 const WASM_OUT = resolve(PROJECT_ROOT, "frontend/src/wasm");
 
 const CYAN = "\x1b[36m";
@@ -96,8 +99,11 @@ export function wasmPackPlugin(): Plugin {
         }
       });
 
-      // Initial build if WASM doesn't exist
-      if (!existsSync(resolve(WASM_OUT, "editor_core.js"))) {
+      // Initial build only when the REAL glue file is missing. The stale
+      // `editor_core.js` check never matched the editor-application glue, so
+      // every dev-server start rebuilt WASM (~3-4 min) and fired a
+      // full-reload that killed page hydration mid-test (TASK-47 smoke).
+      if (!existsSync(resolve(WASM_OUT, "editor_application.js"))) {
         log("WASM not found, running initial build...");
         doRebuild("Initial build");
       } else {
