@@ -110,9 +110,7 @@ async function readTourCompletedSync(): Promise<boolean> {
   }
   // localStorage fallback (matches services/tour.ts write).
   if (typeof localStorage !== "undefined") {
-    return (
-      localStorage.getItem("bevy-2d-editor:tour-completed") === "1"
-    );
+    return localStorage.getItem("bevy-2d-editor:tour-completed") === "1";
   }
   return false;
 }
@@ -201,18 +199,17 @@ export default function WelcomeOverlay({ onTakeTour, onSkip }: Props) {
         return;
       }
       // First visit (or no prior choice): fall through to async OPFS check.
-      Promise.all([
-        isWelcomeDismissed(),
-        readTourCompletedSync(),
-      ]).then(([wasDismissed, hasTourCompleted]) => {
-        if (cancelled) return;
-        setTourCompleted(hasTourCompleted);
-        setHydrated(true);
-        reportWelcomeShouldShow({
-          shouldShow: !wasDismissed && !skip,
-          permanentDismissal: false,
-        });
-      });
+      Promise.all([isWelcomeDismissed(), readTourCompletedSync()]).then(
+        ([wasDismissed, hasTourCompleted]) => {
+          if (cancelled) return;
+          setTourCompleted(hasTourCompleted);
+          setHydrated(true);
+          reportWelcomeShouldShow({
+            shouldShow: !wasDismissed && !skip,
+            permanentDismissal: false,
+          });
+        },
+      );
     });
     return () => {
       cancelled = true;

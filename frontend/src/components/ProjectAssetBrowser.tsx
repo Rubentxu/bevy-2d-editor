@@ -330,41 +330,35 @@ export default function ProjectAssetBrowser({
   // we dispatch a custom event the parent hook can listen for. This is
   // intentionally minimal — the dialog's `onImported` is the integration
   // point; if the parent doesn't listen, the user can manually refresh.
-  const handleImportDialogImported = useCallback(
-    (resourceRef: string) => {
-      // eslint-disable-next-line no-console
-      console.info(
-        `[ProjectAssetBrowser] Import dialog completed: resource=${resourceRef}`,
-      );
-      window.dispatchEvent(
-        new CustomEvent("bevy-2d-editor:asset-imported", {
-          detail: { resourceRef },
-        }),
-      );
-    },
-    [],
-  );
+  const handleImportDialogImported = useCallback((resourceRef: string) => {
+    // eslint-disable-next-line no-console
+    console.info(
+      `[ProjectAssetBrowser] Import dialog completed: resource=${resourceRef}`,
+    );
+    window.dispatchEvent(
+      new CustomEvent("bevy-2d-editor:asset-imported", {
+        detail: { resourceRef },
+      }),
+    );
+  }, []);
 
   // Callback for the dialog's onShowChangeWorkbench hook — switch the
   // bottom dock to the Workbench tab via the test bridge. The bridge
   // is exposed by <BottomDock /> (mirrors the __setEditorMode pattern
   // in useEditorWorkspaceController).
-  const handleShowChangeWorkbench = useCallback(
-    (_changeSetId?: string) => {
-      type Setter = (tab: string) => void;
-      const setter = (window as unknown as { __setActiveBottomTab?: Setter })
-        .__setActiveBottomTab;
-      if (typeof setter === "function") {
-        setter("workbench");
-      } else {
-        // eslint-disable-next-line no-console
-        console.warn(
-          "[ProjectAssetBrowser] window.__setActiveBottomTab not available; cannot route conflict to Change Workbench.",
-        );
-      }
-    },
-    [],
-  );
+  const handleShowChangeWorkbench = useCallback((_changeSetId?: string) => {
+    type Setter = (tab: string) => void;
+    const setter = (window as unknown as { __setActiveBottomTab?: Setter })
+      .__setActiveBottomTab;
+    if (typeof setter === "function") {
+      setter("workbench");
+    } else {
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[ProjectAssetBrowser] window.__setActiveBottomTab not available; cannot route conflict to Change Workbench.",
+      );
+    }
+  }, []);
 
   const handlePlaceInstance = useCallback(async (assetId: string) => {
     setPlaceDialogAssetId(assetId);

@@ -20,13 +20,12 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
-use bevy::prelude::*;
 use bevy::input::InputPlugin;
+use bevy::prelude::*;
 use bevy::time::TimeUpdateStrategy;
 use editor_model::scene_asset::SceneAssetDocument;
 use examples_bevy_harness::{
-    Pickup, PickupCollisionPlugin, PlayerController, PlayerMovementPlugin,
-    spawn_all_assets,
+    Pickup, PickupCollisionPlugin, PlayerController, PlayerMovementPlugin, spawn_all_assets,
 };
 use std::time::Duration;
 
@@ -43,18 +42,27 @@ fn sample_dir() -> PathBuf {
 fn load_sample_assets() -> BTreeMap<String, SceneAssetDocument> {
     let dir = sample_dir();
     let asset_paths = [
-        ("characters/player", "scene-assets/characters/player.actor.json"),
-        ("characters/enemy", "scene-assets/characters/enemy.actor.json"),
-        ("environment/ground", "scene-assets/environment/ground.fragment.json"),
+        (
+            "characters/player",
+            "scene-assets/characters/player.actor.json",
+        ),
+        (
+            "characters/enemy",
+            "scene-assets/characters/enemy.actor.json",
+        ),
+        (
+            "environment/ground",
+            "scene-assets/environment/ground.fragment.json",
+        ),
         ("effects/pickup", "scene-assets/effects/pickup.actor.json"),
     ];
     let mut assets_by_path: BTreeMap<String, SceneAssetDocument> = BTreeMap::new();
     for (logical_path, rel) in asset_paths.iter() {
         let abs = dir.join(rel);
-        let raw = fs::read_to_string(&abs)
-            .unwrap_or_else(|e| panic!("read {}: {}", abs.display(), e));
-        let doc: SceneAssetDocument = serde_json::from_str(&raw)
-            .unwrap_or_else(|e| panic!("parse {}: {}", abs.display(), e));
+        let raw =
+            fs::read_to_string(&abs).unwrap_or_else(|e| panic!("read {}: {}", abs.display(), e));
+        let doc: SceneAssetDocument =
+            serde_json::from_str(&raw).unwrap_or_else(|e| panic!("parse {}: {}", abs.display(), e));
         assets_by_path.insert(logical_path.to_string(), doc);
     }
     assets_by_path
@@ -125,7 +133,10 @@ fn pickup_despawns_when_player_overlaps() {
         pu_t.translation = Vec3::new(5.0, 5.0, 0.0);
     }
 
-    assert!(entity_exists(app.world(), pickup), "pickup should exist before");
+    assert!(
+        entity_exists(app.world(), pickup),
+        "pickup should exist before"
+    );
 
     advance(&mut app, 0.1);
 
@@ -181,6 +192,12 @@ fn pickup_collision_only_affects_pickup_marker() {
 
     assert!(!entity_exists(app.world(), pickup), "pickup should despawn");
     assert!(entity_exists(app.world(), player), "player should remain");
-    assert!(entity_exists(app.world(), enemy), "enemy should remain (no Pickup marker)");
-    assert!(entity_exists(app.world(), ground), "ground should remain (no Pickup marker)");
+    assert!(
+        entity_exists(app.world(), enemy),
+        "enemy should remain (no Pickup marker)"
+    );
+    assert!(
+        entity_exists(app.world(), ground),
+        "ground should remain (no Pickup marker)"
+    );
 }

@@ -182,26 +182,24 @@ pub fn register_editor_session(session: Arc<Mutex<dyn EditorSessionPort>>) {
 pub fn with_session_mut<R, F: FnOnce(&mut dyn EditorSessionPort) -> R>(f: F) -> Option<R> {
     EDITOR_SESSION
         .try_with(|cell| {
-            cell.borrow()
-                .as_ref()
-                .and_then(|arc| {
-                    // Use try_lock to avoid recursive-mutex panic when Bevy
-                    // systems hold the session lock during a JS-driven
-                    // async call (load_project etc.). On contention we
-                    // yield (spin) briefly to give Bevy a chance to release
-                    // before bailing. Spinning is safe because wasm is
-                    // single-threaded — no other thread can grab the lock
-                    // between our try_lock attempts.
-                    for _ in 0..10000 {
-                        if let Some(mut g) = arc.try_lock().ok() {
-                            return Some(f(&mut *g));
-                        }
-                        // hint the scheduler; in wasm this is essentially
-                        // a no-op but keeps semantics correct on hosts.
-                        std::hint::spin_loop();
+            cell.borrow().as_ref().and_then(|arc| {
+                // Use try_lock to avoid recursive-mutex panic when Bevy
+                // systems hold the session lock during a JS-driven
+                // async call (load_project etc.). On contention we
+                // yield (spin) briefly to give Bevy a chance to release
+                // before bailing. Spinning is safe because wasm is
+                // single-threaded — no other thread can grab the lock
+                // between our try_lock attempts.
+                for _ in 0..10000 {
+                    if let Some(mut g) = arc.try_lock().ok() {
+                        return Some(f(&mut *g));
                     }
-                    None
-                })
+                    // hint the scheduler; in wasm this is essentially
+                    // a no-op but keeps semantics correct on hosts.
+                    std::hint::spin_loop();
+                }
+                None
+            })
         })
         .ok()
         .flatten()

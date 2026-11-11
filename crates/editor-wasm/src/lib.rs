@@ -930,9 +930,9 @@ pub async fn init_project_store() -> Result<(), JsValue> {
 /// or if the underlying hydrate step fails (e.g., OPFS unavailable).
 #[wasm_bindgen]
 pub async fn rehydrate_project_store() -> Result<(), JsValue> {
-    let store = OPFS_STORE
-        .get()
-        .ok_or_else(|| JsValue::from_str("Project store not initialized; call init_project_store first"))?;
+    let store = OPFS_STORE.get().ok_or_else(|| {
+        JsValue::from_str("Project store not initialized; call init_project_store first")
+    })?;
     store
         .hydrate()
         .await

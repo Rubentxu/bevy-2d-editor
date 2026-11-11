@@ -130,9 +130,11 @@ export default function TutorialStepper({ open, onClose }: Props) {
   useEffect(() => {
     if (!open) return;
     setStepIndex(0);
-    const loader = (window as unknown as {
-      __loadSampleProject?: (id: string) => Promise<{ ok: boolean }>;
-    }).__loadSampleProject;
+    const loader = (
+      window as unknown as {
+        __loadSampleProject?: (id: string) => Promise<{ ok: boolean }>;
+      }
+    ).__loadSampleProject;
     if (typeof loader === "function") {
       void loader("platformer-minimal");
     }
@@ -144,9 +146,11 @@ export default function TutorialStepper({ open, onClose }: Props) {
     const step = TUTORIAL_STEPS[stepIndex];
     if (!step) return;
     if (step.modeSwitch) {
-      const bridge = (window as unknown as {
-        __setEditorMode?: (m: string) => void;
-      }).__setEditorMode;
+      const bridge = (
+        window as unknown as {
+          __setEditorMode?: (m: string) => void;
+        }
+      ).__setEditorMode;
       if (typeof bridge === "function") {
         bridge(step.modeSwitch);
       }
@@ -203,10 +207,7 @@ export default function TutorialStepper({ open, onClose }: Props) {
         >
           Step {step.id} of {totalSteps}: {step.title}
         </p>
-        <p
-          className="tour-stepper-caption"
-          data-testid="tour-step-caption"
-        >
+        <p className="tour-stepper-caption" data-testid="tour-step-caption">
           {step.caption}
         </p>
       </header>

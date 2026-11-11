@@ -31,8 +31,8 @@ use crate::instance_projection::{PreviewEntity, project_instances};
 use crate::logic_dispatch;
 use crate::logic_evaluator::{self, PortValue};
 use crate::state::{
-    HOT_RELOAD_BUS_FALLBACK, HotReloadRequest, PLAY_MODE_REQUEST_FALLBACK, PlayModeRequest, mark_dirty,
-    with_asset_body_cache_mut, with_logic_graph_mut,
+    HOT_RELOAD_BUS_FALLBACK, HotReloadRequest, PLAY_MODE_REQUEST_FALLBACK, PlayModeRequest,
+    mark_dirty, with_asset_body_cache_mut, with_logic_graph_mut,
 };
 use crate::{
     BevyEntity, OperationLogState, PlayMode, SceneDocumentState, SceneEntity, SceneInstanceChild,
@@ -339,10 +339,9 @@ fn process_play_mode_request(
     baseline_components: Query<(&EditorComponent, &SceneInstanceChild)>,
 ) {
     // H2.5 Block G: dual-write read — session first, fallback to FALLBACK thread_local.
-    let request: Option<PlayModeRequest> = editor_model::ports::with_session_mut(|s| {
-        s.runtime_play_mode_request_mut().clone()
-    })
-    .unwrap_or_else(|| PLAY_MODE_REQUEST_FALLBACK.with(|r| (*r.borrow()).clone()));
+    let request: Option<PlayModeRequest> =
+        editor_model::ports::with_session_mut(|s| s.runtime_play_mode_request_mut().clone())
+            .unwrap_or_else(|| PLAY_MODE_REQUEST_FALLBACK.with(|r| (*r.borrow()).clone()));
 
     match request {
         Some(PlayModeRequest::Enter) => {
@@ -632,9 +631,10 @@ pub fn process_hot_reload_requests() {
 
     // Collect and clear bus atomically. Session first, FALLBACK otherwise.
     let requests: Vec<HotReloadRequest> = {
-        let via_session: Option<Vec<HotReloadRequest>> = editor_model::ports::with_session_mut(|s| {
-            std::mem::take(s.runtime_hot_reload_requests_mut())
-        });
+        let via_session: Option<Vec<HotReloadRequest>> =
+            editor_model::ports::with_session_mut(|s| {
+                std::mem::take(s.runtime_hot_reload_requests_mut())
+            });
         if let Some(via) = via_session {
             via
         } else {

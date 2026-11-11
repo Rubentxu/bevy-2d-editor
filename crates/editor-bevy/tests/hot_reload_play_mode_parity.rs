@@ -31,10 +31,8 @@ fn fresh_session() {
 fn parity_hot_reload_source_via_session() {
     fresh_session();
     editor_bevy::hot_reload_source_wasm("foo.rs");
-    let v = editor_model::ports::with_session_mut(|s| {
-        s.runtime_hot_reload_requests_mut().clone()
-    })
-    .unwrap();
+    let v = editor_model::ports::with_session_mut(|s| s.runtime_hot_reload_requests_mut().clone())
+        .unwrap();
     assert_eq!(v.len(), 1);
     match &v[0] {
         HotReloadRequest::Source { file_id } => assert_eq!(file_id, "foo.rs"),
@@ -47,10 +45,8 @@ fn parity_hot_reload_source_via_session() {
 fn parity_hot_reload_asset_via_session() {
     fresh_session();
     editor_bevy::hot_reload_asset_wasm("asset_42");
-    let v = editor_model::ports::with_session_mut(|s| {
-        s.runtime_hot_reload_requests_mut().clone()
-    })
-    .unwrap();
+    let v = editor_model::ports::with_session_mut(|s| s.runtime_hot_reload_requests_mut().clone())
+        .unwrap();
     assert_eq!(v.len(), 1);
     match &v[0] {
         HotReloadRequest::Asset { asset_id } => assert_eq!(asset_id, "asset_42"),
@@ -63,10 +59,8 @@ fn parity_hot_reload_asset_via_session() {
 fn parity_force_reload_via_session() {
     fresh_session();
     editor_bevy::force_reload_wasm();
-    let v = editor_model::ports::with_session_mut(|s| {
-        s.runtime_hot_reload_requests_mut().clone()
-    })
-    .unwrap();
+    let v = editor_model::ports::with_session_mut(|s| s.runtime_hot_reload_requests_mut().clone())
+        .unwrap();
     assert_eq!(v.len(), 1);
     assert!(
         matches!(v[0], HotReloadRequest::ForceReloadAll),
@@ -82,10 +76,8 @@ fn parity_play_mode_enter_via_session() {
     editor_model::ports::with_session_mut(|s| {
         *s.runtime_play_mode_request_mut() = Some(PlayModeRequest::Enter);
     });
-    let req = editor_model::ports::with_session_mut(|s| {
-        s.runtime_play_mode_request_mut().clone()
-    })
-    .unwrap();
+    let req = editor_model::ports::with_session_mut(|s| s.runtime_play_mode_request_mut().clone())
+        .unwrap();
     assert!(
         matches!(req, Some(PlayModeRequest::Enter)),
         "expected Some(Enter), got {:?}",
@@ -100,10 +92,8 @@ fn parity_play_mode_exit_via_session() {
     editor_model::ports::with_session_mut(|s| {
         *s.runtime_play_mode_request_mut() = Some(PlayModeRequest::Exit);
     });
-    let req = editor_model::ports::with_session_mut(|s| {
-        s.runtime_play_mode_request_mut().clone()
-    })
-    .unwrap();
+    let req = editor_model::ports::with_session_mut(|s| s.runtime_play_mode_request_mut().clone())
+        .unwrap();
     assert!(
         matches!(req, Some(PlayModeRequest::Exit)),
         "expected Some(Exit), got {:?}",
@@ -120,10 +110,9 @@ fn parity_two_session_isolation_hot_reload() {
 
     // Session B (replaces A).
     fresh_session();
-    let v_b = editor_model::ports::with_session_mut(|s| {
-        s.runtime_hot_reload_requests_mut().clone()
-    })
-    .unwrap();
+    let v_b =
+        editor_model::ports::with_session_mut(|s| s.runtime_hot_reload_requests_mut().clone())
+            .unwrap();
     assert!(
         v_b.is_empty(),
         "session B must not inherit session A's hot-reload requests"
