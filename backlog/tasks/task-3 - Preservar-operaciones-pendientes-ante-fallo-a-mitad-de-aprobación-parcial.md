@@ -4,7 +4,7 @@ title: Preservar operaciones pendientes ante fallo a mitad de aprobación parcia
 status: To Do
 assignee: []
 created_date: '2026-11-11T20:12:00Z'
-updated_date: '2026-11-11T20:13:00Z'
+updated_date: '2026-11-11T22:53:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -38,3 +38,9 @@ Clave de migración: H0.03 (sin ID preasignado).
 - [ ] #2 Las operaciones ejecutadas quedan registradas de manera inequívoca o se revierten según contrato explícito.
 - [ ] #3 Índices duplicados; fuera de rango y orden distinto son rechazados o normalizados antes de cualquier mutación.
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Base dejada por TASK-2 (merge PR #200): el restore tras fallo a mitad de apply ya no pierde ops seleccionadas no aplicadas (antes: !indices.contains descartaba la cola seleccionada); la selección se canoniza (sort+dedup) con paridad del kernel partial_apply; el camino de éxito reinserta ops no seleccionadas. Pendiente de esta tarea: caracterización formal + test del restore a mitad de apply (corpus de comandos con fallo en el op k de n), evidencia E2E del payload restaurado y cierre del contrato de atomicidad cross-resource (TASK-4 depende de esto).
+<!-- SECTION:NOTES:END -->

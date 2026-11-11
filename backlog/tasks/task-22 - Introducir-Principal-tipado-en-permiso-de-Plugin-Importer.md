@@ -4,7 +4,7 @@ title: Introducir Principal tipado en permiso de Plugin/Importer
 status: To Do
 assignee: []
 created_date: '2026-11-11T20:12:00Z'
-updated_date: '2026-11-11T20:13:00Z'
+updated_date: '2026-11-11T22:53:00Z'
 labels: []
 milestone: m-4
 dependencies:
@@ -39,3 +39,9 @@ Clave de migración: H4.03 (sin ID preasignado).
 - [ ] #2 La identidad se modela como ADT cerrada y se serializa con compatibilidad documentada.
 - [ ] #3 Tests demuestran que el origen declarado no permite suplantar actor Extension.
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Hallazgo de revisión goldfish de TASK-2 (2026-11-11) heredado para esta tarea: la identidad de extensión es un string aportado por el llamador (extension:<id> en submit_plugin_change_set_wasm, lib.rs) y el gate ADR-0040 lo resuelve por ese string contra el registro — cualquier script de página puede impersonar una extensión privilegiada registrada. Requiere Principal tipado autenticado en el boundary WASM (scope exacto de esta tarea). Refinamiento adicional propuesto por la misma revisión: sustituir la fabricación del ChangeSet<serde_json::Value> temporal por una API check_plugin_permission(origin, actor, resources).
+<!-- SECTION:NOTES:END -->
