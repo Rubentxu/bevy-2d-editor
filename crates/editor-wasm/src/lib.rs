@@ -118,6 +118,28 @@ pub fn submit_pending_change_set(json: &str) -> Result<String, JsValue> {
         ));
     }
 
+    // H0.02 (goldfish review): the permission gates key on the canonical
+    // origin string, so a Plugin-authored ChangeSet submitted with e.g.
+    // "plugin" (lowercase) would silently skip the ADR-0040 check. Accept
+    // only canonical origins at the boundary. Identity authentication is
+    // TASK-22 (typed Principal).
+    const CANONICAL_ORIGINS: [&str; 7] = [
+        "Human",
+        "Agent",
+        "Recipe",
+        "Importer",
+        "Migration",
+        "Plugin",
+        "RuntimeApplyBack",
+    ];
+    if !CANONICAL_ORIGINS.contains(&cs.origin.as_str()) {
+        return Err(JsValue::from_str(&format!(
+            "ChangeSet origin must be one of {} (got \"{}\")",
+            CANONICAL_ORIGINS.join(", "),
+            cs.origin
+        )));
+    }
+
     let change_id = cs.id.clone();
     with_pending_change_sets_mut(|map| {
         map.insert(change_id.clone(), cs);
@@ -169,10 +191,14 @@ pub fn approve_selected_ops(change_id: &str, indices_json: &str) -> Result<Strin
 
 /// Restore the full pending ChangeSet unchanged (used on pre-dispatch
 /// rejections so the user can inspect and retry without losing ops).
-fn restore_full_pending_change_set(change_id: &str, cs: &PendingChangeSet) {
-    let _ = with_pending_change_sets_mut(|map| {
+///
+/// Propagates lock errors instead of swallowing them: silently losing the
+/// pending ChangeSet after its removal would be data loss on the approval
+/// boundary (H0.02 goldfish review).
+fn restore_full_pending_change_set(change_id: &str, cs: &PendingChangeSet) -> Result<(), JsValue> {
+    with_pending_change_sets_mut(|map| {
         map.insert(change_id.to_string(), cs.clone());
-    });
+    })
 }
 
 /// Internal implementation of approve_selected_ops.
@@ -187,24 +213,47 @@ fn approve_selected_ops_impl(change_id: &str, indices: &[usize]) -> Result<Strin
     let cs = with_pending_change_sets_mut(|map| map.remove(change_id))?
         .ok_or_else(|| JsValue::from_str(&format!("ChangeSet not found: {}", change_id)))?;
 
+    // Canonicalize the selection: kernel `partial_apply` sorts + dedups, so
+    // this path must not double-apply duplicated indices; an empty approval
+    // is rejected instead of silently consuming the ChangeSet (H0.02
+    // goldfish review, kernel parity).
+    let mut selection: Vec<usize> = indices.to_vec();
+    selection.sort_unstable();
+    selection.dedup();
+    if selection.is_empty() {
+        restore_full_pending_change_set(change_id, &cs)?;
+        return Err(JsValue::from_str(
+            "Approval requires at least one operation index",
+        ));
+    }
+
     // Parse the selected ops up front: a malformed op must fail the approval
     // BEFORE any dispatch or permission decision, leaving the pending
     // ChangeSet intact (H0.02 AC#3).
-    let mut commands: Vec<Command> = Vec::with_capacity(indices.len());
-    for &idx in indices {
-        let op_json = cs.ops.get(idx).ok_or_else(|| {
-            restore_full_pending_change_set(change_id, &cs);
-            JsValue::from_str(&format!(
-                "Op index {} out of bounds (max {})",
-                idx,
-                cs.ops.len().saturating_sub(1)
-            ))
-        })?;
+    let mut commands: Vec<Command> = Vec::with_capacity(selection.len());
+    for &idx in &selection {
+        let op_json = match cs.ops.get(idx) {
+            Some(op) => op,
+            None => {
+                restore_full_pending_change_set(change_id, &cs)?;
+                return Err(JsValue::from_str(&format!(
+                    "Op index {} out of bounds (op count {})",
+                    idx,
+                    cs.ops.len()
+                )));
+            }
+        };
 
-        let command: Command = serde_json::from_value(op_json.clone()).map_err(|e| {
-            restore_full_pending_change_set(change_id, &cs);
-            JsValue::from_str(&format!("Invalid op JSON at index {}: {}", idx, e))
-        })?;
+        let command: Command = match serde_json::from_value(op_json.clone()) {
+            Ok(c) => c,
+            Err(e) => {
+                restore_full_pending_change_set(change_id, &cs)?;
+                return Err(JsValue::from_str(&format!(
+                    "Invalid op JSON at index {}: {}",
+                    idx, e
+                )));
+            }
+        };
         commands.push(command);
     }
 
@@ -214,13 +263,15 @@ fn approve_selected_ops_impl(change_id: &str, indices: &[usize]) -> Result<Strin
     // ChangeSet passed the gate (bypass).
     if cs.origin == "Plugin" {
         use editor_application::transaction::{
-            derive_change_set_resources, transaction_kernel_check_plugin_permission,
+            derive_resources_from_commands, transaction_kernel_check_plugin_permission,
         };
-        let resources =
-            derive_change_set_resources(&commands).map_err(|e| {
-                restore_full_pending_change_set(change_id, &cs);
-                JsValue::from_str(&format!("Unsupported plugin op: {}", e))
-            })?;
+        let resources = match derive_resources_from_commands(&commands) {
+            Ok(r) => r,
+            Err(e) => {
+                restore_full_pending_change_set(change_id, &cs)?;
+                return Err(JsValue::from_str(&format!("Unsupported plugin op: {}", e)));
+            }
+        };
 
         let mut temp_cs: ChangeSet<serde_json::Value> = ChangeSet::new(
             cs.id.clone(),
@@ -235,7 +286,7 @@ fn approve_selected_ops_impl(change_id: &str, indices: &[usize]) -> Result<Strin
         if let Err(e) = transaction_kernel_check_plugin_permission(&temp_cs) {
             // H0.02 AC#3: a denied approval must not consume the pending
             // ChangeSet — restore it unchanged and mutate nothing.
-            restore_full_pending_change_set(change_id, &cs);
+            restore_full_pending_change_set(change_id, &cs)?;
             return Err(JsValue::from_str(&format!("Permission denied: {}", e)));
         }
     }
@@ -251,32 +302,37 @@ fn approve_selected_ops_impl(change_id: &str, indices: &[usize]) -> Result<Strin
             cs.rationale.clone(),
         );
         if let Err(e) = transaction_kernel_check_importer_permission(&temp_cs) {
-            restore_full_pending_change_set(change_id, &cs);
+            restore_full_pending_change_set(change_id, &cs)?;
             return Err(JsValue::from_str(&format!("Permission denied: {}", e)));
         }
     }
 
-    let mut applied_count = 0;
+    // Hoist the metadata strings: the rationale format! ran once per command
+    // in the loop before the H0.02 goldfish review.
+    let authorship = cs.actor.clone();
+    let workbench_rationale = format!("[ChangeWorkbench] {}", cs.rationale);
+
+    let mut applied_count = 0usize;
     for command in commands {
         let envelope = CommandEnvelope {
             command,
             metadata: CommandMetadata {
                 timestamp: SysClock::new().now().into_u64(),
-                authorship: cs.actor.clone(),
-                rationale: Some(format!("[ChangeWorkbench] {}", cs.rationale)),
+                authorship: authorship.clone(),
+                rationale: Some(workbench_rationale.clone()),
             },
         };
 
         if let Err(e) = dispatch_command_via_kernel(envelope) {
-            // Re-insert remaining ops so the user can retry.
-            let applied_index_set: std::collections::HashSet<usize> =
-                indices.iter().take(applied_count).copied().collect();
-            let remaining_indices: Vec<usize> = (0..cs.ops.len())
-                .filter(|i| !applied_index_set.contains(i))
-                .collect();
-            let remaining_ops: Vec<serde_json::Value> = remaining_indices
-                .iter()
-                .filter_map(|&i| cs.ops.get(i).cloned())
+            // Re-insert everything that was NOT applied so the user can
+            // retry: both unselected ops and selected-but-not-yet-applied
+            // ones (H0.02 goldfish review; previously the selected tail was
+            // silently dropped).
+            let applied_set: std::collections::HashSet<usize> =
+                selection.iter().take(applied_count).copied().collect();
+            let remaining_ops: Vec<serde_json::Value> = (0..cs.ops.len())
+                .filter(|i| !applied_set.contains(i))
+                .filter_map(|i| cs.ops.get(i).cloned())
                 .collect();
 
             if !remaining_ops.is_empty() {
@@ -288,14 +344,37 @@ fn approve_selected_ops_impl(change_id: &str, indices: &[usize]) -> Result<Strin
                     ops: remaining_ops,
                     submitted_at_ms: cs.submitted_at_ms,
                 };
-                let _ = with_pending_change_sets_mut(|map| {
+                with_pending_change_sets_mut(|map| {
                     map.insert(change_id.to_string(), restored_cs);
-                });
+                })?;
             }
 
             return Err(JsValue::from_str(&e.to_string()));
         }
         applied_count += 1;
+    }
+
+    // H0.02 goldfish review: the doc contract of `approve_selected_ops`
+    // states ops NOT in the selection remain pending. The success path never
+    // re-inserted them, silently discarding unselected work. Restore the
+    // remainder as the pending ChangeSet.
+    let applied_set: std::collections::HashSet<usize> = selection.iter().copied().collect();
+    let remaining_ops: Vec<serde_json::Value> = (0..cs.ops.len())
+        .filter(|i| !applied_set.contains(i))
+        .filter_map(|i| cs.ops.get(i).cloned())
+        .collect();
+    if !remaining_ops.is_empty() {
+        let restored_cs = PendingChangeSet {
+            id: change_id.to_string(),
+            origin: cs.origin.clone(),
+            actor: cs.actor.clone(),
+            rationale: cs.rationale.clone(),
+            ops: remaining_ops,
+            submitted_at_ms: cs.submitted_at_ms,
+        };
+        with_pending_change_sets_mut(|map| {
+            map.insert(change_id.to_string(), restored_cs);
+        })?;
     }
 
     let response = serde_json::json!({
@@ -576,6 +655,15 @@ pub fn submit_plugin_change_set_wasm(
 
     let mut cs: PendingChangeSet = serde_json::from_str(change_set_json)
         .map_err(|e| JsValue::from_str(&format!("Invalid ChangeSet JSON: {}", e)))?;
+
+    if cs.ops.is_empty() {
+        // Mirror the submit_pending_change_set guard (H0.02 goldfish review):
+        // an empty-ops Plugin ChangeSet would pass the permission check over
+        // an empty resource set.
+        return Err(JsValue::from_str(
+            "Plugin ChangeSet must have at least one operation",
+        ));
+    }
 
     // Override origin and actor to reflect plugin provenance.
     cs.origin = "Plugin".to_string();
@@ -968,9 +1056,9 @@ pub async fn init_project_store() -> Result<(), JsValue> {
 /// or if the underlying hydrate step fails (e.g., OPFS unavailable).
 #[wasm_bindgen]
 pub async fn rehydrate_project_store() -> Result<(), JsValue> {
-    let store = OPFS_STORE
-        .get()
-        .ok_or_else(|| JsValue::from_str("Project store not initialized; call init_project_store first"))?;
+    let store = OPFS_STORE.get().ok_or_else(|| {
+        JsValue::from_str("Project store not initialized; call init_project_store first")
+    })?;
     store
         .hydrate()
         .await
