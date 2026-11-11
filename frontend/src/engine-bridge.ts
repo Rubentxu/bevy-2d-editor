@@ -64,12 +64,85 @@ function pollEvents() {
   evtView.setUint32(0, 8, true);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Single-flight engine init (H0.05)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Explicit init state machine — consumers await `engineReady()`, they do not
+ * probe globals or poll for readiness. */
+export type EngineInitState = "idle" | "initializing" | "ready" | "failed";
+
+let engineInitState: EngineInitState = "idle";
+let engineInitPromise: Promise<void> | null = null;
+
+export function getEngineInitState(): EngineInitState {
+  return engineInitState;
+}
+
+/** The explicit readiness contract: resolves once the engine, session and
+ * bridges are usable. Rejects if init has not been started yet. */
+export function engineReady(): Promise<void> {
+  if (engineInitState === "ready") return Promise.resolve();
+  if (engineInitPromise) return engineInitPromise;
+  return Promise.reject(new Error("engine init has not started"));
+}
+
 export async function initEngine(
+  canvasId: string,
+  onEvent: (type: number, payload: DataView) => void,
+): Promise<void> {
+  // H0.05: observability hooks — installed up front so they exist even when
+  // init fails or while it is in flight. `__bevyEngineStarted` remains as the
+  // Playwright wait signal; product code must await `engineReady()` instead
+  // of probing globals.
+  (window as any).__engineReady = () => engineReady();
+  (window as any).__engineInitState = () => getEngineInitState();
+
+  // H0.05 AC#1: single-flight. Repeated calls (React remounts, double init,
+  // test re-entry) join the in-flight or completed init instead of creating a
+  // second session or registering half the components mid-hydration. A failed
+  // init is retryable: the next call starts a fresh attempt.
+  if (engineInitState === "initializing" && engineInitPromise) {
+    return engineInitPromise;
+  }
+  if (engineInitState === "ready") {
+    return;
+  }
+
+  const isRetry = engineInitState === "failed";
+  engineInitState = "initializing";
+  engineInitPromise = doInitEngine(canvasId, onEvent)
+    .then(() => {
+      engineInitState = "ready";
+    })
+    .catch((e) => {
+      engineInitState = "failed";
+      engineInitPromise = null;
+      throw e;
+    });
+  return engineInitPromise;
+}
+
+async function doInitEngine(
   canvasId: string,
   onEvent: (type: number, payload: DataView) => void,
 ): Promise<void> {
   console.log("[bridge] Loading WASM module...");
 
+  // Test hook (H0.05 AC#3 evidence): deterministic init failure so the retry
+  // flow can be exercised end to end. Disabled by flipping the flag, which
+  // the recovery spec does before pressing the retry affordance.
+  if (
+    new URLSearchParams(window.location.search).has("simulate-init-failure") &&
+    (window as any).__allowEngineInit !== true
+  ) {
+    throw new Error("Simulated engine init failure (H0.05 test hook)");
+  }
+
+  // The wasm-bindgen glue guards re-initialization (`wasm !== undefined`
+  // returns the existing instance), so a retry after a failed attempt is
+  // safe with the same statically analyzable import — which keeps the vite
+  // production bundle working (a variable dynamic import would not bundle).
   const wasmModule = await import("./wasm/editor_application.js");
   await wasmModule.default();
   wasm = wasmModule;

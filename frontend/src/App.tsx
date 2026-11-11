@@ -106,14 +106,6 @@ function AppInner() {
   const [initError, setInitError] = useState<string | null>(null);
 
   const { addToast } = useToasts();
-  const initGuard = (() => {
-    let guard = false;
-    return {
-      current: guard,
-      set: (v: boolean) => (guard = v),
-      get: () => guard,
-    };
-  })();
 
   const { scene, refresh, dispatch } = useSceneState();
 
@@ -331,20 +323,31 @@ function AppInner() {
     selectedEntity,
   });
 
-  useEffect(() => {
-    if (initGuard.get()) return;
-    initGuard.set(true);
-
+  // H0.05: the single-flight initEngine is the only guard — repeated effect
+  // runs (remounts, rerenders) join the in-flight init instead of creating a
+  // second session. Failures stay surfaced with a retry affordance.
+  const startEngineInit = useCallback(() => {
     initEngine("bevy-canvas", () => {
       // FPS and sprite position events handled silently (legacy)
     })
-      .then(() => setReady(isEngineReady()))
+      .then(() => setReady(true))
       .catch((e) => {
         const msg = String(e);
         setInitError(msg);
         addToast(`Engine init failed: ${msg}`, "error");
       });
   }, [addToast]);
+
+  useEffect(() => {
+    startEngineInit();
+  }, [startEngineInit]);
+
+  // H0.05 AC#3: a failed init offers an explicit recovery action instead of a
+  // silent screen. A retry re-enters the single-flight init from scratch.
+  const retryEngineInit = useCallback(() => {
+    setInitError(null);
+    startEngineInit();
+  }, [startEngineInit]);
 
   // ── Handler extraction (useSceneHandlers) ─────────────────────────────────
   // All ~30+ useCallback handlers that previously lived inline in AppInner
@@ -590,6 +593,7 @@ function AppInner() {
       pendingBackToScene={pendingBackToScene}
       ready={ready}
       initError={initError}
+      onRetryInit={retryEngineInit}
       pan={pan}
       zoom={zoom}
       isDragOverCanvas={isDragOverCanvas}
