@@ -101,8 +101,8 @@ thread_local! {
 /// `PREVIEW_METRICS_FALLBACK` when no session is installed (legacy
 /// tests). Returns silently if both paths are unavailable.
 pub fn set_metrics(metrics: PreviewMetrics) {
-    let payload = serde_json::to_value(&metrics)
-        .expect("PreviewMetrics serializes (round-trip tested)");
+    let payload =
+        serde_json::to_value(&metrics).expect("PreviewMetrics serializes (round-trip tested)");
     let written = editor_model::ports::with_session_mut(|sess| {
         sess.preview_inspector_mut().metrics = payload;
     })
@@ -122,8 +122,8 @@ pub fn increment_rebuild_count() -> u32 {
         let pi = sess.preview_inspector_mut();
         let mut m: PreviewMetrics = serde_json::from_value(pi.metrics.clone()).unwrap_or_default();
         m.rebuild_count = m.rebuild_count.saturating_add(1);
-        pi.metrics = serde_json::to_value(&m)
-            .expect("PreviewMetrics serializes (round-trip tested)");
+        pi.metrics =
+            serde_json::to_value(&m).expect("PreviewMetrics serializes (round-trip tested)");
         m.rebuild_count
     });
     if let Some(n) = via_session {
@@ -186,9 +186,9 @@ pub fn set_provenance(entries: BTreeMap<StableId, PreviewProvenance>) {
 /// `PREVIEW_METRICS_FALLBACK` otherwise. Returns `Default::default()`
 /// if the session metric cannot be deserialized (treat as empty).
 pub fn get_metrics() -> PreviewMetrics {
-    if let Some(v) = editor_model::ports::with_session_mut(|sess| {
-        sess.preview_inspector_mut().metrics.clone()
-    }) {
+    if let Some(v) =
+        editor_model::ports::with_session_mut(|sess| sess.preview_inspector_mut().metrics.clone())
+    {
         return serde_json::from_value(v).unwrap_or_default();
     }
     PREVIEW_METRICS_FALLBACK.with(|m| m.borrow().clone())
@@ -201,9 +201,9 @@ pub fn get_metrics() -> PreviewMetrics {
 /// `PREVIEW_MAPPING_FALLBACK` otherwise. Entries that fail
 /// deserialization are skipped (preserves the others).
 pub fn get_mapping() -> Vec<PreviewMappingEntry> {
-    if let Some(arr) = editor_model::ports::with_session_mut(|sess| {
-        sess.preview_inspector_mut().mapping.clone()
-    }) {
+    if let Some(arr) =
+        editor_model::ports::with_session_mut(|sess| sess.preview_inspector_mut().mapping.clone())
+    {
         return arr
             .into_iter()
             .filter_map(|v| serde_json::from_value(v).ok())
@@ -231,9 +231,7 @@ pub fn get_provenance(stable_id: &str) -> Option<PreviewProvenance> {
             .get(&sid_str)
             .and_then(|v| serde_json::from_value(v.clone()).ok());
     }
-    PREVIEW_PROVENANCE_FALLBACK.with(|p| {
-        p.borrow().get(&StableId::new(stable_id)).cloned()
-    })
+    PREVIEW_PROVENANCE_FALLBACK.with(|p| p.borrow().get(&StableId::new(stable_id)).cloned())
 }
 
 // ─── §6 RebuildCause (v0.90 PR2: migrated to EditorSession via EditorSessionPort) ──

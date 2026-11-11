@@ -41,10 +41,16 @@ fn parity_submit_drain_fifo() {
 
     // FIFO order check
     assert_eq!(outputs[0].field, "translation");
-    assert!(matches!(outputs[0].value, PortValue::Vec2 { x: 1.0, y: 2.0 }));
+    assert!(matches!(
+        outputs[0].value,
+        PortValue::Vec2 { x: 1.0, y: 2.0 }
+    ));
 
     assert_eq!(outputs[1].field, "scale");
-    assert!(matches!(outputs[1].value, PortValue::Vec2 { x: 3.0, y: 4.0 }));
+    assert!(matches!(
+        outputs[1].value,
+        PortValue::Vec2 { x: 3.0, y: 4.0 }
+    ));
 
     assert_eq!(outputs[2].field, "rotation");
     assert!(matches!(outputs[2].value, PortValue::Float(1.57)));
@@ -98,7 +104,11 @@ fn parity_drain_when_empty() {
     let entity = bevy::prelude::Entity::from_bits(99);
     submit_actuator_output(entity, "color", PortValue::Float(0.5));
     let third = drain_actuator_outputs();
-    assert_eq!(third.len(), 1, "submit after empty drain must be observable");
+    assert_eq!(
+        third.len(),
+        1,
+        "submit after empty drain must be observable"
+    );
 }
 
 // §EC-A2-1: submit without session is a graceful no-op

@@ -10,7 +10,7 @@
 //! `with_session_mut`), fallback is `HOT_RELOAD_BUS_FALLBACK`
 //! (used by legacy tests + non-session entrypoints).
 
-use crate::hot_reload_state::{HotReloadRequest, HOT_RELOAD_BUS_FALLBACK};
+use crate::hot_reload_state::{HOT_RELOAD_BUS_FALLBACK, HotReloadRequest};
 use editor_model::ports::with_session_mut;
 
 fn push_hot_reload(req: HotReloadRequest) {

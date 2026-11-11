@@ -223,8 +223,7 @@ fn corpus_v0_logic_graph_asset_migrates() {
 fn corpus_all_types_reject_future_version() {
     // Build minimal v1 documents of each type via the JSON fixtures.
     let mut sd: SceneDocument = serde_json::from_str(V0_SCENE_DOCUMENT_JSON).unwrap();
-    let mut sad: SceneAssetDocument =
-        serde_json::from_str(V0_SCENE_ASSET_DOCUMENT_JSON).unwrap();
+    let mut sad: SceneAssetDocument = serde_json::from_str(V0_SCENE_ASSET_DOCUMENT_JSON).unwrap();
     let mut wd: WorldDocument = serde_json::from_str(V0_WORLD_DOCUMENT_JSON).unwrap();
     let mut lg: LogicGraphAsset = serde_json::from_str(V0_LOGIC_GRAPH_ASSET_JSON).unwrap();
     let mut pm: ProjectMetadata = serde_json::from_str(V0_PROJECT_METADATA_JSON).unwrap();

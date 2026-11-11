@@ -18,8 +18,8 @@
 mod support;
 
 use editor_bevy::preview_inspector::{
-    PreviewMappingEntry, PreviewMetrics, PreviewProvenance, get_mapping, get_metrics, get_provenance,
-    increment_rebuild_count, set_mapping, set_metrics, set_provenance,
+    PreviewMappingEntry, PreviewMetrics, PreviewProvenance, get_mapping, get_metrics,
+    get_provenance, increment_rebuild_count, set_mapping, set_metrics, set_provenance,
 };
 use editor_bevy::scene_asset::AssetReference;
 use editor_model::EditorSessionPort;

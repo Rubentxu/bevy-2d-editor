@@ -48,7 +48,10 @@ fn parity_dual_write_resource() {
 
     let input_state = app.world_mut().resource::<InputState>();
     assert!(input_state.contains("KeyW"), "Resource should contain KeyW");
-    assert!(input_state.contains("Space"), "Resource should contain Space");
+    assert!(
+        input_state.contains("Space"),
+        "Resource should contain Space"
+    );
 }
 
 // §S-H-2b: cleared/released keys are removed from Resource

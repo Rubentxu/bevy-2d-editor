@@ -189,7 +189,9 @@ pub(crate) mod test_helpers {
         fn world_state_mut(&mut self, _: &str) -> &mut editor_model::WorldSessionState {
             unimplemented!("MinimalSession: world_state_mut not supported")
         }
-        fn tunable_baselines_mut(&mut self) -> &mut std::collections::BTreeMap<String, serde_json::Value> {
+        fn tunable_baselines_mut(
+            &mut self,
+        ) -> &mut std::collections::BTreeMap<String, serde_json::Value> {
             unimplemented!("MinimalSession: tunable_baselines_mut not supported")
         }
         fn last_rebuild_cause_mut(&mut self) -> &mut Option<editor_model::RebuildCause> {
@@ -256,8 +258,7 @@ pub(crate) mod test_helpers {
     /// actuator-output FIFO queue).
     pub(crate) fn install_fresh_session() {
         let session = MinimalSession::new();
-        let arc: Arc<Mutex<dyn editor_model::EditorSessionPort>> =
-            Arc::new(Mutex::new(session));
+        let arc: Arc<Mutex<dyn editor_model::EditorSessionPort>> = Arc::new(Mutex::new(session));
         editor_model::ports::register_editor_session(arc);
     }
 }
