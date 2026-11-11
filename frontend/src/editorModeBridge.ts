@@ -22,12 +22,7 @@
  */
 
 export type EditorMode =
-  | "scene"
-  | "asset-authoring"
-  | "code"
-  | "logic"
-  | "play"
-  | "world";
+  "scene" | "asset-authoring" | "code" | "logic" | "play" | "world";
 
 let currentMode: EditorMode = "scene";
 

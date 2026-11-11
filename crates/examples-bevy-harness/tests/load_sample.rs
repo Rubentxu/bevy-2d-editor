@@ -53,8 +53,8 @@ fn sample_round_trips_into_bevy_world() {
     let project_path = dir.join("project.json");
     let project_raw = fs::read_to_string(&project_path)
         .unwrap_or_else(|e| panic!("read {}: {}", project_path.display(), e));
-    let project: serde_json::Value = serde_json::from_str(&project_raw)
-        .unwrap_or_else(|e| panic!("parse project.json: {}", e));
+    let project: serde_json::Value =
+        serde_json::from_str(&project_raw).unwrap_or_else(|e| panic!("parse project.json: {}", e));
     let declared_assets = project
         .get("scene_assets")
         .and_then(serde_json::Value::as_array)
@@ -68,19 +68,28 @@ fn sample_round_trips_into_bevy_world() {
 
     // 2. Load each scene asset and verify entity count.
     let asset_paths = [
-        ("characters/player", "scene-assets/characters/player.actor.json"),
-        ("characters/enemy", "scene-assets/characters/enemy.actor.json"),
-        ("environment/ground", "scene-assets/environment/ground.fragment.json"),
+        (
+            "characters/player",
+            "scene-assets/characters/player.actor.json",
+        ),
+        (
+            "characters/enemy",
+            "scene-assets/characters/enemy.actor.json",
+        ),
+        (
+            "environment/ground",
+            "scene-assets/environment/ground.fragment.json",
+        ),
         ("effects/pickup", "scene-assets/effects/pickup.actor.json"),
     ];
 
     let mut assets_by_path: BTreeMap<String, SceneAssetDocument> = BTreeMap::new();
     for (logical_path, rel) in asset_paths.iter() {
         let abs = dir.join(rel);
-        let raw = fs::read_to_string(&abs)
-            .unwrap_or_else(|e| panic!("read {}: {}", abs.display(), e));
-        let doc: SceneAssetDocument = serde_json::from_str(&raw)
-            .unwrap_or_else(|e| panic!("parse {}: {}", abs.display(), e));
+        let raw =
+            fs::read_to_string(&abs).unwrap_or_else(|e| panic!("read {}: {}", abs.display(), e));
+        let doc: SceneAssetDocument =
+            serde_json::from_str(&raw).unwrap_or_else(|e| panic!("parse {}: {}", abs.display(), e));
         assert_eq!(
             doc.entities.len(),
             1,

@@ -175,6 +175,12 @@ entries:
     owner: H1.x
     reason: "WASM composition root singleton (ADR-0057); remains after H1 closes"
 
+  - name: OPFS_STORE
+    kind: static
+    declared_at: crates/editor-wasm/src/lib.rs:49
+    owner: TASK-5
+    reason: "OnceLock retaining the concrete OpfsProjectStore so the rehydrate_project_store test bridge can re-hydrate it on demand (trait object does not expose hydrate). Test-only; no production path reads it. Candidate to retire when the test bridge routes through a session port."
+
   # ── ai-proxy (separate binary crate; OK as memoized OnceLock) ──────────────
   - name: SCHEMA
     kind: static

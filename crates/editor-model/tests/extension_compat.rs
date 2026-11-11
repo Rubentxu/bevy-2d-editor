@@ -15,8 +15,8 @@
 //! surface for the policy text.
 
 use editor_model::extension::{
-    Capability, CapabilityDescriptor, ExtensionId, ExtensionManifest, Permission,
-    PermissionArea, PermissionScope, SemVer,
+    Capability, CapabilityDescriptor, ExtensionId, ExtensionManifest, Permission, PermissionArea,
+    PermissionScope, SemVer,
 };
 
 fn sample_manifest() -> ExtensionManifest {
@@ -69,16 +69,16 @@ fn extension_manifest_json_round_trip_is_byte_identical() {
     let manifest = sample_manifest();
 
     // First serialization.
-    let json1 = serde_json::to_string_pretty(&manifest)
-        .expect("ExtensionManifest should serialize");
+    let json1 =
+        serde_json::to_string_pretty(&manifest).expect("ExtensionManifest should serialize");
 
     // Parse back.
-    let parsed: ExtensionManifest = serde_json::from_str(&json1)
-        .expect("ExtensionManifest should round-trip parse");
+    let parsed: ExtensionManifest =
+        serde_json::from_str(&json1).expect("ExtensionManifest should round-trip parse");
 
     // Second serialization.
-    let json2 = serde_json::to_string_pretty(&parsed)
-        .expect("ExtensionManifest should re-serialize");
+    let json2 =
+        serde_json::to_string_pretty(&parsed).expect("ExtensionManifest should re-serialize");
 
     assert_eq!(
         json1, json2,
@@ -94,8 +94,7 @@ fn semver_parses_valid_and_rejects_malformed() {
     // Valid inputs.
     let valid_inputs = ["0.1.0", "1.0.0", "2.10.5", "10.20.30"];
     for s in valid_inputs.iter() {
-        let v = SemVer::parse(s)
-            .unwrap_or_else(|| panic!("SemVer::parse should accept {s:?}"));
+        let v = SemVer::parse(s).unwrap_or_else(|| panic!("SemVer::parse should accept {s:?}"));
         assert_eq!(v.to_string(), *s, "Display should round-trip input {s:?}");
     }
 
@@ -162,15 +161,10 @@ fn capability_enum_has_builtin_categories() {
     );
 
     let json = serde_json::to_string(&manifest).expect("manifest serializes");
-    let parsed: ExtensionManifest =
-        serde_json::from_str(&json).expect("manifest parses back");
+    let parsed: ExtensionManifest = serde_json::from_str(&json).expect("manifest parses back");
 
     assert_eq!(manifest.capabilities.len(), parsed.capabilities.len());
-    for (a, b) in manifest
-        .capabilities
-        .iter()
-        .zip(parsed.capabilities.iter())
-    {
+    for (a, b) in manifest.capabilities.iter().zip(parsed.capabilities.iter()) {
         assert_eq!(
             a.kind, b.kind,
             "Capability kind {:?} should round-trip losslessly",

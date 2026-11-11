@@ -13,7 +13,9 @@ pub mod loader;
 pub mod movement;
 
 pub use collision::{PICKUP_HITBOX_HALF, PickupCollisionPlugin, pickup_collision_system};
-pub use components::{EditorSpriteAsset, EnemyDirection, EnemyPatrol, Pickup, PlayerController, Visible};
+pub use components::{
+    EditorSpriteAsset, EnemyDirection, EnemyPatrol, Pickup, PlayerController, Visible,
+};
 pub use enemy_patrol::{EnemyPatrolPlugin, enemy_patrol_system};
 pub use jump::{JUMP_FRAME_DT, JumpPlugin, JumpState, jump_system};
 pub use loader::SpawnReport;
@@ -28,7 +30,10 @@ use std::collections::BTreeMap;
 ///
 /// `assets_by_path` is keyed by `SceneAssetDocument.logical_path`,
 /// matching the `asset_ref` values used in `SceneInstance.asset_ref`.
-pub fn spawn_all_assets(world: &mut World, assets_by_path: &BTreeMap<String, SceneAssetDocument>) -> usize {
+pub fn spawn_all_assets(
+    world: &mut World,
+    assets_by_path: &BTreeMap<String, SceneAssetDocument>,
+) -> usize {
     let mut total = 0;
     for doc in assets_by_path.values() {
         let report = loader::spawn_scene_asset(world, doc);

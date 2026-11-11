@@ -9,7 +9,9 @@ use bevy::prelude::*;
 use editor_model::scene_asset::SceneAssetDocument;
 use serde_json::Value;
 
-use crate::components::{EditorSpriteAsset, EnemyDirection, EnemyPatrol, Pickup, PlayerController, Visible};
+use crate::components::{
+    EditorSpriteAsset, EnemyDirection, EnemyPatrol, Pickup, PlayerController, Visible,
+};
 
 /// Result of translating one scene asset into a Bevy world.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
