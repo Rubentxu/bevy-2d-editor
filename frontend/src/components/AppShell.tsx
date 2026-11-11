@@ -555,10 +555,7 @@ export function AppShell(props: AppShellProps) {
           onTakeTour={() => setTourOpen(true)}
           onSkip={() => undefined}
         />
-        <TutorialStepper
-          open={tourOpen}
-          onClose={() => setTourOpen(false)}
-        />
+        <TutorialStepper open={tourOpen} onClose={() => setTourOpen(false)} />
       </WelcomeDismissalProvider>
       <Toasts />
     </div>
