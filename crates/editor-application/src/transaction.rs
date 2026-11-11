@@ -22,7 +22,7 @@ pub use editor_model::transaction::{
     ResourceRef, TransactionKernel, ValidationReport,
 };
 
-use editor_model::command::{Command, CommandError};
+use editor_model::command::Command;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Extension permission checking (ADR-0040 — v0.92)
@@ -257,12 +257,30 @@ where
 // Resource derivation from real ops (H0.02 — ADR-0040)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Resource identity used when the ops themselves do not carry a scene id.
+/// Placeholder scene identity for resources derived from pending ops.
 ///
 /// ADR-0040 manifests gate permission by resource *kind* (the kernel maps
-/// kind → area/scope), so scene ops derived from a pending ChangeSet all
-/// refer to the scene document the ChangeWorkbench operates on.
-pub const SCENE_DOC_REF: &str = "active-scene";
+/// kind → area/scope and never inspects the payload), so scene ops derived
+/// from a pending ChangeSet all refer to the scene document the ChangeWorkbench
+/// operates on. The payload is deliberately a placeholder — wiring it to real
+/// scene paths would be a policy change, not a derivation fix.
+pub const SCENE_DOC_PLACEHOLDER: &str = "active-scene";
+
+/// Error deriving affected resources for permission gating (H0.02).
+///
+/// Not a `CommandError`: this is an application-layer permission policy
+/// verdict, not an apply-path contract.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum ResourceDerivationError {
+    /// A command kind without a sanctioned permission mapping was proposed
+    /// through the plugin approval flow (fail-closed). New `Command` variants
+    /// must extend the derivation before plugins can propose them.
+    #[error("command kind has no sanctioned permission mapping (H0.02): {kind}")]
+    UnmappedCommandKind {
+        /// Serde-ish tag of the offending `Command` variant.
+        kind: &'static str,
+    },
+}
 
 /// Derive the [`ResourceRef`] set affected by the given commands.
 ///
@@ -271,25 +289,14 @@ pub const SCENE_DOC_REF: &str = "active-scene";
 /// instead of an empty temporary ChangeSet, which bypassed the gate.
 ///
 /// Fail-closed: a command kind without a sanctioned mapping is an error.
-/// New `Command` variants must extend this mapper before plugins can
-/// propose them through the approval flow.
-pub fn derive_change_set_resources(
+pub fn derive_resources_from_commands(
     commands: &[Command],
-) -> Result<Vec<ResourceRef>, CommandError> {
+) -> Result<Vec<ResourceRef>, ResourceDerivationError> {
     fn scene_resource() -> ResourceRef {
-        ResourceRef::Scene(SCENE_DOC_REF.to_string())
+        ResourceRef::Scene(SCENE_DOC_PLACEHOLDER.to_string())
     }
 
-    fn fail_closed(kind: &str) -> CommandError {
-        CommandError::Unsupported(format!(
-            "command kind has no sanctioned permission mapping (H0.02): {kind}"
-        ))
-    }
-
-    fn visit(
-        cmd: &Command,
-        out: &mut Vec<ResourceRef>,
-    ) -> Result<(), CommandError> {
+    fn visit(cmd: &Command, out: &mut Vec<ResourceRef>) -> Result<(), ResourceDerivationError> {
         match cmd {
             // No mutation — nothing to gate.
             Command::Noop {} => Ok(()),
@@ -322,12 +329,24 @@ pub fn derive_change_set_resources(
             }
             // No sanctioned mapping yet: fail closed rather than letting an
             // unknown mutation surface skip the permission gate.
-            Command::CreateSceneComponent { .. } => Err(fail_closed("CreateSceneComponent")),
-            Command::UpdateSceneComponentFields { .. } => {
-                Err(fail_closed("UpdateSceneComponentFields"))
+            Command::CreateSceneComponent { .. } => {
+                Err(ResourceDerivationError::UnmappedCommandKind {
+                    kind: "CreateSceneComponent",
+                })
             }
-            Command::BindSceneToSchema { .. } => Err(fail_closed("BindSceneToSchema")),
-            Command::World(_) => Err(fail_closed("World")),
+            Command::UpdateSceneComponentFields { .. } => {
+                Err(ResourceDerivationError::UnmappedCommandKind {
+                    kind: "UpdateSceneComponentFields",
+                })
+            }
+            Command::BindSceneToSchema { .. } => {
+                Err(ResourceDerivationError::UnmappedCommandKind {
+                    kind: "BindSceneToSchema",
+                })
+            }
+            Command::World(_) => {
+                Err(ResourceDerivationError::UnmappedCommandKind { kind: "World" })
+            }
         }
     }
 
@@ -485,8 +504,11 @@ mod tests {
     #[test]
     fn derive_resources_maps_scene_mutations_to_scene_resource() {
         let resources =
-            derive_change_set_resources(&[scene_write_command()]).expect("scene ops must map");
-        assert_eq!(resources, vec![ResourceRef::Scene(SCENE_DOC_REF.into())]);
+            derive_resources_from_commands(&[scene_write_command()]).expect("scene ops must map");
+        assert_eq!(
+            resources,
+            vec![ResourceRef::Scene(SCENE_DOC_PLACEHOLDER.into())]
+        );
     }
 
     #[test]
@@ -498,9 +520,20 @@ mod tests {
                 commands: vec![scene_write_command(), scene_write_command()],
             },
         ];
-        let resources = derive_change_set_resources(&cmds).expect("batch must map");
+        let resources = derive_resources_from_commands(&cmds).expect("batch must map");
         // One scene resource total: Noop mutates nothing, duplicates dedup.
-        assert_eq!(resources, vec![ResourceRef::Scene(SCENE_DOC_REF.into())]);
+        assert_eq!(
+            resources,
+            vec![ResourceRef::Scene(SCENE_DOC_PLACEHOLDER.into())]
+        );
+    }
+
+    #[test]
+    fn derive_resources_empty_slice_yields_no_resources() {
+        // Pins the contract the WASM boundary relies on: no ops → no
+        // resources (the empty-selection path is rejected upstream).
+        let resources = derive_resources_from_commands(&[]).expect("empty slice must map");
+        assert!(resources.is_empty());
     }
 
     #[test]
@@ -511,8 +544,33 @@ mod tests {
             name: "w".into(),
             layout_policy: editor_model::world::LayoutPolicy::Free,
         });
-        let err = derive_change_set_resources(&[world]).unwrap_err();
-        assert!(matches!(err, CommandError::Unsupported(_)));
+        let err = derive_resources_from_commands(&[world]).unwrap_err();
+        assert_eq!(
+            err,
+            ResourceDerivationError::UnmappedCommandKind { kind: "World" }
+        );
+    }
+
+    #[test]
+    fn derive_resources_fail_closed_through_batch_nesting() {
+        // A fail-closed kind hidden inside a Batch must still be rejected —
+        // recursion must not launder an unmapped mutation through a mapped
+        // parent (goldfish review gap).
+        let batch = Command::Batch {
+            label: "b".into(),
+            commands: vec![
+                scene_write_command(),
+                Command::World(editor_model::world_command::WorldCommand::WorldCreate {
+                    name: "w".into(),
+                    layout_policy: editor_model::world::LayoutPolicy::Free,
+                }),
+            ],
+        };
+        let err = derive_resources_from_commands(&[batch]).unwrap_err();
+        assert_eq!(
+            err,
+            ResourceDerivationError::UnmappedCommandKind { kind: "World" }
+        );
     }
 
     #[test]
@@ -530,7 +588,7 @@ mod tests {
             "recipe proposes scene mutation".into(),
         );
         cs.ops.push(scene_write_command());
-        for r in derive_change_set_resources(&cs.ops).expect("scene op must map") {
+        for r in derive_resources_from_commands(&cs.ops).expect("scene op must map") {
             cs.add_resource_ref(r);
         }
 
@@ -560,7 +618,7 @@ mod tests {
             "controller proposes scene mutation".into(),
         );
         cs.ops.push(scene_write_command());
-        for r in derive_change_set_resources(&cs.ops).expect("scene op must map") {
+        for r in derive_resources_from_commands(&cs.ops).expect("scene op must map") {
             cs.add_resource_ref(r);
         }
 
@@ -581,7 +639,7 @@ mod tests {
             "repeat denial".into(),
         );
         cs.ops.push(scene_write_command());
-        for r in derive_change_set_resources(&cs.ops).expect("scene op must map") {
+        for r in derive_resources_from_commands(&cs.ops).expect("scene op must map") {
             cs.add_resource_ref(r);
         }
 
