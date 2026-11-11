@@ -1,10 +1,10 @@
 ---
 id: TASK-5
 title: Una sola señal de EditorReady e inicialización WASM reentrante
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-11T20:12:00Z'
-updated_date: '2026-11-11T23:12:00Z'
+updated_date: '2026-11-11T23:21:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -34,9 +34,9 @@ Clave de migración: H0.05 (sin ID preasignado).
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Una inicialización repetida o React rerender no crea sesiones incoherentes ni registra a mitad componentes.
-- [ ] #2 Los consumers esperan una Promise/estado explícito; no detectan readiness por botón o global en window.
-- [ ] #3 Un error de OPFS muestra acción de retry o recuperación y no pantalla silenciosa.
+- [x] #1 Una inicialización repetida o React rerender no crea sesiones incoherentes ni registra a mitad componentes.
+- [x] #2 Los consumers esperan una Promise/estado explícito; no detectan readiness por botón o global en window.
+- [x] #3 Un error de OPFS muestra acción de retry o recuperación y no pantalla silenciosa.
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -44,3 +44,9 @@ Clave de migración: H0.05 (sin ID preasignado).
 <!-- SECTION:NOTES:BEGIN -->
 Implementación H0.05: single-flight initEngine (estado idle/initializing/ready/failed + promesa única; llamadas repetidas se unen al vuelo en curso o completado — el initGuard por-render de App.tsx, que se recreaba en cada render y jamás persistía, se elimina; AC#1). Consumidores: engineReady() promesa explícita + getEngineInitState(); hooks window.__engineReady/__engineInitState instalados desde el inicio de initEngine (existen incluso en fallo); window.__bevyEngineStarted se conserva como señal de espera de Playwright (AC#2). Fallo de init visible con error nombrado + botón 'Reintentar inicialización' en AppShell (data-testid engine-init-error / engine-retry-btn) con retry que re-entra al single-flight (AC#3). El glue wasm-bindgen guarda re-init (wasm !== undefined → devuelve instancia existente), así que el retry reusa el import estático (seguro para el bundle de producción; un import dinámico con query variable no lo empaqueta vite). Hallazgo de diseño: SESSION.set es idempotente (no pánico) pero re-init sobrescribiría registros globales → el single-flight es la raíz del fix; el fallo de hydrate OPFS ocurre antes del session-set → retry limpio. Evidencia: E2E @domain 3/3 (doble init = exactamente 1 'Buses created' + sesión coherente; reload durante hidratación → ready determinista; fallo simulado → error + retry → save/load tras recuperación), smoke 39/39, tsc/eslint/prettier/archcheck-frontend verdes.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+H0.05 integrado (PR #202, 11/11 checks). Init single-flight con máquina de estados explícita: llamadas repetidas se unen al vuelo (AC#1, evidencia: doble init = exactamente 1 'Buses created' + sesión coherente); consumidores esperan engineReady()/estado explícito sin sondar globals (AC#2, __engineReady/__engineInitState instalados desde el inicio de init); fallo de init con error nombrado + botón de reintento y recovery real con save/load tras recuperación (AC#3, fallo simulado determinista vía hook de test). Reload durante hidratación → ready determinista. E2E @domain 3/3, smoke 39/39. El initGuard por-render de App.tsx (clausura recreada en cada render) eliminado como raíz del defecto.
+<!-- SECTION:FINAL_SUMMARY:END -->
