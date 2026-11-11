@@ -271,12 +271,13 @@ pub struct TransformSnapshot {
 // crates/editor-core/src/state.rs. Re-exported here so existing
 // callers in lib.rs continue to work without modification.
 use crate::state::{
-    HOT_RELOAD_BUS_FALLBACK, HotReloadRequest, LOGIC_OPERATION_LOG, PLAY_MODE_REQUEST_FALLBACK, PlayModeRequest,
-    SCENE_REGISTRY, clear_asset_catalog_warnings, get_asset_catalog_warnings, mark_dirty,
-    with_asset_body_cache, with_asset_body_cache_mut, with_asset_catalog, with_asset_catalog_mut,
-    with_asset_doc, with_asset_doc_and_log_mut, with_asset_doc_mut, with_asset_log,
-    with_asset_log_mut, with_logic_graph, with_logic_graph_catalog, with_logic_graph_catalog_mut,
-    with_logic_graph_mut, with_logic_log, with_logic_log_mut, with_registry, with_registry_mut,
+    HOT_RELOAD_BUS_FALLBACK, HotReloadRequest, LOGIC_OPERATION_LOG, PLAY_MODE_REQUEST_FALLBACK,
+    PlayModeRequest, SCENE_REGISTRY, clear_asset_catalog_warnings, get_asset_catalog_warnings,
+    mark_dirty, with_asset_body_cache, with_asset_body_cache_mut, with_asset_catalog,
+    with_asset_catalog_mut, with_asset_doc, with_asset_doc_and_log_mut, with_asset_doc_mut,
+    with_asset_log, with_asset_log_mut, with_logic_graph, with_logic_graph_catalog,
+    with_logic_graph_catalog_mut, with_logic_graph_mut, with_logic_log, with_logic_log_mut,
+    with_registry, with_registry_mut,
 };
 // Also import binding registry helpers for tests
 use crate::state::{with_binding_registry, with_binding_registry_mut};
@@ -318,7 +319,6 @@ where
 const CMD_MOVE_SPRITE: u16 = 1;
 const EVT_SPRITE_POSITION: u16 = 1;
 const EVT_FPS: u16 = 2;
-
 
 /// Default scene JSON matching the original spike: green sprite at origin.
 const DEFAULT_SCENE_JSON: &str = r#"{

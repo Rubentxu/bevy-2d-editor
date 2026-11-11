@@ -635,15 +635,21 @@ mod tests {
 
         let (orphans, real) = OpfsCore::classify_paths(paths);
 
-        assert_eq!(orphans, vec![
-            "project.json.tmp".to_string(),
-            "scenes/level_1.json.tmp".to_string(),
-        ]);
-        assert_eq!(real, vec![
-            "project.json".to_string(),
-            "scenes/level_1.json".to_string(),
-            "scenes/level_2.json".to_string(),
-        ]);
+        assert_eq!(
+            orphans,
+            vec![
+                "project.json.tmp".to_string(),
+                "scenes/level_1.json.tmp".to_string(),
+            ]
+        );
+        assert_eq!(
+            real,
+            vec![
+                "project.json".to_string(),
+                "scenes/level_1.json".to_string(),
+                "scenes/level_2.json".to_string(),
+            ]
+        );
     }
 
     #[test]
@@ -685,21 +691,24 @@ mod tests {
         // heuristic is purely suffix-based: a path ending in exactly
         // `.tmp` is an orphan, anything else is real.
         let paths = vec![
-            "foo.tmp".to_string(),         // orphan (shadow for `foo`)
-            "foo.json.tmp".to_string(),    // orphan (shadow for `foo.json`)
-            "foo.json".to_string(),        // real
-            "foo.tmp.bak".to_string(),     // real (does NOT end in `.tmp`)
-            ".tmp".to_string(),            // orphan (edge: bare `.tmp`)
+            "foo.tmp".to_string(),      // orphan (shadow for `foo`)
+            "foo.json.tmp".to_string(), // orphan (shadow for `foo.json`)
+            "foo.json".to_string(),     // real
+            "foo.tmp.bak".to_string(),  // real (does NOT end in `.tmp`)
+            ".tmp".to_string(),         // orphan (edge: bare `.tmp`)
         ];
         let (orphans, real) = OpfsCore::classify_paths(paths);
-        assert_eq!(orphans, vec![
-            "foo.tmp".to_string(),
-            "foo.json.tmp".to_string(),
-            ".tmp".to_string(),
-        ]);
-        assert_eq!(real, vec![
-            "foo.json".to_string(),
-            "foo.tmp.bak".to_string(),
-        ]);
+        assert_eq!(
+            orphans,
+            vec![
+                "foo.tmp".to_string(),
+                "foo.json.tmp".to_string(),
+                ".tmp".to_string(),
+            ]
+        );
+        assert_eq!(
+            real,
+            vec!["foo.json".to_string(), "foo.tmp.bak".to_string(),]
+        );
     }
 }
