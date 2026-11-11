@@ -144,6 +144,8 @@ export interface AppShellProps {
   // Canvas state
   ready: boolean;
   initError: string | null;
+  /** H0.05 AC#3: explicit recovery action when init fails. */
+  onRetryInit: () => void;
   pan: { x: number; y: number };
   zoom: number;
   isDragOverCanvas: boolean;
@@ -207,6 +209,7 @@ export function AppShell(props: AppShellProps) {
     pendingBackToScene,
     ready,
     initError,
+    onRetryInit,
     pan,
     zoom,
     isDragOverCanvas,
@@ -366,8 +369,26 @@ export function AppShell(props: AppShellProps) {
                   onDrop={handlers.handleCanvasDrop}
                 >
                   {!ready && (
-                    <div style={{ padding: 16, color: "#888" }}>
-                      {initError ? `Error: ${initError}` : "Loading WASM..."}
+                    <div style={{ padding: 16 }}>
+                      {initError ? (
+                        <>
+                          <div
+                            style={{ color: "#c00" }}
+                            data-testid="engine-init-error"
+                          >
+                            Error: {initError}
+                          </div>
+                          <button
+                            data-testid="engine-retry-btn"
+                            onClick={onRetryInit}
+                            style={{ marginTop: 8 }}
+                          >
+                            Reintentar inicialización
+                          </button>
+                        </>
+                      ) : (
+                        "Loading WASM..."
+                      )}
                     </div>
                   )}
                   <div
