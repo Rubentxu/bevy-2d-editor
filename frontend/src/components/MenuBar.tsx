@@ -10,7 +10,6 @@ export type EditorMode =
 
 export interface MenuBarProps {
   editorMode?: EditorMode;
-  onOpenAssets?: () => void;
   onBackToScene?: () => void;
   onOpenLogic?: () => void;
   onOpenCode?: () => void;
@@ -21,8 +20,8 @@ export interface MenuBarProps {
   onSaveAs?: () => void;
   onLoad: () => void;
   onExportRust: () => void;
-  onNewScene?: () => void;
-  onDeleteEntity?: () => void;
+  onNewScene: () => void;
+  onDeleteEntity: () => void;
   selectedEntityId?: string | null;
   onToggleAI: () => void;
   aiPanelOpen: boolean;
@@ -36,7 +35,7 @@ export interface MenuBarProps {
   onOpenWorldWorkspace?: () => void;
   onOpenSearch?: () => void;
   onOpenCheatSheet?: () => void;
-  onWelcomeTour?: () => void;
+  onWelcomeTour: () => void;
   onAbout?: () => void;
   // Phase E — View menu dock toggles + reset layout + fullscreen.
   onToggleLeftDock?: () => void;
@@ -51,7 +50,6 @@ export interface MenuBarProps {
 
 export default function MenuBar({
   editorMode = "scene",
-  onOpenAssets,
   onBackToScene,
   onOpenLogic,
   onOpenCode,
@@ -112,15 +110,14 @@ export default function MenuBar({
   const menus = useMemo(
     () =>
       createMenuConfig({
-        handleNewScene:
-          onNewScene ?? (() => console.warn("[menu] TODO: wire New Scene")),
+        handleNewScene: onNewScene,
         handleSave: onSave,
         handleSaveAs: onSaveAs ?? onSave,
         handleLoad: onLoad,
         handleExportRust: onExportRust,
         handleUndo: onUndo,
         handleRedo: onRedo,
-        handleDeleteEntity: onDeleteEntity ?? (() => {}),
+        handleDeleteEntity: onDeleteEntity,
         handleToggleAI: onToggleAI,
         handleToggleValidationCenter: onToggleValidationCenter,
         handleToggleTileset: onToggleTileset,
@@ -130,9 +127,7 @@ export default function MenuBar({
         handleOpenWorldWorkspace: onOpenWorldWorkspace ?? (() => {}),
         handleTogglePlay: onTogglePlay ?? (() => {}),
         handleOpenCheatSheet: onOpenCheatSheet ?? (() => {}),
-        handleWelcomeTour:
-          onWelcomeTour ??
-          (() => console.warn("[menu] TODO: wire Welcome Tour")),
+        handleWelcomeTour: onWelcomeTour,
         handleAbout: onAbout ?? (() => alert("Bevy 2D Editor v0.80.0")),
         handleToggleLeftDock: onToggleLeftDock,
         handleToggleOutlineDock: onToggleOutlineDock,
