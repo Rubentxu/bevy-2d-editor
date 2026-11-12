@@ -228,7 +228,6 @@ export function AppShell(props: AppShellProps) {
           <>
             <AppHeader
               editorMode={editorMode}
-              onOpenAssets={() => {}}
               onBackToScene={
                 editorMode === "asset-authoring"
                   ? handlers.handleBackToScene
@@ -277,9 +276,7 @@ export function AppShell(props: AppShellProps) {
               onTogglePlay={handlers.handleTogglePlay}
               onOpenSearch={() => setCommandPaletteOpen(true)}
               onOpenCheatSheet={() => setCheatSheetOpen(true)}
-              onWelcomeTour={() =>
-                console.warn("[menu] TODO: wire Welcome Tour")
-              }
+              onWelcomeTour={() => setTourOpen(true)}
               onAbout={handlers.handleAbout}
               onToggleLeftDock={dock.toggleLeft}
               onToggleOutlineDock={dock.toggleOutline}

@@ -46,8 +46,6 @@ export interface MenuHandlers {
 }
 
 const separator = (): MenuItem => ({ label: "", separator: true });
-const todo = (label: string) => () =>
-  console.warn(`[menu] TODO: wire ${label}`);
 
 export function createMenuConfig(
   handlers: MenuHandlers,
@@ -106,25 +104,21 @@ export function createMenuConfig(
         label: "Cut",
         shortcut: "Ctrl+X",
         disabled: true,
-        onClick: todo("Cut"),
       },
       {
         label: "Copy",
         shortcut: "Ctrl+C",
         disabled: true,
-        onClick: todo("Copy"),
       },
       {
         label: "Paste",
         shortcut: "Ctrl+V",
         disabled: true,
-        onClick: todo("Paste"),
       },
       {
         label: "Duplicate",
         shortcut: "Ctrl+D",
         disabled: true,
-        onClick: todo("Duplicate"),
       },
       {
         label: "Delete",
@@ -137,41 +131,44 @@ export function createMenuConfig(
         label: "Find",
         shortcut: "Ctrl+F",
         disabled: true,
-        onClick: todo("Find"),
       },
     ],
     View: [
       {
         label: "Toggle Assets",
         shortcut: "F6",
-        onClick: handlers.handleToggleLeftDock ?? todo("Toggle Assets"),
+        onClick: handlers.handleToggleLeftDock,
+        disabled: !handlers.handleToggleLeftDock,
         testId: "menu-toggle-assets",
       },
       {
         label: "Toggle Outline",
         shortcut: "F8",
-        onClick: handlers.handleToggleOutlineDock ?? todo("Toggle Outline"),
+        onClick: handlers.handleToggleOutlineDock,
+        disabled: !handlers.handleToggleOutlineDock,
         testId: "menu-toggle-outline",
       },
       {
         label: "Toggle Properties",
         shortcut: "Shift+F8",
-        onClick:
-          handlers.handleTogglePropertiesDock ?? todo("Toggle Properties"),
+        onClick: handlers.handleTogglePropertiesDock,
+        disabled: !handlers.handleTogglePropertiesDock,
         testId: "menu-toggle-properties",
       },
-      { label: "Toggle Tools", shortcut: "F7", onClick: todo("Toggle Tools") },
+      { label: "Toggle Tools", shortcut: "F7", disabled: true },
       separator(),
       {
         label: "Fullscreen Viewport",
         shortcut: "F9",
-        onClick: handlers.handleToggleFullscreen ?? todo("Fullscreen Viewport"),
+        onClick: handlers.handleToggleFullscreen,
+        disabled: !handlers.handleToggleFullscreen,
         testId: "menu-fullscreen",
       },
       separator(),
       {
         label: "Reset Layout",
-        onClick: handlers.handleResetLayout ?? todo("Reset Layout"),
+        onClick: handlers.handleResetLayout,
+        disabled: !handlers.handleResetLayout,
         testId: "menu-reset-layout",
       },
       separator(),
@@ -179,7 +176,7 @@ export function createMenuConfig(
       {
         label: "World Workspace",
         shortcut: "F10",
-        onClick: handlers.handleOpenWorldWorkspace ?? todo("World Workspace"),
+        onClick: handlers.handleOpenWorldWorkspace,
         testId: "menu-world-workspace",
       },
       // ── Workspace presets (v0.81 Tier 1b) ──────────────────────────────
@@ -219,9 +216,8 @@ export function createMenuConfig(
           { label: "", separator: true },
           {
             label: "Save Current as Preset…",
-            onClick:
-              handlers.handleSaveWorkspacePreset ??
-              todo("Save Current as Preset…"),
+            onClick: handlers.handleSaveWorkspacePreset,
+            disabled: !handlers.handleSaveWorkspacePreset,
             testId: "menu-preset-save",
           },
         ],
@@ -245,7 +241,7 @@ export function createMenuConfig(
         label: "Validation Center",
         onClick: handlers.handleToggleValidationCenter,
       },
-      { label: "Schema Authoring", onClick: todo("Schema Authoring") },
+      { label: "Schema Authoring", disabled: true },
       {
         label: "Tileset Panel",
         onClick: handlers.handleToggleTileset,
@@ -271,7 +267,7 @@ export function createMenuConfig(
       {
         label: "Project Asset Browser",
         shortcut: "Ctrl+P",
-        onClick: todo("Project Asset Browser"),
+        disabled: true,
       },
     ],
     Run: [
@@ -281,8 +277,8 @@ export function createMenuConfig(
         onClick: handlers.handleTogglePlay,
         testId: handlers.editorMode === "play" ? "stop-btn" : "play-btn",
       },
-      { label: "Pause", disabled: true, onClick: todo("Pause") },
-      { label: "Step", disabled: true, onClick: todo("Step") },
+      { label: "Pause", disabled: true },
+      { label: "Step", disabled: true },
     ],
     Help: [
       {
