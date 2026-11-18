@@ -18,7 +18,6 @@ import type { LogState } from "../hooks/useLogState";
 export interface AppHeaderProps {
   // ── MenuBar props (forwarded directly) ──────────────────────────────────
   editorMode?: EditorMode;
-  onOpenAssets?: () => void;
   onBackToScene?: () => void;
   onOpenLogic?: () => void;
   onOpenCode?: () => void;
@@ -30,8 +29,8 @@ export interface AppHeaderProps {
   onSaveAs?: () => void;
   onLoad: () => void;
   onExportRust: () => void;
-  onNewScene?: () => void;
-  onDeleteEntity?: () => void;
+  onNewScene: () => void;
+  onDeleteEntity: () => void;
   selectedEntityId?: string | null;
   onToggleAI: () => void;
   aiPanelOpen: boolean;
@@ -44,7 +43,7 @@ export interface AppHeaderProps {
   onTogglePlay?: () => void;
   onOpenSearch?: () => void;
   onOpenCheatSheet?: () => void;
-  onWelcomeTour?: () => void;
+  onWelcomeTour: () => void;
   onAbout?: () => void;
   onToggleLeftDock?: () => void;
   onToggleOutlineDock?: () => void;
@@ -83,7 +82,6 @@ export default function AppHeader(props: AppHeaderProps) {
   const {
     // MenuBar
     editorMode,
-    onOpenAssets,
     onBackToScene,
     onOpenLogic,
     onOpenCode,
@@ -142,7 +140,6 @@ export default function AppHeader(props: AppHeaderProps) {
     >
       <MenuBar
         editorMode={editorMode}
-        onOpenAssets={onOpenAssets}
         onBackToScene={onBackToScene}
         onOpenLogic={onOpenLogic}
         onOpenCode={onOpenCode}
